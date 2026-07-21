@@ -1,0 +1,748 @@
+{% extends "base.html" %}
+{% block title %}{% if template %}编辑模板{% else %}新建模板{% endif %} - 电子表单{% endblock %}
+{% block extra_head %}
+<style>
+:root { --p-w: 170px; --prop-w: 320px; --toolbar-h: 54px; }
+body { overflow: hidden; background: #1a1d23; }
+
+/* ---- Editor Wrap ---- */
+.editor-wrap { position:fixed; top:0; left:220px; right:0; bottom:0; padding-top:var(--toolbar-h); display:flex; }
+
+/* ---- Toolbar ---- */
+.editor-tbar { position:fixed; top:0; left:220px; right:0; height:var(--toolbar-h); background:#1e2028; border-bottom:1px solid #2a2d37; display:flex; align-items:center; padding:0 14px; gap:8px; z-index:100; }
+.editor-tbar .title { font-weight:600; font-size:14px; color:#e8eaed; white-space:nowrap; }
+.editor-tbar input { background:#2a2d37; border:1px solid #3a3d48; color:#e8eaed; border-radius:6px; padding:5px 10px; font-size:13px; }
+.editor-tbar input:focus { outline:none; border-color:#4f46e5; }
+.editor-tbar .btn { border-radius:6px; font-size:12px; padding:5px 14px; }
+.editor-tbar .btn-outline-light { border-color:#3a3d48; color:#ccc; }
+.editor-tbar .btn-outline-light:hover { background:#2a2d37; color:#fff; }
+
+/* ---- Left Palette ---- */
+.fld-palette { width:var(--p-w); min-width:var(--p-w); background:#1e2028; border-right:1px solid #2a2d37; overflow-y:auto; padding:12px; }
+.fld-palette h6 { font-size:11px; color:#6b7280; margin:12px 0 6px; text-transform:uppercase; letter-spacing:.5px; }
+.fld-palette h6:first-child { margin-top:0; color:#4f46e5; }
+.p-item { padding:7px 10px; margin-bottom:3px; border-radius:5px; border:1px solid #2a2d37; cursor:pointer; font-size:12px; background:#262830; color:#ccc; display:flex; align-items:center; gap:8px; transition:all .12s; user-select:none; }
+.p-item:hover { background:#2d2f3a; border-color:#4f46e5; color:#fff; }
+.p-item .icon { font-size:13px; color:#4f46e5; width:16px; text-align:center; }
+
+/* ---- Canvas (A4 Desk) ---- */
+.canvas-area { flex:1; overflow:auto; display:flex; justify-content:center; padding:30px 20px; background:#1a1d23; }
+
+/* A4 Paper */
+.a4 { width:794px; min-height:1123px; background:#fff; position:relative; transform-origin:top center; box-shadow:0 2px 12px rgba(0,0,0,.3); border-radius:2px; border:2px solid #5a6a7a; }
+.a4-inner { position:absolute; inset:0; margin:0; }
+.a4-canvas-drag-over { outline:3px dashed #4f46e5; outline-offset:-3px; }
+
+/* Field box on canvas */
+.fld { position:absolute; border:1px solid #8896a6; border-radius:0px; cursor:move; box-sizing:border-box; transition:box-shadow .1s; overflow:hidden; min-width:24px; min-height:20px; }
+.fld:hover { border-color:#818cf8; background:#f8f9ff; }
+.fld.selected { border-color:#4f46e5; background:#eef2ff; box-shadow:0 0 0 2px rgba(79,70,229,.15); z-index:5; }
+.fld .fld-label { font-size:11px; font-weight:600; color:#374151; padding:2px 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fld .fld-value { font-size:10px; color:#9ca3af; padding:0 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fld .fld-badge { display:inline-block; background:#eef2ff; color:#4f46e5; font-size:8px; padding:0 4px; border-radius:4px; margin-left:2px; }
+
+/* Resize handles */
+.fld .rh { position:absolute; width:8px; height:8px; border:2px solid #4f46e5; background:#fff; border-radius:50%; opacity:0; transition:opacity .12s; z-index:10; }
+.fld.selected .rh { opacity:1; }
+.fld .rh-nw { top:-4px; left:-4px; cursor:nw-resize; }
+.fld .rh-ne { top:-4px; right:-4px; cursor:ne-resize; }
+.fld .rh-sw { bottom:-4px; left:-4px; cursor:sw-resize; }
+.fld .rh-se { bottom:-4px; right:-4px; cursor:se-resize; }
+.fld .rh-n { top:-4px; left:50%; margin-left:-4px; cursor:n-resize; }
+.fld .rh-s { bottom:-4px; left:50%; margin-left:-4px; cursor:s-resize; }
+.fld .rh-w { left:-4px; top:50%; margin-top:-4px; cursor:w-resize; }
+.fld .rh-e { right:-4px; top:50%; margin-top:-4px; cursor:e-resize; }
+.fld .fld-del { position:absolute; top:1px; right:1px; width:16px; height:16px; border:none; background:rgba(239,68,68,.15); color:#ef4444; border-radius:50%; cursor:pointer; font-size:9px; display:none; align-items:center; justify-content:center; line-height:1; padding:0; z-index:11; }
+.fld.selected .fld-del { display:flex; }
+.fld .fld-del:hover { background:#ef4444; color:#fff; }
+
+/* Empty canvas hint */
+.empty-canvas-hint { display:flex; align-items:center; justify-content:center; height:100%; color:#d1d5db; font-size:14px; flex-direction:column; gap:8px; }
+
+/* ---- Right Properties Panel ---- */
+.prop-panel { width:var(--prop-w); min-width:var(--prop-w); background:#1e2028; border-left:1px solid #2a2d37; overflow-y:auto; padding:14px; color:#d1d5db; }
+.prop-panel .pp-empty { text-align:center; padding:40px 0; color:#6b7280; font-size:13px; }
+.prop-panel .pp-title { font-weight:600; font-size:13px; margin-bottom:12px; color:#e8eaed; display:flex; align-items:center; gap:6px; }
+.prop-panel .pp-title .tag { font-size:10px; background:#2d2f3a; color:#818cf8; padding:1px 6px; border-radius:4px; }
+.prop-panel label { font-size:11px; font-weight:600; color:#9ca3af; margin-bottom:3px; display:block; text-transform:uppercase; letter-spacing:.3px; }
+.prop-panel .form-control, .prop-panel .form-select { font-size:12px; padding:5px 8px; background:#262830; border:1px solid #3a3d48; color:#e8eaed; border-radius:5px; }
+.prop-panel .form-control:focus, .prop-panel .form-select:focus { outline:none; border-color:#4f46e5; }
+.prop-panel .form-check { margin-top:4px; }
+.prop-panel .form-check-input { background:#262830; border-color:#3a3d48; }
+.prop-panel .form-check-input:checked { background:#4f46e5; border-color:#4f46e5; }
+.prop-panel hr { margin:10px 0; border-color:#2a2d37; }
+.opt-row { display:flex; gap:4px; margin-bottom:4px; align-items:center; }
+.opt-row input { flex:1; }
+.opt-row .btn-sm { padding:2px 6px; font-size:11px; }
+.pp-section { padding:8px 0; border-bottom:1px solid #2a2d37; margin-bottom:8px; }
+.pp-section:last-child { border-bottom:none; }
+
+/* ---- Zoom Bar ---- */
+.zoom-bar { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); background:#1e2028; border:1px solid #2a2d37; border-radius:8px; padding:4px 8px; display:flex; align-items:center; gap:4px; box-shadow:0 2px 8px rgba(0,0,0,.3); z-index:50; }
+.zoom-bar .btn-z { width:28px; height:28px; padding:0; font-size:14px; line-height:1; border:1px solid transparent; background:transparent; border-radius:4px; cursor:pointer; color:#d1d5db; }
+.zoom-bar .btn-z:hover { background:#2a2d37; color:#fff; }
+.zoom-bar .z-lvl { font-size:12px; width:48px; text-align:center; color:#9ca3af; }
+
+/* ---- Save indicator ---- */
+.save-indicator { font-size:12px; padding:3px 10px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; }
+.save-indicator.saved { background:#065f4622; color:#34d399; }
+.save-indicator.saving { background:#92400e22; color:#fbbf24; }
+.save-indicator.error { background:#991b1b22; color:#f87171; }
+
+/* Preview mode */
+.editor-wrap.preview-mode .fld-palette,
+.editor-wrap.preview-mode .prop-panel,
+.editor-wrap.preview-mode .zoom-bar { display:none; }
+.editor-wrap.preview-mode .fld .fld-del,
+.editor-wrap.preview-mode .fld .rh { display:none !important; }
+.editor-wrap.preview-mode .fld { cursor:default; border-color:#e5e7eb; background:#fafbfc; box-shadow:none; }
+.editor-wrap.preview-mode .fld.type-signature { border:1px dashed #d1d5db; }
+.editor-wrap.preview-mode .fld.selected { border-color:#4f46e5; }
+.editor-wrap.preview-mode #tpl-name,
+.editor-wrap.preview-mode #tpl-desc { pointer-events:none; opacity:.7; }
+
+/* ---- Stats ---- */
+.field-stats { font-size:11px; color:#6b7280; padding:6px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set is_new = template is none %}
+{% set tpl = template or {} %}
+{% set fields = (tpl.fields_json or []) %}
+
+<div class="editor-wrap">
+  <!-- Toolbar -->
+  <div class="editor-tbar">
+    <span class="title">📋 {{ '新建模板' if is_new else '编辑模板' }}</span>
+    <input type="text" id="tpl-name" style="width:180px" placeholder="模板名称" value="{{ tpl.name or '' }}" required>
+    <input type="text" id="tpl-desc" style="width:240px" placeholder="描述（可选）" value="{{ tpl.description or '' }}">
+    <select id="tpl-page-size" style="background:#2a2d37;border:1px solid #3a3d48;color:#e8eaed;border-radius:6px;padding:5px 8px;font-size:12px;">
+      <option value="A4" {% if tpl.page_size == 'A4' %}selected{% endif %}>A4</option>
+      <option value="A5" {% if tpl.page_size == 'A5' %}selected{% endif %}>A5</option>
+    </select>
+    <select id="tpl-orientation" style="background:#2a2d37;border:1px solid #3a3d48;color:#e8eaed;border-radius:6px;padding:5px 8px;font-size:12px;">
+      <option value="portrait" {% if tpl.orientation == 'portrait' %}selected{% endif %}>纵向</option>
+      <option value="landscape" {% if tpl.orientation == 'landscape' %}selected{% endif %}>横向</option>
+    </select>
+    <span id="saveIndicator" class="save-indicator saved ms-2"><i class="fas fa-check-circle"></i> 已保存</span>
+    <div class="ms-auto"></div>
+    <div class="btn-group btn-group-sm me-2">
+      <button class="btn btn-primary btn-sm" id="m-design" onclick="setMode('design')">✏️ 设计</button>
+      <button class="btn btn-outline-light btn-sm" id="m-preview" onclick="setMode('preview')">👁 预览</button>
+    </div>
+    <button class="btn btn-success btn-sm" onclick="saveTemplate()"><i class="fas fa-save"></i> 保存</button>
+    <div class="dropdown d-inline-block">
+      <button class="btn btn-outline-light btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+        <i class="fas fa-file-excel"></i> 导入
+      </button>
+      <ul class="dropdown-menu dropdown-menu-dark">
+        <li><a class="dropdown-item" href="#" onclick="downloadTemplateGuide();return false;"><i class="fas fa-download me-2"></i>下载导入格式参考</a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="#" onclick="importExcel();return false;"><i class="fas fa-file-excel me-2"></i>选择文件导入</a></li>
+      </ul>
+    </div>
+    <a href="{{ url_for('forms.template_list') }}" class="btn btn-outline-light btn-sm">取消</a>
+  </div>
+
+  <!-- Left Palette -->
+  <div class="fld-palette">
+    <h6>点击添加</h6>
+    <div class="p-item" data-type="text"><span class="icon">Aa</span> 单行文本</div>
+    <div class="p-item" data-type="textarea"><span class="icon">¶</span> 多行文本</div>
+    <div class="p-item" data-type="number"><span class="icon">#</span> 数字</div>
+    <div class="p-item" data-type="select"><span class="icon">▼</span> 下拉选择</div>
+    <div class="p-item" data-type="radio"><span class="icon">○</span> 单选按钮</div>
+    <div class="p-item" data-type="checkbox"><span class="icon">☑</span> 多选勾选</div>
+    <div class="p-item" data-type="date"><span class="icon">📅</span> 日期</div>
+    <div class="p-item" data-type="datetime"><span class="icon">🕐</span> 日期时间</div>
+    <h6>特殊</h6>
+    <div class="p-item" data-type="signature"><span class="icon">✍</span> 手写签名</div>
+    <div class="p-item" data-type="file"><span class="icon">📎</span> 文件上传</div>
+    <h6>标题</h6>
+    <div class="p-item" data-type="title"><span class="icon">H</span> 大标题</div>
+    <div class="p-item" data-type="divider"><span class="icon">—</span> 分割线</div>
+    <h6>内容</h6>
+    <div class="p-item" data-type="richtext"><span class="icon">&lt;/&gt;</span> 富文本</div>
+    <div class="field-stats">字段: <strong id="statTotal">0</strong> | 必填: <strong id="statRequired">0</strong></div>
+  </div>
+
+  <!-- Center Canvas -->
+  <div class="canvas-area" id="canvasWrap">
+    <div class="a4" id="a4Paper">
+      <div class="a4-inner" id="a4Inner">
+        <div class="empty-canvas-hint" id="emptyHint">
+          <i class="fas fa-hand-pointer" style="font-size:32px;color:#818cf8;"></i>
+          <span>从左侧点击字段类型添加到画布</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Properties -->
+  <div class="prop-panel" id="propPanel">
+    <div class="pp-empty" id="propEmpty">
+      <i class="fas fa-arrow-left" style="font-size:20px;display:block;margin-bottom:8px;"></i>
+      选择一个字段编辑属性
+    </div>
+    <div id="propEditor" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- Zoom Bar -->
+<div class="zoom-bar">
+  <button class="btn-z" onclick="zoomIt(-10)">−</button>
+  <span class="z-lvl" id="zLvl">100%</span>
+  <button class="btn-z" onclick="zoomIt(10)">+</button>
+  <span style="color:#3a3d48;margin:0 4px">|</span>
+  <button class="btn-z" onclick="zoomIt(0)">⊡</button>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ===== Field type display labels and icons =====
+const FIELD_TYPES = {
+  text:     { label:'单行文本',  icon:'fa-font' },
+  textarea: { label:'多行文本',  icon:'fa-paragraph' },
+  number:   { label:'数字',      icon:'fa-hashtag' },
+  select:   { label:'下拉选择',  icon:'fa-chevron-down' },
+  radio:    { label:'单选按钮',  icon:'fa-dot-circle' },
+  checkbox: { label:'多选勾选',  icon:'fa-check-square' },
+  date:     { label:'日期',      icon:'fa-calendar-alt' },
+  datetime: { label:'日期时间',  icon:'fa-clock' },
+  signature:{ label:'签名',      icon:'fa-pen' },
+  file:     { label:'文件上传',  icon:'fa-upload' },
+  title:    { label:'大标题',    icon:'fa-heading' },
+  divider:  { label:'分割线',    icon:'fa-minus' },
+  richtext: { label:'富文本',    icon:'fa-code' },
+};
+const DATA_SOURCES = {
+  '':           '无（手动输入）',
+  'current_user':'当前用户',
+  'current_date':'当前日期',
+  'current_time':'当前时间',
+  'personnel':  '人员列表',
+  'department': '科室列表',
+  'device_type':'设备类型',
+  'location':   '建筑位置',
+  'building':   '楼区',
+  'asset_code': '资产编码',
+  'supplier':   '供应商',
+  'fault_type': '故障类别',
+  'order_no':   '工单编号(自动)',
+  'repair_order_no':'维修单号(自动)',
+};
+
+// ===== State =====
+let fields = [];
+let selectedId = null;
+let nextId = 1;
+let zoom = 1;
+let currentMode = 'design';
+let saveTimer = null;
+let dirty = false;
+
+{% if template and template.fields_json %}
+try {
+  fields = {{ template.fields_json | tojson }};
+  fields = fields.map(f => ({
+    id: f.id || ('f_'+(nextId++)),
+    label: f.label || '',
+    type: f.type || 'text',
+    required: !!f.required,
+    placeholder: f.placeholder || '',
+    options: Array.isArray(f.options) ? f.options : [],
+    defaultValue: f.defaultValue || '',
+    dataSource: f.dataSource || '',
+    fontSize: f.fontSize || null,
+    textAlign: f.textAlign || null,
+    x: f.x != null ? f.x : (5 + Math.random()*10),
+    y: f.y != null ? f.y : (5 + Math.random()*10),
+    w: f.w != null ? f.w : 40,
+    h: f.h != null ? f.h : (f.type==='title'?6:f.type==='signature'?8:5),
+  }));
+  const nums = fields.map(f => parseInt(String(f.id).replace(/^f_/,''))).filter(n => !isNaN(n));
+  if (nums.length) nextId = Math.max(...nums) + 1;
+} catch(e) { fields = []; console.warn('Parse fields error', e); }
+{% endif %}
+
+function uid() { return 'f_'+(nextId++); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/\"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ===== Render A4 Canvas =====
+function render() {
+  const inner = document.getElementById('a4Inner');
+  const hint = document.getElementById('emptyHint');
+  const st = document.getElementById('statTotal');
+  const sr = document.getElementById('statRequired');
+  if (st) st.textContent = fields.length;
+  if (sr) sr.textContent = fields.filter(f => f.required).length;
+
+  if (fields.length === 0) {
+    if (hint) hint.style.display = 'flex';
+    // Clear any remaining field elements but keep hint
+    Array.from(inner.children).forEach(c => { if (c.id !== 'emptyHint') c.remove(); });
+    return;
+  }
+  if (hint) hint.style.display = 'none';
+
+  let html = '';
+  fields.forEach(f => {
+    const sel = f.id === selectedId ? ' selected' : '';
+    const ti = FIELD_TYPES[f.type] || FIELD_TYPES.text;
+    const xp = (f.x || 0)+'%', yp = (f.y || 0)+'%', wp = (f.w || 40)+'%', hp = (f.h || 5)+'%';
+    const fs = f.fontSize ? `font-size:${f.fontSize}pt;` : '';
+    const ta = f.textAlign ? `text-align:${f.textAlign};` : '';
+    let content = '';
+    if (f.type === 'title') {
+      content = `<div class="fld-label" style="font-size:${f.fontSize||18}pt;font-weight:700;text-align:${f.textAlign||'center'};padding:4px;">${esc(f.label||'标题')}</div>`;
+    } else if (f.type === 'divider') {
+      content = `<div style="background:#1d2939;height:100%;border-radius:1px;"></div>`;
+    } else if (f.type === 'richtext') {
+      content = `<div class="fld-label" style="${fs}${ta}padding:4px;">${f.label||''}</div>`;
+    } else if (f.type === 'signature') {
+      content = `<div class="fld-label">${esc(f.label||'签名')}</div><div class="fld-value" style="border:1px dashed #d1d5db;border-radius:3px;margin:2px 4px;height:${Math.max(16,(f.h||8)*3-4)}px;display:flex;align-items:center;justify-content:center;">✍</div>`;
+    } else {
+      const dsLabel = DATA_SOURCES[f.dataSource] || '';
+      const badge = dsLabel ? `<span class="fld-badge">🔗${dsLabel}</span>` : '';
+      const reqBadge = f.required ? '<span class="fld-badge" style="background:#fef2f2;color:#ef4444;">必填</span>' : '';
+      content = `<div class="fld-label">${esc(f.label||'字段')} ${badge} ${reqBadge}</div><div class="fld-value">${esc(f.placeholder||'')}</div>`;
+    }
+    html += `<div class="fld type-${f.type}${sel}" id="fld-${f.id}" style="left:${xp};top:${yp};width:${wp};height:${hp};" data-id="${f.id}" ondblclick="editField('${f.id}')">
+      <button class="fld-del" onclick="event.stopPropagation();deleteField('${f.id}')">✕</button>
+      ${content}
+      <span class="rh rh-nw"></span><span class="rh rh-n"></span><span class="rh rh-ne"></span>
+      <span class="rh rh-w"></span><span class="rh rh-e"></span>
+      <span class="rh rh-sw"></span><span class="rh rh-s"></span><span class="rh rh-se"></span>
+    </div>`;
+  });
+  inner.innerHTML = html;
+
+  // Attach events
+  inner.querySelectorAll('.fld').forEach(el => {
+    el.addEventListener('mousedown', onFieldMouseDown);
+    el.querySelectorAll('.rh').forEach(rh => rh.addEventListener('mousedown', onResizeStart));
+  });
+
+  // Keep properties panel in sync
+  if (selectedId && fields.some(f => f.id === selectedId)) {
+    renderProperties();
+  } else if (fields.length > 0) {
+    selectField(fields[0].id);
+  } else {
+    selectedId = null;
+    showEmptyProp();
+  }
+}
+
+// ===== Select field =====
+function selectField(id) {
+  selectedId = id;
+  document.querySelectorAll('#a4Inner .fld').forEach(el => el.classList.toggle('selected', el.dataset.id === id));
+  renderProperties();
+}
+
+document.getElementById('a4Inner').addEventListener('mousedown', function(e) {
+  if (!e.target.closest('.fld')) {
+    selectedId = null;
+    document.querySelectorAll('#a4Inner .fld').forEach(el => el.classList.remove('selected'));
+    showEmptyProp();
+  }
+});
+
+// ===== Drag field on canvas =====
+let dragField = null, dragStartX, dragStartY, dragOrigX, dragOrigY;
+function onFieldMouseDown(e) {
+  if (e.target.closest('.rh') || e.target.closest('.fld-del')) return;
+  const el = e.currentTarget;
+  selectField(el.dataset.id);
+  if (currentMode !== 'design') return;
+  dragField = el;
+  const rect = el.getBoundingClientRect();
+  const pRect = document.getElementById('a4Inner').getBoundingClientRect();
+  dragStartX = e.clientX; dragStartY = e.clientY;
+  dragOrigX = (rect.left - pRect.left)/pRect.width*100;
+  dragOrigY = (rect.top - pRect.top)/pRect.height*100;
+  document.addEventListener('mousemove', onFieldMouseMove);
+  document.addEventListener('mouseup', onFieldMouseUp);
+  e.preventDefault();
+}
+function onFieldMouseMove(e) {
+  if (!dragField) return;
+  const pRect = document.getElementById('a4Inner').getBoundingClientRect();
+  const dx = (e.clientX - dragStartX)/pRect.width*100;
+  const dy = (e.clientY - dragStartY)/pRect.height*100;
+  const f = fields.find(f => f.id === dragField.dataset.id);
+  if (!f) return;
+  f.x = Math.max(0, Math.min(92, dragOrigX + dx));
+  f.y = Math.max(0, Math.min(92, dragOrigY + dy));
+  dragField.style.left = f.x+'%'; dragField.style.top = f.y+'%';
+}
+function onFieldMouseUp() {
+  document.removeEventListener('mousemove', onFieldMouseMove);
+  document.removeEventListener('mouseup', onFieldMouseUp);
+  dragField = null;
+  markDirty();
+}
+
+// ===== Resize =====
+let resizeField = null, resizeHandle = '', resizeStartX, resizeStartY, resizeOrig;
+function onResizeStart(e) {
+  const rh = e.currentTarget;
+  const el = rh.closest('.fld');
+  resizeField = fields.find(f => f.id === el.dataset.id);
+  if (!resizeField) return;
+  resizeHandle = Array.from(rh.classList).find(c => c.startsWith('rh-')) || '';
+  resizeStartX = e.clientX; resizeStartY = e.clientY;
+  resizeOrig = { x: resizeField.x, y: resizeField.y, w: resizeField.w, h: resizeField.h };
+  document.addEventListener('mousemove', onResizeMove);
+  document.addEventListener('mouseup', onResizeEnd);
+  e.preventDefault(); e.stopPropagation();
+}
+function onResizeMove(e) {
+  if (!resizeField) return;
+  const pRect = document.getElementById('a4Inner').getBoundingClientRect();
+  const dx = (e.clientX - resizeStartX)/pRect.width*100;
+  const dy = (e.clientY - resizeStartY)/pRect.height*100;
+  let {x,y,w,h} = resizeOrig;
+  const minW=10, minH=3;
+  if (resizeHandle.includes('e')) w = Math.max(minW, resizeOrig.w + dx);
+  if (resizeHandle.includes('w')) { const nw = Math.max(minW, resizeOrig.w - dx); x = resizeOrig.x + resizeOrig.w - nw; w = nw; }
+  if (resizeHandle.includes('s')) h = Math.max(minH, resizeOrig.h + dy);
+  if (resizeHandle.includes('n')) { const nh = Math.max(minH, resizeOrig.h - dy); y = resizeOrig.y + resizeOrig.h - nh; h = nh; }
+  resizeField.x = Math.max(0, Math.min(92, x));
+  resizeField.y = Math.max(0, Math.min(92, y));
+  resizeField.w = Math.max(minW, Math.min(92 - resizeField.x, w));
+  resizeField.h = Math.max(minH, Math.min(95 - resizeField.y, h));
+  const el = document.getElementById('fld-'+resizeField.id);
+  if (el) { el.style.left = resizeField.x+'%'; el.style.top = resizeField.y+'%'; el.style.width = resizeField.w+'%'; el.style.height = resizeField.h+'%'; }
+}
+function onResizeEnd() {
+  document.removeEventListener('mousemove', onResizeMove);
+  document.removeEventListener('mouseup', onResizeEnd);
+  resizeField = null;
+  markDirty();
+}
+
+// ===== Left Palette: click to add =====
+document.querySelectorAll('.p-item').forEach(el => {
+  el.addEventListener('click', () => {
+    const type = el.dataset.type;
+    const f = {
+      id: uid(), label: FIELD_TYPES[type] ? FIELD_TYPES[type].label : '', type: type,
+      required: false, placeholder: '', options: [], defaultValue: '', dataSource: '',
+      fontSize: type==='title'?18:(type==='label'?11:null),
+      textAlign: (type==='title'||type==='richtext')?'center':(type==='label'?'left':null),
+      x: 5, y: 5, w: type==='title'?90:(type==='divider'?90:(type==='richtext'?90:40)),
+      h: type==='title'?6:(type==='signature'?8:(type==='richtext'?8:(type==='textarea'?8:5))),
+    };
+    fields.push(f);
+    selectedId = f.id;
+    render();
+    markDirty();
+  });
+});
+
+// ===== Delete field =====
+function deleteField(id) {
+  const idx = fields.findIndex(f => f.id === id);
+  if (idx === -1) return;
+  const label = fields[idx].label || '未命名';
+  if (!confirm(`确认删除字段「${label}」？`)) return;
+  fields.splice(idx, 1);
+  if (selectedId === id) { selectedId = null; showEmptyProp(); }
+  render();
+  markDirty();
+}
+
+// ===== Keyboard =====
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { selectedId = null; document.querySelectorAll('#a4Inner .fld').forEach(el => el.classList.remove('selected')); showEmptyProp(); }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId && !e.target.closest('input,select,textarea')) { deleteField(selectedId); }
+  if ((e.ctrlKey||e.metaKey) && e.key === 's') { e.preventDefault(); saveTemplate(); }
+});
+
+// ===== Properties Panel =====
+function showEmptyProp() {
+  const e1 = document.getElementById('propEmpty'); if (e1) e1.style.display = 'block';
+  const e2 = document.getElementById('propEditor'); if (e2) e2.style.display = 'none';
+}
+function renderProperties() {
+  const f = fields.find(x => x.id === selectedId);
+  if (!f) { showEmptyProp(); return; }
+  document.getElementById('propEmpty').style.display = 'none';
+  const editor = document.getElementById('propEditor');
+  editor.style.display = 'block';
+
+  const ti = FIELD_TYPES[f.type] || FIELD_TYPES.text;
+  const hasOptions = ['select','radio','checkbox'].includes(f.type);
+  const optsHtml = hasOptions ? (f.options||[]).map((o,i) =>
+    `<div class="opt-row"><input class="form-control form-control-sm" value="${esc(o)}" onchange="updateOpt(${i},this.value)" placeholder="选项"><button class="btn btn-outline-danger btn-sm" onclick="removeOpt(${i})"><i class="fas fa-times"></i></button></div>`
+  ).join('') : '';
+
+  const dsOptions = Object.entries(DATA_SOURCES).map(([k,v]) => `<option value="${k}" ${k===f.dataSource?'selected':''}>${v}</option>`).join('');
+
+  editor.innerHTML = `
+    <div class="pp-section">
+      <div class="pp-title">✏️ 字段属性 <span class="tag"><i class="${ti.icon} me-1"></i>${ti.label}</span></div>
+      <div class="mb-2">
+        <label>字段标签</label>
+        <input class="form-control form-control-sm" id="prop-label" value="${esc(f.label)}" oninput="upd('label',this.value)" placeholder="例如：申请人姓名">
+      </div>
+      ${f.type === 'richtext' ? `
+      <div class="mb-2">
+        <label>富文本内容（支持HTML）</label>
+        <textarea class="form-control form-control-sm" rows="3" style="font-family:monospace;font-size:11px;" oninput="upd('label',this.value)" placeholder="输入HTML内容，如：&lt;b&gt;加粗&lt;/b&gt; 或 ☐ 选择框">${esc(f.label||'')}</textarea>
+        <div style="font-size:10px;color:#6b7280;margin-top:2px;">支持HTML标签：b, i, u, font, br, span, ☐/☑ 等</div>
+      </div>
+      ` : ''}
+      <div class="mb-2">
+        <label>字段类型</label>
+        <select class="form-select form-select-sm" id="prop-type" onchange="onTypeChange(this.value)">
+          ${Object.entries(FIELD_TYPES).map(([k,v]) => `<option value="${k}" ${k===f.type?'selected':''}>${v.label}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    <div class="pp-section">
+      <div class="mb-2">
+        <label>数据源</label>
+        <select class="form-select form-select-sm" id="prop-datasource" onchange="upd('dataSource',this.value)">
+          ${dsOptions}
+        </select>
+        <div style="font-size:10px;color:#6b7280;margin-top:2px;">选择后填写时自动加载系统数据</div>
+      </div>
+    </div>
+
+    <div class="pp-section">
+      <div class="mb-2">
+        <label>占位提示</label>
+        <input class="form-control form-control-sm" id="prop-placeholder" value="${esc(f.placeholder)}" oninput="upd('placeholder',this.value)" placeholder="输入框内提示文字">
+      </div>
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="checkbox" id="prop-required" ${f.required?'checked':''} onchange="upd('required',this.checked)">
+        <label class="form-check-label" style="font-size:12px;color:#d1d5db;">必填字段</label>
+      </div>
+      ${hasOptions ? `
+      <hr style="border-color:#2a2d37;">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <label style="margin:0;"><i class="fas fa-list"></i> 选项列表</label>
+        <button class="btn btn-sm btn-outline-success" onclick="addOpt()"><i class="fas fa-plus"></i></button>
+      </div>
+      <div id="opt-list">${optsHtml || '<div class="text-muted small p-1">暂无选项，点击 + 添加</div>'}</div>
+      ` : ''}
+    </div>
+
+    <div class="pp-section">
+      <label>字体</label>
+      <div class="d-flex gap-2 mb-2">
+        <div style="flex:1">
+          <label style="font-size:10px;color:#6b7280;">字号 (pt)</label>
+          <input type="number" class="form-control form-control-sm" value="${f.fontSize||''}" oninput="upd('fontSize',this.value?Number(this.value):null)" placeholder="继承" min="6" max="72" style="font-size:12px;">
+        </div>
+        <div style="flex:1">
+          <label style="font-size:10px;color:#6b7280;">对齐</label>
+          <select class="form-select form-select-sm" onchange="upd('textAlign',this.value||null)">
+            <option value="">继承</option>
+            <option value="left" ${f.textAlign==='left'?'selected':''}>左对齐</option>
+            <option value="center" ${f.textAlign==='center'?'selected':''}>居中</option>
+            <option value="right" ${f.textAlign==='right'?'selected':''}>右对齐</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="pp-section">
+      <div style="font-size:10px;color:#6b7280;">
+        <div><i class="fas fa-arrows-alt me-1"></i>位置: ${f.x?.toFixed(1)}%, ${f.y?.toFixed(1)}%</div>
+        <div><i class="fas fa-expand me-1"></i>尺寸: ${f.w?.toFixed(1)}% × ${f.h?.toFixed(1)}%</div>
+        <div>ID: ${esc(f.id)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function upd(key, val) {
+  const f = fields.find(x => x.id === selectedId);
+  if (!f) return;
+  f[key] = val;
+  render();
+  markDirty();
+}
+function onTypeChange(newType) { upd('type', newType); renderProperties(); }
+function addOpt() {
+  const f = fields.find(x => x.id === selectedId);
+  if (!f) return;
+  f.options = f.options || []; f.options.push('');
+  renderProperties();
+}
+function removeOpt(idx) {
+  const f = fields.find(x => x.id === selectedId);
+  if (!f || !f.options) return;
+  f.options.splice(idx, 1);
+  renderProperties();
+}
+function updateOpt(idx, val) {
+  const f = fields.find(x => x.id === selectedId);
+  if (!f || !f.options) return;
+  f.options[idx] = val;
+}
+
+// ===== Edit field (double-click) =====
+function editField(id) {
+  selectedId = id;
+  document.querySelectorAll('#a4Inner .fld').forEach(el => el.classList.toggle('selected', el.dataset.id === id));
+  renderProperties();
+}
+
+// ===== Mode toggle =====
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelector('.editor-wrap').classList.toggle('preview-mode', mode==='preview');
+  document.getElementById('m-design').className = mode==='design' ? 'btn btn-primary btn-sm' : 'btn btn-outline-light btn-sm';
+  document.getElementById('m-preview').className = mode==='preview' ? 'btn btn-primary btn-sm' : 'btn btn-outline-light btn-sm';
+}
+
+// ===== Zoom =====
+function zoomIt(delta) {
+  const paper = document.getElementById('a4Paper');
+  if (delta === 0) { zoom = 1; }
+  else { zoom = Math.max(0.3, Math.min(2, zoom + delta/100)); }
+  paper.style.transform = 'scale('+zoom+')';
+  document.getElementById('zLvl').textContent = Math.round(zoom*100)+'%';
+}
+
+// ===== Save =====
+function markDirty() {
+  dirty = true;
+  const ind = document.getElementById('saveIndicator');
+  if (ind) { ind.className = 'save-indicator saving'; ind.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> 未保存'; }
+}
+function markSaved() {
+  dirty = false;
+  const ind = document.getElementById('saveIndicator');
+  if (ind) { ind.className = 'save-indicator saved'; ind.innerHTML = '<i class="fas fa-check-circle"></i> 已保存'; }
+}
+function markError() {
+  const ind = document.getElementById('saveIndicator');
+  if (ind) { ind.className = 'save-indicator error'; ind.innerHTML = '<i class="fas fa-exclamation-circle"></i> 保存失败'; }
+}
+
+function saveTemplate() {
+  const name = document.getElementById('tpl-name').value.trim();
+  if (!name) { alert('请输入模板名称'); return; }
+  const cleaned = fields.map(f => ({
+    id: f.id, label: f.label||'', type: f.type||'text', required:!!f.required,
+    placeholder: f.placeholder||'', options: f.options||[], defaultValue: f.defaultValue||'',
+    dataSource: f.dataSource||'', fontSize: f.fontSize||null, textAlign: f.textAlign||null,
+    x: f.x, y: f.y, w: f.w, h: f.h,
+  }));
+  const form = document.createElement('form');
+  form.method = 'POST'; form.style.display = 'none';
+  const add = (n, v) => { const i = document.createElement('input'); i.name=n; i.value=v; form.appendChild(i); };
+  add('name', name);
+  add('description', document.getElementById('tpl-desc').value.trim());
+  add('page_size', document.getElementById('tpl-page-size').value);
+  add('orientation', document.getElementById('tpl-orientation').value);
+  add('fields_json', JSON.stringify(cleaned));
+  document.body.appendChild(form);
+  form.submit();
+}
+
+// ===== Auto-save =====
+function autoSave() {
+  if (!dirty) return;
+  const name = document.getElementById('tpl-name').value.trim();
+  if (!name) return;
+  const cleaned = fields.map(f => ({
+    id: f.id, label: f.label||'', type: f.type||'text', required:!!f.required,
+    placeholder: f.placeholder||'', options: f.options||[], defaultValue: f.defaultValue||'',
+    dataSource: f.dataSource||'', fontSize: f.fontSize||null, textAlign: f.textAlign||null,
+    x: f.x, y: f.y, w: f.w, h: f.h,
+  }));
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('description', document.getElementById('tpl-desc').value.trim());
+  fd.append('page_size', document.getElementById('tpl-page-size').value);
+  fd.append('orientation', document.getElementById('tpl-orientation').value);
+  fd.append('fields_json', JSON.stringify(cleaned));
+  fetch(window.location.href, { method: 'POST', body: fd })
+    .then(r => { if (r.ok) markSaved(); else markError(); }).catch(e => markError());
+}
+setInterval(autoSave, 15000);
+
+// ===== Download template guide =====
+function downloadTemplateGuide() {
+  // Create a sample Excel with the correct headers
+  var guide = [
+    ['字段名', '类型', '必填', '选项', '占位提示'],
+    ['报修科室', '文本', '是', '', '请选择科室'],
+    ['故障原因', '多行文本', '', '', '请输入'],
+    ['设备类型', '下拉', '', '电脑,打印机,笔记本', ''],
+    ['紧急程度', '单选', '是', '普通,加急,紧急', ''],
+    ['是否完成', '多选', '', '', ''],
+    ['维修日期', '日期', '', '', ''],
+    ['故障描述', '富文本', '', '', '☐ 死机 ☐ 蓝屏 ☐ 网络不通'],
+    ['签名确认', '签名', '', '', ''],
+  ];
+  // Use SheetJS-like approach: generate CSV since we can't create xlsx without library
+  // Instead, just show a modal with the format info
+  alert('Excel导入格式：\n\n' +
+    '第一行为表头：字段名 | 类型 | 必填 | 选项 | 占位提示\n\n' +
+    '类型可选值：文本 / 多行文本 / 数字 / 下拉 / 单选 / 多选 / 日期 / 富文本 / 签名 / 分割线\n\n' +
+    '选项用逗号分隔，如：电脑,打印机,笔记本\n\n' +
+    '支持的类型：文本、多行文本、数字、下拉选择、单选按钮、多选勾选、日期、富文本、签名、文件上传\n\n' +
+    '导入后字段自动按垂直顺序排列，多行内容自动识别为富文本');
+}
+
+// ===== Import Excel =====
+function importExcel() {
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.xlsx,.xls';
+  input.onchange = function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var fd = new FormData();
+    fd.append('file', file);
+    fetch('{{ url_for("forms.template_import_excel") }}', { method: 'POST', body: fd })
+      .then(function(r) {
+        if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || '导入失败'); });
+        return r.json();
+      })
+      .then(function(data) {
+        if (!data.fields || !data.fields.length) { alert('未解析到字段'); return; }
+        // Replace all fields with imported ones
+        fields = data.fields.map(function(f, i) {
+          return {
+            id: f.id || ('f_'+(nextId++)),
+            label: f.label || '',
+            type: f.type || 'text',
+            required: !!f.required,
+            placeholder: f.placeholder || '',
+            options: Array.isArray(f.options) ? f.options : [],
+            defaultValue: f.defaultValue || '',
+            dataSource: f.dataSource || '',
+            fontSize: f.fontSize || null,
+            textAlign: f.textAlign || null,
+            x: f.x != null ? f.x : 5,
+            y: f.y != null ? f.y : (3 + i * 7),
+            w: f.w != null ? f.w : 90,
+            h: f.h != null ? f.h : 5.5,
+          };
+        });
+        selectedId = null;
+        render();
+        markDirty();
+      })
+      .catch(function(err) { alert('导入失败: ' + err.message); });
+  };
+  input.click();
+}
+
+// ===== Init =====
+render();
+setTimeout(() => zoomIt(0), 100);
+</script>
+{% endblock %}

@@ -1,0 +1,208 @@
+<view class="page">
+  <!-- 标题栏 -->
+  <view class="header">
+    <view class="header-left">
+      <text class="header-title" wx:if="{{task}}">{{task.name}}</text>
+      <text class="header-sub" wx:if="{{task}}">{{task.task_no}}</text>
+    </view>
+    <view class="header-right">
+      <text class="header-back" bindtap="onBackToBuildings" wx:if="{{selectedBuilding && !scanMode && !scanFloor}}">← 返回</text>
+      <text class="header-back" bindtap="onBackToFloors" wx:if="{{scanFloor && !scanMode}}">← 返回</text>
+    </view>
+  </view>
+
+  <!-- 概览统计 -->
+  <view wx:if="{{!scanFloor && !scanMode}}" class="stats-row">
+    <view class="stats-item"><text class="s-num">{{taskTotal}}</text><text class="s-label">应盘</text></view>
+    <view class="stats-item"><text class="s-num primary">{{taskScanned}}</text><text class="s-label">已盘</text></view>
+    <view class="stats-item"><text class="s-num success">{{taskNormal}}</text><text class="s-label">正常</text></view>
+    <view class="stats-item"><text class="s-num warning">{{taskIssue}}</text><text class="s-label">异常</text></view>
+    <view class="stats-item"><text class="s-num purple">{{taskNew}}</text><text class="s-label">新盘</text></view>
+  </view>
+
+  <!-- 模式1：楼区选择 -->
+  <view wx:if="{{!selectedBuilding && !scanMode}}" class="content">
+    <text class="section-title">🏢 选择楼区</text>
+    <view class="building-grid">
+      <view class="building-card" wx:for="{{buildings}}" wx:key="building" data-building="{{item.building}}" bindtap="onBuildingTap">
+        <text class="b-name">{{item.building}}</text>
+        <text class="b-count">{{item.floors.length}} 层</text>
+      </view>
+    </view>
+    <view wx:if="{{buildings.length == 0}}" class="empty-section">
+      <text>暂无楼区数据，请先在PC端导入资产</text>
+    </view>
+
+    <!-- 已扫明细折叠 -->
+    <view wx:if="{{items.length > 0}}" class="section">
+      <text class="section-title">📋 已盘点 ({{items.length}})</text>
+      <view class="item-card" wx:for="{{items}}" wx:key="id">
+        <view class="item-top">
+          <text class="item-code">{{item.asset_no}}</text>
+          <text class="item-result {{item.result}}">
+            {{item.result == 'normal' ? '正常' : item.result == 'issue' ? '异常' : '新盘'}}
+          </text>
+        </view>
+        <text class="item-info">{{item.device_type}} {{item.brand}} · {{item.floor}}</text>
+        <text class="item-time">{{item.scanned_at}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 模式2：楼层选择（未选中楼层时显示） -->
+  <view wx:if="{{selectedBuilding && !selectedFloorName && !scanMode}}" class="content">
+    <text class="section-title">📍 {{selectedBuilding}} - 选择楼层</text>
+    <view class="floor-grid">
+      <view wx:for="{{buildings}}" wx:key="building">
+        <view wx:if="{{item.building == selectedBuilding}}">
+          <view wx:for="{{item.floors}}" wx:key="name" class="floor-item" data-floor="{{item.name}}" bindtap="onSelectFloor">
+          <view class="floor-left">
+            <text class="floor-name">{{item.name}} 层</text>
+            <text class="floor-hint">已盘 {{item.scanned}}/{{item.total}} · {{selectedFloorName == item.name ? '已选中' : '点击进入'}}</text>
+          </view>
+          <view class="floor-right">
+            <text class="floor-count {{item.scanned > 0 ? 'has' : ''}}">{{item.scanned}}/{{item.total}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+  </view>
+
+  <!-- 模式3：选中楼层后的操作区（独立，不受 scanFloor 影响） -->
+  <view class="selected-floor-bar" wx:if="{{selectedBuilding && selectedFloorName && !scanMode}}">
+    <view class="sfb-info">
+      <text class="sfb-floor">{{selectedFloorName}} 层</text>
+      <text class="sfb-stats">资产 {{selectedFloorTotal}} · 已盘 {{selectedFloorScanned}}</text>
+    </view>
+    <view class="sfb-actions">
+      <view class="sfb-btn primary" bindtap="onStartScan">
+        <text>📷 扫码盘点</text>
+      </view>
+      <view class="sfb-btn" bindtap="onManualInput">
+        <text>✏️ 手动输入</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 模式4：扫码界面 -->
+  <view wx:if="{{scanMode}}" class="scan-mode">
+    <view class="scan-header">
+      <text class="scan-building">{{selectedBuilding}} · {{scanFloor}}层</text>
+      <text class="scan-hint">扫描资产条形码</text>
+    </view>
+
+    <view class="scan-area" bindtap="onStartScan">
+      <text class="scan-icon">📷</text>
+      <text class="scan-text">点击扫码</text>
+      <text class="scan-sub">或点击手动输入</text>
+    </view>
+
+    <view class="scan-actions">
+      <view class="scan-btn" bindtap="onManualInput">
+        <text>✏️ 手动输入编码</text>
+      </view>
+      <view class="scan-btn secondary" bindtap="onBackToFloor">
+        <text>← 返回楼层</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 资产详情弹窗 -->
+  <view wx:if="{{showAssetDetail}}" class="modal-overlay" catchtouchmove="preventDefault">
+    <view class="asset-modal">
+      <scroll-view scroll-y class="asset-scroll">
+        <view class="asset-header">
+          <text class="asset-title">{{assetTitle}}</text>
+          <text class="asset-code">编码: {{scannedCode}}</text>
+        </view>
+
+        <!-- 资产信息 -->
+        <view class="asset-info-grid">
+          <view class="info-row">
+            <text class="info-label">设备类型</text>
+            <text class="info-value">{{assetDeviceType}}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">品牌</text>
+            <text class="info-value">{{assetBrand}}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">型号</text>
+            <text class="info-value">{{assetModelNo}}</text>
+          </view>
+          <view class="info-row" wx:if="{{hasSn}}">
+            <text class="info-label">序列号</text>
+            <text class="info-value">{{assetSn}}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">科室</text>
+            <text class="info-value">{{assetDept}}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">位置</text>
+            <text class="info-value">{{assetLocation}}</text>
+          </view>
+          <view class="info-row" wx:if="{{hasIp}}">
+            <text class="info-label">IP</text>
+            <text class="info-value">{{assetIp}}</text>
+          </view>
+          <view class="info-row" wx:if="{{hasCpu}}">
+            <text class="info-label">CPU</text>
+            <text class="info-value">{{assetCpu}}</text>
+          </view>
+          <view class="info-row" wx:if="{{hasMemory}}">
+            <text class="info-label">内存</text>
+            <text class="info-value">{{assetMemory}}</text>
+          </view>
+          <view class="info-row" wx:if="{{hasDisk}}">
+            <text class="info-label">硬盘</text>
+            <text class="info-value">{{assetDisk}}</text>
+          </view>
+        </view>
+
+        <!-- 编辑模式 -->
+        <view wx:if="{{editMode}}" class="edit-section">
+          <text class="edit-title">✏️ 编辑资产信息</text>
+          <view class="edit-field" wx:for="{{editFieldList}}" wx:key="key">
+            <text class="edit-label">{{item.label}}</text>
+            <input class="edit-input" value="{{item.value}}" data-field="{{item.key}}" bindinput="onEditFieldInput" />
+          </view>
+        </view>
+
+        <!-- 结果选择 -->
+        <view class="result-section">
+          <text class="result-title">盘点结果</text>
+          <view class="result-options">
+            <view class="result-option {{scanResult == 'normal' ? 'active ok' : ''}}" data-result="normal" bindtap="onResultChange">
+              <text class="ro-icon">✅</text>
+              <text>无问题</text>
+            </view>
+            <view class="result-option {{scanResult == 'issue' ? 'active issue' : ''}}" data-result="issue" bindtap="onResultChange">
+              <text class="ro-icon">⚠️</text>
+              <text>有异常</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 备注 -->
+        <view wx:if="{{scanResult == 'issue' || editMode}}" class="notes-section">
+          <textarea class="notes-input" placeholder="描述异常情况..." value="{{scanNotes}}" bindinput="onNotesInput" />
+        </view>
+
+        <!-- 操作按钮 -->
+        <view class="action-btns">
+          <view class="action-btn primary" bindtap="onConfirmResult">
+            <text>{{isNewAsset ? '确认为新盘' : '确认盘点'}}</text>
+          </view>
+          <view class="action-btn secondary" wx:if="{{!isNewAsset && !editMode}}" bindtap="onEditMode">
+            <text>有误，编辑后确认</text>
+          </view>
+          <view class="action-btn cancel" bindtap="onSkipScan">
+            <text>跳过，继续扫码</text>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+</view>

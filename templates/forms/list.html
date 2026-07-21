@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}电子表单{% endblock %}
+{% block content %}
+<style>
+.status-badge { font-size:12px; padding:3px 10px; border-radius:20px; font-weight:500; }
+.status-draft { background:#fef3c7; color:#92400e; }
+.status-active { background:#dbeafe; color:#1e40af; }
+.status-completed { background:#d1fae5; color:#065f46; }
+</style>
+<div class="container-fluid px-4 py-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0"><i class="fas fa-file-alt me-2"></i>电子表单</h4>
+        <div class="d-flex align-items-center gap-2">
+            <select class="form-select form-select-sm" style="width:auto;min-width:160px" onchange="if(this.value) window.location.href='{{ url_for('forms.form_list') }}?form_type='+this.value; else window.location.href='{{ url_for('forms.form_list') }}';">
+                <option value="">全部类型</option>
+                {% for ft in type_names %}
+                <option value="{{ ft }}" {{ 'selected' if active_filter==ft else '' }}>{{ type_names[ft] }}</option>
+                {% endfor %}
+            </select>
+            <a href="{{ url_for('forms.template_list') }}" class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-puzzle-piece"></i> 模板管理
+            </a>
+            <a href="{{ url_for('forms.form_create') }}" class="btn btn-sm btn-success">
+                <i class="fas fa-plus"></i> 新建表单
+            </a>
+        </div>
+    </div>
+
+    {% if records %}
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>表单名称</th>
+                            <th>类型</th>
+                            <th>状态</th>
+                            <th>创建人</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in records %}
+                        <tr>
+                            <td>{{ r.id }}</td>
+                            <td>{{ r.name }}</td>
+                            <td>
+                                {% if r.template %}
+                                <span class="badge bg-secondary" title="模板ID: {{ r.template_id }}">{{ r.template.name }}</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ r.form_type }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if r.status == 'draft' %}
+                                <span class="status-badge status-draft">📄 草稿</span>
+                                {% elif r.status == 'submitted' %}
+                                <span class="status-badge" style="background:#fef3c7;color:#92400e;">⏳ 待审批</span>
+                                {% elif r.status == 'active' %}
+                                <span class="status-badge status-active">🔄 进行中</span>
+                                {% elif r.status == 'completed' %}
+                                <span class="status-badge status-completed">✅ 已完成</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ r.created_by }}</td>
+                            <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '' }}</td>
+                            <td style="white-space:nowrap">
+                                <a href="{{ url_for('forms.form_view', fid=r.id) }}" class="btn btn-sm btn-outline-primary">查看</a>
+                                <a href="{{ url_for('forms.form_print', fid=r.id) }}" class="btn btn-sm btn-outline-secondary" target="_blank"><i class="fas fa-print"></i></a>
+                                {% if r.status == 'draft' %}
+                                <form method="POST" action="{{ url_for('forms.form_publish', fid=r.id) }}" style="display:inline" onsubmit="return confirm('确认发布？发布后将生成关联工单')">
+                                    <button type="submit" class="btn btn-sm btn-success"><i class="fas fa-paper-plane"></i> 发布</button>
+                                </form>
+                                {% endif %}
+                                {% if r.work_order_id %}
+                                <a href="{{ url_for('orders.detail', order_id=r.work_order_id) }}" class="btn btn-sm btn-outline-info" title="关联工单"><i class="fas fa-external-link-alt"></i></a>
+                                {% endif %}
+                                <form method="POST" action="{{ url_for('forms.form_delete', fid=r.id) }}" style="display:inline" onsubmit="return confirm('确认删除？')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+        <i class="fas fa-file-alt fa-3x mb-3"></i>
+        <p class="mb-3">暂无表单记录，点击上方按钮创建</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

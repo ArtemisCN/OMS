@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>维修验收单打印</title>
+<style>
+@page { size: A4; margin: 7mm; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'SimSun', '宋体', serif; font-size: 9pt; color: #000; }
+.page { width: 196mm; margin: 0 auto; }
+
+/* 2列，卡片间有2mm间隙供撕开 */
+.grid {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 2mm;
+}
+
+.card {
+    border: 1.2px solid #000;
+    padding: 1.5mm 2mm;
+    width: calc(50% - 1mm);
+    height: 66mm;
+    display: flex;
+    flex-direction: column;
+}
+
+.h { display: flex; align-items: baseline; margin-bottom: 0.6mm; font-size: 7.5pt; line-height: 1.5; }
+.lbl { width: 15mm; font-weight: 600; flex-shrink: 0; }
+.v { flex: 1; border-bottom: 0.5px solid #999; padding: 0 1mm; min-height: 4mm; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v2 { flex: 1; padding: 0 1mm; min-height: 4mm; }
+
+.ttl { font-size: 10pt; font-weight: 700; text-align: center; letter-spacing: 2px; padding-bottom: 0.8mm; margin-bottom: 0.8mm; border-bottom: 0.5px solid #000; }
+
+.cx {
+    border: 0.5px solid #999; padding: 0.5mm 1mm; margin-bottom: 0.6mm;
+    font-size: 7pt; min-height: 3mm; line-height: 1.4;
+    overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+
+.sg { display: flex; justify-content: space-between; margin-top: auto; padding-top: 0.5mm; font-size: 7pt; border-top: 0.5px solid #ccc; }
+.si { display: flex; align-items: center; gap: 2mm; }
+.sl { display: inline-block; width: 12mm; border-bottom: 0.5px solid #999; }
+
+@media print {
+    .np { display: none !important; }
+    @page { margin: 5mm; }
+    .card { break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+
+<div class="np" style="text-align:center;padding:8px;margin-bottom:8px;background:#f1f5f9;border-radius:6px;">
+    <button onclick="window.print()" style="padding:6px 20px;font-size:13px;cursor:pointer;">🖨️ 打印</button>
+    <span style="margin-left:10px;color:#64748b;font-size:11px;" id="pageInfo"></span>
+</div>
+
+<div class="page" id="pageContainer">
+{% set total = drafts|length %}
+{% set per_page = 8 %}
+{% for page_start in range(0, total, per_page) %}
+{% if page_start > 0 %}<div style="page-break-before:always;"></div>{% endif %}
+<div class="grid">
+    {% for i in range(per_page) %}
+    {% set idx = page_start + i %}
+    {% if idx < total %}
+    {% set d = drafts[idx] %}
+    <div class="card">
+        <div class="ttl">维修验收单</div>
+        <div class="h">
+            <span class="lbl">日期</span>
+            <span class="v">{{ d.report_date.strftime('%Y-%m-%d') if d.report_date else '' }}</span>
+            <span class="lbl" style="margin-left:2mm;">科室</span>
+            <span class="v">{{ d.department or '' }}</span>
+        </div>
+        <div class="h">
+            <span class="lbl">设备</span>
+            <span class="v">{{ d.device_type or '' }}</span>
+            <span class="lbl" style="margin-left:2mm;">编号</span>
+            <span class="v">{{ d.asset.asset_no if d.asset else '' }}</span>
+        </div>
+        <div class="h"><span class="lbl">内容</span></div>
+        <div class="cx">{{ d.repair_content or '' }}</div>
+        <div class="h">
+            <span class="lbl">金额</span>
+            <span class="v2"><strong>¥{{ '%.2f'|format(d.total_amount) }}</strong></span>
+            <span style="margin-left:2mm;font-size:7pt;">☑已完成 □未完成</span>
+        </div>
+        <div class="sg">
+            <span class="si"><span class="sl"></span> 验收人</span>
+            <span class="si"><span class="sl"></span> 日期</span>
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+{% endfor %}
+</div>
+
+<script>
+var total = {{ total }};
+var per = 8;
+var pages = Math.ceil(total / per);
+document.getElementById('pageInfo').textContent = '共' + total + '张 · 每页8张 · ' + pages + '页' + (pages > 1 ? ' · 间隙处可撕开' : '');
+</script>
+
+</body>
+</html>

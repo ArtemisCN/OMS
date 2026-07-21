@@ -1,0 +1,397 @@
+{% extends "base.html" %}
+{% block title %}成绩管理 - {{ exam.title }} - {{ system_name }}{% endblock %}
+{% block extra_head %}
+<link href="/static/css/exam.css?v=4" rel="stylesheet">
+<style>
+/* ===== 详情页顶部 ===== */
+.exam-detail-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
+}
+.exam-detail-header .hd-left { flex: 1; min-width: 200px; }
+.exam-detail-header h2 { font-size: 1.25rem; font-weight: 700; margin: 0 0 4px; }
+.exam-detail-header .hd-desc { font-size: .84rem; color: var(--text-tertiary,#94a3b8); margin: 0; }
+.exam-detail-header .hd-actions { display: flex; gap: 8px; align-items: center; }
+.exam-detail-header .hd-actions a,
+.exam-detail-header .hd-actions button {
+  padding: 6px 16px; border-radius: 8px; font-size: .82rem;
+  border: 1px solid var(--border-color,#e2e8f0); background: var(--bg-card,#fff);
+  color: var(--text-primary); text-decoration: none; cursor: pointer;
+  transition: all .15s; display: inline-flex; align-items: center; gap: 5px;
+}
+.exam-detail-header .hd-actions a:hover,
+.exam-detail-header .hd-actions button:hover {
+  border-color: var(--exam-primary,#6366f1); color: var(--exam-primary,#6366f1);
+}
+
+/* ===== 统计行 ===== */
+.stats-bar {
+  display: flex; gap: 0; flex-wrap: wrap;
+  background: var(--bg-card,#fff); border-radius: 10px;
+  border: 1px solid var(--border-color,#e2e8f0);
+  overflow: hidden; margin-bottom: 24px;
+}
+.stats-bar .stat-cell {
+  flex: 1; min-width: 100px; padding: 16px 12px;
+  text-align: center; position: relative;
+}
+.stats-bar .stat-cell + .stat-cell { border-left: 1px solid var(--border-color,#e2e8f0); }
+.stats-bar .stat-cell .stat-icon { font-size: 1.2rem; margin-bottom: 4px; }
+.stats-bar .stat-cell .stat-num {
+  font-size: 1.4rem; font-weight: 700; color: var(--text-primary,#1e293b);
+  line-height: 1.2;
+}
+.stats-bar .stat-cell .stat-num.pass-high { color: #22c55e; }
+.stats-bar .stat-cell .stat-num.pass-mid { color: #f59e0b; }
+.stats-bar .stat-cell .stat-num.pass-low { color: #ef4444; }
+.stats-bar .stat-cell .stat-lbl {
+  font-size: .75rem; color: var(--text-tertiary,#94a3b8); margin-top: 2px;
+}
+@media (max-width: 600px) {
+  .stats-bar .stat-cell { min-width: 33%; }
+  .stats-bar .stat-cell:nth-child(4) { border-left: none; }
+}
+
+/* ===== 成绩表格 ===== */
+.scores-wrap {
+  background: var(--bg-card,#fff); border-radius: 10px;
+  border: 1px solid var(--border-color,#e2e8f0); overflow: hidden;
+  margin-bottom: 24px;
+}
+.scores-wrap .sw-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid var(--border-color,#e2e8f0);
+}
+.scores-wrap .sw-header h4 {
+  margin: 0; font-size: .9rem; font-weight: 600;
+  display: flex; align-items: center; gap: 6px;
+}
+.scores-wrap .sw-header .sw-count {
+  font-size: .78rem; color: var(--text-tertiary,#94a3b8);
+  background: var(--bg-secondary,#f1f5f9); padding: 2px 10px;
+  border-radius: 10px;
+}
+.scores-table {
+  width: 100%; border-collapse: collapse; font-size: .84rem;
+}
+.scores-table th {
+  padding: 10px 14px; text-align: left; font-weight: 500;
+  color: var(--text-tertiary,#94a3b8); font-size: .78rem;
+  background: var(--bg-secondary,#f8fafc);
+  border-bottom: 1px solid var(--border-color,#e2e8f0);
+}
+.scores-table td {
+  padding: 11px 14px; border-bottom: 1px solid var(--border-color,#e2e8f0);
+  vertical-align: middle;
+}
+.scores-table tr:last-child td { border-bottom: none; }
+.scores-table tr:hover td { background: rgba(99,102,241,.03); }
+.scores-table .rank-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 6px;
+  font-size: .8rem; font-weight: 600;
+}
+.scores-table .rank-1 { background: #fef3c7; color: #d97706; }
+.scores-table .rank-2 { background: #f1f5f9; color: #64748b; }
+.scores-table .rank-3 { background: #fef2f2; color: #dc2626; }
+.scores-table .rank-other { background: transparent; color: var(--text-tertiary); }
+.scores-table .candidate-name { font-weight: 500; }
+.scores-table .score-val { font-weight: 600; font-size: .9rem; }
+.scores-table .accuracy-bar-wrap {
+  display: flex; align-items: center; gap: 8px;
+}
+.scores-table .accuracy-bar {
+  width: 60px; height: 5px; background: var(--bg-secondary,#e2e8f0);
+  border-radius: 3px; overflow: hidden; flex-shrink: 0;
+}
+.scores-table .accuracy-bar .fill {
+  height: 100%; border-radius: 3px; transition: width .3s;
+}
+.scores-table .accuracy-bar .fill.high { background: #22c55e; }
+.scores-table .accuracy-bar .fill.mid { background: #f59e0b; }
+.scores-table .accuracy-bar .fill.low { background: #ef4444; }
+.scores-table .result-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 10px; border-radius: 10px; font-size: .78rem; font-weight: 500;
+}
+.result-badge.passed { background: #dcfce7; color: #15803d; }
+.result-badge.failed { background: #fef2f2; color: #dc2626; }
+[data-theme="dark"] .result-badge.passed { background: rgba(34,197,94,.15); color: #4ade80; }
+[data-theme="dark"] .result-badge.failed { background: rgba(239,68,68,.15); color: #f87171; }
+[data-theme="dark"] .scores-table .rank-1 { background: rgba(217,119,6,.2); color: #fbbf24; }
+[data-theme="dark"] .scores-table .rank-2 { background: rgba(100,116,139,.2); color: #94a3b8; }
+[data-theme="dark"] .scores-table .rank-3 { background: rgba(220,38,38,.2); color: #ef4444; }
+
+/* ===== 试题回顾 ===== */
+.questions-wrap {
+  background: var(--bg-card,#fff); border-radius: 10px;
+  border: 1px solid var(--border-color,#e2e8f0); margin-bottom: 24px;
+}
+.questions-wrap .qw-header {
+  padding: 14px 18px; border-bottom: 1px solid var(--border-color,#e2e8f0);
+  display: flex; align-items: center; gap: 8px;
+}
+.questions-wrap .qw-header h4 { margin: 0; font-size: .9rem; font-weight: 600; }
+.questions-wrap .qw-header .qw-count {
+  font-size: .78rem; color: var(--text-tertiary);
+  background: var(--bg-secondary,#f1f5f9); padding: 2px 10px; border-radius: 10px;
+}
+.q-review-list { list-style: none; margin: 0; padding: 0; }
+.q-review-item {
+  padding: 14px 18px; border-bottom: 1px solid var(--border-color,#e2e8f0);
+  cursor: pointer; transition: background .15s;
+}
+.q-review-item:last-child { border-bottom: none; }
+.q-review-item:hover { background: rgba(99,102,241,.02); }
+.q-review-item .qri-top {
+  display: flex; align-items: flex-start; gap: 10px; justify-content: space-between;
+}
+.q-review-item .qri-left { display: flex; align-items: flex-start; gap: 10px; flex: 1; }
+.q-review-item .qri-num {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .8rem; font-weight: 600; margin-top: 1px;
+}
+.q-review-item .qri-num.correct { background: #dcfce7; color: #15803d; }
+.q-review-item .qri-num.wrong { background: #fef2f2; color: #dc2626; }
+[data-theme="dark"] .q-review-item .qri-num.correct { background: rgba(34,197,94,.15); color: #4ade80; }
+[data-theme="dark"] .q-review-item .qri-num.wrong { background: rgba(239,68,68,.15); color: #f87171; }
+.q-review-item .qri-text { font-size: .85rem; line-height: 1.5; flex: 1; }
+.q-review-item .qri-type {
+  flex-shrink: 0; font-size: .72rem; padding: 1px 8px; border-radius: 4px;
+  background: var(--bg-secondary,#f1f5f9); color: var(--text-tertiary,#94a3b8);
+  margin-left: 8px; white-space: nowrap;
+}
+.q-review-item .qri-toggle {
+  flex-shrink: 0; color: var(--text-tertiary,#94a3b8);
+  font-size: .8rem; transition: transform .2s; margin-left: 8px;
+}
+.q-review-item .qri-toggle.open { transform: rotate(180deg); }
+.q-review-item .qri-detail {
+  display: none; margin-top: 10px; padding: 12px; border-radius: 8px;
+  background: var(--bg-secondary,#f8fafc); font-size: .82rem; line-height: 1.6;
+}
+.q-review-item .qri-detail.open { display: block; }
+.q-review-item .qri-detail .opt-row {
+  display: flex; align-items: center; gap: 8px; padding: 4px 0;
+}
+.q-review-item .qri-detail .opt-row .opt-label {
+  width: 20px; font-weight: 600; flex-shrink: 0;
+}
+.q-review-item .qri-detail .opt-row .opt-text { flex: 1; }
+.q-review-item .qri-detail .opt-row .opt-mark {
+  flex-shrink: 0; font-size: .9rem;
+}
+.q-review-item .qri-detail .opt-row .opt-mark.user { color: #6366f1; }
+.q-review-item .qri-detail .opt-row .opt-mark.correct-ans { color: #22c55e; }
+.q-review-item .qri-detail .ans-info { margin-top: 6px; display: flex; gap: 16px; flex-wrap: wrap; }
+.q-review-item .qri-detail .ans-info span { display: flex; align-items: center; gap: 4px; }
+.q-review-item .qri-detail .ans-info .lbl { color: var(--text-tertiary); font-size: .78rem; }
+.q-review-item .qri-detail .analysis-box {
+  margin-top: 8px; padding: 8px 12px; background: rgba(99,102,241,.06);
+  border-radius: 6px; border-left: 3px solid var(--exam-primary,#6366f1);
+}
+
+/* ===== 空状态 ===== */
+.empty-state-detail {
+  text-align: center; padding: 60px 20px; color: var(--text-tertiary,#94a3b8);
+}
+.empty-state-detail .empty-icon { font-size: 2.5rem; display: block; margin-bottom: 8px; }
+.empty-state-detail p { margin: 0; font-size: .9rem; }
+
+/* 暗色覆盖 */
+[data-theme="dark"] .exam-detail-header .hd-actions a,
+[data-theme="dark"] .exam-detail-header .hd-actions button { background: #1a202c; border-color: #2d3748; }
+[data-theme="dark"] .stats-bar { border-color: #2d3748; }
+[data-theme="dark"] .stats-bar .stat-cell + .stat-cell { border-color: #2d3748; }
+[data-theme="dark"] .scores-wrap { border-color: #2d3748; }
+[data-theme="dark"] .questions-wrap { border-color: #2d3748; }
+[data-theme="dark"] .scores-wrap .sw-header { border-color: #2d3748; }
+[data-theme="dark"] .scores-table th { background: #1a202c; border-color: #2d3748; }
+[data-theme="dark"] .scores-table td { border-color: #2d3748; }
+[data-theme="dark"] .q-review-item { border-color: #2d3748; }
+[data-theme="dark"] .q-review-item .qri-detail { background: #1a202c; }
+[data-theme="dark"] .scores-wrap .sw-header .sw-count,
+[data-theme="dark"] .questions-wrap .qw-header .qw-count { background: #1a202c; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="exam-detail-header">
+  <div class="hd-left">
+    <h2><i class="fas fa-graduation-cap" style="color:var(--exam-primary,#6366f1);"></i> {{ exam.title }}</h2>
+    {% if exam.description %}<p class="hd-desc">{{ exam.description }}</p>{% endif %}
+  </div>
+  <div class="hd-actions">
+    <a href="{{ url_for('exam.exam_edit', exam_id=exam.id) }}"><i class="fas fa-edit"></i> 编辑设置</a>
+    <a href="{{ url_for('exam.exam_ranking', exam_id=exam.id) }}"><i class="fas fa-trophy"></i> 完整排名</a>
+    <a href="{{ url_for('exam.exam_list') }}"><i class="fas fa-arrow-left"></i> 返回</a>
+  </div>
+</div>
+
+<!-- 统计行 -->
+{% set total_q = exam.questions.count() %}
+{% set passed_count = submissions|selectattr('score', 'ge', exam.pass_score)|list|length if submissions else 0 %}
+{% set pass_rate = (passed_count / submissions|length * 100)|round(1) if submissions else 0 %}
+<div class="stats-bar">
+  <div class="stat-cell">
+    <div class="stat-icon">📝</div>
+    <div class="stat-num">{{ total_q }}</div>
+    <div class="stat-lbl">总题数</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-icon">⏱</div>
+    <div class="stat-num">{{ exam.duration_minutes }}</div>
+    <div class="stat-lbl">时长(分钟)</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-icon">🎯</div>
+    <div class="stat-num">{{ exam.pass_score }}%</div>
+    <div class="stat-lbl">及格线</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-icon">🏆</div>
+    <div class="stat-num">{{ exam.total_score }}</div>
+    <div class="stat-lbl">总分</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-icon">👥</div>
+    <div class="stat-num">{{ submissions|length }}</div>
+    <div class="stat-lbl">已交卷</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-icon">📈</div>
+    <div class="stat-num pass-{% if pass_rate >= 80 %}high{% elif pass_rate >= 50 %}mid{% else %}low{% endif %}">{{ pass_rate }}%</div>
+    <div class="stat-lbl">通过率</div>
+  </div>
+</div>
+
+<!-- 成绩表格 -->
+<div class="scores-wrap">
+  <div class="sw-header">
+    <h4><i class="fas fa-users" style="color:var(--exam-primary,#6366f1);"></i> 考试成绩</h4>
+    <span class="sw-count">{{ submissions|length }} 人</span>
+  </div>
+  {% if submissions %}
+  <table class="scores-table">
+    <thead>
+      <tr>
+        <th style="width:48px;">#</th>
+        <th>考生</th>
+        <th style="width:80px;">得分</th>
+        <th style="width:120px;">正确率</th>
+        <th style="width:90px;">用时</th>
+        <th style="width:80px;">结果</th>
+        <th style="width:80px;">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in submissions %}
+      {% set pct = '%.1f'|format((s.score/s.total_possible*100) if s.total_possible>0 else 0) %}
+      {% set pct_num = (s.score/s.total_possible*100) if s.total_possible>0 else 0 %}
+      {% set m = s.duration_seconds // 60 %}
+      {% set sec = s.duration_seconds % 60 %}
+      <tr>
+        <td>
+          <span class="rank-num {% if loop.index == 1 %}rank-1{% elif loop.index == 2 %}rank-2{% elif loop.index == 3 %}rank-3{% else %}rank-other{% endif %}">
+            {{ loop.index }}
+          </span>
+        </td>
+        <td class="candidate-name">{{ s.user.display_name if s.user else '未知' }}</td>
+        <td>
+          <span class="score-val">{{ s.score|int }}</span>
+          <span style="color:var(--text-tertiary,#94a3b8);font-size:.78rem;">/{{ s.total_possible|int }}</span>
+        </td>
+        <td>
+          <div class="accuracy-bar-wrap">
+            <span style="font-size:.82rem;font-weight:500;{% if pct_num >= 80 %}color:#22c55e{% elif pct_num >= 50 %}color:#f59e0b{% else %}color:#ef4444{% endif %}">{{ pct }}%</span>
+            <div class="accuracy-bar">
+              <div class="fill {% if pct_num >= 80 %}high{% elif pct_num >= 50 %}mid{% else %}low{% endif %}" style="width:{{ pct_num|round }}%;"></div>
+            </div>
+          </div>
+        </td>
+        <td style="color:var(--text-secondary,#64748b);font-size:.82rem;">{{ m }}分{{ sec }}秒</td>
+        <td>
+          <span class="result-badge {{ 'passed' if s.is_passed(exam.pass_score) else 'failed' }}">
+            {{ '✓ 及格' if s.is_passed(exam.pass_score) else '✗ 不及格' }}
+          </span>
+        </td>
+        <td>
+          <a href="{{ url_for('exam.exam_review_submission', exam_id=exam.id, submission_id=s.id) }}" class="btn btn-sm" style="padding:3px 10px;font-size:.78rem;border:1px solid var(--border-color,#e2e8f0);border-radius:6px;text-decoration:none;color:var(--text-primary);"><i class="fas fa-eye"></i> 答卷</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state-detail">
+    <span class="empty-icon">📋</span>
+    <p>暂无考生提交答卷</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- 试题回顾 -->
+<div class="questions-wrap">
+  <div class="qw-header">
+    <h4><i class="fas fa-list" style="color:var(--exam-primary,#6366f1);"></i> 试题回顾</h4>
+    <span class="qw-count">{{ questions|length }} 题</span>
+  </div>
+  <ul class="q-review-list">
+    {% for q in questions %}
+    <li class="q-review-item" onclick="toggleQDetail(this)">
+      <div class="qri-top">
+        <div class="qri-left">
+          <span class="qri-num correct">✓</span>
+          <span class="qri-text">{{ q.question_text }}</span>
+        </div>
+        <span class="qri-type">{{ {'single':'单选','multi':'多选','judge':'判断','fill':'填空'}[q.question_type] }} · {{ q.score }}分</span>
+        <span class="qri-toggle">▼</span>
+      </div>
+      <div class="qri-detail">
+        {% set opts = q.get_options() %}
+        {% if q.question_type in ('single', 'multi') and opts %}
+        {% for opt in opts %}
+        <div class="opt-row">
+          <span class="opt-label">{{ opt.label }}</span>
+          <span class="opt-text">{{ opt.text }}</span>
+          {% if opt.label == q.answer %}
+          <span class="opt-mark correct-ans">✓ 正确答案</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% if q.question_type == 'judge' %}
+        <div class="opt-row"><span>正确答案：{{ '正确' if q.answer == 'T' else '错误' }}</span></div>
+        {% endif %}
+        {% if q.question_type == 'fill' %}
+        <div class="opt-row"><span>正确答案：{{ q.answer }}</span></div>
+        {% endif %}
+        <div class="ans-info">
+          <span><span class="lbl">答案：</span>{{ q.answer }}</span>
+          <span><span class="lbl">分值：</span>{{ q.score }}分</span>
+        </div>
+        {% if q.analysis %}
+        <div class="analysis-box">
+          <i class="fas fa-lightbulb" style="color:var(--exam-primary,#6366f1);margin-right:5px;"></i>
+          {{ q.analysis }}
+        </div>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function toggleQDetail(el) {
+  var detail = el.querySelector('.qri-detail');
+  var toggle = el.querySelector('.qri-toggle');
+  if (!detail) return;
+  detail.classList.toggle('open');
+  if (toggle) toggle.classList.toggle('open');
+}
+</script>
+{% endblock %}

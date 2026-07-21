@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}登录 · {{ system_name }}{% endblock %}
+{% block content %}
+<style>
+/* ====== 登录页专属样式 ====== */
+.login-wrapper {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 30%, #0f172a 60%, #1a1f3a 100%);
+    background-size: 400% 400%;
+    animation: gradient-shift 12s ease infinite;
+    overflow: hidden;
+}
+
+/* 浮动装饰图标 */
+.login-float-icon {
+    position: absolute;
+    font-size: 28px;
+    opacity: 0.06;
+    animation: float 6s ease-in-out infinite;
+    pointer-events: none;
+}
+.login-float-icon:nth-child(1) { top: 12%; left: 10%; font-size: 42px; animation-delay: 0s; opacity: 0.07; }
+.login-float-icon:nth-child(2) { top: 25%; right: 15%; font-size: 34px; animation-delay: 1s; opacity: 0.05; }
+.login-float-icon:nth-child(3) { bottom: 30%; left: 8%; font-size: 30px; animation-delay: 2s; opacity: 0.06; }
+.login-float-icon:nth-child(4) { bottom: 15%; right: 20%; font-size: 38px; animation-delay: 0.5s; opacity: 0.04; }
+.login-float-icon:nth-child(5) { top: 45%; left: 22%; font-size: 22px; animation-delay: 3s; opacity: 0.05; }
+.login-float-icon:nth-child(6) { top: 55%; right: 25%; font-size: 26px; animation-delay: 1.5s; opacity: 0.04; }
+.login-float-icon:nth-child(7) { top: 18%; left: 45%; font-size: 18px; animation-delay: 4s; opacity: 0.05; }
+.login-float-icon:nth-child(8) { bottom: 40%; right: 8%; font-size: 32px; animation-delay: 2.5s; opacity: 0.04; }
+
+/* 网格背景 */
+.login-grid {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background-image:
+        linear-gradient(rgba(99,102,241,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99,102,241,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+}
+
+/* 光晕效果 */
+.login-glow {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(100px);
+    pointer-events: none;
+    animation: pulse-soft 4s ease-in-out infinite;
+}
+.login-glow:nth-child(1) {
+    width: 400px; height: 400px;
+    background: rgba(99,102,241,0.08);
+    top: -150px; left: -100px;
+}
+.login-glow:nth-child(2) {
+    width: 350px; height: 350px;
+    background: rgba(6,182,212,0.06);
+    bottom: -100px; right: -80px;
+    animation-delay: 2s;
+}
+
+/* 登录卡片 - 毛玻璃 */
+.login-card {
+    position: relative; z-index: 10;
+    width: 400px; max-width: 90vw;
+    background: rgba(255,255,255,0.06);
+    backdrop-filter: blur(40px) saturate(1.8);
+    -webkit-backdrop-filter: blur(40px) saturate(1.8);
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow:
+        0 24px 64px rgba(0,0,0,0.3),
+        0 8px 20px rgba(0,0,0,0.15),
+        inset 0 1px 0 rgba(255,255,255,0.1);
+    animation: scaleIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    padding: 40px 36px 36px;
+}
+
+.login-card .brand-icon {
+    width: 56px; height: 56px; margin: 0 auto 16px;
+    background: linear-gradient(135deg, var(--primary), #8b5cf6, var(--accent));
+    border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px; color: #fff;
+    box-shadow: 0 8px 24px rgba(99,102,241,0.3);
+    animation: float 4s ease-in-out infinite;
+}
+
+.login-card h4 {
+    color: rgba(255,255,255,0.9);
+    font-weight: 700; font-size: 20px;
+    text-align: center; margin-bottom: 4px;
+}
+.login-card .subtitle {
+    color: rgba(255,255,255,0.4);
+    font-size: 13px; text-align: center; margin-bottom: 28px;
+    font-weight: 400;
+}
+
+.login-card .form-label {
+    color: rgba(255,255,255,0.6);
+    font-size: 12px; font-weight: 500;
+    margin-bottom: 6px;
+}
+.login-card .form-control {
+    background: rgba(255,255,255,0.06);
+    border: 1.5px solid rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.85);
+    padding: 11px 14px;
+    font-size: 14px;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+.login-card .form-control:focus {
+    background: rgba(255,255,255,0.1);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15), 0 4px 12px rgba(0,0,0,0.1);
+}
+.login-card .form-control::placeholder {
+    color: rgba(255,255,255,0.25);
+}
+.login-card .form-control:-webkit-autofill {
+    -webkit-text-fill-color: rgba(255,255,255,0.85) !important;
+    -webkit-box-shadow: 0 0 0 30px rgba(255,255,255,0.06) inset !important;
+    transition: background-color 5000s;
+}
+.login-card .input-group-text {
+    background: rgba(255,255,255,0.06);
+    border: 1.5px solid rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.4);
+    border-radius: 12px 0 0 12px !important;
+}
+
+.login-card .btn-login {
+    width: 100%; padding: 11px;
+    background: linear-gradient(135deg, var(--primary), #4f46e5, #7c3aed);
+    background-size: 200% 100%;
+    border: none; border-radius: 12px;
+    color: #fff; font-size: 15px; font-weight: 600;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(99,102,241,0.3);
+    position: relative; overflow: hidden;
+}
+.login-card .btn-login:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(99,102,241,0.4);
+    background-position: 100% 0;
+}
+.login-card .btn-login:active { transform: translateY(0); }
+.login-card .btn-login i { margin-right: 6px; }
+
+.login-divider {
+    text-align: center; margin-top: 20px;
+    color: rgba(255,255,255,0.2);
+    font-size: 11px;
+}
+
+/* 表单错误动画 */
+.login-card .form-control.error {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239,68,68,0.15);
+}
+
+@media (max-width: 768px) {
+    .login-card { padding: 28px 24px 24px; }
+    .login-card h4 { font-size: 18px; }
+    .login-card .brand-icon { width: 48px; height: 48px; font-size: 22px; }
+}
+</style>
+
+<div class="login-wrapper">
+    <!-- 光晕 -->
+    <div class="login-glow"></div>
+    <div class="login-glow"></div>
+
+    <!-- 网格背景 -->
+    <div class="login-grid"></div>
+
+    <!-- 浮动图标 -->
+    <div class="login-float-icon"><i class="fas fa-hospital"></i></div>
+    <div class="login-float-icon"><i class="fas fa-heartbeat"></i></div>
+    <div class="login-float-icon"><i class="fas fa-ambulance"></i></div>
+    <div class="login-float-icon"><i class="fas fa-stethoscope"></i></div>
+    <div class="login-float-icon"><i class="fas fa-pills"></i></div>
+    <div class="login-float-icon"><i class="fas fa-thermometer"></i></div>
+    <div class="login-float-icon"><i class="fas fa-syringe"></i></div>
+    <div class="login-float-icon"><i class="fas fa-brain"></i></div>
+
+    <!-- 登录卡片 -->
+    <div class="login-card">
+        <div class="brand-icon"><i class="fas fa-hospital"></i></div>
+        <h4>{{ login_page_title }}</h4>
+        <div class="subtitle">医院智慧工单管理系统</div>
+
+        <form method="post">
+            <div class="mb-3">
+                <label class="form-label"><i class="fas fa-user" style="margin-right:4px;opacity:0.5;"></i> 用户名</label>
+                <input type="text" name="username" class="form-control" required autofocus placeholder="请输入用户名">
+            </div>
+            <div class="mb-3">
+                <label class="form-label"><i class="fas fa-lock" style="margin-right:4px;opacity:0.5;"></i> 密码</label>
+                <input type="password" name="password" class="form-control" required placeholder="请输入密码">
+            </div>
+            <button type="submit" class="btn-login">
+                <i class="fas fa-sign-in-alt"></i> 登 录
+            </button>
+        </form>
+
+        <div class="login-divider">{{ system_subtitle }}</div>
+    </div>
+</div>
+
+<script>
+// ===== 登录表单动效 =====
+document.addEventListener('DOMContentLoaded', function() {
+    var inputs = document.querySelectorAll('.login-card .form-control');
+    inputs.forEach(function(input) {
+        // 聚焦时小幅上浮
+        input.addEventListener('focus', function() {
+            this.closest('.mb-3').style.transform = 'translateX(4px)';
+        });
+        input.addEventListener('blur', function() {
+            this.closest('.mb-3').style.transform = '';
+        });
+    });
+});
+</script>
+{% endblock %}

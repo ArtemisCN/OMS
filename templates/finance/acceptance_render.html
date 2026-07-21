@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>{% if is_preview %}模板预览{% else %}维修验收单{% endif %}</title>
+<style>
+@page { size: {{ layout.paper_w or 210 }}mm {{ layout.paper_h or 297 }}mm; margin: 10mm 7mm; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'SimSun', '宋体', serif; font-size: 9pt; color: #000; background: #fff; padding: 10px; }
+.page { width: {{ layout.page_width or 196 }}mm; margin: 0 auto; }
+{% if not is_preview %}
+.grid {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 2mm;
+}
+.card {
+    border: {% if layout.border_style == 'none' %}none{% else %}{{ layout.border_width or 1 }}px {{ layout.border_style or 'solid' }} #000{% endif %};
+    padding: 3mm;
+    width: calc(50% - 1mm);
+    min-height: 66mm;
+    display: flex;
+    flex-direction: column;
+    page-break-inside: avoid;
+}
+{% endif %}
+.ttl {
+    font-size: {{ layout.title_font_size or 12 }}pt;
+    font-weight: 700;
+    text-align: center;
+    letter-spacing: 4px;
+    padding-bottom: 2mm;
+    margin-bottom: 2mm;
+    border-bottom: 0.5px solid #000;
+}
+.fields-container {
+    position: relative;
+    width: 100%;
+    flex: 1;
+}
+.fl {
+    position: absolute;
+    font-size: {{ layout.fields[0].font_size if layout.fields else 9 }}pt;
+    overflow: hidden;
+}
+.fl .fl-lbl {
+    font-weight: 600;
+    margin-right: 2px;
+}
+.fl .fl-val {
+    border-bottom: 0.5px solid #999;
+    padding: 0 1mm;
+    min-height: 4mm;
+    display: inline-block;
+}
+.fl.separator {
+    border-top: 1px dashed #999;
+    width: 100% !important;
+    height: 0 !important;
+    left: 0 !important;
+}
+.fl .fl-val-text {
+    border: 0.5px solid #999;
+    padding: 0.5mm 1mm;
+    min-height: 8mm;
+    font-size: 7.5pt;
+    line-height: 1.4;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+}
+.fl.sign-field .fl-val {
+    border-bottom: 0.5px solid #999;
+    min-width: 20mm;
+}
+.preview-card {
+    border: 1px solid #ddd;
+    padding: 3mm;
+    margin-bottom: 5mm;
+    border-radius: 4px;
+}
+@media print {
+    .toolbar { display: none !important; }
+    body { padding: 0; }
+}
+</style>
+</head>
+<body>
+
+<div class="toolbar" style="text-align:center;padding:8px;margin-bottom:8px;background:#f1f5f9;border-radius:6px;{% if is_preview %}position:sticky;top:0;z-index:100;{% endif %}">
+    <button onclick="window.print()" style="padding:6px 20px;font-size:13px;cursor:pointer;">🖨️ 打印</button>
+    {% if is_preview %}
+    <span style="margin-left:10px;color:#64748b;font-size:11px;">预览模式 · 模拟数据</span>
+    {% else %}
+    <span style="margin-left:10px;color:#64748b;font-size:11px;" id="pageInfo"></span>
+    {% endif %}
+</div>
+
+<div class="page">
+{% if is_preview %}
+    <div class="preview-card">
+        <div class="ttl">{{ layout.title or '维修验收单' }}</div>
+        <div class="fields-container" style="height:{{ layout.rows * 8 }}mm;">
+            {% for f in layout.fields %}
+            {% set fs = (f.font_size or 9) %}
+            {# 字段渲染：支持边框/表格行/表格 #}
+                {% set bdr = f.border or 'underline' %}
+                {% if f.type == 'separator' %}
+                <div class="fl separator" style="top:{{ f.y / layout.rows * 100 }}%;left:0;width:100%;height:0;"></div>
+                {% elif f.type == 'table_row' %}
+                {% set tcols = f.table_cols or 2 %}
+                {% set cells = f.cells or [{'label':'列1'},{'label':'列2'}] %}
+                <div class="fl" style="left:{{ f.x * 100 / layout.cols }}%;width:{{ f.w * 100 / layout.cols }}%;top:{{ f.y / layout.rows * 100 }}%;height:{{ f.h / layout.rows * 100 }}%;font-size:{{ fs }}pt;display:flex;align-items:center;border:1px solid #000;border-radius:2px;padding:1px;">
+                    {% for ci in range(tcols) %}
+                    {% set cl = cells[ci].label if cells and ci < cells|length else '列' ~ (ci+1) %}
+                    {% set ck = cells[ci].key if cells and ci < cells|length else '' %}
+                    {% set cv = data.get(ck, '') if ck else '' %}
+                    <span style="flex:1;padding:0 2px;border-right:{{ '1px solid #000' if ci < tcols-1 else 'none' }};font-size:7pt;white-space:nowrap;overflow:hidden;">
+                        <strong>{{ cl }}：</strong>{{ cv }}
+                    </span>
+                    {% endfor %}
+                </div>
+                {% elif f.type == 'table' %}
+                {% set trows = f.table_rows or 3 %}
+                {% set tcols = f.table_cols or 4 %}
+                <div class="fl" style="left:{{ f.x * 100 / layout.cols }}%;width:{{ f.w * 100 / layout.cols }}%;top:{{ f.y / layout.rows * 100 }}%;height:{{ f.h / layout.rows * 100 }}%;overflow:hidden;border:1px solid #000;border-radius:1px;">
+                    <table style="width:100%;height:100%;border-collapse:collapse;font-size:6.5pt;">
+                        {% for ri in range(trows) %}
+                        <tr>{% for ci in range(tcols) %}
+                            <td style="border:0.5px solid #000;padding:1px;text-align:center;">&nbsp;</td>
+                        {% endfor %}</tr>
+                        {% endfor %}
+                    </table>
+                </div>
+                {% elif f.type == 'sign' %}
+                <div class="fl sign-field"
+                     style="left:{{ f.x * 100 / layout.cols }}%;width:{{ f.w * 100 / layout.cols }}%;top:{{ f.y / layout.rows * 100 }}%;height:{{ f.h / layout.rows * 100 }}%;font-size:{{ fs }}pt;{% if f.bold %}font-weight:700;{% endif %}text-align:{{ f.align or 'left' }};">
+                    <span class="fl-lbl">{{ f.label }}：</span>
+                    <span class="fl-val" style="min-width:{{ f.w * 6 }}mm;">&nbsp;</span>
+                </div>
+                {% else %}
+                {% set val_style = 'border:0.5px solid #999;padding:1px;border-radius:1px;' if bdr == 'box' else ('border-bottom:0.5px solid #999;padding:0 1mm;min-height:4mm;display:inline-block;' if bdr == 'underline' else '') %}
+                {% set val = data.get(f.key, '') if data else '' %}
+                <div class="fl"
+                     style="left:{{ f.x * 100 / layout.cols }}%;width:{{ f.w * 100 / layout.cols }}%;top:{{ f.y / layout.rows * 100 }}%;height:{{ f.h / layout.rows * 100 }}%;font-size:{{ fs }}pt;{% if f.bold %}font-weight:700;{% endif %}text-align:{{ f.align or 'left' }};{% if bdr == 'box' %}border:0.5px solid #999;border-radius:2px;padding:0 2px;{% endif %}">
+                    <span class="fl-lbl">{{ f.label }}：</span>
+                    {% if f.key == 'repair_content' %}
+                        <span class="fl-val-text" style="{{ val_style }}">{{ val }}</span>
+                    {% else %}
+                        <span {% if bdr == 'underline' %}class="fl-val"{% else %}style="{{ val_style }}"{% endif %}>{{ val }}</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+{% else %}
+    {% set total = drafts|length %}
+    {% set per_page = 8 %}
+    {% for page_start in range(0, total, per_page) %}
+    {% if page_start > 0 %}<div style="page-break-before:always;"></div>{% endif %}
+    <div class="grid">
+        {% for i in range(per_page) %}
+        {% set idx = page_start + i %}
+        {% if idx < total %}
+        {% set d = drafts[idx] %}
+        {% set data = {
+            'date': d.report_date.strftime('%Y-%m-%d') if d.report_date else '',
+            'department': d.department or '',
+            'device_type': d.device_type or '',
+            'device_brand': d.asset.brand if d.asset else '',
+            'device_model': d.asset.model_no if d.asset else '',
+            'asset_no': d.asset.asset_no if d.asset else '',
+            'repair_content': d.repair_content or '',
+            'total_amount': '¥%.2f'|format(d.total_amount),
+            'complete_status': '☑已完成  □未完成',
+            'acceptor': '',
+            'accept_date': d.report_date.strftime('%Y-%m-%d') if d.report_date else '',
+            'remark': '',
+            'work_order_no': '',
+            'repair_person': '',
+        } %}
+        <div class="card">
+            <div class="ttl">{{ layout.title or '维修验收单' }}</div>
+            <div class="fields-container" style="height:{{ layout.rows * 3.2 }}mm;">
+                {% for f in layout.fields %}
+                {% set fs = (f.font_size or 9) %}
+                {# 字段渲染：支持边框/表格行/表格 #}
+                {% set bdr = f.border or 'underline' %}
+                {% if f.type == 'separator' %}
+                <div class="fl separator" style="top:{{ f.y / layout.rows * 100 }}%;left:0;width:100%;height:0;"></div>
+                {% elif f.type == 'table_row' %}
+                {% set tcols = f.table_cols or 2 %}
+                {% set cells = f.cells or [{'label':'列1'},{'label':'列2'}] %}
+                <div class="fl" style="left:{{ f.x * 100 / layout.cols }}%;width:{{ f.w * 100 / layout.cols }}%;top:{{ f.y / layout.rows * 100 }}%;height:{{ f.h / layout.rows * 100 }}%;font-size:{{ fs }}pt;display:flex;align-items:center;border:1px solid #000;border-radius:2px;padding:1px;">
+                    {% for ci in range(tcols) %}
+                    {% set cl = cells[ci].label if cells and ci < cells|length else '列' ~ (ci+1) %}
+                    {% set ck = cells[ci].key if cells and ci < cells|length else '' %}
+                    {% set cv = data.get(ck, '') if ck else '' %}
+                    <span style="flex:1;padding:0 2px;border-right:{{ '1px solid #000' if ci < tcols-1 else 'none' }};font-size:7pt;white-space:nowrap;overflow:hidden;">
+                        <strong>{{ cl }}：</strong>{{ cv }}
+                    </span>
+                    {% endfor %}
+                </div>
+                {% elif f.type == 'table' %}
+                {% set trows = f.table_rows or 3 %}
+                {% set tcols = f.table_cols or 4 %}
+                <div class="fl" style="left:{{ f.x * 100 / layout.cols }}%;width:{{ f.w * 100 / layout.cols }}%;top:{{ f.y / layout.rows * 100 }}%;height:{{ f.h / layout.rows * 100 }}%;overflow:hidden;border:1px solid #000;border-radius:1px;">
+                    <table style="width:100%;height:100%;border-collapse:collapse;font-size:6.5pt;">
+                        {% for ri in range(trows) %}
+                        <tr>{% for ci in range(tcols) %}
+                            <td style="border:0.5px solid #000;padding:1px;text-align:center;">&nbsp;</td>
+                        {% endfor %}</tr>
+                        {% endfor %}
+                    </table>
+                </div>
+                {% elif f.type == 'sign' %}
+                <div class="fl sign-field"
+                     style="left:{{ f.x * 100 / layout.cols }}%;width:{{ f.w * 100 / layout.cols }}%;top:{{ f.y / layout.rows * 100 }}%;height:{{ f.h / layout.rows * 100 }}%;font-size:{{ fs }}pt;{% if f.bold %}font-weight:700;{% endif %}text-align:{{ f.align or 'left' }};">
+                    <span class="fl-lbl">{{ f.label }}：</span>
+                    <span class="fl-val" style="min-width:{{ f.w * 6 }}mm;">&nbsp;</span>
+                </div>
+                {% else %}
+                {% set val_style = 'border:0.5px solid #999;padding:1px;border-radius:1px;' if bdr == 'box' else ('border-bottom:0.5px solid #999;padding:0 1mm;min-height:4mm;display:inline-block;' if bdr == 'underline' else '') %}
+                {% set val = data.get(f.key, '') %}
+                <div class="fl"
+                     style="left:{{ f.x * 100 / layout.cols }}%;width:{{ f.w * 100 / layout.cols }}%;top:{{ f.y / layout.rows * 100 }}%;height:{{ f.h / layout.rows * 100 }}%;font-size:{{ fs }}pt;{% if f.bold %}font-weight:700;{% endif %}text-align:{{ f.align or 'left' }};{% if bdr == 'box' %}border:0.5px solid #999;border-radius:2px;padding:0 2px;{% endif %}">
+                    <span class="fl-lbl">{{ f.label }}：</span>
+                    {% if f.key == 'repair_content' %}
+                        <span class="fl-val-text" style="{{ val_style }}">{{ val }}</span>
+                    {% else %}
+                        <span {% if bdr == 'underline' %}class="fl-val"{% else %}style="{{ val_style }}"{% endif %}>{{ val }}</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    {% endfor %}
+{% endif %}
+</div>
+
+{% if not is_preview %}
+<script>
+var total = {{ total }};
+var per = 8;
+var pages = Math.ceil(total / per);
+document.getElementById('pageInfo').textContent = '共' + total + '张 · 每页8张 · ' + pages + '页';
+</script>
+{% endif %}
+
+</body>
+</html>

@@ -1,0 +1,124 @@
+<view class="page">
+  <!-- 加载中 -->
+  <view wx:if="{{loading}}" class="loading-wrap">
+    <view class="loading-icon"></view>
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <view wx:else class="form-wrap">
+    <!-- 表单头部 -->
+    <view class="form-header">
+      <text class="form-title">{{form.template_name || form.name}}</text>
+      <text class="form-status">
+        <text wx:if="{{form.status === 'active'}}" style="color:#1e40af;">🔄 进行中</text>
+        <text wx:elif="{{form.status === 'submitted'}}" style="color:#92400e;">⏳ 待审批</text>
+        <text wx:elif="{{form.status === 'completed'}}" style="color:#065f46;">✅ 已完成</text>
+      </text>
+    </view>
+
+    <!-- 字段列表 -->
+    <view class="field-list">
+      <view class="field-item" wx:for="{{fields}}" wx:key="id" wx:for-item="f">
+        <!-- 单行文本 / 数字 / 邮箱 / 电话 -->
+        <view wx:if="{{f.type === 'text' || f.type === 'number' || f.type === 'email' || f.type === 'tel' || f.type === 'url'}}" class="field-row">
+          <text class="field-label">{{f.label}}<text wx:if="{{f.required}}" class="required">*</text></text>
+          <input class="field-input" type="{{f.type === 'number' ? 'number' : 'text'}}" value="{{formData[f.id] || ''}}" placeholder="{{f.placeholder || '请输入'}}" data-field-id="{{f.id}}" bindinput="onFieldInput" disabled="{{form.status !== 'active'}}"/>
+        </view>
+
+        <!-- 多行文本 -->
+        <view wx:elif="{{f.type === 'textarea'}}" class="field-row textarea-row">
+          <text class="field-label">{{f.label}}<text wx:if="{{f.required}}" class="required">*</text></text>
+          <textarea class="field-textarea" value="{{formData[f.id] || ''}}" placeholder="{{f.placeholder || '请输入'}}" data-field-id="{{f.id}}" bindinput="onFieldInput" disabled="{{form.status !== 'active'}}"/>
+        </view>
+
+        <!-- 下拉选择 -->
+        <view wx:elif="{{f.type === 'select'}}" class="field-row">
+          <text class="field-label">{{f.label}}<text wx:if="{{f.required}}" class="required">*</text></text>
+          <picker mode="selector" range="{{f.options}}" value="{{_selIndices[f.id] || 0}}" data-field-id="{{f.id}}" bindchange="onSelectChange" disabled="{{form.status !== 'active'}}">
+            <view class="picker-value">{{_selLabels[f.id] || f.placeholder || '请选择'}}</view>
+          </picker>
+        </view>
+
+        <!-- 单选 -->
+        <view wx:elif="{{f.type === 'radio'}}" class="field-row radio-row">
+          <text class="field-label">{{f.label}}<text wx:if="{{f.required}}" class="required">*</text></text>
+          <view class="radio-group">
+            <label class="radio-item" wx:for="{{f.options}}" wx:key="index">
+              <radio value="{{item}}" checked="{{formData[f.id] === item}}" data-field-id="{{f.id}}" bindchange="onRadioChange" disabled="{{form.status !== 'active'}}"/>
+              <text class="radio-text">{{item}}</text>
+            </label>
+          </view>
+        </view>
+
+        <!-- 日期 -->
+        <view wx:elif="{{f.type === 'date'}}" class="field-row">
+          <text class="field-label">{{f.label}}<text wx:if="{{f.required}}" class="required">*</text></text>
+          <picker mode="date" value="{{formData[f.id] || ''}}" data-field-id="{{f.id}}" bindchange="onFieldInput" disabled="{{form.status !== 'active'}}">
+            <view class="picker-value">{{formData[f.id] || '选择日期'}}</view>
+          </picker>
+        </view>
+
+        <!-- 日期时间 -->
+        <view wx:elif="{{f.type === 'datetime' || f.type === 'datetime-local'}}" class="field-row">
+          <text class="field-label">{{f.label}}<text wx:if="{{f.required}}" class="required">*</text></text>
+          <picker mode="date" value="{{formData[f.id] || ''}}" data-field-id="{{f.id}}" bindchange="onFieldInput" disabled="{{form.status !== 'active'}}">
+            <view class="picker-value">{{formData[f.id] || '选择日期时间'}}</view>
+          </picker>
+        </view>
+
+        <!-- 复选框（作为开关） -->
+        <view wx:elif="{{f.type === 'checkbox'}}" class="field-row checkbox-row">
+          <text class="field-label">{{f.label}}</text>
+          <label class="checkbox-switch">
+            <switch checked="{{formData[f.id] && formData[f.id] !== '0' && formData[f.id] !== ''}}" data-field-id="{{f.id}}" data-value="{{f.options[0] || 'on'}}" bindchange="onCheckboxChange" disabled="{{form.status !== 'active'}}"/>
+            <text class="checkbox-text">{{formData[f.id] && formData[f.id] !== '0' && formData[f.id] !== '' ? '✅ 是' : '⬜ 否'}}</text>
+          </label>
+        </view>
+
+        <!-- 签名 -->
+        <view wx:elif="{{f.type === 'signature'}}" class="field-row signature-row">
+          <text class="field-label">{{f.label}}<text wx:if="{{f.required}}" class="required">*</text></text>
+          <view wx:if="{{formData[f.id]}}" class="signature-preview" data-field-id="{{f.id}}" catchtap="onSignatureTap">
+            <image class="signature-preview-img" src="{{formData[f.id]}}" mode="widthFix"></image>
+            <text wx:if="{{form.status === 'active'}}" class="signature-retap">点击重签</text>
+          </view>
+          <view wx:else class="signature-placeholder" data-field-id="{{f.id}}" catchtap="onSignatureTap">
+            <text wx:if="{{form.status === 'active'}}">📝 点击签字</text>
+            <text wx:else style="color:#cbd5e1;">未签字</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 操作按钮 -->
+    <view wx:if="{{form.status === 'active'}}" class="action-row">
+      <button class="btn btn-primary" bindtap="onSubmit" disabled="{{submitting}}" loading="{{submitting}}">
+        <text wx:if="{{!submitting}}">📤 提交审批</text>
+        <text wx:else>提交中...</text>
+      </button>
+    </view>
+
+    <view wx:elif="{{form.status === 'submitted'}}" class="submitted-hint">
+      <text class="submitted-text">⏳ 已提交审批，等待管理员审核</text>
+    </view>
+
+    <view class="back-row">
+      <button class="btn btn-secondary" bindtap="onBack">← 返回</button>
+    </view>
+  </view>
+
+  <!-- 签名弹窗 -->
+  <view wx:if="{{showSignaturePad}}" class="signature-overlay" catchtouchmove="noop">
+    <view class="signature-pad">
+      <view class="signature-pad-header">
+        <text class="signature-pad-title">请签字</text>
+        <text class="signature-pad-clear" bindtap="onClearCanvas">清除</text>
+      </view>
+      <canvas type="2d" id="sigCanvas" class="signature-canvas" catchtouchstart="onSigTouchStart" catchtouchmove="onSigTouchMove" catchtouchend="onSigTouchEnd"></canvas>
+      <view class="signature-pad-actions">
+        <button class="btn-sign-cancel" bindtap="onSignatureCancel">取消</button>
+        <button class="btn-sign-confirm" bindtap="onSignatureConfirm">确认签字</button>
+      </view>
+    </view>
+  </view>
+</view>

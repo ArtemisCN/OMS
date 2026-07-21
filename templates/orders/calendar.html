@@ -1,0 +1,493 @@
+{% extends "base.html" %}
+{% block title %}工单日历 · {{ year }}年{{ month }}月{% endblock %}
+{% block content %}
+<style>
+/* ============================================================
+   "Glass Heatmap" 工单日历 — 极简全玻璃风格
+   ============================================================ */
+
+/* ── 容器 ── */
+.cal-wrap {
+  max-width: 1140px; margin: 0 auto;
+  --cal-radius: 14px;
+  --cal-glow: rgba(99,102,241,0.18);
+  --cal-heat-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+/* ── 顶部栏 ── */
+.cal-topbar {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+}
+.cal-topbar .cal-title {
+  font-size: 22px; font-weight: 800; letter-spacing: -0.3px;
+  margin: 0; display: flex; align-items: center; gap: 10px;
+}
+.cal-topbar .cal-title i { background:var(--cal-heat-bg); -webkit-background-clip:text; -webkit-text-fill-color:transparent; font-size:20px; }
+.cal-topbar-right { display:flex; align-items:center; gap:8px; }
+
+/* ── 月份导航 ── */
+.cal-nav {
+  display: flex; align-items: center; gap: 4px;
+  background: var(--card-bg, rgba(255,255,255,0.6));
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--card-border, rgba(229,231,235,0.5));
+  border-radius: 12px; padding: 3px; box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+.cal-nav-btn {
+  width: 34px; height: 34px; border-radius: 9px; border: none;
+  background: transparent; cursor: pointer; transition: all .2s;
+  display:flex; align-items:center; justify-content:center;
+  color: var(--text-muted, #94a3b8); font-size: 14px; text-decoration: none;
+}
+.cal-nav-btn:hover { background: rgba(79,70,229,0.08); color: var(--primary, #4f46e5); }
+.cal-nav-label {
+  font-size: 15px; font-weight: 700; padding: 0 14px; min-width: 130px;
+  text-align: center; color: var(--text, #1e293b); letter-spacing: 0.5px;
+  cursor: default; user-select: none;
+}
+.cal-nav-btn.today {
+  background: var(--primary, #4f46e5); color: #fff; width: auto;
+  padding: 0 14px; font-size: 12px; font-weight: 600; gap: 4px;
+  box-shadow: 0 2px 10px rgba(79,70,229,0.25);
+}
+.cal-nav-btn.today:hover { background: #4338ca; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(79,70,229,0.35); }
+
+/* ── 图例 ── */
+.cal-legend {
+  display: flex; gap: 14px; font-size: 11px; color: var(--text-muted, #94a3b8);
+  background: var(--card-bg, rgba(255,255,255,0.5));
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  padding: 6px 14px; border-radius: 10px; border: 1px solid var(--card-border, rgba(229,231,235,0.3));
+}
+.cal-legend-item { display: flex; align-items: center; gap: 5px; }
+.cal-legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+/* ── 统计摘要 ── */
+.cal-stats {
+  display: flex; gap: 4px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.cal-stat {
+  flex: 1; min-width: 80px; padding: 8px 10px; border-radius: 10px;
+  text-align: center; font-size: 11px; font-weight: 500;
+  background: var(--card-bg, rgba(255,255,255,0.5));
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--card-border, rgba(229,231,235,0.3));
+  color: var(--text-muted, #94a3b8); line-height: 1.3;
+}
+.cal-stat strong { display: block; font-size: 20px; font-weight: 800; color: var(--text, #1e293b); letter-spacing:-0.5px; }
+
+/* ── 星期头 ── */
+.cal-weekdays {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px;
+  margin-bottom: 3px; padding: 0 1px;
+}
+.cal-weekday {
+  padding: 6px 0; text-align: center; font-size: 11px; font-weight: 600;
+  color: var(--text-muted, #94a3b8); letter-spacing: 1px; text-transform: uppercase;
+}
+.cal-weekday:nth-child(6),
+.cal-weekday:nth-child(7) { color: #ef4444; opacity: 0.6; }
+
+/* ── 日期网格 ── */
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px;
+}
+.cal-day {
+  position: relative; min-height: 88px; padding: 8px 9px 6px;
+  border-radius: var(--cal-radius); cursor: pointer;
+  background: var(--card-bg, rgba(255,255,255,0.55));
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--card-border, rgba(229,231,235,0.4));
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.cal-day::before {
+  content: ''; position: absolute; inset: 0; border-radius: var(--cal-radius);
+  opacity: 0; transition: opacity .25s;
+  background: linear-gradient(135deg, rgba(79,70,229,0.03), transparent 60%);
+  pointer-events: none;
+}
+.cal-day:hover {
+  transform: translateY(-2px); z-index: 2;
+  border-color: var(--primary, #4f46e5);
+  box-shadow: 0 6px 20px var(--cal-glow);
+}
+.cal-day:hover::before { opacity: 1; }
+.cal-day:active { transform: translateY(0) scale(0.97); }
+
+/* 非本月 */
+.cal-day.other-month {
+  opacity: 0.2; cursor: default; pointer-events: none;
+}
+
+/* 当天 */
+.cal-day.today {
+  border-color: var(--primary, #4f46e5);
+  background: linear-gradient(135deg, rgba(79,70,229,0.08), rgba(79,70,229,0.02));
+  box-shadow: 0 0 0 1px var(--primary, #4f46e5), 0 4px 16px var(--cal-glow);
+}
+.cal-day.today .cal-day-num {
+  background: var(--primary, #4f46e5); color: #fff;
+  width: 28px; height: 28px; line-height: 28px; text-align: center;
+  border-radius: 50%; display: inline-block; font-size: 13px;
+}
+@keyframes todayPulse {
+  0%, 100% { box-shadow: 0 0 0 1px var(--primary, #4f46e5), 0 4px 16px var(--cal-glow); }
+  50% { box-shadow: 0 0 0 2px var(--primary, #4f46e5), 0 4px 24px rgba(79,70,229,0.3); }
+}
+.cal-day.today { animation: todayPulse 3s ease-in-out infinite; }
+
+/* 日期编号 */
+.cal-day-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; position: relative; z-index: 1; }
+.cal-day-num { font-size: 13px; font-weight: 600; color: var(--text, #1e293b); }
+.cal-day.today .cal-day-num { background: var(--primary); color: #fff; width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; display: inline-block; font-size: 13px; }
+
+/* 完成徽章 */
+.cal-done-badge { color: #22c55e; font-size: 12px; flex-shrink: 0; }
+@keyframes donePop { from{transform:scale(0)} to{transform:scale(1)} }
+.cal-done-badge i { animation: donePop .3s ease; }
+
+/* ── 热力条（工作量密度） ── */
+.cal-heat { height: 3px; border-radius: 2px; margin-bottom: 4px; transition: all .3s; position: relative; z-index: 1; }
+.cal-heat.lv0 { background: transparent; }
+.cal-heat.lv1 { background: linear-gradient(90deg, #22c55e, #86efac); width: 30%; }
+.cal-heat.lv2 { background: linear-gradient(90deg, #eab308, #fde047); width: 55%; }
+.cal-heat.lv3 { background: linear-gradient(90deg, #f97316, #fdba74); width: 75%; }
+.cal-heat.lv4 { background: linear-gradient(90deg, #ef4444, #fca5a5); width: 95%; }
+
+/* ── 工单状态点 ── */
+.cal-dots { display: flex; flex-wrap: wrap; gap: 2px; position: relative; z-index: 1; margin-top: auto; }
+.cal-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  transition: transform .2s; box-shadow: 0 0 0 1px rgba(255,255,255,0.5);
+}
+.cal-day:hover .cal-dot { transform: scale(1.3); }
+.cal-more-dot {
+  font-size: 9px; color: var(--text-muted, #94a3b8); font-weight: 600;
+  margin-left: 2px; line-height: 1;
+}
+
+/* ── 空状态 ── */
+.cal-empty { text-align: center; padding: 60px 20px; }
+.cal-empty-icon {
+  width: 72px; height: 72px; margin: 0 auto 16px;
+  background: linear-gradient(135deg, #667eea20, #764ba220);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 30px; color: var(--primary, #4f46e5);
+}
+
+/* ============================================================
+   侧滑详情面板（取代弹窗）
+   ============================================================ */
+.cal-slide-overlay {
+  position: fixed; inset: 0; z-index: 9990;
+  background: rgba(0,0,0,0.15); backdrop-filter: blur(4px);
+  display: none; animation: fadeIn .2s ease;
+}
+.cal-slide-overlay.show { display: block; }
+
+.cal-slide-panel {
+  position: fixed; top: 0; right: -440px; bottom: 0; z-index: 9991;
+  width: 420px; max-width: 92vw;
+  background: var(--modal-bg, #fff);
+  border-left: 1px solid var(--card-border, #e5e7eb);
+  box-shadow: -8px 0 40px rgba(0,0,0,0.08);
+  transition: right 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.cal-slide-panel.open { right: 0; }
+
+.cal-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 22px; border-bottom: 1px solid var(--card-border, #e5e7eb);
+  flex-shrink: 0;
+}
+.cal-panel-header h6 {
+  margin: 0; font-size: 16px; font-weight: 700;
+  display: flex; align-items: center; gap: 8px;
+}
+.cal-panel-close {
+  width: 32px; height: 32px; border-radius: 8px; border: none;
+  background: transparent; cursor: pointer; font-size: 18px;
+  color: var(--text-muted, #94a3b8); transition: all .15s;
+  display:flex; align-items:center; justify-content:center;
+}
+.cal-panel-close:hover { background: rgba(0,0,0,0.05); color: var(--text, #1e293b); }
+
+.cal-panel-body {
+  flex: 1; overflow-y: auto; padding: 16px 22px 24px;
+}
+
+/* 面板内的工单卡片 */
+.cal-p-card {
+  display: flex; align-items: stretch; gap: 0; margin-bottom: 10px;
+  border-radius: 12px; overflow: hidden;
+  border: 1px solid var(--card-border, #e5e7eb);
+  transition: all .15s; text-decoration: none; color: inherit;
+  background: var(--card-bg, #fff);
+}
+.cal-p-card:hover {
+  border-color: var(--primary, #4f46e5);
+  box-shadow: 0 3px 12px rgba(79,70,229,0.08);
+  transform: translateX(3px);
+}
+.cal-p-card-bar {
+  width: 4px; flex-shrink: 0; align-self: stretch;
+}
+.cal-p-card-body { flex: 1; padding: 10px 14px; min-width: 0; }
+.cal-p-card-title {
+  font-size: 14px; font-weight: 600; color: var(--text, #1e293b);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: flex; align-items: center; gap: 6px;
+}
+.cal-p-card-meta {
+  font-size: 11px; color: var(--text-muted, #94a3b8);
+  margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px 10px;
+}
+.cal-p-card-meta .status-tag {
+  display: inline-block; padding: 0 6px; border-radius: 4px;
+  font-size: 10px; font-weight: 600; line-height: 18px;
+}
+
+.cal-p-empty { text-align: center; padding: 40px 0; color: var(--text-muted, #94a3b8); font-size: 13px; }
+
+/* ── 深色模式 ── */
+[data-theme="dark"] .cal-nav { background: rgba(26,29,39,0.7); border-color: rgba(42,46,58,0.5); }
+[data-theme="dark"] .cal-legend { background: rgba(26,29,39,0.5); border-color: rgba(42,46,58,0.3); }
+[data-theme="dark"] .cal-stat { background: rgba(26,29,39,0.5); border-color: rgba(42,46,58,0.3); }
+[data-theme="dark"] .cal-day { background: rgba(26,29,39,0.6); border-color: rgba(42,46,58,0.4); }
+[data-theme="dark"] .cal-day.today { background: rgba(30,27,75,0.5); border-color: #4f46e5; }
+[data-theme="dark"] .cal-slide-panel { background: #111318; border-color: #2a2e3a; }
+[data-theme="dark"] .cal-p-card { background: #1a1d27; border-color: #2a2e3a; }
+[data-theme="dark"] .cal-p-card:hover { border-color: #4f46e5; }
+[data-theme="dark"] .cal-panel-close:hover { background: rgba(255,255,255,0.06); }
+[data-theme="dark"] .cal-nav-btn.today { box-shadow: 0 2px 10px rgba(79,70,229,0.4); }
+[data-theme="dark"] .cal-empty-icon { background: linear-gradient(135deg, #667eea15, #764ba215); }
+
+/* ── 响应式 ── */
+@media(max-width:768px) {
+  .cal-day { min-height: 58px; padding: 5px 5px 3px; }
+  .cal-day-num { font-size: 12px; }
+  .cal-day.today .cal-day-num { width: 24px; height: 24px; line-height: 24px; font-size: 11px; }
+  .cal-heat { height: 2px; }
+  .cal-dot { width: 5px; height: 5px; }
+  .cal-stat strong { font-size: 16px; }
+  .cal-stat { min-width: 60px; padding: 6px 6px; }
+  .cal-slide-panel { width: 100vw; max-width: 100vw; right: -100vw; border-left: none; }
+  .cal-topbar .cal-title { font-size: 18px; }
+  .cal-legend { font-size: 10px; padding: 4px 10px; gap: 8px; }
+}
+@media(max-width:480px) {
+  .cal-day { min-height: 48px; padding: 3px 3px 2px; border-radius: 8px; }
+  .cal-day-num { font-size: 11px; }
+  .cal-day.today .cal-day-num { width: 20px; height: 20px; line-height: 20px; font-size: 10px; }
+  .cal-nav-label { min-width: 80px; font-size: 13px; padding: 0 8px; }
+  .cal-stats { gap: 2px; }
+  .cal-stat { min-width: 45px; padding: 4px 4px; font-size: 10px; }
+  .cal-stat strong { font-size: 14px; }
+  .cal-weekday { font-size: 10px; }
+}
+
+/* ── 入场动画 ── */
+@keyframes calStaggerIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.cal-day { animation: calStaggerIn 0.4s ease both; }
+</style>
+
+<div class="cal-wrap">
+  <!-- 顶部栏 -->
+  <div class="cal-topbar">
+    <div class="cal-title"><i class="fas fa-calendar-alt"></i> 工单日历</div>
+    <div class="cal-topbar-right">
+      <div class="cal-legend">
+        <span class="cal-legend-item"><span class="cal-legend-dot" style="background:#22c55e;"></span> 已完成</span>
+        <span class="cal-legend-item"><span class="cal-legend-dot" style="background:#f59e0b;"></span> 处理中</span>
+        <span class="cal-legend-item"><span class="cal-legend-dot" style="background:#94a3b8;"></span> 待接单</span>
+      </div>
+      <a href="{{ url_for('orders.list_orders') }}" class="cal-nav-btn" title="列表视图"
+         style="width:34px;height:34px;border-radius:9px;border:1px solid var(--card-border,rgba(229,231,235,0.5));">
+        <i class="fas fa-list"></i>
+      </a>
+    </div>
+  </div>
+
+  <!-- 月份导航 -->
+  <div class="cal-nav" style="margin-bottom:14px;width:fit-content;">
+    <a href="{{ url_for('orders.calendar_view', year=prev_year, month=prev_month) }}" class="cal-nav-btn"><i class="fas fa-chevron-left"></i></a>
+    <span class="cal-nav-label" id="calMonthLabel">{{ year }}年{{ month }}月</span>
+    <a href="{{ url_for('orders.calendar_view', year=next_year, month=next_month) }}" class="cal-nav-btn"><i class="fas fa-chevron-right"></i></a>
+    <a href="{{ url_for('orders.calendar_view') }}" class="cal-nav-btn today" style="margin-left:4px;"><i class="fas fa-calendar-check"></i> 今天</a>
+  </div>
+
+  <!-- 统计摘要 -->
+  {% set ns = namespace(total=0, done=0, prog=0, pend=0) %}
+  {% for day, orders in cal_data.items() %}
+    {% set ns.total = ns.total + orders|length %}
+    {% for o in orders %}
+      {% if o.status == 'completed' %}{% set ns.done = ns.done + 1 %}{% endif %}
+      {% if o.status == 'in_progress' %}{% set ns.prog = ns.prog + 1 %}{% endif %}
+      {% if o.status == 'pending' %}{% set ns.pend = ns.pend + 1 %}{% endif %}
+    {% endfor %}
+  {% endfor %}
+  {% set busy_day = cal_data.values()|map('length')|max if cal_data else 0 %}
+
+  <div class="cal-stats">
+    <div class="cal-stat"><strong>{{ ns.total }}</strong>本月工单</div>
+    <div class="cal-stat"><strong style="color:#22c55e;">{{ ns.done }}</strong>已完成</div>
+    <div class="cal-stat"><strong style="color:#f59e0b;">{{ ns.prog }}</strong>处理中</div>
+    <div class="cal-stat"><strong style="color:#94a3b8;">{{ ns.pend }}</strong>待接单</div>
+    <div class="cal-stat"><strong style="color:{% if busy_day <= 3 %}#22c55e{% elif busy_day <= 8 %}#f59e0b{% else %}#ef4444{% endif %};">{{ busy_day }}</strong>单日峰值</div>
+  </div>
+
+  <!-- 星期 -->
+  <div class="cal-weekdays">
+    {% for wd in weekdays %}
+    <div class="cal-weekday">{{ wd }}</div>
+    {% endfor %}
+  </div>
+
+  <!-- 日期网格 -->
+  <div class="cal-grid" id="calGrid">
+    {% if first_weekday > 0 %}
+    {% for _ in range(first_weekday) %}
+    <div class="cal-day other-month"></div>
+    {% endfor %}
+    {% endif %}
+
+    {% for day in range(1, days_in_month + 1) %}
+    {% set orders_today = cal_data.get(day, []) %}
+    {% set is_today = (year == now.year and month == now.month and day == now.day) %}
+    {% set all_done = orders_today|selectattr('status', 'equalto', 'completed')|list|length == orders_today|length if orders_today else false %}
+    {% set n = orders_today|length %}
+
+    {% set heat_lv = 0 %}
+    {% if busy_day > 0 %}
+      {% set ratio = (n / busy_day * 100)|int %}
+      {% if ratio == 0 %}{% set heat_lv = 0 %}{% elif ratio <= 30 %}{% set heat_lv = 1 %}{% elif ratio <= 55 %}{% set heat_lv = 2 %}{% elif ratio <= 80 %}{% set heat_lv = 3 %}{% else %}{% set heat_lv = 4 %}{% endif %}
+    {% endif %}
+
+    {% set stagger_delay = (loop.index0 + first_weekday) * 0.025 %}
+
+    <div class="cal-day {% if is_today %}today{% endif %} {% if not orders_today %}cal-empty-day{% endif %}"
+         onclick="openSlidePanel({{ year }},{{ month }},{{ day }})" title="{{ year }}年{{ month }}月{{ day }}日·{{ n }}个工单"
+         style="animation-delay:{{ stagger_delay }}s;">
+      <div class="cal-day-header">
+        <span class="cal-day-num">{{ day }}</span>
+        {% if all_done and orders_today %}
+        <span class="cal-done-badge" title="全部完成"><i class="fas fa-check-circle"></i></span>
+        {% endif %}
+      </div>
+      {% if n > 0 %}
+      <div class="cal-heat lv{{ heat_lv }}"></div>
+      <div class="cal-dots">
+        {% set status_counts = {'completed':0,'in_progress':0,'pending':0} %}
+        {% for o in orders_today[:10] %}
+          {% if o.status == 'completed' %}{% set _ = status_counts.update({'completed': status_counts.completed + 1}) %}{% endif %}
+          {% if o.status == 'in_progress' %}{% set _ = status_counts.update({'in_progress': status_counts.in_progress + 1}) %}{% endif %}
+          {% if o.status == 'pending' %}{% set _ = status_counts.update({'pending': status_counts.pending + 1}) %}{% endif %}
+        {% endfor %}
+        {% for _ in range(status_counts.completed) %}
+          <span class="cal-dot" style="background:#22c55e;" title="已完成"></span>
+        {% endfor %}
+        {% for _ in range(status_counts.in_progress) %}
+          <span class="cal-dot" style="background:#f59e0b;" title="处理中"></span>
+        {% endfor %}
+        {% for _ in range(status_counts.pending) %}
+          <span class="cal-dot" style="background:#94a3b8;" title="待接单"></span>
+        {% endfor %}
+        {% if n > 10 %}
+        <span class="cal-more-dot">+{{ n - 10 }}</span>
+        {% endif %}
+      </div>
+      {% else %}
+      <div style="flex:1;"></div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if not cal_data %}
+  <div class="cal-empty">
+    <div class="cal-empty-icon"><i class="fas fa-calendar-alt"></i></div>
+    <div style="font-size:15px;font-weight:600;color:var(--text,#1e293b);">暂无工单数据</div>
+    <div style="font-size:12px;color:var(--text-muted,#94a3b8);margin-top:4px;">{{ year }}年{{ month }}月没有工单记录</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- 侧滑详情面板 -->
+<div class="cal-slide-overlay" id="slideOverlay" onclick="closeSlidePanel()"></div>
+<div class="cal-slide-panel" id="slidePanel">
+  <div class="cal-panel-header">
+    <h6><i class="fas fa-calendar-day" style="color:var(--primary,#4f46e5);"></i> <span id="slideDayTitle"></span></h6>
+    <button class="cal-panel-close" onclick="closeSlidePanel()">&times;</button>
+  </div>
+  <div class="cal-panel-body" id="slideBody">
+    <div class="text-center py-5 text-muted" style="font-size:13px;">
+      <div class="spinner-border spinner-border-sm mb-2" role="status"></div>
+      <div>加载中...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+var monthStr = '{{ "%04d-%02d"|format(year, month) }}';
+
+function openSlidePanel(year, month, day) {
+  var dateStr = year + '-' + String(month).padStart(2,'0') + '-' + String(day).padStart(2,'0');
+  document.getElementById('slideDayTitle').textContent = dateStr;
+  document.getElementById('slideOverlay').classList.add('show');
+  document.getElementById('slidePanel').classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  document.getElementById('slideBody').innerHTML =
+    '<div class="text-center py-5 text-muted" style="font-size:13px;">' +
+    '<div class="spinner-border spinner-border-sm mb-2" role="status"></div><div>加载中...</div></div>';
+
+  fetch('/orders/api/calendar-day?date=' + dateStr)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      var html = '';
+      if (!data || data.length === 0) {
+        html = '<div class="cal-p-empty"><i class="fas fa-inbox" style="font-size:32px;display:block;margin-bottom:8px;opacity:.3;"></i>当日无工单</div>';
+      } else {
+        data.forEach(function(o){
+          var color = o.status === 'completed' ? '#22c55e' : o.status === 'in_progress' ? '#f59e0b' : '#94a3b8';
+          var label = o.status === 'completed' ? '已完成' : o.status === 'in_progress' ? '处理中' : '待接单';
+          var prioIcon = o.priority === 'emergency' ? '<span style="color:#ef4444;">🔴</span>' : o.priority === 'urgent' ? '<span style="color:#eab308;">🟡</span>' : '<span style="color:#22c55e;">🟢</span>';
+          html += '<a href="' + escapeHtml(o.detail_url) + '" class="cal-p-card">' +
+            '<div class="cal-p-card-bar" style="background:' + color + ';"></div>' +
+            '<div class="cal-p-card-body">' +
+            '<div class="cal-p-card-title">' + prioIcon + ' ' + escapeHtml(o.title) + '</div>' +
+            '<div class="cal-p-card-meta">' +
+            '<span>' + (o.person || '未分配') + '</span>' +
+            '<span>' + (o.start_time || '无时间') + '</span>' +
+            '<span class="status-tag" style="background:' + color + '15;color:' + color + ';">● ' + label + '</span>' +
+            '</div></div></a>';
+        });
+      }
+      document.getElementById('slideBody').innerHTML = html;
+    })
+    .catch(function(){
+      document.getElementById('slideBody').innerHTML =
+        '<div class="cal-p-empty" style="color:#ef4444;"><i class="fas fa-exclamation-circle" style="font-size:28px;display:block;margin-bottom:6px;"></i>加载失败</div>';
+    });
+}
+
+function closeSlidePanel() {
+  document.getElementById('slideOverlay').classList.remove('show');
+  document.getElementById('slidePanel').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function escapeHtml(t) { if(!t)return ''; var d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
+
+// ESC 关闭面板
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeSlidePanel();
+});
+</script>
+{% endblock %}

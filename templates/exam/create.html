@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% block title %}{{ '编辑考试' if exam else '新建考试' }} - {{ system_name }}{% endblock %}
+{% block extra_head %}
+<link href="/static/css/exam.css?v=4" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="exam-create-steps">
+  <div class="step active">
+    <div class="step-circle">1</div>
+    <div class="step-text">基本信息</div>
+  </div>
+  <div class="step-connector"></div>
+  <div class="step active">
+    <div class="step-circle">2</div>
+    <div class="step-text">考试设置</div>
+  </div>
+  <div class="step-connector"></div>
+  <div class="step active">
+    <div class="step-circle">3</div>
+    <div class="step-text">试题管理</div>
+  </div>
+</div>
+
+<div class="create-exam-wrap">
+  <div class="create-exam-header">
+    <a href="{{ url_for('exam.exam_list') }}" class="back-link"><i class="fas fa-arrow-left"></i></a>
+    <div>
+      <h2><i class="fas fa-graduation-cap" style="color:var(--exam-primary);"></i> {{ '编辑考试' if exam else '新建考试' }}</h2>
+      <p class="header-sub">配置考试基本信息、题目与考试规则</p>
+    </div>
+  </div>
+
+  <form method="POST" id="examForm">
+    <div class="form-section">
+      <div class="section-head">
+        <div class="section-icon"><i class="fas fa-info-circle"></i></div>
+        <div>
+          <div class="section-title">基本信息</div>
+          <div class="section-desc">考试的名称和说明</div>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="form-group">
+          <label>考试标题 <span class="required">*</span></label>
+          <input type="text" name="title" class="form-input" value="{{ exam.title if exam else '' }}" required placeholder="如：2026年第二季度安全培训考核">
+        </div>
+        <div class="form-group">
+          <label>考试说明</label>
+          <textarea name="description" class="form-input" placeholder="考试须知、注意事项等，考生可在考试前查看">{{ exam.description if exam else '' }}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-head">
+        <div class="section-icon"><i class="fas fa-cog"></i></div>
+        <div>
+          <div class="section-title">考试设置</div>
+          <div class="section-desc">时长、分数、参与规则</div>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="settings-grid">
+          <div class="settings-card">
+            <div class="settings-card-icon" style="color:#f59e0b;background:rgba(245,158,11,.1);"><i class="fas fa-clock"></i></div>
+            <div class="settings-card-body">
+              <label>考试时长 <span class="unit">（分钟）</span></label>
+              <input type="number" name="duration_minutes" class="form-input" value="{{ exam.duration_minutes if exam else 30 }}" min="1" max="480">
+            </div>
+          </div>
+          <div class="settings-card">
+            <div class="settings-card-icon" style="color:#22c55e;background:rgba(34,197,94,.1);"><i class="fas fa-check-circle"></i></div>
+            <div class="settings-card-body">
+              <label>及格分数 <span class="unit">（%）</span></label>
+              <input type="number" name="pass_score" class="form-input" value="{{ exam.pass_score if exam else 60 }}" min="0" max="100" step="0.5">
+            </div>
+          </div>
+          <div class="settings-card">
+            <div class="settings-card-icon" style="color:#a78bfa;background:rgba(167,139,250,.1);"><i class="fas fa-star"></i></div>
+            <div class="settings-card-body">
+              <label>总分</label>
+              <input type="number" name="total_score" class="form-input" value="{{ exam.total_score if exam else 100 }}" min="0" step="0.5">
+            </div>
+          </div>
+          <div class="settings-card">
+            <div class="settings-card-icon" style="color:#ec4899;background:rgba(236,72,153,.1);"><i class="fas fa-redo"></i></div>
+            <div class="settings-card-body">
+              <label>最多尝试 <span class="unit">（0=不限）</span></label>
+              <input type="number" name="max_attempts" class="form-input" value="{{ exam.max_attempts if exam else 0 }}" min="0" max="99">
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-row-label">考试状态</div>
+          <div class="status-pills">
+            <label class="status-pill {% if (exam and exam.status=='draft') or not exam %}active draft{% endif %}">
+              <input type="radio" name="status" value="draft" {% if (exam and exam.status=='draft') or not exam %}checked{% endif %}>
+              <i class="fas fa-pencil-alt"></i> 草稿
+            </label>
+            <label class="status-pill {% if exam and exam.status=='published' %}active published{% endif %}">
+              <input type="radio" name="status" value="published" {% if exam and exam.status=='published' %}checked{% endif %}>
+              <i class="fas fa-play-circle"></i> 发布
+            </label>
+            <label class="status-pill {% if exam and exam.status=='closed' %}active closed{% endif %}">
+              <input type="radio" name="status" value="closed" {% if exam and exam.status=='closed' %}checked{% endif %}>
+              <i class="fas fa-stop-circle"></i> 已结束
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-row-label">允许参加的角色组</div>
+          <div class="settings-row-desc">不选择则所有有权限的用户可参加</div>
+          <div class="groups-grid">
+            {% for g in groups %}
+            <label class="group-chip {% if exam and g.name in exam.get_allowed_groups() %}selected{% endif %}">
+              <input type="checkbox" name="allowed_groups" value="{{ g.name }}"
+                     {% if exam and g.name in exam.get_allowed_groups() %}checked{% endif %}>
+              <i class="fas fa-users"></i> {{ g.name }}
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-row-label">允许参加的人员组别</div>
+          <div class="settings-row-desc">按人员资料的「组别」字段筛选（可选，不选则不限制）</div>
+          <div class="groups-grid">
+            {% for t in teams %}
+            <label class="group-chip {% if exam and t in exam.get_allowed_teams() %}selected{% endif %}">
+              <input type="checkbox" name="allowed_teams" value="{{ t }}"
+                     {% if exam and t in exam.get_allowed_teams() %}checked{% endif %}>
+              <i class="fas fa-user-tag"></i> {{ t }}
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-row-label">考试选项</div>
+          <div class="switch-group">
+            <label class="switch-item">
+              <input type="checkbox" name="shuffle_questions" value="1" {{ 'checked' if not exam or exam.shuffle_questions else '' }}>
+              <span class="switch-track"><span class="switch-thumb"></span></span>
+              <span class="switch-text">打乱题目顺序</span>
+            </label>
+            <label class="switch-item">
+              <input type="checkbox" name="shuffle_options" value="1" {{ 'checked' if not exam or exam.shuffle_options else '' }}>
+              <span class="switch-track"><span class="switch-thumb"></span></span>
+              <span class="switch-text">打乱选项顺序</span>
+            </label>
+            <label class="switch-item">
+              <input type="checkbox" name="show_result_immediately" value="1" {{ 'checked' if not exam or exam.show_result_immediately else '' }}>
+              <span class="switch-track"><span class="switch-thumb"></span></span>
+              <span class="switch-text">交卷后立即显示成绩</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-head">
+        <div class="section-icon"><i class="fas fa-list"></i></div>
+        <div>
+          <div class="section-title">试题管理</div>
+          <div class="section-desc">添加考试题目，设置选项与答案</div>
+        </div>
+      </div>
+      <div class="section-body">
+        <div id="questionsContainer">
+          {% if questions %}
+          {% for q in questions %}
+          {% set q_idx = loop.index0 %}
+          <div class="question-card" data-index="{{ q_idx }}">
+            {% include 'exam/_question_card.html' %}
+          </div>
+          {% endfor %}
+          {% endif %}
+        </div>
+        <button type="button" class="add-question-btn" onclick="addQuestion()">
+          <i class="fas fa-plus"></i> 添加试题
+        </button>
+        <div class="q-tip">
+          <i class="fas fa-info-circle"></i>
+          <span>题型说明：单选填 A / 多选用逗号分隔如 A,B / 判断填 T 或 F / 填空填标准答案</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <a href="{{ url_for('exam.exam_list') }}" class="btn-cancel-form"><i class="fas fa-times"></i> 取消</a>
+      <button type="submit" class="btn-exam-primary">
+        <i class="fas fa-save"></i> {{ '更新考试' if exam else '创建考试' }}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let qIdx = {{ questions|length if questions else 0 }};
+const labelGen = (i) => String.fromCharCode(65 + i);
+
+function addQuestion(data) {
+    const idx = qIdx++;
+    const card = document.createElement('div');
+    card.className = 'question-card';
+    card.dataset.index = idx;
+    card.innerHTML = genQuestionHTML(idx, data);
+    document.getElementById('questionsContainer').appendChild(card);
+}
+
+function genQuestionHTML(idx, data) {
+    data = data || {};
+    const qtype = data.question_type || 'single';
+    const opts = data.options || [];
+    return `
+    <div class="q-header">
+        <span class="q-number">#${idx + 1}</span>
+        <select name="q_type[]" class="q-type-select" onchange="updateOpts(this,${idx})">
+            <option value="single" ${qtype==='single'?'selected':''}>单选题</option>
+            <option value="multi" ${qtype==='multi'?'selected':''}>多选题</option>
+            <option value="judge" ${qtype==='judge'?'selected':''}>判断题</option>
+            <option value="fill" ${qtype==='fill'?'selected':''}>填空题</option>
+        </select>
+        <button type="button" class="q-remove" onclick="this.closest('.question-card').remove()"><i class="fas fa-times"></i></button>
+    </div>
+    <input type="text" name="q_title[]" class="q-text-input" value="${data.question_text||''}" placeholder="请输入题目内容...">
+    <div class="options-editor" id="opts_${idx}">
+        ${genOptionsHTML(idx, qtype, opts)}
+    </div>
+    <div class="q-meta-row">
+        <span class="q-meta-item">
+            <label>分值</label>
+            <input type="number" name="q_score[]" value="${data.score||10}" min="0" step="0.5">
+        </span>
+        <span class="q-meta-item">
+            <label>答案</label>
+            <input type="text" name="q_answer[]" class="q-answer-input" value="${data.answer||''}" placeholder="正确答案">
+        </span>
+        <span class="q-meta-item wide">
+            <label>解析</label>
+            <input type="text" name="q_analysis[]" class="q-answer-input" value="${data.analysis||''}" placeholder="答案解析（可选）">
+        </span>
+    </div>
+    <input type="hidden" name="q_options_${idx}" id="qopt_json_${idx}" value='${JSON.stringify(opts)}'>`;
+}
+
+function genOptionsHTML(idx, qtype, opts) {
+    if (qtype === 'judge') {
+        return `<div class="q-type-hint"><i class="fas fa-balance-scale"></i> 判断题无需填写选项，答案填 <code>T</code> 或 <code>F</code></div>`;
+    }
+    if (qtype === 'fill') {
+        return `<div class="q-type-hint"><i class="fas fa-edit"></i> 填空题无需选项，在答案框中填写标准答案</div>`;
+    }
+    let html = '';
+    for (let i = 0; i < opts.length; i++) {
+        html += `<div class="option-row">
+            <span class="opt-label">${labelGen(i)}</span>
+            <input type="text" value="${opts[i].text||''}" placeholder="选项内容" oninput="updateOptsJSON(${idx})">
+            <input type="hidden" class="opt-label-val" value="${opts[i].label||labelGen(i)}">
+            <button type="button" class="opt-remove" onclick="this.parentElement.remove();updateOptsJSON(${idx})"><i class="fas fa-times"></i></button>
+        </div>`;
+    }
+    if (opts.length === 0) {
+        for (let i = 0; i < 2; i++) {
+            html += `<div class="option-row">
+                <span class="opt-label">${labelGen(i)}</span>
+                <input type="text" value="" placeholder="选项内容" oninput="updateOptsJSON(${idx})">
+                <input type="hidden" class="opt-label-val" value="${labelGen(i)}">
+                <button type="button" class="opt-remove" onclick="this.parentElement.remove();updateOptsJSON(${idx})"><i class="fas fa-times"></i></button>
+            </div>`;
+        }
+    }
+    html += `<button type="button" class="opt-add-btn" onclick="addOption(${idx})"><i class="fas fa-plus"></i> 添加选项</button>`;
+    return html;
+}
+
+function addOption(idx) {
+    const container = document.getElementById('opts_' + idx);
+    const rows = container.querySelectorAll('.option-row');
+    const label = labelGen(rows.length);
+    const div = document.createElement('div');
+    div.className = 'option-row';
+    div.innerHTML = `<span class="opt-label">${label}</span>
+        <input type="text" value="" placeholder="选项内容" oninput="updateOptsJSON(${idx})">
+        <input type="hidden" class="opt-label-val" value="${label}">
+        <button type="button" class="opt-remove" onclick="this.parentElement.remove();updateOptsJSON(${idx})"><i class="fas fa-times"></i></button>`;
+    container.insertBefore(div, container.querySelector('.opt-add-btn'));
+    updateOptsJSON(idx);
+}
+
+function updateOpts(idx) { updateOptsJSON(idx); }
+
+function updateOptsJSON(idx) {
+    const container = document.getElementById('opts_' + idx);
+    if (!container) return;
+    const rows = container.querySelectorAll('.option-row');
+    const opts = [];
+    let i = 0;
+    rows.forEach(row => {
+        const inputs = row.querySelectorAll('input');
+        if (inputs.length >= 1) {
+            opts.push({label: labelGen(i), text: inputs[0].value});
+            i++;
+        }
+    });
+    document.getElementById('qopt_json_' + idx).value = JSON.stringify(opts);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.question-card').forEach(card => {
+        const idx = parseInt(card.dataset.index);
+        updateOptsJSON(idx);
+    });
+    // 角色组/人员组别芯片点击切换选中态
+    document.querySelectorAll('.group-chip').forEach(chip => {
+        chip.addEventListener('click', function(e) {
+            setTimeout(() => {
+                const cb = this.querySelector('input[type="checkbox"]');
+                if (cb) {
+                    this.classList.toggle('selected', cb.checked);
+                }
+            }, 10);
+        });
+    });
+});
+</script>
+{% endblock %}

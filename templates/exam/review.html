@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+{% block title %}查看答卷 - {{ exam.title }} - {{ system_name }}{% endblock %}
+{% block extra_head %}
+<style>
+/* ===== 顶部信息 ===== */
+.review-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+}
+.review-header .rh-left { flex: 1; min-width: 200px; }
+.review-header h2 { font-size: 1.2rem; font-weight: 700; margin: 0 0 4px; }
+.review-header .rh-desc { font-size: .84rem; color: var(--text-tertiary,#94a3b8); margin: 0; }
+.review-header .rh-actions { display: flex; gap: 8px; align-items: center; }
+.review-header .rh-actions a {
+  padding: 6px 16px; border-radius: 8px; font-size: .82rem;
+  border: 1px solid var(--border-color,#e2e8f0); background: var(--bg-card,#fff);
+  color: var(--text-primary); text-decoration: none; cursor: pointer;
+  transition: all .15s; display: inline-flex; align-items: center; gap: 5px;
+}
+.review-header .rh-actions a:hover {
+  border-color: var(--exam-primary,#6366f1); color: var(--exam-primary,#6366f1);
+}
+
+/* ===== 考生信息卡 ===== */
+.student-card {
+  display: flex; flex-wrap: wrap; gap: 16px; padding: 16px 20px;
+  background: var(--bg-card,#fff); border-radius: 10px;
+  border: 1px solid var(--border-color,#e2e8f0); margin-bottom: 20px;
+}
+.student-card .sc-item { display: flex; align-items: center; gap: 8px; }
+.student-card .sc-item .sc-lbl { font-size: .8rem; color: var(--text-tertiary,#94a3b8); }
+.student-card .sc-item .sc-val { font-size: .95rem; font-weight: 600; color: var(--text-primary,#1e293b); }
+.student-card .sc-item .sc-val.passed { color: #22c55e; }
+.student-card .sc-item .sc-val.failed { color: #ef4444; }
+
+/* ===== 统计行 ===== */
+.stats-mini {
+  display: flex; gap: 0; flex-wrap: wrap; margin-bottom: 20px;
+  background: var(--bg-card,#fff); border-radius: 10px;
+  border: 1px solid var(--border-color,#e2e8f0); overflow: hidden;
+}
+.stats-mini .sm-cell {
+  flex: 1; min-width: 80px; padding: 14px 10px; text-align: center;
+}
+.stats-mini .sm-cell + .sm-cell { border-left: 1px solid var(--border-color,#e2e8f0); }
+.stats-mini .sm-cell .sm-num {
+  font-size: 1.3rem; font-weight: 700; line-height: 1.2;
+}
+.stats-mini .sm-cell .sm-num.green { color: #22c55e; }
+.stats-mini .sm-cell .sm-num.red { color: #ef4444; }
+.stats-mini .sm-cell .sm-num.blue { color: #6366f1; }
+.stats-mini .sm-cell .sm-lbl {
+  font-size: .72rem; color: var(--text-tertiary,#94a3b8); margin-top: 2px;
+}
+
+/* ===== 逐题回顾 ===== */
+.q-list { list-style: none; margin: 0; padding: 0; }
+.q-item {
+  background: var(--bg-card,#fff); border-radius: 10px;
+  border: 1px solid var(--border-color,#e2e8f0); margin-bottom: 12px;
+  overflow: hidden;
+}
+.q-item .q-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; cursor: pointer; user-select: none;
+  transition: background .15s;
+}
+.q-item .q-bar:hover { background: rgba(99,102,241,.02); }
+.q-item .q-bar .q-status {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .8rem; font-weight: 700;
+}
+.q-item .q-bar .q-status.correct { background: #dcfce7; color: #15803d; }
+.q-item .q-bar .q-status.wrong { background: #fef2f2; color: #dc2626; }
+.q-item .q-bar .q-text { flex: 1; font-size: .88rem; font-weight: 500; line-height: 1.4; }
+.q-item .q-bar .q-tag {
+  font-size: .72rem; padding: 2px 8px; border-radius: 4px;
+  background: var(--bg-secondary,#f1f5f9); color: var(--text-tertiary,#94a3b8);
+  white-space: nowrap; flex-shrink: 0;
+}
+.q-item .q-bar .q-toggle {
+  font-size: .75rem; color: var(--text-tertiary,#94a3b8);
+  transition: transform .2s; flex-shrink: 0;
+}
+.q-item .q-bar .q-toggle.open { transform: rotate(180deg); }
+
+.q-item .q-detail {
+  display: none; padding: 14px 16px; border-top: 1px solid var(--border-color,#e2e8f0);
+  background: var(--bg-secondary,#fafafa);
+}
+.q-item .q-detail.open { display: block; }
+
+/* 选项行 */
+.opt-row {
+  display: flex; align-items: center; gap: 8px; padding: 5px 0;
+  font-size: .84rem; border-radius: 6px; margin: 2px 0;
+}
+.opt-row .opt-label {
+  width: 24px; font-weight: 600; flex-shrink: 0; text-align: center;
+}
+.opt-row .opt-text { flex: 1; }
+.opt-row .opt-badge {
+  flex-shrink: 0; font-size: .72rem; padding: 1px 8px; border-radius: 4px;
+  font-weight: 500; white-space: nowrap;
+}
+.opt-row .opt-badge.user-selected { background: rgba(99,102,241,.12); color: #6366f1; }
+.opt-row .opt-badge.correct-ans { background: rgba(34,197,94,.12); color: #22c55e; }
+.opt-row .opt-badge.wrong-ans { background: rgba(239,68,68,.12); color: #ef4444; }
+.opt-row.is-user-ans { background: rgba(99,102,241,.05); border-radius: 6px; }
+.opt-row.is-correct-ans { background: rgba(34,197,94,.04); border-radius: 6px; }
+
+/* 答案摘要 */
+.ans-summary {
+  margin-top: 10px; padding: 10px 14px; border-radius: 8px;
+  font-size: .84rem; line-height: 1.6;
+  border-left: 3px solid;
+}
+.ans-summary.correct { background: #f0fdf4; border-color: #22c55e; }
+.ans-summary.wrong { background: #fef2f2; border-color: #ef4444; }
+[data-theme="dark"] .ans-summary.correct { background: rgba(34,197,94,.08); }
+[data-theme="dark"] .ans-summary.wrong { background: rgba(239,68,68,.08); }
+.ans-summary .as-row { display: flex; gap: 16px; flex-wrap: wrap; }
+.ans-summary .as-row span { display: flex; align-items: center; gap: 4px; }
+.ans-summary .as-row .as-lbl { color: var(--text-tertiary,#94a3b8); }
+
+/* 答案解析 */
+.analysis-box {
+  margin-top: 8px; padding: 8px 14px; border-radius: 6px;
+  background: rgba(99,102,241,.06); border-left: 3px solid var(--exam-primary,#6366f1);
+  font-size: .84rem; line-height: 1.5;
+}
+
+/* 未答 */
+.no-answer { color: var(--text-tertiary,#94a3b8); font-size: .84rem; font-style: italic; }
+
+/* 暗色 */
+[data-theme="dark"] .q-item { border-color: #2d3748; }
+[data-theme="dark"] .q-item .q-detail { border-color: #2d3748; }
+[data-theme="dark"] .student-card { border-color: #2d3748; }
+[data-theme="dark"] .stats-mini { border-color: #2d3748; }
+[data-theme="dark"] .stats-mini .sm-cell + .sm-cell { border-color: #2d3748; }
+[data-theme="dark"] .q-item .q-bar:hover { background: rgba(99,102,241,.04); }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set m = submission.duration_seconds // 60 %}
+{% set sec = submission.duration_seconds % 60 %}
+{% set total_q = correct_count + wrong_count %}
+{% set pct = (correct_count / total_q * 100)|round(1) if total_q > 0 else 0 %}
+
+<div class="review-header">
+  <div class="rh-left">
+    <h2><i class="fas fa-file-alt" style="color:var(--exam-primary,#6366f1);"></i> 考生答卷</h2>
+    <p class="rh-desc">{{ exam.title }}</p>
+  </div>
+  <div class="rh-actions">
+    <a href="{{ url_for('exam.exam_detail', exam_id=exam.id) }}"><i class="fas fa-arrow-left"></i> 返回成绩</a>
+    <a href="{{ url_for('exam.exam_list') }}"><i class="fas fa-list"></i> 考试列表</a>
+  </div>
+</div>
+
+<!-- 考生信息 -->
+<div class="student-card">
+  <div class="sc-item"><span class="sc-lbl">👤 考生</span><span class="sc-val">{{ submission.user.display_name if submission.user else '未知' }}</span></div>
+  <div class="sc-item"><span class="sc-lbl">📊 得分</span><span class="sc-val">{{ submission.score|int }} / {{ submission.total_possible|int }}</span></div>
+  <div class="sc-item"><span class="sc-lbl">⏱ 用时</span><span class="sc-val">{{ m }}分{{ sec }}秒</span></div>
+  <div class="sc-item"><span class="sc-lbl">🎯 正确率</span><span class="sc-val">{{ pct }}%</span></div>
+  <div class="sc-item">
+    <span class="sc-lbl">🏆 结果</span>
+    <span class="sc-val {{ 'passed' if submission.is_passed(exam.pass_score) else 'failed' }}">
+      {{ '✓ 及格' if submission.is_passed(exam.pass_score) else '✗ 不及格' }}
+    </span>
+  </div>
+</div>
+
+<!-- 统计 -->
+<div class="stats-mini">
+  <div class="sm-cell"><div class="sm-num blue">{{ total_q }}</div><div class="sm-lbl">总题数</div></div>
+  <div class="sm-cell"><div class="sm-num green">{{ correct_count }}</div><div class="sm-lbl">正确 ✓</div></div>
+  <div class="sm-cell"><div class="sm-num red">{{ wrong_count }}</div><div class="sm-lbl">错误 ✗</div></div>
+</div>
+
+<!-- 逐题回顾 -->
+<ul class="q-list">
+  {% for item in review_items %}
+  {% set q = item.question %}
+  {% set opts = q.get_options() %}
+  {% set qtype_name = {'single':'单选','multi':'多选','judge':'判断','fill':'填空'}[q.question_type] %}
+  <li class="q-item">
+    <div class="q-bar" onclick="toggleQDetail(this)">
+      <span class="q-status {{ 'correct' if item.is_correct else 'wrong' }}">{{ '✓' if item.is_correct else '✗' }}</span>
+      <span class="q-text">{{ loop.index }}. {{ q.question_text }}</span>
+      <span class="q-tag">{{ qtype_name }} · {{ q.score }}分</span>
+      <span class="q-toggle">▼</span>
+    </div>
+    <div class="q-detail">
+      {% if q.question_type in ('single', 'multi') and opts %}
+      {% for opt in opts %}
+      {% set is_user = opt.label == item.user_answer %}
+      {% set is_correct_ans = opt.label == q.answer %}
+      <div class="opt-row {% if is_user %}is-user-ans{% endif %} {% if is_correct_ans %}is-correct-ans{% endif %}">
+        <span class="opt-label">{{ opt.label }}</span>
+        <span class="opt-text">{{ opt.text }}</span>
+        {% if is_user and is_correct_ans %}
+        <span class="opt-badge user-selected">你的选择 ✓</span>
+        {% elif is_user and not is_correct_ans %}
+        <span class="opt-badge wrong-ans">你的选择 ✗</span>
+        {% elif is_correct_ans %}
+        <span class="opt-badge correct-ans">正确答案 ✓</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      {% if q.question_type == 'judge' %}
+      {% set judge_opts = [('T','正确'),('F','错误')] %}
+      {% for label, text in judge_opts %}
+      {% set is_user = label == item.user_answer %}
+      {% set is_correct_ans = label == q.answer %}
+      <div class="opt-row {% if is_user %}is-user-ans{% endif %} {% if is_correct_ans %}is-correct-ans{% endif %}">
+        <span class="opt-label">{{ label }}</span>
+        <span class="opt-text">{{ text }}</span>
+        {% if is_user and is_correct_ans %}
+        <span class="opt-badge user-selected">你的选择 ✓</span>
+        {% elif is_user and not is_correct_ans %}
+        <span class="opt-badge wrong-ans">你的选择 ✗</span>
+        {% elif is_correct_ans %}
+        <span class="opt-badge correct-ans">正确答案 ✓</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      {% if q.question_type == 'fill' %}
+      <div class="opt-row">
+        <span class="opt-label">📝</span>
+        <span class="opt-text"><span style="color:var(--text-tertiary);">你的答案：</span>{{ item.user_answer if item.user_answer else '（未作答）' }}</span>
+      </div>
+      {% endif %}
+
+      <!-- 答案摘要 -->
+      <div class="ans-summary {{ 'correct' if item.is_correct else 'wrong' }}">
+        <div class="as-row">
+          <span><span class="as-lbl">你的答案：</span>
+            {%- if item.user_answer -%}<strong>{{ item.user_answer }}</strong>
+            {%- else -%}<span class="no-answer">（未作答）</span>{%- endif -%}
+          </span>
+          <span><span class="as-lbl">正确答案：</span><strong style="color:#22c55e;">{{ q.answer }}</strong></span>
+          <span><span class="as-lbl">结果：</span><strong style="color:{{ '#22c55e' if item.is_correct else '#ef4444' }};">{{ '✓ 正确' if item.is_correct else '✗ 错误' }}</strong></span>
+          <span><span class="as-lbl">分值：</span>{{ q.score }}分</span>
+        </div>
+        <div style="margin-top:4px;">{{ '✓ ' + q.score|string + '分 已计入总分' if item.is_correct else '✗ ' + q.score|string + '分 未得分' }}</div>
+      </div>
+
+      {% if q.analysis %}
+      <div class="analysis-box">
+        <i class="fas fa-lightbulb" style="color:var(--exam-primary,#6366f1);margin-right:5px;"></i>
+        {{ q.analysis }}
+      </div>
+      {% endif %}
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function toggleQDetail(bar) {
+  var detail = bar.parentElement.querySelector('.q-detail');
+  var toggle = bar.querySelector('.q-toggle');
+  if (!detail) return;
+  detail.classList.toggle('open');
+  if (toggle) toggle.classList.toggle('open');
+}
+</script>
+{% endblock %}

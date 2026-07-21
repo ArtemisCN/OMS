@@ -1,0 +1,296 @@
+page {
+  min-height: 100vh;
+  background: #f5f6fa;
+  padding-bottom: 40rpx;
+}
+.loading-wrap {
+  text-align: center;
+  padding: 240rpx 0;
+}
+.loading-icon {
+  display: inline-block;
+  width: 60rpx;
+  height: 60rpx;
+  border: 4rpx solid #e8ecf1;
+  border-top-color: #4f46e5;
+  border-radius: 50%;
+}
+.loading-text {
+  display: block;
+  font-size: 26rpx;
+  color: #94a3b8;
+  margin-top: 16rpx;
+}
+.form-wrap {
+  padding: 28rpx;
+}
+.form-header {
+  background: #fff;
+  border: none;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.06);
+  border-radius: 20rpx;
+  padding: 28rpx 28rpx 0;
+  margin-bottom: 20rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.form-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #4f46e5;
+  flex: 1;
+}
+.form-status {
+  font-size: 24rpx;
+  font-weight: 500;
+}
+.field-list {
+  background: #fff;
+  border-radius: 20rpx;
+  overflow: hidden;
+  border: none;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.06);
+  margin-bottom: 24rpx;
+}
+.field-item {
+  border-bottom: 2rpx solid #f1f5f9;
+}
+.field-item:last-child {
+  border-bottom: none;
+}
+.field-row {
+  padding: 24rpx 28rpx;
+}
+.field-label {
+  display: block;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 12rpx;
+}
+.required {
+  color: #ef4444;
+  margin-left: 4rpx;
+}
+.field-input {
+  width: 100%;
+  height: 76rpx;
+  border: 2rpx solid #e2e8f0;
+  border-radius: 14rpx;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+  background: #f8fafc;
+  transition: border-color .2s, box-shadow .2s;
+  box-sizing: border-box;
+}
+.field-input:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3rpx rgba(79,70,229,0.12);
+  background: #fff;
+}
+.field-textarea {
+  width: 100%;
+  min-height: 160rpx;
+  border: 2rpx solid #e2e8f0;
+  border-radius: 14rpx;
+  padding: 16rpx 20rpx;
+  font-size: 28rpx;
+  background: #f8fafc;
+  transition: border-color .2s, box-shadow .2s;
+  box-sizing: border-box;
+}
+.field-textarea:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3rpx rgba(79,70,229,0.12);
+  background: #fff;
+}
+.picker-value {
+  height: 76rpx;
+  line-height: 76rpx;
+  border: 2rpx solid #e2e8f0;
+  border-radius: 14rpx;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+  background: #f8fafc;
+  color: #1e293b;
+}
+.radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+.radio-item {
+  display: flex;
+  align-items: center;
+  padding: 8rpx 0;
+  margin-right: 20rpx;
+}
+.radio-text {
+  font-size: 26rpx;
+  color: #334155;
+  margin-left: 8rpx;
+}
+.checkbox-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.checkbox-switch {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+.checkbox-text {
+  font-size: 24rpx;
+  color: #64748b;
+}
+.signature-row {
+  padding: 24rpx 28rpx;
+}
+.signature-preview {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 8rpx 0;
+}
+.signature-preview-img {
+  width: 300rpx;
+  height: 80rpx;
+  border: 2rpx solid #e8ecf1;
+  border-radius: 8rpx;
+  background: #fafafa;
+}
+.signature-retap {
+  font-size: 24rpx;
+  color: #2563eb;
+  text-decoration: underline;
+}
+.signature-placeholder {
+  height: 76rpx;
+  line-height: 76rpx;
+  border: 2rpx dashed #e2e8f0;
+  border-radius: 14rpx;
+  padding: 0 20rpx;
+  font-size: 26rpx;
+  color: #4f46e5;
+  background: #eef2ff;
+  text-align: center;
+  transition: border-color .2s, background .2s;
+}
+.signature-placeholder:active {
+  border-color: #4f46e5;
+  background: #dde4ff;
+}
+.action-row {
+  margin-bottom: 16rpx;
+}
+.submitted-hint {
+  background: #f0fdf4;
+  border: 2rpx solid #bbf7d0;
+  border-radius: 20rpx;
+  padding: 28rpx 30rpx;
+  margin-bottom: 16rpx;
+  text-align: center;
+}
+.submitted-text {
+  font-size: 28rpx;
+  color: #059669;
+}
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 90rpx;
+  border: none;
+  border-radius: 20rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #fff;
+  margin-top: 8rpx;
+  transition: opacity .2s;
+}
+.btn-primary {
+  background: #4f46e5;
+}
+.btn-primary:active {
+  opacity: 0.85;
+}
+.btn-secondary {
+  background: #f1f5f9;
+  color: #475569;
+  margin-top: 4rpx;
+}
+.back-row {
+  margin-top: 8rpx;
+}
+
+/* ========== 签名弹窗 ========== */
+.signature-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 999;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.signature-pad {
+  width: 100vw;
+  max-width: 750rpx;
+  background: #fff;
+  border-radius: 24rpx 24rpx 0 0;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.signature-pad-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 28rpx 30rpx;
+  border-bottom: 2rpx solid #f1f5f9;
+}
+.signature-pad-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1e293b;
+}
+.signature-pad-clear {
+  font-size: 26rpx;
+  color: #ef4444;
+}
+.signature-canvas {
+  width: 100%;
+  height: 500rpx;
+  display: block;
+  flex-shrink: 0;
+}
+.signature-pad-actions {
+  display: flex;
+  border-top: 2rpx solid #f1f5f9;
+}
+.btn-sign-cancel {
+  flex: 1;
+  background: #f1f5f9;
+  color: #475569;
+  border: none;
+  border-radius: 0;
+  font-size: 28rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+}
+.btn-sign-confirm {
+  flex: 1;
+  background: #4f46e5;
+  color: #fff;
+  border: none;
+  border-radius: 0;
+  font-size: 28rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+}

@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D数字孪生 · 医院建筑群</title>
+    <link href="/static/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/vendor/fontawesome/all.min.css" rel="stylesheet">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        html, body { width:100%; height:100%; overflow:hidden; font-family:system-ui,-apple-system,sans-serif; background:#000; }
+        #three-container { width:100vw; height:100vh; }
+        .header-3d {
+            position:fixed; top:0; left:0; right:0; height:56px; z-index:100;
+            display:flex; align-items:center; justify-content:space-between;
+            padding:0 24px;
+            background:linear-gradient(180deg,rgba(10,14,39,0.95),rgba(10,14,39,0.7));
+            border-bottom:1px solid rgba(255,255,255,0.06);
+            backdrop-filter:blur(12px);
+        }
+        .header-3d .title { font-size:18px; font-weight:700; background:linear-gradient(135deg,#a78bfa,#60a5fa); -webkit-background-clip:text;-webkit-text-fill-color:transparent; background-clip:text; }
+        .header-3d .title i { -webkit-text-fill-color:#4f46e5; margin-right:8px; }
+        .hdr-btn {
+            padding:6px 14px; border-radius:8px; border:1px solid rgba(255,255,255,0.1);
+            background:rgba(255,255,255,0.04); color:#cbd5e1;
+            font-size:13px; cursor:pointer; transition:all 0.2s; text-decoration:none;
+        }
+        .hdr-btn:hover { background:rgba(255,255,255,0.1); }
+        .info-panel {
+            position:fixed; bottom:24px; right:24px; z-index:100;
+            background:rgba(10,14,39,0.85); backdrop-filter:blur(12px);
+            border:1px solid rgba(255,255,255,0.06); border-radius:12px;
+            padding:14px 18px; min-width:180px;
+        }
+        .info-panel .ip-title { font-size:11px; color:#64748b; margin-bottom:6px; text-transform:uppercase; letter-spacing:1px; }
+        .info-panel .ip-row { display:flex; justify-content:space-between; font-size:13px; color:#e2e8f0; padding:3px 0; }
+        .info-panel .ip-row .ip-val { color:#818cf8; font-weight:600; }
+        .legend-3d {
+            position:fixed; bottom:24px; left:24px; z-index:100;
+            background:rgba(10,14,39,0.85); backdrop-filter:blur(12px);
+            border:1px solid rgba(255,255,255,0.06); border-radius:12px;
+            padding:12px 16px; display:flex; gap:14px; align-items:center;
+        }
+        .legend-3d .lg-item { display:flex; align-items:center; gap:6px; font-size:11px; color:#94a3b8; }
+        .legend-3d .lg-dot { width:14px; height:14px; border-radius:4px; }
+        .loading {
+            position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+            background:#0a0e27; z-index:9999; transition:opacity 0.5s;
+        }
+        .loading.hidden { opacity:0; pointer-events:none; }
+        .loading .spinner { width:40px; height:40px; border:3px solid rgba(79,70,229,0.2); border-top-color:#818cf8; border-radius:50%; animation:spin 1s linear infinite; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+        .label-3d {
+            color:#fff; font-size:11px; font-weight:600;
+            text-shadow:0 1px 6px rgba(0,0,0,0.8);
+            pointer-events:none;
+            background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:4px;
+            white-space:nowrap; border:1px solid rgba(255,255,255,0.1);
+        }
+        /* ===== 建模编辑器 ===== */
+        .editor-btn { padding:4px 10px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04); color:#cbd5e1; font-size:11px; cursor:pointer; transition:all 0.2s; }
+        .editor-btn:hover { background:rgba(255,255,255,0.1); }
+        .editor-btn.active { background:rgba(99,102,241,0.3); border-color:#818cf8; color:#a5b4fc; }
+        .editor-btn.primary { background:rgba(79,70,229,0.3); border-color:rgba(79,70,229,0.4); color:#a78bfa; }
+        .editor-btn.danger { background:rgba(239,68,68,0.2); border-color:rgba(239,68,68,0.3); color:#f87171; }
+        .editor-btn.success { background:rgba(34,197,94,0.2); border-color:rgba(34,197,94,0.3); color:#4ade80; }
+        .editor-btn.small { padding:2px 6px; font-size:10px; }
+        #editorPanel {
+            position:fixed; top:64px; right:12px; width:280px; max-height:calc(100vh - 80px);
+            z-index:200; display:none; flex-direction:column;
+            background:rgba(10,14,39,0.95); backdrop-filter:blur(20px);
+            border:1px solid rgba(255,255,255,0.08); border-radius:14px;
+            overflow:hidden; box-shadow:0 12px 48px rgba(0,0,0,0.5);
+        }
+        #editorPanel.show { display:flex; }
+        .editor-header { padding:12px 14px 8px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:13px; font-weight:600; color:#f1f5f9; display:flex; align-items:center; gap:6px; }
+        .editor-body { padding:10px 14px; overflow-y:auto; flex:1; }
+        .editor-body label { font-size:10px; color:#64748b; display:block; margin-top:8px; margin-bottom:2px; text-transform:uppercase; letter-spacing:0.5px; }
+        .editor-body input, .editor-body select { width:100%; padding:4px 8px; border-radius:5px; border:1px solid rgba(255,255,255,0.08); background:rgba(0,0,0,0.3); color:#e2e8f0; font-size:12px; }
+        .editor-body input[type=color] { width:40px; height:28px; padding:2px; cursor:pointer; }
+        .editor-row { display:flex; gap:6px; align-items:center; margin:2px 0; }
+        .editor-row label { margin:0; flex-shrink:0; width:50px; }
+        .editor-row input { flex:1; }
+        .editor-elem-list { max-height:150px; overflow-y:auto; margin:4px 0; }
+        .editor-elem-item { padding:4px 8px; border-radius:4px; font-size:11px; color:#94a3b8; cursor:pointer; transition:all 0.15s; display:flex; align-items:center; gap:6px; }
+        .editor-elem-item:hover { background:rgba(255,255,255,0.04); }
+        .editor-elem-item.selected { background:rgba(99,102,241,0.2); color:#e2e8f0; }
+        .editor-elem-item .del { margin-left:auto; color:#f87171; cursor:pointer; opacity:0.5; }
+        .editor-elem-item .del:hover { opacity:1; }
+        .editor-tools { display:flex; gap:4px; flex-wrap:wrap; }
+        .editor-section { margin-top:10px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.04); }
+    </style>
+</head>
+<body>
+<div class="loading" id="loading"><div class="spinner"></div></div>
+
+<div class="header-3d">
+    <div>
+        <a href="/feature/digital-twin" class="hdr-btn" style="margin-right:12px;"><i class="fas fa-arrow-left"></i> 返回</a>
+        <span class="title"><i class="fas fa-cubes"></i>3D 医院建筑群</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+        <span style="font-size:12px;color:#64748b;" id="buildingCount">加载中...</span>
+        <button class="hdr-btn" id="resetViewBtn"><i class="fas fa-home"></i> 复位</button>
+        <button class="hdr-btn" id="rotateBtn"><i class="fas fa-sync-alt"></i> <span id="rotateBtnText">旋转</span></button>
+        <button class="hdr-btn primary" id="editModelBtn" style="background:rgba(99,102,241,0.2);border-color:rgba(99,102,241,0.3);color:#a5b4fc;"><i class="fas fa-pencil-ruler"></i> 建模</button>
+    </div>
+</div>
+
+<div id="three-container"></div>
+
+<div class="legend-3d">
+    <div class="lg-item"><span class="lg-dot" style="background:#22c55e;"></span>低 ≤10</div>
+    <div class="lg-item"><span class="lg-dot" style="background:#eab308;"></span>中 10-100</div>
+    <div class="lg-item"><span class="lg-dot" style="background:#ef4444;"></span>高 100-500</div>
+    <div class="lg-item"><span class="lg-dot" style="background:#a855f7;"></span>极高 >500</div>
+</div>
+
+<!-- 建模编辑器面板 -->
+<div id="editorPanel">
+    <div class="editor-header">
+        <i class="fas fa-pencil-ruler" style="color:#818cf8;"></i> 建模编辑器
+        <span style="margin-left:auto;font-size:10px;color:#64748b;font-weight:400;" id="editBuildingName">未选中</span>
+    </div>
+    <div class="editor-body">
+        <!-- 选择建筑 -->
+        <label>选择建筑</label>
+        <select id="editBuildingSelect" onchange="onEditBuildingChange()"></select>
+
+        <!-- 添加元素工具 -->
+        <div class="editor-section">
+            <label>基础元素</label>
+            <div class="editor-tools">
+                <button class="editor-btn" onclick="addElement('box')">📦 方块</button>
+                <button class="editor-btn" onclick="addElement('cylinder')">🛢 圆柱</button>
+                <button class="editor-btn" onclick="addElement('sign')">🏷 标牌</button>
+            </div>
+        </div>
+
+        <!-- 快速插入预设元素 -->
+        <div class="editor-section">
+            <label>🏗 快速插入</label>
+            <div class="editor-tools" style="gap:3px;">
+                <button class="editor-btn small" onclick="addPreset('ac')">❄️ 空调</button>
+                <button class="editor-btn small" onclick="addPreset('watertank')">💧 水箱</button>
+                <button class="editor-btn small" onclick="addPreset('antenna')">📡 天线</button>
+                <button class="editor-btn small" onclick="addPreset('chimney')">🏭 烟囱</button>
+                <button class="editor-btn small" onclick="addPreset('solar')">☀️ 太阳能</button>
+                <button class="editor-btn small" onclick="addPreset('elevator')">🛗 电梯井</button>
+                <button class="editor-btn small" onclick="addPreset('column')">🏛 柱子</button>
+                <button class="editor-btn small" onclick="addPreset('fence')">🔲 围栏</button>
+                <button class="editor-btn small" onclick="addPreset('tree')">🌲 树</button>
+                <button class="editor-btn small" onclick="addPreset('lamp')">💡 路灯</button>
+                <button class="editor-btn small" onclick="addPreset('glasswall')">🪟 幕墙</button>
+                <button class="editor-btn small" onclick="addPreset('canopy')">🏠 雨棚</button>
+            </div>
+        </div>
+
+        <!-- 元素列表 -->
+        <div class="editor-section">
+            <label>元素列表</label>
+            <div class="editor-elem-list" id="elemList"></div>
+        </div>
+
+        <!-- 选中元素属性 -->
+        <div class="editor-section" id="elemProps" style="display:none;">
+            <label>属性</label>
+            <div class="editor-row"><label>位置X</label><input type="range" min="-10" max="10" step="0.1" id="propPx" oninput="onPropChange()"><span id="propPxV" style="font-size:10px;color:#64748b;width:30px;text-align:right;">0</span></div>
+            <div class="editor-row"><label>位置Y</label><input type="range" min="0" max="15" step="0.1" id="propPy" oninput="onPropChange()"><span id="propPyV" style="font-size:10px;color:#64748b;width:30px;text-align:right;">0</span></div>
+            <div class="editor-row"><label>位置Z</label><input type="range" min="-10" max="10" step="0.1" id="propPz" oninput="onPropChange()"><span id="propPzV" style="font-size:10px;color:#64748b;width:30px;text-align:right;">0</span></div>
+            <div class="editor-row"><label>宽</label><input type="range" min="0.1" max="8" step="0.1" id="propW" oninput="onPropChange()"><span id="propWV" style="font-size:10px;color:#64748b;width:30px;text-align:right;">1</span></div>
+            <div class="editor-row"><label>高</label><input type="range" min="0.1" max="6" step="0.1" id="propH" oninput="onPropChange()"><span id="propHV" style="font-size:10px;color:#64748b;width:30px;text-align:right;">1</span></div>
+            <div class="editor-row"><label>深</label><input type="range" min="0.1" max="8" step="0.1" id="propD" oninput="onPropChange()"><span id="propDV" style="font-size:10px;color:#64748b;width:30px;text-align:right;">1</span></div>
+            <div class="editor-row"><label>颜色</label><input type="color" id="propColor" oninput="onPropChange()"></div>
+            <div class="editor-row"><label>贴图</label>
+                <select id="propTex" onchange="onPropChange()" style="flex:1;">
+                    <option value="">无</option>
+                </select>
+                <button class="editor-btn small" onclick="uploadTexture()">📤</button>
+            </div>
+            <button class="editor-btn danger small" onclick="deleteSelected()" style="margin-top:6px;">🗑 删除元素</button>
+        </div>
+
+        <!-- 保存/加载 -->
+        <div class="editor-section" style="display:flex;gap:4px;">
+            <button class="editor-btn success" onclick="saveModel()" style="flex:1;">💾 保存模型</button>
+            <button class="editor-btn" onclick="loadModel()" style="flex:1;">📂 加载</button>
+        </div>
+    </div>
+</div>
+
+<div class="info-panel">
+    <div class="ip-title">建筑统计</div>
+    <div class="ip-row"><span>建筑总数</span><span class="ip-val" id="ipCount">-</span></div>
+    <div class="ip-row"><span>总工单</span><span class="ip-val" id="ipOrders">-</span></div>
+    <div class="ip-row"><span>最高建筑</span><span class="ip-val" id="ipTop">-</span></div>
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "/static/vendor/three/three.module.js",
+        "three/addons/": "/static/vendor/three/"
+    }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+// ===== 从图片精确分析得到的8个建筑数据 =====
+// 坐标直接从卫星图(1600x1123)像素检测得到
+const IMG_W = 1600, IMG_H = 1123;
+const SCENE_SIZE = 70;
+// 卫星图URL（用于屋顶纹理贴图）
+const SAT_MAP_URL = '/static/bg_layout.jpg';
+
+function imgToScene(ix, iy) {
+    return {
+        x: (ix / IMG_W - 0.5) * SCENE_SIZE,
+        z: (0.5 - iy / IMG_H) * SCENE_SIZE * (IMG_H/IMG_W),
+    };
+}
+
+// 检测到的精确建筑边界（像素坐标）
+const BUILDING_DATA = [
+    {
+        id: '7号楼', fault: 1103,
+        img: { x:500, y:158, w:678, h:140 },  // 顶部大长条
+        density: '极高',
+    },
+    {
+        id: '6号楼', fault: 767,
+        img: { x:50, y:350, w:448, h:448 },    // 左下大方形
+        density: '高',
+    },
+    {
+        id: '1号楼', fault: 663,
+        img: { x:1100, y:400, w:448, h:448 },  // 右下大方形
+        density: '高',
+    },
+    {
+        id: '2号楼', fault: 372,
+        img: { x:1100, y:300, w:348, h:198 },  // 右中长条
+        density: '中',
+    },
+    {
+        id: '16号楼', fault: 325,
+        img: { x:853, y:274, w:147, h:84 },    // 中上小方形
+        density: '中',
+    },
+    {
+        id: '15号楼', fault: 222,
+        img: { x:74, y:835, w:148, h:261 },    // 左中竖长条
+        density: '中',
+    },
+    {
+        id: '4号楼', fault: 181,
+        img: { x:1000, y:550, w:398, h:198 },  // 中偏右下方形
+        density: '中',
+    },
+    {
+        id: '8号楼', fault: 174,
+        img: { x:1100, y:150, w:348, h:148 },  // 右上长条
+        density: '低',
+    },
+    {
+        id: '3号楼', fault: 218,
+        img: { x:300, y:350, w:398, h:248 },   // 中偏左方形
+        density: '中',
+    },
+    {
+        id: '5号楼', fault: 82,
+        img: { x:100, y:700, w:286, h:248 },   // 左侧中段
+        density: '低',
+    },
+];
+
+const MAX_FAULT = BUILDING_DATA[0].fault;
+
+// ===== 场景 =====
+const container = document.getElementById('three-container');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0e27);
+scene.fog = new THREE.Fog(0x0a0e27, 90, 180);
+
+// ===== 相机 =====
+const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 500);
+camera.position.set(30, 28, 35);
+camera.lookAt(0, 2, 0);
+
+// ===== 渲染器 =====
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(container.clientWidth, container.clientHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+container.appendChild(renderer.domElement);
+
+// ===== CSS2D 标签渲染器 =====
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(container.clientWidth, container.clientHeight);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0';
+labelRenderer.domElement.style.pointerEvents = 'none';
+container.appendChild(labelRenderer.domElement);
+
+// ===== 控制器 =====
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.maxPolarAngle = Math.PI / 2.05;
+controls.minDistance = 15;
+controls.maxDistance = 100;
+controls.target.set(0, 2, 0);
+controls.update();
+
+// ===== 灯光 =====
+const ambient = new THREE.AmbientLight(0x404060, 0.5);
+scene.add(ambient);
+
+const dirLight = new THREE.DirectionalLight(0xffeedd, 2.0);
+dirLight.position.set(30, 50, 20);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.width = 2048;
+dirLight.shadow.mapSize.height = 2048;
+dirLight.shadow.camera.near = 0.5;
+dirLight.shadow.camera.far = 100;
+dirLight.shadow.camera.left = -40;
+dirLight.shadow.camera.right = 40;
+dirLight.shadow.camera.top = 40;
+dirLight.shadow.camera.bottom = -40;
+scene.add(dirLight);
+
+const fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
+fillLight.position.set(-20, 15, -20);
+scene.add(fillLight);
+
+const hemi = new THREE.HemisphereLight(0x443366, 0x222244, 0.5);
+scene.add(hemi);
+
+// ===== 地面（网格+地图纹理）=====
+const groundSize = 75;
+const gridHelper = new THREE.GridHelper(groundSize, 30, 0x1a1a4e, 0x1a1a4e);
+gridHelper.position.y = -0.05;
+scene.add(gridHelper);
+
+// 地图纹理地面
+async function loadMapTexture(mapUrl) {
+    if (!mapUrl) return;
+    return new Promise((resolve) => {
+        new THREE.TextureLoader().load(mapUrl, (tex) => {
+            tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+            const geo = new THREE.PlaneGeometry(groundSize, groundSize * (IMG_H/IMG_W));
+            const mat = new THREE.MeshStandardMaterial({
+                map: tex, transparent: true, opacity: 0.4,
+                roughness: 0.9, metalness: 0.05, side: THREE.DoubleSide,
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.position.y = -0.04;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+            resolve();
+        }, undefined, () => resolve());
+    });
+}
+
+// ===== 纹理加载器（全局共享）=====
+const texLoader = new THREE.TextureLoader();
+const ROOF_TEX_PATH = '/static/roof_textures/';
+const ROOF_TEX_MAP = {
+    '7号楼': 'b7.jpg', '6号楼': 'b6.jpg', '1号楼': 'b1.jpg',
+    '2号楼': 'b2.jpg', '16号楼': 'b16.jpg', '15号楼': 'b15.jpg',
+    '4号楼': 'b4.jpg', '8号楼': 'b8.jpg', '3号楼': 'b3.jpg', '5号楼': 'b5.jpg',
+};
+let loadedTextures = {};
+
+// ===== 创建3D建筑（独立裁剪图纹理贴图）=====
+function createBuilding(data) {
+    const { id, fault, img: imgData, density } = data;
+    const pos = imgToScene(imgData.x, imgData.y);
+    const size3d = imgToScene(imgData.x + imgData.w, imgData.y + imgData.h);
+    const w3d = Math.abs(size3d.x - pos.x);
+    const d3d = Math.abs(size3d.z - pos.z);
+    const height = Math.max(1.8, (fault / MAX_FAULT) * 12 + 2.5);
+    
+    function getColor(count) {
+        if (count > 500) return new THREE.Color(0xa855f7);
+        if (count > 100) return new THREE.Color(0xef4444);
+        if (count > 10) return new THREE.Color(0xeab308);
+        return new THREE.Color(0x22c55e);
+    }
+    const mainColor = getColor(fault);
+    
+    // 墙面颜色（从屋顶边缘采样暗色）
+    const wallColor = new THREE.Color().setHSL(
+        0.62 - (fault / MAX_FAULT) * 0.15,
+        0.1 + (fault / MAX_FAULT) * 0.3,
+        0.15 + (fault / MAX_FAULT) * 0.15
+    );
+    
+    const group = new THREE.Group();
+    group.position.set(pos.x, 0, pos.z);
+    
+    // === 建筑主体 ===
+    // 屋顶使用独立裁剪图（每栋楼从卫星图精确裁剪）
+    let roofMat;
+    const texFile = ROOF_TEX_MAP[id];
+    if (texFile && loadedTextures[texFile]) {
+        const tex = loadedTextures[texFile];
+        roofMat = new THREE.MeshStandardMaterial({
+            map: tex,
+            roughness: 0.6,
+            metalness: 0.15,
+        });
+    } else if (texFile) {
+        // 图片未加载完成时使用单色回退 + 异步加载
+        roofMat = new THREE.MeshStandardMaterial({
+            color: mainColor,
+            roughness: 0.7, metalness: 0.2,
+        });
+        // 异步加载纹理，加载成功后替换
+        texLoader.load(ROOF_TEX_PATH + texFile, (tex) => {
+            tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+            loadedTextures[texFile] = tex;
+            // 替换屋顶材质
+            if (body.material) {
+                const mats = body.material;
+                if (Array.isArray(mats)) {
+                    mats[2] = new THREE.MeshStandardMaterial({
+                        map: tex, roughness: 0.6, metalness: 0.15,
+                    });
+                    body.material = mats;
+                    body.material.needsUpdate = true;
+                }
+            }
+        });
+    } else {
+        roofMat = new THREE.MeshStandardMaterial({
+            color: mainColor,
+            roughness: 0.7, metalness: 0.2,
+        });
+    }
+    
+    const wallMat = new THREE.MeshStandardMaterial({
+        color: wallColor,
+        roughness: 0.6, metalness: 0.3,
+    });
+    
+    // BoxGeometry材料顺序：[+x, -x, +y, -y, +z, -z] = [右, 左, 顶(屋顶), 底, 前, 后]
+    const bodyGeo = new THREE.BoxGeometry(w3d, height, d3d);
+    const materials = [wallMat, wallMat, roofMat, wallMat, wallMat, wallMat];
+    const body = new THREE.Mesh(bodyGeo, materials);
+    body.position.y = height / 2;
+    body.castShadow = true;
+    body.receiveShadow = true;
+    group.add(body);
+    
+    // === 边缘发光 ===
+    const edgeMat = new THREE.LineBasicMaterial({
+        color: mainColor, transparent: true, opacity: 0.5,
+    });
+    const edgeGeo = new THREE.EdgesGeometry(bodyGeo);
+    const edges = new THREE.LineSegments(edgeGeo, edgeMat);
+    edges.position.copy(body.position);
+    group.add(edges);
+    
+    // === 发光底部平台 ===
+    const platSize = Math.max(w3d, d3d) * 0.6;
+    const plat = new THREE.Mesh(
+        new THREE.RingGeometry(platSize * 0.7, platSize, 32),
+        new THREE.MeshBasicMaterial({
+            color: mainColor, transparent: true, opacity: 0.12,
+            side: THREE.DoubleSide,
+        })
+    );
+    plat.rotation.x = -Math.PI / 2;
+    plat.position.y = 0.02;
+    group.add(plat);
+    
+    // === 窗户（墙面发光点）===
+    const winMat = new THREE.MeshBasicMaterial({
+        color: 0x88ddff, transparent: true, opacity: 0.2,
+    });
+    // 正面窗户列
+    const winCols = Math.max(3, Math.floor(w3d / 1.5));
+    const winRows = Math.max(2, Math.floor(height / 1.8));
+    for (let wy = 0; wy < winRows; wy++) {
+        for (let wx = 0; wx < winCols; wx++) {
+            const xo = (wx / (winCols - 1) - 0.5) * (w3d - 0.8);
+            const yo = (wy / (winRows - 1)) * (height * 0.6) + height * 0.15;
+            
+            const win = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.22), winMat);
+            win.position.set(xo, yo, d3d / 2 + 0.01);
+            group.add(win);
+            
+            const win2 = win.clone();
+            win2.position.set(xo, yo, -d3d / 2 - 0.01);
+            group.add(win2);
+        }
+    }
+    
+    // === 屋顶纹理网格（模拟瓦片/板材分格） ===
+    const roofGridMat = new THREE.LineBasicMaterial({
+        color: mainColor, transparent: true, opacity: 0.2
+    });
+    const roofY = height;
+    for (let rx = -w3d/2 + 0.8; rx < w3d/2; rx += 1.2) {
+        const pts = [new THREE.Vector3(rx, roofY+0.01, -d3d/2), new THREE.Vector3(rx, roofY+0.01, d3d/2)];
+        group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), roofGridMat));
+    }
+    for (let rz = -d3d/2 + 0.8; rz < d3d/2; rz += 1.2) {
+        const pts = [new THREE.Vector3(-w3d/2, roofY+0.01, rz), new THREE.Vector3(w3d/2, roofY+0.01, rz)];
+        group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), roofGridMat));
+    }
+    
+    // === 女儿墙围栏（屋顶边缘一圈） ===
+    const parMat = new THREE.MeshStandardMaterial({
+        color: wallColor, roughness: 0.7, metalness: 0.2
+    });
+    const parH = 0.2, parT = 0.06;
+    [
+        {w: w3d+parT*2, d: parT, x: 0, z: -d3d/2-parT/2},
+        {w: w3d+parT*2, d: parT, x: 0, z: d3d/2+parT/2},
+        {w: parT, d: d3d, x: -w3d/2-parT/2, z: 0},
+        {w: parT, d: d3d, x: w3d/2+parT/2, z: 0},
+    ].forEach(p => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(p.w, parH, p.d), parMat);
+        m.position.set(p.x, roofY+parH/2, p.z);
+        group.add(m);
+    });
+    
+    // === 屋顶设备（空调外机/通风管） ===
+    const eqMat1 = new THREE.MeshStandardMaterial({color: 0x555555, roughness: 0.9});
+    const eqMat2 = new THREE.MeshStandardMaterial({color: 0x333333, roughness: 0.8});
+    const eqCount = 2 + Math.floor(Math.random() * 2);
+    for (let ei = 0; ei < eqCount; ei++) {
+        const ew = 0.2+Math.random()*0.3, ed = 0.2+Math.random()*0.3, eh = 0.15+Math.random()*0.2;
+        const eq = new THREE.Mesh(new THREE.BoxGeometry(ew, eh, ed), ei%2===0?eqMat1:eqMat2);
+        eq.position.set(
+            -w3d/2+0.5+Math.random()*(w3d-1),
+            roofY+eh/2,
+            -d3d/2+0.5+Math.random()*(d3d-1)
+        );
+        group.add(eq);
+    }
+    
+    // === 楼层线（墙面水平分割） ===
+    const flMat = new THREE.LineBasicMaterial({color: mainColor, transparent: true, opacity: 0.15});
+    const floors = Math.max(2, Math.floor(height / 1.8));
+    for (let fi = 1; fi < floors; fi++) {
+        const fy = (fi/floors)*height;
+        const pts = [
+            new THREE.Vector3(-w3d/2, fy, d3d/2), new THREE.Vector3(w3d/2, fy, d3d/2),
+            new THREE.Vector3(w3d/2, fy, -d3d/2), new THREE.Vector3(-w3d/2, fy, -d3d/2),
+            new THREE.Vector3(-w3d/2, fy, d3d/2)
+        ];
+        group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), flMat));
+    }
+    
+    // === 入口雨棚（正面底部小薄片） ===
+    const canMat = new THREE.MeshStandardMaterial({color: roofMat.map ? 0x555555 : mainColor, roughness: 0.5, metalness: 0.3});
+    const canW = Math.min(w3d*0.4, 1.5);
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(canW, 0.05, 0.35), canMat);
+    canopy.position.set(0, 0.3, d3d/2+0.15);
+    group.add(canopy);
+    
+    // === 文字标签 ===
+    const labelDiv = document.createElement('div');
+    labelDiv.className = 'label-3d';
+    labelDiv.textContent = `${id} (${fault}单)`;
+    const label = new CSS2DObject(labelDiv);
+    label.position.set(0, height + 1.0, 0);
+    group.add(label);
+    
+    scene.add(group);
+}
+
+// ===== 创建环境：周围树木/路灯效果 =====
+function createEnvironment() {
+    // 树（用绿色锥体+柱体模拟）
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3728 });
+    const leafMats = [
+        new THREE.MeshStandardMaterial({ color: 0x2d5a27 }),
+        new THREE.MeshStandardMaterial({ color: 0x3a7a33 }),
+        new THREE.MeshStandardMaterial({ color: 0x1e4a1a }),
+    ];
+    
+    for (let i = 0; i < 30; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 28 + Math.random() * 12;
+        const x = Math.cos(angle) * dist;
+        const z = Math.sin(angle) * dist;
+        
+        const trunkH = 0.5 + Math.random() * 0.5;
+        const trunk = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.08, 0.12, trunkH),
+            trunkMat
+        );
+        trunk.position.set(x, trunkH/2, z);
+        scene.add(trunk);
+        
+        const leafR = 0.3 + Math.random() * 0.4;
+        const leaf = new THREE.Mesh(
+            new THREE.SphereGeometry(leafR, 5),
+            leafMats[i % 3]
+        );
+        leaf.position.set(x, trunkH + leafR * 0.6, z);
+        scene.add(leaf);
+    }
+    
+    // 小路灯
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
+    for (let i = 0; i < 12; i++) {
+        const angle = (i / 12) * Math.PI * 2;
+        const dist = 24;
+        const x = Math.cos(angle) * dist;
+        const z = Math.sin(angle) * dist;
+        
+        const pole = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.06, 0.08, 1.2),
+            poleMat
+        );
+        pole.position.set(x, 0.6, z);
+        scene.add(pole);
+        
+        const light = new THREE.Mesh(
+            new THREE.SphereGeometry(0.1, 6),
+            new THREE.MeshBasicMaterial({ color: 0xaabbff, transparent: true, opacity: 0.3 })
+        );
+        light.position.set(x, 1.3, z);
+        scene.add(light);
+    }
+}
+
+// ===== 加载数据 =====
+async function loadData() {
+    try {
+        const res = await fetch('/feature/digital-twin/data');
+        const data = await res.json();
+        
+        document.getElementById('buildingCount').textContent = `显示 ${BUILDING_DATA.length} 栋主要建筑`;
+        document.getElementById('ipCount').textContent = data.stats.total_buildings;
+        document.getElementById('ipOrders').textContent = data.stats.total_orders;
+        document.getElementById('ipTop').textContent = data.stats.top_building;
+        
+        // 预加载所有裁剪后的屋顶纹理
+        const texPromises = Object.entries(ROOF_TEX_MAP).map(([id, file]) => {
+            return new Promise((resolve) => {
+                texLoader.load(ROOF_TEX_PATH + file, (tex) => {
+                    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+                    loadedTextures[file] = tex;
+                    resolve();
+                }, undefined, () => resolve());
+            });
+        });
+        await Promise.all(texPromises);
+        console.log('所有屋顶纹理加载完成');
+        
+        // 地图纹理（地面底图）
+        await loadMapTexture(data.map_url);
+        
+        // 创建10栋建筑（使用独立裁剪纹理）
+        BUILDING_DATA.forEach(b => createBuilding(b));
+        
+        // 环境
+        createEnvironment();
+        
+        document.getElementById('loading').classList.add('hidden');
+    } catch (e) {
+        console.error('加载失败:', e);
+        document.getElementById('loading').classList.add('hidden');
+    }
+}
+
+// ===== 窗口自适应 =====
+window.addEventListener('resize', () => {
+    const w = container.clientWidth, h = container.clientHeight;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+    labelRenderer.setSize(w, h);
+});
+
+// ===== 相机复位 =====
+window.resetCamera = function() {
+    camera.position.set(30, 28, 35);
+    controls.target.set(0, 2, 0);
+    controls.update();
+};
+
+// ===== 旋转控制 =====
+let autoRotate = false;
+function toggleAutoRotate() {
+    autoRotate = !autoRotate;
+    document.getElementById('rotateBtnText').textContent = autoRotate ? '停止' : '旋转';
+    controls.autoRotate = autoRotate;
+    controls.autoRotateSpeed = 1.5;
+};
+
+// ===== 动画 =====
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    if (transformControl) transformControl.update();
+    renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
+}
+
+// ===== 建模编辑器 =====
+let editorActive = false;
+let editBuildingId = null;
+let editElements = [];
+let selectedElemIdx = -1;
+let transformControl = null;
+let customTexUrls = [];
+
+// 初始化TransformControls
+function initTransformControl() {
+    if (transformControl) return;
+    transformControl = new TransformControls(camera, renderer.domElement);
+    transformControl.addEventListener('draggingChanged', (e) => {
+        controls.enabled = !e.value;
+    });
+    transformControl.addEventListener('change', () => {
+        // 更新属性面板
+        if (selectedElemIdx >= 0 && transformControl.object) {
+            const obj = transformControl.object;
+            const elem = editElements[selectedElemIdx];
+            elem.pos = [obj.position.x, obj.position.y, obj.position.z];
+            if (elem.type !== 'sign') {
+                elem.size = [obj.scale.x, obj.scale.y, obj.scale.z];
+            }
+            updatePropUI();
+        }
+    });
+    scene.add(transformControl);
+    transformControl.setSize(0.6);
+}
+
+function toggleEditor() {
+    editorActive = !editorActive;
+    document.getElementById('editorPanel').classList.toggle('show', editorActive);
+    document.getElementById('editModelBtn').classList.toggle('active', editorActive);
+    if (editorActive) {
+        initTransformControl();
+        populateBuildingSelect();
+        loadModel();
+        controls.autoRotate = false;
+        document.getElementById('rotateBtnText').textContent = '旋转';
+    } else {
+        if (transformControl) transformControl.detach();
+    }
+}
+
+// ===== 按钮事件绑定（替代 onclick） =====
+document.getElementById('resetViewBtn').addEventListener('click', resetCamera);
+document.getElementById('rotateBtn').addEventListener('click', toggleAutoRotate);
+document.getElementById('editModelBtn').addEventListener('click', toggleEditor);
+
+function populateBuildingSelect() {
+    const sel = document.getElementById('editBuildingSelect');
+    sel.innerHTML = '';
+    BUILDING_DATA.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.id;
+        opt.textContent = `${b.id} (${b.fault}单)`;
+        sel.appendChild(opt);
+    });
+    onEditBuildingChange();
+}
+
+function onEditBuildingChange() {
+    editBuildingId = document.getElementById('editBuildingSelect').value;
+    document.getElementById('editBuildingName').textContent = editBuildingId || '未选中';
+    // 清空当前元素
+    clearCustomElements();
+    editElements = [];
+    selectedElemIdx = -1;
+    document.getElementById('elemList').innerHTML = '';
+    document.getElementById('elemProps').style.display = 'none';
+    if (transformControl) transformControl.detach();
+    // 加载该建筑的保存模型
+    loadModelForBuilding(editBuildingId);
+}
+
+function clearCustomElements() {
+    if (editBuildingId && buildingGroups[editBuildingId]) {
+        const g = buildingGroups[editBuildingId];
+        // 移除自定义元素（标记为custom）
+        const toRemove = [];
+        g.children.forEach(child => {
+            if (child.userData && child.userData.isCustom) toRemove.push(child);
+        });
+        toRemove.forEach(c => g.remove(c));
+    }
+}
+
+function addElement(type) {
+    if (!editBuildingId || !buildingGroups[editBuildingId]) {
+        showToast('请先选择建筑', 'error'); return;
+    }
+    const elem = {
+        id: Date.now().toString(36),
+        type: type,
+        pos: [0, 2, 0],
+        size: [0.8, 0.6, 0.8],
+        color: '#555555',
+        texUrl: '',
+    };
+    editElements.push(elem);
+    renderElement(elem);
+    selectElement(editElements.length - 1);
+    renderElemList();
+}
+
+// ===== 快速插入预设 =====
+const PRESETS = {
+    ac:       { name:'空调外机', elements:[
+        {type:'box', pos:[0,0.3,0], size:[0.8,0.2,0.5], color:'#555555'},
+        {type:'box', pos:[0,0.55,0], size:[0.5,0.1,0.3], color:'#444444'},
+    ]},
+    watertank:{ name:'水箱', elements:[
+        {type:'cylinder', pos:[0,0.6,0], size:[0.7,0.7,0.7], color:'#4a7fb5'},
+        {type:'cylinder', pos:[0,1.0,0], size:[0.5,0.2,0.5], color:'#3a6fa5'},
+    ]},
+    antenna:  { name:'天线', elements:[
+        {type:'cylinder', pos:[0,0.5,0], size:[0.06,0.8,0.06], color:'#888'},
+        {type:'box', pos:[0,1.0,0], size:[0.3,0.04,0.3], color:'#aaa'},
+        {type:'cylinder', pos:[-0.3,0.95,0], size:[0.02,0.3,0.02], color:'#888'},
+        {type:'cylinder', pos:[0.3,0.95,0], size:[0.02,0.3,0.02], color:'#888'},
+    ]},
+    chimney:  { name:'烟囱', elements:[
+        {type:'box', pos:[0,0.8,0], size:[0.4,1.2,0.4], color:'#8B4513'},
+        {type:'box', pos:[0,1.5,0], size:[0.5,0.1,0.5], color:'#6B3410'},
+    ]},
+    solar:    { name:'太阳能板', elements:[
+        {type:'box', pos:[0,0.3,0], size:[1.2,0.05,0.6], color:'#1a3a6a'},
+        {type:'box', pos:[0,0.35,0], size:[1.0,0.03,0.4], color:'#2a4a8a'},
+        {type:'cylinder', pos:[-0.4,0.1,0], size:[0.03,0.2,0.03], color:'#666'},
+        {type:'cylinder', pos:[0.4,0.1,0], size:[0.03,0.2,0.03], color:'#666'},
+    ]},
+    elevator: { name:'电梯井', elements:[
+        {type:'box', pos:[0,1.5,0], size:[0.8,2.5,0.8], color:'#6B7280'},
+        {type:'box', pos:[0,3.0,0], size:[0.9,0.2,0.9], color:'#9CA3AF'},
+    ]},
+    column:   { name:'柱子', elements:[
+        {type:'cylinder', pos:[0,1.0,0], size:[0.2,2.0,0.2], color:'#9CA3AF'},
+    ]},
+    fence:    { name:'围栏', elements:[
+        {type:'box', pos:[-0.6,0.3,0], size:[0.04,0.5,0.04], color:'#aaa'},
+        {type:'box', pos:[0,0.3,0], size:[0.04,0.5,0.04], color:'#aaa'},
+        {type:'box', pos:[0.6,0.3,0], size:[0.04,0.5,0.04], color:'#aaa'},
+        {type:'box', pos:[0,0.55,0], size:[1.3,0.04,0.04], color:'#ccc'},
+        {type:'box', pos:[0,0.15,0], size:[1.3,0.04,0.04], color:'#ccc'},
+    ]},
+    tree:     { name:'树', elements:[
+        {type:'cylinder', pos:[0,0.3,0], size:[0.06,0.6,0.06], color:'#5c3a1a'},
+        {type:'cylinder', pos:[0,1.0,0], size:[0.5,0.8,0.5], color:'#2d7a27'},
+        {type:'cylinder', pos:[0,1.4,0], size:[0.35,0.5,0.35], color:'#3a8a33'},
+    ]},
+    lamp:     { name:'路灯', elements:[
+        {type:'cylinder', pos:[0,0.7,0], size:[0.04,1.4,0.04], color:'#666'},
+        {type:'box', pos:[0,1.40,0], size:[0.02,0.02,0.25], color:'#888'},
+        {type:'sphere', pos:[0,1.42,0.12], size:[0.06,0.06,0.06], color:'#ffee88'},
+    ]},
+    glasswall:{ name:'玻璃幕墙', elements:[
+        {type:'box', pos:[0,1.5,0], size:[2.0,3.0,0.08], color:'#3a6a9a'},
+    ]},
+    canopy:   { name:'雨棚', elements:[
+        {type:'box', pos:[0,0.15,0.5], size:[1.5,0.05,0.6], color:'#5c4033'},
+        {type:'cylinder', pos:[-0.6,0.05,0.3], size:[0.03,0.2,0.03], color:'#666'},
+        {type:'cylinder', pos:[0.6,0.05,0.3], size:[0.03,0.2,0.03], color:'#666'},
+    ]},
+};
+
+function addPreset(name) {
+    const preset = PRESETS[name];
+    if (!preset) return;
+    const added = [];
+    preset.elements.forEach(elem => {
+        const e = {
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+            type: elem.type,
+            pos: [...elem.pos],
+            size: [...elem.size],
+            color: elem.color,
+            texUrl: elem.texUrl || '',
+        };
+        editElements.push(e);
+        added.push(e);
+    });
+    refreshCustomElements();
+    renderElemList();
+    if (added.length > 0) selectElement(editElements.indexOf(added[0]));
+    showToast(`✅ 已添加 ${preset.name}`, 'success');
+}
+
+function renderElement(elem) {
+    const g = buildingGroups[editBuildingId];
+    if (!g) return;
+    let mesh;
+    const color = new THREE.Color(elem.color);
+    
+    if (elem.type === 'box') {
+        const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.2 });
+        if (elem.texUrl) {
+            texLoader.load(elem.texUrl, (tex) => { mat.map = tex; mat.needsUpdate = true; });
+        }
+        mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
+        mesh.scale.set(elem.size[0], elem.size[1], elem.size[2]);
+    } else if (elem.type === 'cylinder') {
+        const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0.1 });
+        mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1, 16), mat);
+        mesh.scale.set(elem.size[0], elem.size[1], elem.size[2]);
+    } else if (elem.type === 'sphere') {
+        const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.1, emissive: color, emissiveIntensity: 0.1 });
+        mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 10), mat);
+        mesh.scale.set(elem.size[0], elem.size[1], elem.size[2]);
+    } else if (elem.type === 'sign') {
+        const canvas = document.createElement('canvas');
+        canvas.width = 128; canvas.height = 64;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = elem.color;
+        ctx.fillRect(0, 0, 128, 64);
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+        ctx.strokeRect(2, 2, 124, 60);
+        ctx.font = '22px sans-serif'; ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('自定义', 64, 32);
+        const tex = new THREE.CanvasTexture(canvas);
+        const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+        mesh = new THREE.Sprite(mat);
+        mesh.scale.set(elem.size[0], elem.size[1], 1);
+    }
+    
+    if (mesh) {
+        mesh.position.set(elem.pos[0], elem.pos[1], elem.pos[2]);
+        mesh.userData = { isCustom: true, elemId: elem.id };
+        mesh.castShadow = true;
+        g.add(mesh);
+    }
+}
+
+function renderElemList() {
+    const list = document.getElementById('elemList');
+    list.innerHTML = '';
+    editElements.forEach((elem, i) => {
+        const div = document.createElement('div');
+        div.className = 'editor-elem-item' + (i === selectedElemIdx ? ' selected' : '');
+        const icons = { box: '📦', cylinder: '🛢', sign: '🏷' };
+        div.innerHTML = `${icons[elem.type] || '■'} ${elem.type}<span class="del" onclick="event.stopPropagation();deleteElement(${i})">✕</span>`;
+        div.onclick = () => selectElement(i);
+        list.appendChild(div);
+    });
+}
+
+function selectElement(idx) {
+    selectedElemIdx = idx;
+    renderElemList();
+    const elem = editElements[idx];
+    if (!elem) { document.getElementById('elemProps').style.display = 'none'; transformControl.detach(); return; }
+    document.getElementById('elemProps').style.display = 'block';
+    updatePropUI();
+    // 高亮3D对象
+    const g = buildingGroups[editBuildingId];
+    if (g) {
+        g.children.forEach(child => {
+            if (child.userData && child.userData.isCustom) {
+                if (child.userData.elemId === elem.id) {
+                    transformControl.attach(child);
+                }
+            }
+        });
+    }
+}
+
+function updatePropUI() {
+    const elem = editElements[selectedElemIdx];
+    if (!elem) return;
+    document.getElementById('propPx').value = elem.pos[0];
+    document.getElementById('propPy').value = elem.pos[1];
+    document.getElementById('propPz').value = elem.pos[2];
+    document.getElementById('propPxV').textContent = elem.pos[0].toFixed(1);
+    document.getElementById('propPyV').textContent = elem.pos[1].toFixed(1);
+    document.getElementById('propPzV').textContent = elem.pos[2].toFixed(1);
+    if (elem.type !== 'sign') {
+        document.getElementById('propW').value = elem.size[0];
+        document.getElementById('propH').value = elem.size[1];
+        document.getElementById('propD').value = elem.size[2];
+        document.getElementById('propWV').textContent = elem.size[0].toFixed(1);
+        document.getElementById('propHV').textContent = elem.size[1].toFixed(1);
+        document.getElementById('propDV').textContent = elem.size[2].toFixed(1);
+    } else {
+        document.getElementById('propW').value = elem.size[0];
+        document.getElementById('propH').value = elem.size[1];
+        document.getElementById('propWV').textContent = elem.size[0].toFixed(1);
+        document.getElementById('propHV').textContent = elem.size[1].toFixed(1);
+    }
+    document.getElementById('propColor').value = elem.color;
+}
+
+function onPropChange() {
+    const elem = editElements[selectedElemIdx];
+    if (!elem) return;
+    elem.pos[0] = parseFloat(document.getElementById('propPx').value);
+    elem.pos[1] = parseFloat(document.getElementById('propPy').value);
+    elem.pos[2] = parseFloat(document.getElementById('propPz').value);
+    document.getElementById('propPxV').textContent = elem.pos[0].toFixed(1);
+    document.getElementById('propPyV').textContent = elem.pos[1].toFixed(1);
+    document.getElementById('propPzV').textContent = elem.pos[2].toFixed(1);
+    
+    if (elem.type !== 'sign') {
+        elem.size[0] = parseFloat(document.getElementById('propW').value);
+        elem.size[1] = parseFloat(document.getElementById('propH').value);
+        elem.size[2] = parseFloat(document.getElementById('propD').value);
+        document.getElementById('propWV').textContent = elem.size[0].toFixed(1);
+        document.getElementById('propHV').textContent = elem.size[1].toFixed(1);
+        document.getElementById('propDV').textContent = elem.size[2].toFixed(1);
+    } else {
+        elem.size[0] = parseFloat(document.getElementById('propW').value);
+        elem.size[1] = parseFloat(document.getElementById('propH').value);
+        document.getElementById('propWV').textContent = elem.size[0].toFixed(1);
+        document.getElementById('propHV').textContent = elem.size[1].toFixed(1);
+    }
+    
+    elem.color = document.getElementById('propColor').value;
+    elem.texUrl = document.getElementById('propTex').value;
+    
+    // 重新渲染
+    refreshCustomElements();
+}
+
+function refreshCustomElements() {
+    clearCustomElements();
+    editElements.forEach(e => renderElement(e));
+    if (selectedElemIdx >= 0) selectElement(selectedElemIdx);
+}
+
+function deleteElement(idx) {
+    editElements.splice(idx, 1);
+    if (selectedElemIdx >= idx) selectedElemIdx = -1;
+    refreshCustomElements();
+    renderElemList();
+    if (editElements.length === 0) document.getElementById('elemProps').style.display = 'none';
+}
+
+function deleteSelected() {
+    if (selectedElemIdx >= 0) deleteElement(selectedElemIdx);
+}
+
+// 保存/加载
+async function saveModel() {
+    if (!editBuildingId) { showToast('请选择建筑', 'error'); return; }
+    try {
+        const model = { elements: editElements, textures: customTexUrls };
+        const res = await fetch(`/feature/digital-twin/model/${encodeURIComponent(editBuildingId)}`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ model })
+        });
+        const data = await res.json();
+        showToast(data.success ? `✅ ${editBuildingId} 模型已保存` : '保存失败', data.success ? 'success' : 'error');
+    } catch(e) {
+        showToast('保存失败: ' + e.message, 'error');
+    }
+}
+
+async function loadModel() {
+    await loadModelForBuilding(editBuildingId);
+}
+
+async function loadModelForBuilding(buildingId) {
+    if (!buildingId) return;
+    try {
+        const res = await fetch(`/feature/digital-twin/model/${encodeURIComponent(buildingId)}`);
+        const data = await res.json();
+        if (data.success && data.model && data.model.elements) {
+            editElements = data.model.elements;
+            customTexUrls = data.model.textures || [];
+            // 更新贴图下拉
+            updateTexSelect();
+            refreshCustomElements();
+            renderElemList();
+            showToast(`📂 ${buildingId} 模型已加载`, 'info');
+        }
+    } catch(e) {
+        console.error('加载模型失败:', e);
+    }
+}
+
+function updateTexSelect() {
+    const sel = document.getElementById('propTex');
+    sel.innerHTML = '<option value="">无</option>';
+    customTexUrls.forEach(url => {
+        const opt = document.createElement('option');
+        opt.value = url; opt.textContent = url.split('/').pop();
+        sel.appendChild(opt);
+    });
+}
+
+async function uploadTexture() {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*';
+    input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+        if (file.size > 2*1024*1024) { showToast('图片不能超过2MB', 'error'); return; }
+        const fd = new FormData(); fd.append('file', file);
+        try {
+            const res = await fetch('/feature/digital-twin/upload-texture', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (data.success) {
+                customTexUrls.push(data.url);
+                updateTexSelect();
+                document.getElementById('propTex').value = data.url;
+                showToast('✅ 贴图已上传', 'success');
+            } else showToast(data.error || '上传失败', 'error');
+        } catch(e) { showToast('上传失败: ' + e.message, 'error'); }
+    };
+    input.click();
+}
+
+function showToast(msg, type) {
+    const el = document.getElementById('dtToast') || (()=>{
+        const t = document.createElement('div');
+        t.id = 'dtToast';
+        t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:300;padding:8px 20px;border-radius:20px;font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,0.2);opacity:0;transition:opacity .3s;pointer-events:none';
+        document.body.appendChild(t);
+        return t;
+    })();
+    el.style.background = type === 'error' ? 'rgba(239,68,68,0.9)' : 'rgba(16,185,129,0.9)';
+    el.style.color = '#fff';
+    el.textContent = msg;
+    el.classList.add('show');
+    el.style.opacity = '1';
+    setTimeout(() => el.style.opacity = '0', 2500);
+}
+
+loadData();
+animate();
+</script>
+</body>
+</html>

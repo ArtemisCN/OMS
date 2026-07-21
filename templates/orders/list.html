@@ -1,0 +1,529 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-list text-primary"></i> 工单列表</h5>
+    <div class="d-flex gap-2" style="position:relative;">
+        <button class="btn btn-outline-secondary btn-sm" id="columnToggleBtn" title="自定义列">
+            <i class="fas fa-columns"></i> 列
+        </button>
+        <!-- 列选择器下拉 -->
+        <div class="col-selector-dropdown" id="colSelector">
+            <div class="fw-bold small px-2 pb-1 text-muted" style="border-bottom:1px solid var(--card-border);">显示列</div>
+            <label><input type="checkbox" data-col="star" checked> ⭐ 星标</label>
+            <label><input type="checkbox" data-col="id" checked> # 编号</label>
+            <label><input type="checkbox" data-col="title" checked> 工单名称</label>
+            <label><input type="checkbox" data-col="location" checked> 区域位置</label>
+            <label><input type="checkbox" data-col="fault_type" checked> 类型</label>
+            <label><input type="checkbox" data-col="person" checked> 人员</label>
+            <label><input type="checkbox" data-col="status" checked> 状态</label>
+            <label><input type="checkbox" data-col="time" checked> 时间</label>
+            <label><input type="checkbox" data-col="ops" checked> 操作</label>
+        </div>
+        <a href="/mobile/" target="_blank" class="btn btn-outline-primary btn-sm">
+            <i class="fas fa-mobile-alt"></i> 手机端
+        </a>
+        <a href="{{ url_for('orders.export_excel', fault_type=fault_type, person=person_sel, keyword=keyword, date_from=date_from, date_to=date_to, status=status) }}"
+           class="btn btn-success btn-sm">
+            <i class="fas fa-file-excel"></i> 导出Excel
+        </a>
+    </div>
+</div>
+
+<!-- 三池子标签 -->
+<div class="mb-3">
+    <div class="btn-group w-100" role="group">
+        <a href="{{ url_for('orders.list_orders', status='pending', fault_type=fault_type, person=person_sel, keyword=keyword, date_from=date_from, date_to=date_to, sort=sort, order=order) }}"
+           class="btn btn-{{ 'primary' if status == 'pending' else 'outline-secondary' }} position-relative">
+            📋 未接单
+            <span class="badge rounded-pill bg-{{ 'light text-primary' if status == 'pending' else 'secondary' }} ms-1">{{ stats.pending }}</span>
+        </a>
+        <a href="{{ url_for('orders.list_orders', status='in_progress', fault_type=fault_type, person=person_sel, keyword=keyword, date_from=date_from, date_to=date_to, sort=sort, order=order) }}"
+           class="btn btn-{{ 'primary' if status == 'in_progress' else 'outline-secondary' }} position-relative">
+            🔧 已接单
+            <span class="badge rounded-pill bg-{{ 'light text-primary' if status == 'in_progress' else 'secondary' }} ms-1">{{ stats.in_progress }}</span>
+        </a>
+        <a href="{{ url_for('orders.list_orders', status='completed', fault_type=fault_type, person=person_sel, keyword=keyword, date_from=date_from, date_to=date_to, sort=sort, order=order) }}"
+           class="btn btn-{{ 'primary' if status == 'completed' else 'outline-secondary' }} position-relative">
+            ✅ 已完成
+            <span class="badge rounded-pill bg-{{ 'light text-primary' if status == 'completed' else 'secondary' }} ms-1">{{ stats.completed }}</span>
+        </a>
+    </div>
+</div>
+
+<!-- 筛选 -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" class="row g-2">
+            <input type="hidden" name="status" value="{{ status }}">
+            <input type="hidden" name="sort" value="{{ sort }}">
+            <input type="hidden" name="order" value="{{ order }}">
+            <div class="col-md-2">
+                <input type="text" name="keyword" class="form-control form-control-sm" placeholder="搜索关键词" value="{{ keyword }}">
+            </div>
+            <div class="col-md-2">
+                <select name="fault_type" class="form-select form-select-sm">
+                    <option value="">全部类型</option>
+                    <option value="软件" {% if fault_type=='软件' %}selected{% endif %}>软件</option>
+                    <option value="硬件" {% if fault_type=='硬件' %}selected{% endif %}>硬件</option>
+                    <option value="打印机" {% if fault_type=='打印机' %}selected{% endif %}>打印机</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="person" class="form-select form-select-sm">
+                    <option value="">全部人员</option>
+                    {% for p in persons %}
+                    <option value="{{ p.name }}" {% if person_sel==p.name %}selected{% endif %}>{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <input type="date" name="date_from" class="form-control form-control-sm" value="{{ date_from }}">
+            </div>
+            <div class="col-md-2">
+                <input type="date" name="date_to" class="form-control form-control-sm" value="{{ date_to }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary btn-sm w-100"><i class="fas fa-search"></i> 搜索</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 批量操作工具栏（固定底部，选中才出现） -->
+<div id="batchToolbar" class="batch-bar" hidden>
+    <div class="batch-bar-inner">
+        <span class="fw-bold me-1"><span id="batchCount">0</span> 条已选</span>
+        <select id="batchAssignPerson" class="form-select form-select-sm" style="width:auto;display:inline-block;">
+            <option value="">→ 指派…</option>
+            {% for p in persons %}
+            <option value="{{ p.name }}">{{ p.name }}</option>
+            {% endfor %}
+        </select>
+        <button class="btn btn-sm btn-outline-primary batch-action" data-action="assign">指派</button>
+        <div class="vr mx-1"></div>
+        <button class="btn btn-sm btn-outline-warning batch-action" data-action="priority" data-priority="normal">🟢普通</button>
+        <button class="btn btn-sm btn-outline-warning batch-action" data-action="priority" data-priority="urgent">🟡加急</button>
+        <button class="btn btn-sm btn-outline-danger batch-action" data-action="priority" data-priority="emergency">🔴紧急</button>
+        <div class="vr mx-1"></div>
+        <button class="btn btn-sm btn-outline-warning batch-action" data-action="star">⭐标星</button>
+        <button class="btn btn-sm btn-outline-secondary batch-action" data-action="unstar">☆取消星标</button>
+        <div class="vr mx-1"></div>
+        <button class="btn btn-sm btn-outline-danger batch-action" data-action="delete">🗑删除</button>
+    </div>
+</div>
+<style>
+.batch-bar {
+    position:fixed; bottom:0; left:50%; transform:translateX(-50%);
+    z-index:1050; transition:all .3s cubic-bezier(.34,1.56,.64,1);
+    padding:8px;
+}
+.batch-bar[hidden] { opacity:0; transform:translateX(-50%) translateY(30px); pointer-events:none; }
+.batch-bar:not([hidden]) { opacity:1; transform:translateX(-50%) translateY(0); }
+.batch-bar-inner {
+    display:flex; align-items:center; gap:4px; flex-wrap:wrap;
+    background:var(--modal-bg); border:1px solid var(--card-border);
+    border-radius:12px; padding:10px 16px;
+    box-shadow:0 8px 32px rgba(0,0,0,0.15);
+}
+</style>
+<script>document.getElementById('batchToolbar')&&(document.getElementById('batchToolbar').style.display='')</script>
+
+<!-- 工单表格 -->
+<style>
+.dt-sortable { cursor:pointer; user-select:none; white-space:nowrap; }
+.dt-sortable:hover { color: var(--primary); }
+.dt-sortable .sort-icon { margin-left:3px; font-size:10px; opacity:0.4; }
+.dt-sortable.active-sort .sort-icon { opacity:1; color: var(--primary); }
+.col-selector-dropdown {
+    position:absolute; right:0; top:100%; z-index:1050;
+    background: var(--modal-bg); border:1px solid var(--card-border);
+    border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.12);
+    min-width:180px; display:none; padding:8px;
+}
+.col-selector-dropdown.show { display:block; }
+.col-selector-dropdown label { display:flex; align-items:center; gap:6px; padding:4px 8px; border-radius:4px; cursor:pointer; }
+.col-selector-dropdown label:hover { background:rgba(99,102,241,0.08); }
+.col-selector-dropdown input[type="checkbox"] { accent-color: var(--primary); }
+</style>
+
+<div class="card" id="orderCard">
+
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" id="orderTable">
+            <thead class="table-light">
+                <tr>
+                    <th style="width:32px;">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="selectAll">
+                        </div>
+                    </th>
+                    <th class="dt-sortable" data-sort="priority" style="width:32px;">⭐</th>
+                    <th class="dt-sortable" data-scol="id" data-sort="id"># <span class="sort-icon">↕</span></th>
+                    <th class="dt-sortable" data-scol="title" data-sort="title">工单名称 <span class="sort-icon">↕</span></th>
+                    <th class="dt-sortable" data-scol="location" data-sort="building">区域位置 <span class="sort-icon">↕</span></th>
+                    <th class="dt-sortable" data-scol="fault_type" data-sort="fault_type">类型 <span class="sort-icon">↕</span></th>
+                    <th class="dt-sortable" data-scol="person" data-sort="person">人员 <span class="sort-icon">↕</span></th>
+                    <th class="dt-sortable" data-scol="status" data-sort="status">状态 <span class="sort-icon">↕</span></th>
+                    <th class="dt-sortable" data-scol="time" data-sort="start_time">时间 <span class="sort-icon">↕</span></th>
+                    <th data-scol="ops">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for o in orders %}
+                <tr class="{% if o.id in starred_ids %}table-warning{% endif %}" data-order-id="{{ o.id }}">
+                    <td>
+                        <div class="form-check">
+                            <input class="form-check-input order-checkbox" type="checkbox" value="{{ o.id }}">
+                        </div>
+                    </td>
+                    <td>
+                        <span class="star-btn" data-id="{{ o.id }}" style="cursor:pointer;font-size:16px;"
+                              title="{% if o.id in starred_ids %}取消星标{% else %}标星{% endif %}">
+                            {% if o.id in starred_ids %}⭐{% else %}☆{% endif %}
+                        </span>
+                    </td>
+                    <td class="text-muted small">{{ o.id }}</td>
+                    <td>
+                        {% set ball = ball_map.get(o.id, o.priority or 'normal') %}
+                        {% if ball == 'emergency' %}
+                        <span class="badge bg-danger me-1 priority-ball" data-id="{{ o.id }}" style="cursor:pointer" title="{% set _et = o.end_time or o.completed_at %}{% set _st = o.start_time or o.accepted_at or o.created_at %}{% if _et and _st %}{{ ((_et-_st).total_seconds()/60)|int }}分钟{% else %}紧急{% endif %}">🔴</span>
+                        {% elif ball == 'urgent' %}
+                        <span class="badge bg-warning text-dark me-1 priority-ball" data-id="{{ o.id }}" style="cursor:pointer" title="{% set _et = o.end_time or o.completed_at %}{% set _st = o.start_time or o.accepted_at or o.created_at %}{% if _et and _st %}{{ ((_et-_st).total_seconds()/60)|int }}分钟{% else %}加急{% endif %}">🟡</span>
+                        {% else %}
+                        <span class="badge bg-success me-1 priority-ball" data-id="{{ o.id }}" style="cursor:pointer" title="{% set _et = o.end_time or o.completed_at %}{% set _st = o.start_time or o.accepted_at or o.created_at %}{% if _et and _st %}{{ ((_et-_st).total_seconds()/60)|int }}分钟{% else %}普通{% endif %}">🟢</span>
+                        {% endif %}
+                        {% if o.work_type == 'inspection' %}<span class="badge bg-info me-1" style="font-size:9px;">🔍巡检</span>{% endif %}
+                        <a href="{{ url_for('orders.detail', order_id=o.id) }}" class="text-decoration-none">{{ o.title }}</a>
+                    </td>
+                    <td><small>{{ o.building }} {{ o.department }}</small></td>
+                    <td>
+                        {% if o.fault_type == '软件' %}
+                        <span class="badge bg-info">{{ o.fault_type }}</span>
+                        {% elif o.fault_type == '硬件' %}
+                        <span class="badge bg-warning text-dark">{{ o.fault_type }}</span>
+                        {% elif o.fault_type == '打印机' %}
+                        <span class="badge bg-danger">{{ o.fault_type }}</span>
+                        {% else %}
+                        <span class="badge bg-secondary">{{ o.fault_type }}</span>
+                        {% endif %}
+                    </td>
+                    <td><small>{{ o.person if o.person else '<span class="text-muted">未指派</span>'|safe }}</small></td>
+                    <td>
+                        {% if o.status == 'pending' %}
+                        <span class="badge bg-warning text-dark">待接单</span>
+                        {% elif o.status == 'in_progress' %}
+                        <span class="badge bg-primary">处理中</span>
+                        {% elif o.status == 'completed' %}
+                        <span class="badge bg-success">已完成</span>
+                        {% endif %}
+                    </td>
+                    <td><small class="text-muted">{% if o.start_time %}{{ o.start_time.strftime('%m/%d %H:%M') }}{% endif %}</small></td>
+                    <td>
+                        <div class="d-flex gap-1">
+                            <a href="{{ url_for('orders.detail', order_id=o.id) }}" class="btn btn-sm btn-outline-primary" title="详情"><i class="fas fa-eye"></i></a>
+                            {% if o.person and o.person != '未指派' %}
+                            <button class="btn btn-sm btn-outline-warning urge-btn" data-id="{{ o.id }}" title="催办"><i class="fas fa-bell"></i></button>
+                            {% endif %}
+                            <form method="post" action="{{ url_for('orders.delete_order', order_id=o.id) }}" style="display:inline;">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="删除"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="10" class="text-center text-muted py-4">暂无工单数据</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 分页 -->
+{% if pagination.pages > 1 %}
+<nav class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center">
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('orders.list_orders', page=pagination.prev_num, status=status, fault_type=fault_type, person=person_sel, keyword=keyword, date_from=date_from, date_to=date_to, sort=sort, order=order) }}">上一页</a>
+        </li>
+        {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if p %}
+            <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('orders.list_orders', page=p, status=status, fault_type=fault_type, person=person_sel, keyword=keyword, date_from=date_from, date_to=date_to, sort=sort, order=order) }}">{{ p }}</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('orders.list_orders', page=pagination.next_num, status=status, fault_type=fault_type, person=person_sel, keyword=keyword, date_from=date_from, date_to=date_to, sort=sort, order=order) }}">下一页</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+    var status = '{{ status }}';
+    var sort = '{{ sort }}';
+    var order = '{{ order }}';
+
+    // ==================== 1. 列选择器 ====================
+    var colToggleBtn = document.getElementById('columnToggleBtn');
+    var colSelector = document.getElementById('colSelector');
+    if (colToggleBtn && colSelector) {
+        colToggleBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            colSelector.classList.toggle('show');
+        });
+        document.addEventListener('click', function() {
+            colSelector.classList.remove('show');
+        });
+        colSelector.addEventListener('click', function(e) { e.stopPropagation(); });
+
+        // 恢复保存的列配置
+        var savedCols = localStorage.getItem('order_visible_cols');
+        if (savedCols) {
+            try {
+                var cols = JSON.parse(savedCols);
+                colSelector.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+                    var c = cb.dataset.col;
+                    if (cols.indexOf(c) !== -1) { cb.checked = true; }
+                    else { cb.checked = false; }
+                });
+            } catch(e) {}
+        }
+        applyColumnVisibility();
+
+        colSelector.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+            cb.addEventListener('change', function() {
+                applyColumnVisibility();
+                saveColumnConfig();
+            });
+        });
+    }
+
+    function applyColumnVisibility() {
+        var vis = {};
+        colSelector.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+            vis[cb.dataset.col] = cb.checked;
+        });
+        // 隐藏/显示列
+        var table = document.getElementById('orderTable');
+        if (!table) return;
+        var headerCells = table.querySelectorAll('thead th');
+        headerCells.forEach(function(th) {
+            var scol = th.dataset.scol;
+            if (scol && vis[scol] !== undefined) {
+                th.style.display = vis[scol] ? '' : 'none';
+            }
+        });
+        table.querySelectorAll('tbody tr').forEach(function(tr) {
+            tr.querySelectorAll('td').forEach(function(td, idx) {
+                var headerCol = headerCells[idx];
+                if (headerCol) {
+                    var scol = headerCol.dataset.scol;
+                    if (scol && vis[scol] !== undefined) {
+                        td.style.display = vis[scol] ? '' : 'none';
+                    }
+                }
+            });
+        });
+    }
+
+    function saveColumnConfig() {
+        var visible = [];
+        colSelector.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+            if (cb.checked) visible.push(cb.dataset.col);
+        });
+        localStorage.setItem('order_visible_cols', JSON.stringify(visible));
+    }
+
+    // ==================== 2. 列排序 ====================
+    document.querySelectorAll('.dt-sortable').forEach(function(th) {
+        th.addEventListener('click', function() {
+            var s = this.dataset.sort;
+            if (!s) return;
+            var dir = 'asc';
+            if (sort === s && order === 'asc') dir = 'desc';
+            // 重新加载页面带排序参数
+            var url = new URL(window.location.href);
+            url.searchParams.set('sort', s);
+            url.searchParams.set('order', dir);
+            url.searchParams.set('page', '1');
+            window.location.href = url.toString();
+        });
+        // 标记当前排序列
+        if (th.dataset.sort === sort) {
+            th.classList.add('active-sort');
+            var icon = th.querySelector('.sort-icon');
+            if (icon) icon.textContent = order === 'asc' ? '↑' : '↓';
+        }
+    });
+
+    // ==================== 3. 星标 ====================
+    document.querySelectorAll('.star-btn').forEach(function(el) {
+        el.addEventListener('click', function(e) {
+            e.preventDefault();
+            var id = this.dataset.id;
+            var self = this;
+            fetch('/orders/' + id + '/star', {method:'POST'})
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                self.textContent = d.starred ? '⭐' : '☆';
+                self.title = d.starred ? '取消星标' : '标星';
+                var tr = self.closest('tr');
+                if (d.starred) { tr.classList.add('table-warning'); }
+                else { tr.classList.remove('table-warning'); }
+            });
+        });
+    });
+
+    // ==================== 4. 催办 ====================
+    document.querySelectorAll('.urge-btn').forEach(function(el) {
+        el.addEventListener('click', function(e) {
+            e.preventDefault();
+            var id = this.dataset.id;
+            var self = this;
+            self.disabled = true;
+            self.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            fetch('/orders/' + id + '/urge', {method:'POST'})
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d.success) {
+                    alert('✅ ' + d.message);
+                } else {
+                    alert('❌ ' + (d.error || '发送失败'));
+                }
+                self.disabled = false;
+                self.innerHTML = '<i class="fas fa-bell"></i>';
+            }).catch(function() {
+                alert('❌ 催办失败');
+                self.disabled = false;
+                self.innerHTML = '<i class="fas fa-bell"></i>';
+            });
+        });
+    });
+
+    // ==================== 5. 批量操作 ====================
+    var selectAll = document.getElementById('selectAll');
+    var batchToolbar = document.getElementById('batchToolbar');
+    var batchCount = document.getElementById('batchCount');
+
+    function updateBatchToolbar() {
+        var checked = document.querySelectorAll('.order-checkbox:checked');
+        var count = checked.length;
+        if (batchCount) batchCount.textContent = count;
+        if (batchToolbar) {
+            if (count > 0) {
+                batchToolbar.removeAttribute('hidden');
+            } else {
+                batchToolbar.setAttribute('hidden', '');
+            }
+        }
+    }
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function() {
+            document.querySelectorAll('.order-checkbox').forEach(function(cb) {
+                cb.checked = selectAll.checked;
+            });
+            updateBatchToolbar();
+        });
+    }
+
+    document.querySelectorAll('.order-checkbox').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            updateBatchToolbar();
+            // 如果全部勾选则勾选全选框
+            if (selectAll) {
+                var all = document.querySelectorAll('.order-checkbox');
+                var checked = document.querySelectorAll('.order-checkbox:checked');
+                selectAll.checked = all.length > 0 && all.length === checked.length;
+            }
+        });
+    });
+
+    // 批量操作按钮
+    document.querySelectorAll('.batch-action').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var ids = [];
+            document.querySelectorAll('.order-checkbox:checked').forEach(function(cb) {
+                ids.push(parseInt(cb.value));
+            });
+            if (ids.length === 0) { alert('请先选择工单'); return; }
+
+            var action = this.dataset.action;
+            var data = {action: action, ids: ids};
+
+            if (action === 'assign') {
+                var person = document.getElementById('batchAssignPerson').value;
+                if (!person) { alert('请选择要指派的人员'); return; }
+                data.person = person;
+            } else if (action === 'priority') {
+                data.priority = this.dataset.priority;
+            }
+
+            fetch('/orders/api/batch', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify(data)
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d.success) {
+                    alert('✅ ' + d.message);
+                    // 对于删除、指派等操作刷新页面
+                    if (action === 'delete' || action === 'assign' || action === 'priority') {
+                        window.location.reload();
+                    } else {
+                        // 对于星标操作，保留勾选状态
+                        window.location.reload();
+                    }
+                } else {
+                    alert('❌ ' + (d.error || '操作失败'));
+                }
+            })
+            .catch(function(err) {
+                alert('❌ 操作失败: ' + err);
+            });
+        });
+    });
+
+    // ==================== 6. 优先级点击（已完成工单不响应） ====================
+    document.querySelectorAll('.priority-ball').forEach(function(el){
+        el.addEventListener('click', function(e){
+            e.preventDefault();
+            e.stopPropagation();
+            var id = this.dataset.id;
+            var self = this;
+            fetch('/orders/' + id + '/toggle_priority', {method:'POST'})
+            .then(function(r){
+                if (!r.ok) throw new Error('已完成工单不可修改');
+                return r.json();
+            })
+            .then(function(d){
+                var emoji = '';
+                if(d.priority === 'emergency'){
+                    self.className = 'badge bg-danger me-1 priority-ball';
+                    emoji = '🔴';
+                    self.title = '紧急';
+                } else if(d.priority === 'urgent'){
+                    self.className = 'badge bg-warning text-dark me-1 priority-ball';
+                    emoji = '🟡';
+                    self.title = '加急';
+                } else {
+                    self.className = 'badge bg-success me-1 priority-ball';
+                    emoji = '🟢';
+                    self.title = '普通';
+                }
+                self.textContent = emoji;
+            })
+            .catch(function(){});
+        });
+    });
+
+})();
+</script>
+{% endblock %}

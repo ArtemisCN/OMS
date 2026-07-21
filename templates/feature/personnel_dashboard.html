@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% block title %}运维效能中心{% endblock %}
+{% block extra_head %}
+<script src="/static/vendor/chart.js/chart.umd.min.js"></script>
+<style>
+.rank-card{transition:all .2s;border:1px solid rgba(0,0,0,.05)}
+.rank-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.08)!important}
+.rank-badge{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.efficiency-bar{height:6px;border-radius:3px;background:#e9ecef;overflow:hidden}
+.efficiency-bar .fill{height:100%;border-radius:3px;transition:width .6s ease}
+.avatar-circle{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0;background:linear-gradient(135deg,#4f46e5,#818cf8);color:#fff}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <!-- 头部 -->
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h4 class="mb-1 fw-bold"><i class="fas fa-gauge-high text-primary me-2"></i>运维效能中心</h4>
+      <div class="text-muted small">人员效率 · 负载均衡 · SLA 达标</div>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+      <select id="teamFilter" class="form-select form-select-sm" style="width:auto;min-width:120px;" onchange="loadData()">
+        <option value="">🏢 全部团队</option>
+        {% for t in team_list %}
+        <option value="{{ t }}" {% if default_team == t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+      <select id="groupFilter" class="form-select form-select-sm" style="width:auto;min-width:140px;" onchange="loadData()">
+        <option value="">👥 全部角色组</option>
+      </select>
+      <button class="btn btn-sm btn-outline-primary" onclick="loadData()"><i class="fas fa-sync me-1"></i>刷新</button>
+    </div>
+  </div>
+
+  <!-- KPI 行 -->
+  <div class="row g-3 mb-4" id="statCards">
+    <div class="col-md-3 col-6">
+      <div class="card border-0 shadow-sm h-100" style="border-left:3px solid #4f46e5!important">
+        <div class="card-body py-3 px-3">
+          <div class="d-flex align-items-center gap-2">
+            <i class="fas fa-users fs-4" style="color:#4f46e5"></i>
+            <div>
+              <div class="fs-3 fw-bold" id="statActive" style="color:#1e293b">-</div>
+              <div class="small text-muted">在岗人员</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card border-0 shadow-sm h-100" style="border-left:3px solid #0ea5e9!important">
+        <div class="card-body py-3 px-3">
+          <div class="d-flex align-items-center gap-2">
+            <i class="fas fa-list-check fs-4" style="color:#0ea5e9"></i>
+            <div>
+              <div class="fs-3 fw-bold" id="statTotal" style="color:#1e293b">-</div>
+              <div class="small text-muted">总处理工单</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card border-0 shadow-sm h-100" style="border-left:3px solid #f59e0b!important">
+        <div class="card-body py-3 px-3">
+          <div class="d-flex align-items-center gap-2">
+            <i class="fas fa-clock fs-4" style="color:#f59e0b"></i>
+            <div>
+              <div class="fs-3 fw-bold" id="statAvg" style="color:#1e293b">-</div>
+              <div class="small text-muted">平均耗时(h)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card border-0 shadow-sm h-100" style="border-left:3px solid #22c55e!important">
+        <div class="card-body py-3 px-3">
+          <div class="d-flex align-items-center gap-2">
+            <i class="fas fa-check-circle fs-4" style="color:#22c55e"></i>
+            <div>
+              <div class="fs-3 fw-bold" id="statSla" style="color:#1e293b">-</div>
+              <div class="small text-muted">平均SLA达标率</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 图表行 -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-7">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white py-2 px-3">
+          <span class="small fw-semibold"><i class="fas fa-chart-bar me-1 text-primary"></i>人员工单量排行</span>
+        </div>
+        <div class="card-body p-3">
+          <canvas id="workloadChart" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-5">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white py-2 px-3">
+          <span class="small fw-semibold"><i class="fas fa-gauge me-1 text-success"></i>效率分布</span>
+        </div>
+        <div class="card-body p-3">
+          <canvas id="efficiencyChart" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 人员排行卡片 -->
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-white py-2 px-3 d-flex justify-content-between align-items-center">
+      <span class="small fw-semibold"><i class="fas fa-ranking-star me-1 text-warning"></i>人员效能排行</span>
+      <span class="text-muted small">按总工单数排序</span>
+    </div>
+    <div class="card-body p-3" id="rankContainer">
+      <div class="text-center py-5 text-muted"><i class="fas fa-spinner fa-spin me-1"></i>加载中…</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', loadData);
+
+async function loadData() {
+  const rankEl = document.getElementById('rankContainer');
+  rankEl.innerHTML = '<div class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-1"></i>加载中…</div>';
+
+  try {
+    const groupId = document.getElementById('groupFilter').value;
+    const team = document.getElementById('teamFilter').value;
+    let params = [];
+    if (groupId) params.push('group_id=' + groupId);
+    if (team) params.push('team=' + encodeURIComponent(team));
+    const url = '/feature/personnel/data' + (params.length ? '?' + params.join('&') : '');
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (!data.success) {
+      rankEl.innerHTML = '<div class="text-center py-4 text-danger">' + (data.error || '加载失败') + '</div>';
+      return;
+    }
+
+    // 填充分组下拉
+    var sel = document.getElementById('groupFilter');
+    if (data.groups && sel.options.length <= 1) {
+      data.groups.forEach(function(g) {
+        var opt = document.createElement('option');
+        opt.value = g.id;
+        opt.textContent = g.name;
+        sel.appendChild(opt);
+      });
+    }
+
+    const list = data.data || [];
+    let totalOrders = 0, activeCount = 0, totalAvg = 0, totalSlaCount = 0, totalSlaOk = 0;
+
+    list.forEach(function(p) {
+      totalOrders += p.total_orders;
+      if (p.active) activeCount++;
+      totalAvg += p.avg_hours;
+      if (p.sla_total > 0) {
+        totalSlaCount++;
+        totalSlaOk += (p.sla_ok || 0);
+      }
+    });
+
+    const overallAvg = list.length > 0 ? (totalAvg / list.length) : 0;
+    const overallSla = totalSlaCount > 0 ? Math.round(totalSlaOk / totalSlaCount) : 0;
+
+    document.getElementById('statActive').textContent = activeCount;
+    document.getElementById('statTotal').textContent = totalOrders;
+    document.getElementById('statAvg').textContent = overallAvg.toFixed(1);
+    document.getElementById('statSla').textContent = overallSla + '%';
+
+    // 排行列表
+    const sorted = [...list].sort((a,b) => b.total_orders - a.total_orders);
+    let html = '';
+    sorted.forEach(function(p, i) {
+      const medal = ['🥇','🥈','🥉'][i] || '';
+      const rankBg = ['#ffd700','#c0c0c0','#cd7f32','#f1f5f9','#f1f5f9'][i] || '#f1f5f9';
+      const rankColor = ['#b8860b','#808080','#8b4513','#94a3b8','#94a3b8'][i] || '#94a3b8';
+      const avgStr = p.avg_hours > 0 ? p.avg_hours.toFixed(1) + 'h' : '-';
+      const pct = sorted.length > 0 ? Math.round(p.total_orders / sorted[0].total_orders * 100) : 0;
+
+      // 效率评级
+      let effLabel, effColor, effPct;
+      if (p.avg_hours === 0) { effLabel = '—'; effColor = '#94a3b8'; effPct = 0; }
+      else if (p.avg_hours <= 24) { effLabel = '快'; effColor = '#22c55e'; effPct = 85; }
+      else if (p.avg_hours <= 48) { effLabel = '中'; effColor = '#f59e0b'; effPct = 55; }
+      else { effLabel = '慢'; effColor = '#ef4444'; effPct = 25; }
+
+      // SLA 达标率
+      const slaStr = p.sla_total > 0 ? p.sla_ok + '%' : '-';
+
+      html += '<div class="rank-card card mb-2 border-0 shadow-sm">' +
+        '<div class="card-body py-2 px-3">' +
+        '<div class="row align-items-center g-2">' +
+        '<div class="col-auto">' +
+          '<div class="rank-badge" style="background:' + rankBg + ';color:' + rankColor + '">' + (i+1) + '</div>' +
+        '</div>' +
+        '<div class="col">' +
+          '<div class="fw-semibold" style="font-size:14px">' + medal + ' ' + escHtml(p.name) + '</div>' +
+          '<div class="small text-muted d-flex gap-3 flex-wrap">' +
+            '<span><i class="fas fa-hammer me-1"></i>' + p.total_orders + '单</span>' +
+            '<span><i class="fas fa-clock me-1"></i>平均' + avgStr + '</span>' +
+            '<span><i class="fas fa-check-circle me-1" style="color:' + effColor + '"></i>SLA ' + slaStr + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="col-auto text-end" style="min-width:60px">' +
+          '<div style="font-size:20px;font-weight:700;color:' + effColor + '">' + effLabel + '</div>' +
+          '<div class="small text-muted">效率</div>' +
+        '</div>' +
+        '<div class="col-12 mt-1">' +
+          '<div class="efficiency-bar"><div class="fill" style="width:' + pct + '%;background:linear-gradient(90deg,' + (pct > 60 ? '#4f46e5' : pct > 30 ? '#f59e0b' : '#ef4444') + ',' + (pct > 60 ? '#818cf8' : pct > 30 ? '#fbbf24' : '#f87171') + ')"></div></div>' +
+          '<div class="small text-end text-muted" style="font-size:10px">' + pct + '%</div>' +
+        '</div>' +
+        '</div></div></div>';
+    });
+
+    rankEl.innerHTML = html || '<div class="text-center py-5 text-muted"><i class="fas fa-users fa-2x mb-2 d-block"></i>暂无人员数据</div>';
+
+    // 工单量排行图表
+    const top10 = sorted.slice(0, 10);
+    const wCtx = document.getElementById('workloadChart').getContext('2d');
+    new Chart(wCtx, {
+      type: 'bar',
+      data: {
+        labels: top10.map(p => escHtml(p.name)),
+        datasets: [{
+          label: '工单数',
+          data: top10.map(p => p.total_orders),
+          backgroundColor: ['#4f46e5','#6366f1','#818cf8','#a5b4fc','#c7d2fe','#e0e7ff','#f59e0b','#fbbf24','#fcd34d','#fde68a'],
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { font: { size: 10 } }, grid: { display: false } },
+          y: { beginAtZero: true, ticks: { font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.04)' } }
+        }
+      }
+    });
+
+    // 效率分布图表
+    const eCtx = document.getElementById('efficiencyChart').getContext('2d');
+    const fast = list.filter(p => p.avg_hours > 0 && p.avg_hours <= 24).length;
+    const mid = list.filter(p => p.avg_hours > 24 && p.avg_hours <= 48).length;
+    const slow = list.filter(p => p.avg_hours > 48).length;
+    const unknown = list.filter(p => p.avg_hours === 0).length;
+
+    new Chart(eCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['快速 (<24h): ' + fast + '人', '中等 (24-48h): ' + mid + '人', '慢速 (>48h): ' + slow + '人', '暂无数据: ' + unknown + '人'],
+        datasets: [{
+          data: [fast, mid, slow, unknown],
+          backgroundColor: ['#22c55e','#f59e0b','#ef4444','#e2e8f0'],
+          borderWidth: 0,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 10, padding: 8, font: { size: 10 } } }
+        }
+      }
+    });
+
+  } catch(e) {
+    rankEl.innerHTML = '<div class="text-center py-4 text-danger">加载失败: ' + escHtml(e.message) + '</div>';
+  }
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, function(m) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+  });
+}
+</script>
+{% endblock %}

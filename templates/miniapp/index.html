@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>智维工控 · 工单助手</title>
+<link href="/static/vendor/fontawesome/all.min.css" rel="stylesheet">
+<style>
+:root{--primary:#4f46e5;--success:#059669;--warning:#d97706;--danger:#dc2626;--gray-50:#f8fafc;--gray-100:#f0f0f0;--gray-200:#e0e0e0;--gray-300:#c8c8c8;--gray-400:#999;--gray-500:#666;--gray-600:#333;--card-bg:#fff;--text:#1a1a1a;--bg:#f5f5f5;--tab-h:110px}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;background:var(--bg);color:var(--text);font-size:16px;overflow:hidden;height:100dvh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+
+/* ═══ 顶部状态栏 ═══ */
+.status-bar{height:44px;flex-shrink:0;background:var(--card-bg)}
+
+/* ═══ 导航栏（小程序白底风格）═══ */
+.nav-bar{height:44px;flex-shrink:0;background:var(--card-bg);display:flex;align-items:center;justify-content:center;position:relative;z-index:100;border-bottom:1px solid var(--gray-100)}
+.nav-bar .back-btn{display:none;position:absolute;left:0;top:0;bottom:0;width:48px;align-items:center;justify-content:center;font-size:24px;color:var(--text);cursor:pointer}
+.nav-bar .back-btn.show{display:flex}
+.nav-bar .nav-title{font-size:17px;font-weight:500;color:var(--text)}
+
+/* Pages */
+.page-container{flex:1;overflow:hidden;position:relative}
+.page{display:none;height:100%;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+.page.active{display:block}
+.page-overlay{position:fixed;top:88px;left:0;right:0;bottom:var(--tab-h);background:var(--bg);z-index:50;display:none;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.page-overlay.active{display:block}
+
+/* ═══ 底部 TabBar（小程序风格）═══ */
+.tab-bar{height:var(--tab-h);background:var(--card-bg);border-top:1px solid var(--gray-100);display:flex;flex-shrink:0;z-index:100;padding-bottom:env(safe-area-inset-bottom,0);padding-top:8px}
+.tab-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;cursor:pointer;color:var(--gray-400);font-size:10px;transition:color .15s;position:relative}
+.tab-item .tab-icon{font-size:26px;line-height:1.2;transition:transform .2s}
+.tab-item:active .tab-icon{transform:scale(.9)}
+.tab-item.active{color:var(--primary)}
+
+/* Stat Row（小程序三池子） */
+.stat-row{display:flex;margin:10px 0;gap:0;background:var(--card-bg);border-bottom:1px solid var(--gray-100)}
+.stat-item{flex:1;text-align:center;padding:12px 6px;cursor:pointer;position:relative;color:var(--gray-400);font-size:12px}
+.stat-item .stat-num{font-size:24px;font-weight:600;color:var(--text);display:block;margin-bottom:2px}
+.stat-item .stat-label{color:var(--gray-400);font-size:11px}
+.stat-item.active{color:var(--primary)}
+.stat-item.active .stat-num{color:var(--primary)}
+.stat-item.active::after{content:'';position:absolute;bottom:0;left:20%;right:20%;height:2px;background:var(--primary);border-radius:1px}
+
+/* Order List（小程序列表风格） */
+.order-list{padding:0}
+.order-card{background:var(--card-bg);padding:14px 16px;border-bottom:1px solid var(--gray-100);cursor:pointer;transition:background .15s}
+.order-card:active{background:var(--gray-50)}
+.order-card .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}
+.order-card .title{font-size:15px;font-weight:500;color:var(--text);flex:1;line-height:1.4}
+.order-card .badge-status{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500;margin-left:8px;flex-shrink:0}
+.badge-pending{background:#fef3c7;color:#92400e}
+.badge-in_progress{background:#e0e7ff;color:#3730a3}
+.badge-completed{background:#d1fae5;color:#065f46}
+.order-card .meta{display:flex;flex-wrap:wrap;gap:4px;font-size:13px;color:var(--gray-400)}
+.order-card .meta span{display:inline-flex;align-items:center;gap:4px}
+.prio-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;flex-shrink:0}
+.prio-emergency{background:var(--danger)}
+.prio-urgent{background:var(--warning)}
+.prio-normal{background:var(--success)}
+
+/* Detail（小程序风格） */
+.detail-wrap{padding:0;padding-bottom:80px}
+.detail-card{background:var(--card-bg);padding:16px;border-bottom:1px solid var(--gray-100)}
+.detail-card:first-child{border-top:none}
+.detail-card h3{font-size:14px;font-weight:600;color:var(--primary);margin-bottom:10px}
+.detail-card .row{display:flex;padding:5px 0;font-size:14px;gap:8px}
+.detail-card .label{width:72px;color:var(--gray-400);flex-shrink:0}
+.detail-card .value{flex:1;color:var(--text);font-weight:400;word-break:break-all}
+.detail-desc{padding:0;font-size:15px;line-height:1.6;color:var(--text)}
+
+/* Buttons */
+.btn-fixed-bottom{position:fixed;bottom:var(--tab-h);left:0;right:0;padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0));background:var(--card-bg);z-index:60;display:flex;gap:8px;border-top:1px solid var(--gray-100)}
+.btn-fixed-bottom .btn{flex:1}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:14px 20px;border:none;border-radius:8px;font-size:16px;font-weight:500;cursor:pointer;transition:opacity .15s;text-decoration:none;letter-spacing:.5px}
+.btn:active{opacity:.7}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-success{background:var(--success);color:#fff}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-outline{background:var(--gray-50);color:var(--gray-500);border:1px solid var(--gray-200)}
+.btn-sm{padding:8px 14px;font-size:13px;border-radius:6px}
+.btn-block{width:100%;display:flex}
+
+/* Solve actions */
+.solve-actions{display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--gray-100)}
+.solve-btn{flex:1;text-align:center;padding:6px 0;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:none;text-decoration:none}
+.solve-btn-primary{background:#e0e7ff;color:#3730a3}
+.solve-btn-success{background:#d1fae5;color:#065f46}
+
+/* Form */
+.form-group{margin-bottom:16px;padding:0 16px}
+.form-group label{display:block;font-size:14px;font-weight:400;color:var(--text);margin-bottom:6px}
+.form-group label .req{color:var(--danger);margin-left:2px}
+.form-input{width:100%;padding:12px 14px;border:1px solid var(--gray-200);border-radius:8px;font-size:16px;font-family:inherit;outline:none;transition:border-color .2s;background:var(--gray-50);color:var(--text);-webkit-appearance:none}
+.form-input:focus{border-color:var(--primary);background:var(--card-bg)}
+.form-select{appearance:auto;min-height:44px}
+textarea.form-input{min-height:100px;resize:vertical}
+
+/* Empty */
+.empty{text-align:center;padding:60px 20px;color:var(--gray-300)}
+.empty i{font-size:48px;margin-bottom:12px}
+.empty p{font-size:15px;color:var(--gray-400);margin-top:8px}
+
+/* Loading */
+.loading{text-align:center;padding:40px;color:var(--gray-400)}
+.loading .spinner{display:inline-block;width:24px;height:24px;border:3px solid var(--gray-200);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Toast */
+.toast{position:fixed;top:80px;left:50%;transform:translateX(-50%);background:var(--gray-800);color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:80%;text-align:center}
+.toast.show{opacity:1}
+
+/* Photos */
+.photo-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.photo-item{width:80px;height:80px;border-radius:6px;overflow:hidden;background:var(--gray-100);position:relative}
+.photo-item img{width:100%;height:100%;object-fit:cover}
+.photo-item .del-btn{position:absolute;top:2px;right:2px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.photo-add{display:flex;align-items:center;justify-content:center;width:80px;height:80px;border:2px dashed var(--gray-200);border-radius:6px;cursor:pointer;color:var(--gray-300);font-size:28px}
+
+/* Toast */
+.toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.75);color:#fff;padding:12px 24px;border-radius:8px;font-size:15px;z-index:9999;opacity:0;transition:opacity .25s;pointer-events:none;backdrop-filter:blur(4px)}
+.toast.show{opacity:1}
+
+/* Signature modal */
+.sig-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:9998;display:none;align-items:center;justify-content:center}
+.sig-overlay.show{display:flex}
+.sig-modal{background:var(--card-bg);border-radius:12px;padding:20px;width:88%;max-width:360px}
+.sig-modal h4{margin-bottom:12px;font-size:16px;font-weight:500;text-align:center}
+
+/* Modal */
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:9998;display:none;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal-box{background:var(--card-bg);border-radius:12px;padding:24px;width:85%;max-width:340px;max-height:70vh;overflow-y:auto}
+.modal-box h4{margin-bottom:16px;font-size:16px;font-weight:500;text-align:center}
+.select-list{list-style:none}
+.select-list li{padding:14px;border-bottom:1px solid var(--gray-100);cursor:pointer;font-size:15px;display:flex;align-items:center;gap:10px}
+.select-list li:active{background:var(--gray-50)}
+
+/* Summary bar */
+.summary-bar{display:flex;align-items:center;justify-content:space-between;background:var(--card-bg);padding:10px 16px;border-bottom:1px solid var(--gray-100);font-size:13px;color:var(--gray-500)}
+
+/* Me page */
+.me-card{background:var(--card-bg);padding:24px 16px 20px;text-align:center}
+.me-avatar{font-size:52px;color:var(--gray-300);margin-bottom:8px}
+.me-name{font-size:18px;font-weight:500}
+.me-role{font-size:13px;color:var(--gray-400);margin-top:4px}
+.me-menu{background:var(--card-bg);margin-top:10px}
+.me-item{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--gray-100);cursor:pointer;gap:12px}
+.me-item:active{background:var(--gray-50)}
+.me-item .me-icon{font-size:20px;width:28px;text-align:center}
+.me-item .me-label{flex:1;font-size:15px}
+.me-item .me-arrow{color:var(--gray-200);font-size:14px}
+
+/* Transfers timeline */
+.transfer-timeline{padding:0}
+.transfer-item{padding:10px 0 10px 20px;border-left:2px solid var(--gray-200);position:relative;margin-left:6px}
+.transfer-item::before{content:'';position:absolute;left:-5px;top:14px;width:8px;height:8px;border-radius:50%;background:var(--primary)}
+.transfer-item .t-time{font-size:12px;color:var(--gray-400)}
+.transfer-item .t-text{font-size:14px;color:var(--gray-500);margin-top:2px}
+
+/* Responsive - mobile only, no PC max-width constraint */
+@media(min-width:768px){body{max-width:420px;margin:0 auto;border-left:1px solid var(--gray-100);border-right:1px solid var(--gray-100)}}
+</style>
+</head>
+<body>
+<!-- 状态栏（模拟小程序顶部） -->
+<div class="status-bar"></div>
+
+<!-- 导航栏（小程序白底简约风格） -->
+<div class="nav-bar">
+  <div class="back-btn" id="backBtn" onclick="goBack()">‹</div>
+  <div class="nav-title" id="navTitle">工单助手</div>
+</div>
+
+<div class="page-container">
+  <!-- ===== 工单 ===== -->
+  <div id="page-orders" class="page active"></div>
+
+  <!-- ===== 发布 ===== -->
+  <div id="page-publish" class="page"></div>
+
+  <!-- ===== 盘点 ===== -->
+  <div id="page-inventory" class="page"></div>
+
+  <!-- ===== 我的 ===== -->
+  <div id="page-profile" class="page"></div>
+
+  <!-- ===== Overlay: 工单详情 ===== -->
+  <div id="detailOverlay" class="page-overlay"></div>
+
+  <!-- ===== Overlay: 照片查看 ===== -->
+  <div id="photoOverlay" class="page-overlay"></div>
+</div>
+
+<div class="tab-bar" id="tabBar">
+  <div class="tab-item active" onclick="switchTab('orders')">
+    <span class="tab-icon">📋</span>
+    <span>工单</span>
+  </div>
+  <div class="tab-item" onclick="switchTab('publish')">
+    <span class="tab-icon">✏️</span>
+    <span>发布</span>
+  </div>
+  <div class="tab-item" onclick="switchTab('inventory')">
+    <span class="tab-icon">📦</span>
+    <span>盘点</span>
+  </div>
+  <div class="tab-item" onclick="switchTab('profile')">
+    <span class="tab-icon">👤</span>
+    <span>我的</span>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="flash" id="flash"></div>
+
+<!-- Signature Modal -->
+<div class="sig-overlay" id="sigOverlay">
+  <div class="sig-modal">
+    <h4>✍ 签字确认</h4>
+    <div class="sig-canvas-wrap">
+      <canvas id="sigCanvas" width="340" height="100" style="width:100%;height:100px;border:2px solid var(--gray-200);border-radius:8px;background:#fafafa;touch-action:none;"></canvas>
+    </div>
+    <div class="sig-tools">
+      <button class="btn btn-outline btn-sm" onclick="clearSig()" style="flex:1">清除</button>
+      <button class="btn btn-success btn-sm" onclick="confirmSig()" style="flex:1">确认签字</button>
+      <button class="btn btn-outline btn-sm" onclick="closeSig()" style="flex:1">取消</button>
+    </div>
+    <input type="hidden" id="sigTargetFid" value="">
+  </div>
+</div>
+
+<script>
+// ===== State =====
+var TOKEN = '';
+var state = {orders: [], currentOrderId: null, orderDetail: null, history: []};
+var sigCanvas, sigCtx, sigDrawing = false, sigCallback = null;
+var currentTab = 'orders';
+var photoUploading = false;
+
+// ===== Init =====
+document.addEventListener('DOMContentLoaded', function(){
+  fetch('/miniapp/token').then(function(r){return r.json()}).then(function(d){
+    TOKEN = d.token;
+    loadOrders();
+    loadInventoryTasks();
+  });
+  initSigCanvas();
+});
+
+function api(path, opts){
+  opts = opts || {};
+  return fetch('/api/mobile' + path, {
+    method: opts.method || 'GET',
+    headers: Object.assign({'Authorization':'Bearer '+TOKEN, 'Content-Type':'application/json'}, opts.headers||{}),
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  }).then(function(r){
+    if(r.status===401){
+      // Token expired, try to refresh
+      return fetch('/miniapp/token').then(function(r2){return r2.json()}).then(function(d){
+        if(d && d.token){
+          TOKEN = d.token;
+          // Retry original request with new token
+          return fetch('/api/mobile' + path, {
+            method: opts.method || 'GET',
+            headers: Object.assign({'Authorization':'Bearer '+TOKEN, 'Content-Type':'application/json'}, opts.headers||{}),
+            body: opts.body ? JSON.stringify(opts.body) : undefined
+          }).then(function(r3){return r3.json().catch(function(){return null})});
+        }
+        // Token refresh failed, redirect to login
+        showToast('登录已过期');
+        setTimeout(function(){window.location.href='/auth/login'},1500);
+        return null;
+      });
+    }
+    return r.json().catch(function(){return null});
+  });
+}
+
+function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show')},2500)}
+function showFlash(msg,type){var f=document.getElementById('flash');f.textContent=msg;f.className='flash show flash-'+(type||'success');setTimeout(function(){f.classList.remove('show')},3000)}
+
+function loadingHTML(){return '<div class="loading"><div class="spinner"></div><p style="margin-top:8px;font-size:14px;">加载中...</p></div>'}
+
+// ===== Navigation =====
+function setNav(title, showBack){
+  document.getElementById('navTitle').textContent = title;
+  document.getElementById('backBtn').classList.toggle('show', !!showBack);
+}
+
+function switchTab(tab){
+  currentTab = tab;
+  document.querySelectorAll('.tab-item').forEach(function(el,i){
+    el.classList.toggle('active', i===['orders','publish','inventory','profile'].indexOf(tab));
+  });
+  var navNames = {orders:'工单助手', publish:'发布工单', inventory:'库存盘点', profile:'我的'};
+  setNav(navNames[tab]||'工单助手', false);
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});
+  var page = document.getElementById('page-'+tab);
+  if(page) page.classList.add('active');
+  // lazy load content
+  if(tab==='publish' && !page.querySelector('.order-list')) renderPublish();
+  if(tab==='profile' && !page.querySelector('.me-card')) renderProfile();
+  history.pushState({tab:tab},'');
+}
+
+function goBack(){
+  if(state.history.length){
+    var prev = state.history.pop();
+    if(prev.type==='detail'){closeDetail();return}
+    if(prev.type==='tab'){switchTab(prev.tab);return}
+  }
+  document.getElementById('backBtn').classList.remove('show');
+}
+
+window.addEventListener('popstate', function(e){
+  if(e.state && e.state.tab){switchTab(e.state.tab)}
+  else {closeDetail()}
+});
+
+// ===== Orders =====
+var orderTab = 'pending';
+
+function loadOrders(){
+  var cont = document.getElementById('page-orders');
+  cont.innerHTML = loadingHTML();
+  api('/orders?status='+orderTab).then(function(data){
+    if(!data) return;
+    state.orders = data.orders || [];
+    renderOrders();
+  });
+}
+
+function renderOrders(){
+  var cont = document.getElementById('page-orders');
+  var tabs = [
+    {key:'pending',label:'📋 未接单'},
+    {key:'in_progress',label:'🔧 已接单'},
+    {key:'completed_today',label:'✅ 今日已完'}
+  ];
+  var html = '<div class="stat-row">';
+  tabs.forEach(function(t){
+    html += '<div class="stat-item'+(orderTab===t.key?' active':'')+'" onclick="switchOrderTab(\''+t.key+'\')">'+
+      '<span class="stat-num">'+(state.stats&&state.stats[t.key]||'0')+'</span>'+
+      '<span class="stat-label">'+t.label+'</span></div>';
+  });
+  html += '</div><div class="order-list">';
+
+  if(orderTab==='completed_today' && state.todaySummary){
+    html += '<div class="summary-bar"><span><i class="fas fa-file-alt"></i> 今日完成 '+state.stats.completed_today+' 项</span>'+
+      '<button class="btn btn-sm btn-primary" onclick="copySummary()" style="padding:4px 12px;font-size:12px"><i class="fas fa-copy"></i> 复制总结</button></div>';
+  }
+  (state.orders||[]).forEach(function(o){
+    var prio = o.priority||'normal';
+    var prioDot = '<span class="prio-dot prio-'+prio+'"></span>';
+    html += '<div class="order-card" onclick="openDetail('+o.id+')">'+
+      '<div class="top"><span class="title">'+prioDot+escapeHtml(o.title)+'</span>'+
+      '<span class="badge-status badge-'+o.status+'">'+(o.status==='pending'?'待接单':o.status==='in_progress'?'处理中':'已完成')+'</span></div>'+
+      '<div class="meta"><span><i class="fas fa-building"></i> '+(o.building||'未指定')+'</span>'+
+      (o.department?'<span><i class="fas fa-door-open"></i> '+escapeHtml(o.department)+'</span>':'')+
+      '</div>';
+    if(o.status==='in_progress'){
+      html += '<div class="solve-actions" onclick="event.stopPropagation()">'+
+        '<button class="solve-btn solve-btn-primary" onclick="openDetail('+o.id+')">结单</button>'+
+        '<button class="solve-btn solve-btn-success" onclick="quickSolve('+o.id+')">一键结单</button></div>';
+    }
+    html += '</div>';
+  });
+  if(!state.orders||!state.orders.length){
+    html += '<div class="empty"><i class="fas fa-inbox"></i><p>暂无工单</p></div>';
+  }
+  html += '</div>';
+  cont.innerHTML = html;
+  // reload stats in bg
+  loadStats();
+}
+
+function switchOrderTab(tab){
+  orderTab = tab;
+  loadOrders();
+}
+
+function loadStats(){
+  api('/orders?status='+orderTab).then(function(data){
+    if(!data) return;
+    state.orders = data.orders || [];
+    state.stats = data.stats || data.counts || {};
+    state.todaySummary = data.today_summary || null;
+    renderOrders();
+  });
+}
+
+function copySummary(){
+  api('/orders/today-summary').then(function(d){
+    if(d&&d.summary){
+      navigator.clipboard.writeText(d.summary).then(function(){showToast('✅ 已复制')})
+      .catch(function(){showToast('复制失败，请手动复制')});
+    }
+  });
+}
+
+// ===== Order Detail =====
+function openDetail(id){
+  state.currentOrderId = id;
+  document.getElementById('detailOverlay').classList.add('active');
+  document.getElementById('detailOverlay').innerHTML = loadingHTML();
+  document.getElementById('backBtn').classList.add('show');
+  setNav('工单详情', true);
+  state.history.push({type:'detail'});
+  api('/orders/'+id).then(function(d){
+    if(!d) return;
+    state.orderDetail = d;
+    renderDetail(d);
+  });
+}
+
+function renderDetail(o){
+  var h = document.getElementById('detailOverlay');
+  var prioMap = {emergency:'🔴 紧急',urgent:'🟡 加急',normal:'🟢 普通'};
+  h.innerHTML = '<div class="detail-wrap">'+
+    '<div class="detail-card">'+
+    '<h3>📋 工单信息</h3>'+
+    '<div class="row"><span class="label">标题</span><span class="value">'+escapeHtml(o.title)+'</span></div>'+
+    '<div class="row"><span class="label">位置</span><span class="value">'+(o.building||'')+' '+(o.floor||'')+' '+(o.department||'')+'</span></div>'+
+    (o.location?'<div class="row"><span class="label">详细</span><span class="value">'+escapeHtml(o.location)+'</span></div>':'')+
+    '<div class="row"><span class="label">设备</span><span class="value">'+(o.device_type||'-')+'</span></div>'+
+    '<div class="row"><span class="label">故障</span><span class="value">'+(o.fault_type||'-')+(o.fault_subcategory?' > '+o.fault_subcategory:'')+'</span></div>'+
+    '<div class="row"><span class="label">状态</span><span class="value">'+prioMap[o.priority]||'🟢 普通'+'</span></div>'+
+    (o.person&&o.status!=='pending'?'<div class="row"><span class="label">接单人</span><span class="value">'+escapeHtml(o.person)+'</span></div>':'')+
+    (o.start_time?'<div class="row"><span class="label">发布时间</span><span class="value">'+formatTime(o.start_time)+'</span></div>':'')+
+    '</div>'+
+    '<div class="detail-card"><h3>🔧 故障描述</h3><div class="detail-desc">'+escapeHtml(o.description||o.title)+'</div></div>';
+
+  // Photos
+  if(o.photos && o.photos.length){
+    h.innerHTML += '<div class="detail-card"><h3>📷 照片 ('+o.photos.length+')</h3><div class="photo-grid">';
+    o.photos.forEach(function(p){
+      h.innerHTML += '<div class="photo-item"><img src="'+(p.thumbnail_url||p.url||'/static/uploads/'+p.filename)+'" onclick="viewPhoto(\''+(p.url||'/static/uploads/'+p.filename)+'\')"></div>';
+    });
+    h.innerHTML += '</div></div>';
+  }
+
+  // Transfers
+  if(o.transfers && o.transfers.length){
+    h.innerHTML += '<div class="detail-card"><h3>🔄 转交记录</h3><div class="transfer-timeline">';
+    o.transfers.forEach(function(t){
+      h.innerHTML += '<div class="transfer-item"><div class="t-time">'+formatTime(t.created_at)+'</div><div class="t-text">'+escapeHtml(t.from_name||t.from)+' → '+escapeHtml(t.to_name||t.to)+(t.reason?' ('+escapeHtml(t.reason)+')':'')+'</div></div>';
+    });
+    h.innerHTML += '</div></div>';
+  }
+
+  h.innerHTML += '</div>';
+
+  // Bottom actions
+  h.innerHTML += '<div class="btn-fixed-bottom" id="detailActions">';
+  if(o.status==='pending'){
+    h.innerHTML += '<button class="btn btn-primary btn-block" onclick="acceptOrder('+o.id+')"><i class="fas fa-hand-paper"></i> 立即接单</button>';
+  }else if(o.status==='in_progress'){
+    h.innerHTML += '<button class="btn btn-success" onclick="showSolveForm('+o.id+')" style="flex:1"><i class="fas fa-check"></i> 完成</button>'+
+      '<button class="btn btn-outline" onclick="showTransfer('+o.id+')" style="flex:1"><i class="fas fa-exchange-alt"></i> 转交</button>'+
+      '<button class="btn btn-outline" onclick="showReturnForm('+o.id+')" style="flex:1"><i class="fas fa-undo"></i> 退回</button>';
+  }else{
+    h.innerHTML += '<button class="btn btn-outline btn-block" onclick="closeDetail()"><i class="fas fa-arrow-left"></i> 返回</button>';
+  }
+  h.innerHTML += '</div>';
+}
+
+function closeDetail(){
+  document.getElementById('detailOverlay').classList.remove('active');
+  document.getElementById('backBtn').classList.remove('show');
+  setNav('工单助手', false);
+  state.history = state.history.filter(function(h){return h.type!=='detail'});
+}
+
+function acceptOrder(id){
+  api('/orders/'+id+'/accept',{method:'POST'}).then(function(d){
+    if(d&&d.success!==false){showToast('✅ 已接单');loadOrders();closeDetail()}
+    else showToast('❌ '+(d&&d.error||'接单失败'));
+  });
+}
+
+function quickSolve(id){
+  if(!confirm('确认一键结单？')) return;
+  api('/orders/'+id+'/solve',{method:'POST'}).then(function(d){
+    if(d&&d.success!==false){showToast('✅ 已结单');loadOrders()}
+    else showToast('❌ '+(d&&d.error||'结单失败'));
+  });
+}
+
+// ===== Solve Form =====
+function showSolveForm(id){
+  var o = state.orderDetail;
+  var html = '<div class="modal-overlay show" onclick="if(event.target===this)this.classList.remove(\'show\')">'+
+    '<div class="modal-box"><h4>✏️ 填写解决方案</h4>'+
+    '<div class="form-group"><label>解决方案</label><textarea class="form-input" id="solveSolution" placeholder="请描述处理过程" style="min-height:80px">'+
+    (o.suggested_solution||'')+'</textarea></div>'+
+    '<div class="form-group"><label>耗时（分钟）</label><input class="form-input" type="number" id="solveDuration" value="30" min="1"></div>'+
+    '<div class="modal-actions">'+
+    '<button class="btn btn-outline" onclick="this.closest(\'.modal-overlay\').remove()">取消</button>'+
+    '<button class="btn btn-success" onclick="submitSolve('+id+')">✅ 确认完成</button></div></div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function submitSolve(id, skipForm){
+  if(skipForm){
+    api('/orders/'+id+'/solve',{method:'POST'}).then(function(d){
+      if(d&&d.success!==false){showToast('✅ 已完成');loadOrders();closeDetail()}
+      else showToast('❌ '+(d&&d.error||'操作失败'));
+    });
+    return;
+  }
+  var sol = document.getElementById('solveSolution');
+  var dur = document.getElementById('solveDuration');
+  if(!sol||!sol.value.trim()){showToast('请填写解决方案');return}
+  api('/orders/'+id+'/solve',{method:'POST',body:{solution:sol.value.trim(),duration:dur?parseInt(dur.value)||30:30}}).then(function(d){
+    if(d&&d.success!==false){showToast('✅ 已完成');document.querySelector('.modal-overlay').remove();loadOrders();closeDetail()}
+    else showToast('❌ '+(d&&d.error||'操作失败'));
+  });
+}
+
+// ===== Transfer =====
+function showTransfer(id){
+  api('/orders/'+id+'/personnel').then(function(people){
+    if(!people||!people.length){showToast('暂无可用接单人');return}
+    var items = people.map(function(p){return{label:p.name||p,value:p.name||p}});
+    showPicker('选择接单人', items, function(sel){
+      if(!sel) return;
+      var reason = prompt('转交原因（选填）');
+      api('/orders/'+id+'/transfer',{method:'POST',body:{to:sel,reason:reason||''}}).then(function(d){
+        if(d&&d.success!==false){showToast('✅ 已转交');loadOrders()}
+        else showToast('❌ '+(d&&d.error||'转交失败'));
+      });
+    });
+  });
+}
+
+function showReturnForm(id){
+  var reason = prompt('退回原因：');
+  if(!reason) return;
+  api('/orders/'+id+'/return',{method:'POST',body:{reason:reason}}).then(function(d){
+    if(d&&d.success!==false){showToast('✅ 已退回');loadOrders();closeDetail()}
+    else showToast('❌ '+(d&&d.error||'退回失败'));
+  });
+}
+
+// ===== Picker Modal =====
+function showPicker(title, items, callback){
+  var html = '<div class="modal-overlay show" onclick="if(event.target===this)this.classList.remove(\'show\')">'+
+    '<div class="modal-box"><h4>'+title+'</h4><ul class="select-list">';
+  items.forEach(function(item){
+    html += '<li onclick="pickerSelect(this,\''+escapeHtml(item.value)+'\')">'+
+      (item.icon||'')+' '+escapeHtml(item.label)+' <span class="check" style="display:none"><i class="fas fa-check"></i></span></li>';
+  });
+  html += '</ul></div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+  window._pickerCallback = callback;
+}
+
+function pickerSelect(el, val){
+  document.querySelectorAll('.select-list .check').forEach(function(c){c.style.display='none'});
+  var check = el.querySelector('.check');
+  if(check) check.style.display='inline';
+  setTimeout(function(){
+    document.querySelector('.modal-overlay').remove();
+    if(window._pickerCallback) window._pickerCallback(val);
+  },200);
+}
+
+// ===== Photo =====
+var photoFiles = [];
+
+function viewPhoto(url){
+  document.getElementById('photoOverlay').classList.add('active');
+  document.getElementById('photoOverlay').innerHTML =
+    '<div style="display:flex;flex-direction:column;height:100%;background:#000;">'+
+    '<div style="padding:12px;color:#fff;display:flex;align-items:center;">'+
+    '<span style="cursor:pointer;font-size:18px" onclick="document.getElementById(\'photoOverlay\').classList.remove(\'active\')"><i class="fas fa-times"></i> 关闭</span></div>'+
+    '<div style="flex:1;display:flex;align-items:center;justify-content:center;padding:16px;">'+
+    '<img src="'+url+'" style="max-width:100%;max-height:100%;object-fit:contain;"></div></div>';
+}
+
+// ===== Publish =====
+function renderPublish(){
+  var cont = document.getElementById('page-publish');
+  cont.innerHTML =
+    '<div style="padding:12px">'+
+    '<div class="detail-card"><h3>✏️ 新建工单</h3>'+
+    '<div class="form-group"><label>标题 <span class="req">*</span></label><input class="form-input" id="pubTitle" placeholder="简述故障内容"></div>'+
+    '<div class="form-group"><label>设备类型</label><input class="form-input" id="pubDevice" placeholder="如：电脑、打印机、网络" list="deviceList"></div>'+
+    '<div class="form-group"><label>故障类型</label><input class="form-input" id="pubFault" placeholder="如：无法开机、卡纸" list="faultList"></div>'+
+    '<div class="form-group"><label>位置 - 楼区</label><input class="form-input" id="pubBuilding" placeholder="如：综合楼、门诊楼"></div>'+
+    '<div class="form-group"><label>位置 - 楼层</label><input class="form-input" id="pubFloor" placeholder="如：3楼"></div>'+
+    '<div class="form-group"><label>位置 - 科室</label><input class="form-input" id="pubDept" placeholder="如：信息科、放射科"></div>'+
+    '<div class="form-group"><label>详细描述</label><textarea class="form-input" id="pubDesc" placeholder="请详细描述故障现象" style="min-height:80px"></textarea></div>'+
+    '<div class="form-group"><label>联系方式（选填）</label><input class="form-input" id="pubPhone" type="tel" placeholder="手机号，方便联系您"></div>'+
+    '<button class="btn btn-primary btn-block" onclick="submitPublish()"><i class="fas fa-paper-plane"></i> 提交工单</button>'+
+    '</div></div>'+
+    '<datalist id="deviceList"><option value="电脑"><option value="打印机"><option value="网络"><option value="服务器"><option value="显示器"><option value="电话"><option value="监控"><option value="其他"></datalist>'+
+    '<datalist id="faultList"><option value="无法开机"><option value="无法启动"><option value="卡纸"><option value="网络不通"><option value="蓝屏"><option value="死机"><option value="显示异常"><option value="声音异常"><option value="其他"></datalist>';
+}
+
+function submitPublish(){
+  var title = document.getElementById('pubTitle').value.trim();
+  if(!title){showToast('请输入标题');return}
+  api('/orders/create',{method:'POST',body:{
+    title: title,
+    device_type: document.getElementById('pubDevice').value.trim(),
+    fault_type: document.getElementById('pubFault').value.trim(),
+    building: document.getElementById('pubBuilding').value.trim(),
+    floor: document.getElementById('pubFloor').value.trim(),
+    department: document.getElementById('pubDept').value.trim(),
+    description: document.getElementById('pubDesc').value.trim(),
+    contact: document.getElementById('pubPhone').value.trim()
+  }}).then(function(d){
+    if(d&&d.success!==false){showToast('✅ 工单已提交');switchTab('orders');loadOrders()}
+    else showToast('❌ '+(d&&d.error||d&&d.message||'提交失败'));
+  });
+}
+
+// ===== Inventory =====
+function loadInventoryTasks(){
+  api('/inventory/tasks').then(function(d){
+    if(!d) return;
+    state.inventoryTasks = d.tasks || [];
+  });
+}
+
+function renderInventory(){
+  var cont = document.getElementById('page-inventory');
+  if(!state.inventoryTasks||!state.inventoryTasks.length){
+    api('/inventory/tasks').then(function(d){
+      if(!d) return;
+      state.inventoryTasks = d.tasks || [];
+      renderInventory();
+    });
+    cont.innerHTML = loadingHTML();
+    return;
+  }
+  var tasks = state.inventoryTasks;
+  var html = '<div style="padding:12px">';
+  if(!tasks.length){
+    html += '<div class="empty"><i class="fas fa-clipboard-list"></i><p>暂无盘点任务</p></div>';
+  } else {
+    tasks.forEach(function(t){
+      html += '<div class="detail-card" onclick="openInventoryTask('+t.id+')">'+
+        '<h3>📦 '+(t.name||'盘点#'+t.id)+'</h3>'+
+        '<div class="row"><span class="label">状态</span><span class="value">'+(t.status==='completed'?'✅ 已完成':'🔄 进行中')+'</span></div>'+
+        '<div class="row"><span class="label">地点</span><span class="value">'+(t.location||'-')+'</span></div>'+
+        (t.progress!==undefined?'<div class="row"><span class="label">进度</span><span class="value">'+t.progress+'</span></div>':'')+
+        '</div>';
+    });
+  }
+  html += '</div>';
+  cont.innerHTML = html;
+}
+
+function openInventoryTask(id){
+  api('/inventory/'+id).then(function(d){
+    if(!d) return;
+    var html = '<div style="padding:12px">'+
+      '<div class="detail-card"><h3>📦 '+(d.name||'盘点#'+d.id)+'</h3>'+
+      '<div class="row"><span class="label">状态</span><span class="value">'+(d.status==='completed'?'✅ 已完成':'🔄 进行中')+'</span></div>'+
+      '<div class="row"><span class="label">地点</span><span class="value">'+(d.location||'-')+'</span></div>'+
+      '<div class="row"><span class="label">进度</span><span class="value">'+(d.progress||'0/0')+'</span></div></div>';
+    if(d.assets&&d.assets.length){
+      html += '<div class="detail-card"><h3>资产清单 ('+d.assets.length+')</h3>';
+      d.assets.forEach(function(a){
+        html += '<div style="padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:13px;display:flex;justify-content:space-between">'+
+          '<span>'+(a.asset_no||'无编号')+' '+(a.name||'')+'</span>'+
+          '<span style="color:'+(a.scanned?'var(--success)':'var(--warning)')+'">'+(a.scanned?'✅ 已盘':'⬜ 待盘')+'</span></div>';
+      });
+      html += '</div>';
+    }
+    html += '</div><div class="btn-fixed-bottom">'+
+      '<button class="btn btn-primary btn-block" onclick="showToast(\'扫码功能请使用微信小程序\')"><i class="fas fa-camera"></i> 开始盘点</button></div>';
+    var cont = document.getElementById('page-inventory');
+    cont.innerHTML = html;
+  });
+}
+
+// ===== Profile =====
+function renderProfile(){
+  var cont = document.getElementById('page-profile');
+  api('/profile').then(function(p){
+    if(!p) return;
+    cont.innerHTML =
+      '<div class="me-card">'+
+      '<div class="me-avatar"><i class="fas fa-user-circle"></i></div>'+
+      '<div class="me-name">'+escapeHtml(p.display_name||p.username)+'</div>'+
+      '<div class="me-role">'+(p.role||'运维人员')+'</div>'+
+      '</div>'+
+      '<div class="me-menu">'+
+      '<div class="me-item" onclick="loadExams()"><span class="me-icon">📝</span><span class="me-label">在线考试</span><span class="me-arrow"><i class="fas fa-chevron-right"></i></span></div>'+
+      '<div class="me-item" onclick="loadExamHistory()"><span class="me-icon">📊</span><span class="me-label">考试记录</span><span class="me-arrow"><i class="fas fa-chevron-right"></i></span></div>'+
+      '<div class="me-item" onclick="showToast(\'今日完成 '+((state.stats&&state.stats.completed_today)||'0')+' 项\')"><span class="me-icon">📅</span><span class="me-label">今日统计</span><span class="me-tag">'+(state.stats&&state.stats.completed_today||'0')+'</span><span class="me-arrow"><i class="fas fa-chevron-right"></i></span></div>'+
+      '<div class="me-item" onclick="location.href=\'/auth/logout\'" style="color:var(--danger)"><span class="me-icon">🚪</span><span class="me-label">退出登录</span><span class="me-arrow"><i class="fas fa-chevron-right"></i></span></div>'+
+      '</div>';
+  });
+}
+
+// ===== Exams =====
+function loadExams(){
+  api('/exam/list').then(function(d){
+    if(!d||!d.exams||!d.exams.length){showToast('暂无可用考试');return}
+    var items = d.exams.map(function(e){return{label:e.name||'考试#'+e.id,value:e.id,icon:'📝'}});
+    showPicker('选择考试', items, function(id){
+      startExam(parseInt(id));
+    });
+  });
+}
+
+function startExam(examId){
+  api('/exam/'+examId+'/questions').then(function(d){
+    if(!d){showToast('获取题目失败');return}
+    showExamUI(d);
+  });
+}
+
+function showExamUI(data){
+  var questions = data.questions||[];
+  if(!questions.length){showToast('暂无题目');return}
+  var subId = data.submission_id;
+  var html = '<div style="padding:12px;padding-bottom:80px">'+
+    '<div class="detail-card"><h3>📝 '+escapeHtml(data.name||'考试')+'</h3>'+
+    '<div style="font-size:13px;color:var(--gray-500)">共 '+questions.length+' 题</div></div>';
+  questions.forEach(function(q,i){
+    html += '<div class="detail-card" id="q-'+q.id+'">'+
+      '<h3 style="font-size:13px">第'+(i+1)+'题'+(q.score?' ('+q.score+'分)':'')+'</h3>'+
+      '<div style="font-size:15px;line-height:1.6;margin-bottom:10px">'+escapeHtml(q.question)+'</div>';
+    if(q.type==='choice'||q.type==='single'){
+      var opts = q.options||[];
+      opts.forEach(function(o,j){
+        html += '<label style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--gray-50);cursor:pointer">'+
+          '<input type="radio" name="q_'+q.id+'" value="'+j+'" data-q="'+q.id+'">'+
+          '<span>'+(typeof o==='string'?o:(o.label||o.value||o))+'</span></label>';
+      });
+    }else if(q.type==='multi'){
+      var opts = q.options||[];
+      opts.forEach(function(o,j){
+        html += '<label style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--gray-50);cursor:pointer">'+
+          '<input type="checkbox" name="q_'+q.id+'" value="'+j+'" data-q="'+q.id+'">'+
+          '<span>'+(typeof o==='string'?o:(o.label||o.value||o))+'</span></label>';
+      });
+    }else{
+      html += '<textarea class="form-input" data-q="'+q.id+'" placeholder="请输入答案" style="min-height:60px"></textarea>';
+    }
+    html += '</div>';
+  });
+  html += '</div><div class="btn-fixed-bottom">'+
+    '<button class="btn btn-success btn-block" onclick="submitExam('+subId+')"><i class="fas fa-paper-plane"></i> 交卷</button></div>';
+  var cont = document.getElementById('page-profile');
+  cont.innerHTML = html;
+  window._examSubId = subId;
+
+  // auto-save
+  document.querySelectorAll('[data-q]').forEach(function(el){
+    el.addEventListener('change', function(){saveAnswer(el);});
+    if(el.tagName==='TEXTAREA') el.addEventListener('blur', function(){saveAnswer(el);});
+  });
+}
+
+var _answerTimers = {};
+function saveAnswer(el){
+  var qid = el.dataset.q;
+  var val;
+  if(el.type==='radio'&&el.checked) val = el.value;
+  else if(el.type==='checkbox') return; // handle via submit
+  else if(el.tagName==='TEXTAREA') val = el.value;
+  else return;
+  if(!window._examSubId) return;
+  clearTimeout(_answerTimers[qid]);
+  _answerTimers[qid] = setTimeout(function(){
+    api('/exam/'+window._examSubId+'/save_answer',{method:'POST',body:{question_id:parseInt(qid),answer:val}});
+  },500);
+}
+
+function submitExam(subId){
+  if(!confirm('确认交卷？提交后无法修改')) return;
+  api('/exam/submit',{method:'POST',body:{submission_id:subId}}).then(function(d){
+    if(d&&d.success!==false){
+      showToast('✅ 交卷成功');
+      renderProfile();
+    }else showToast('❌ '+(d&&d.error||'交卷失败'));
+  });
+}
+
+function loadExamHistory(){
+  api('/exam/history').then(function(d){
+    if(!d||!d.submissions||!d.submissions.length){showToast('暂无考试记录');return}
+    var html = '<div style="padding:12px">';
+    d.submissions.forEach(function(s){
+      html += '<div class="detail-card">'+
+        '<h3>📝 '+(s.exam_name||'考试#')+'</h3>'+
+        '<div class="row"><span class="label">得分</span><span class="value">'+(s.score!==null?s.score+'分':'待批阅')+'</span></div>'+
+        '<div class="row"><span class="label">时间</span><span class="value">'+formatTime(s.created_at)+'</span></div></div>';
+    });
+    html += '</div>';
+    var cont = document.getElementById('page-profile');
+    cont.innerHTML = html;
+  });
+}
+
+// ===== Signature =====
+function initSigCanvas(){
+  sigCanvas = document.getElementById('sigCanvas');
+  if(!sigCanvas) return;
+  sigCanvas.addEventListener('touchstart', sigStart);
+  sigCanvas.addEventListener('touchmove', sigMove);
+  sigCanvas.addEventListener('touchend', sigEnd);
+  sigCanvas.addEventListener('mousedown', sigStart);
+  sigCanvas.addEventListener('mousemove', sigMove);
+  sigCanvas.addEventListener('mouseup', sigEnd);
+  sigCanvas.addEventListener('mouseleave', sigEnd);
+  resetSigCanvas();
+}
+
+function resetSigCanvas(){
+  if(!sigCanvas) return;
+  sigCanvas.width = sigCanvas.offsetWidth||340;
+  sigCanvas.height = 100;
+  sigCtx = sigCanvas.getContext('2d');
+  sigCtx.fillStyle = '#fafafa';
+  sigCtx.fillRect(0,0,sigCanvas.width,sigCanvas.height);
+  sigCtx.strokeStyle = '#1e293b';
+  sigCtx.lineWidth = 2;
+  sigCtx.lineCap = 'round';
+}
+
+function sigStart(e){
+  e.preventDefault();
+  var r = sigCanvas.getBoundingClientRect();
+  var x = (e.touches?e.touches[0].clientX:e.clientX)-r.left;
+  var y = (e.touches?e.touches[0].clientY:e.clientY)-r.top;
+  sigCtx.beginPath();
+  sigCtx.moveTo(x,y);
+  sigDrawing = true;
+}
+
+function sigMove(e){
+  e.preventDefault();
+  if(!sigDrawing) return;
+  var r = sigCanvas.getBoundingClientRect();
+  var x = (e.touches?e.touches[0].clientX:e.clientX)-r.left;
+  var y = (e.touches?e.touches[0].clientY:e.clientY)-r.top;
+  sigCtx.lineTo(x,y);
+  sigCtx.stroke();
+}
+
+function sigEnd(e){sigDrawing = false}
+
+function openSig(callback){
+  sigCallback = callback;
+  document.getElementById('sigOverlay').classList.add('show');
+  setTimeout(resetSigCanvas,100);
+}
+
+function closeSig(){
+  document.getElementById('sigOverlay').classList.remove('show');
+  sigCallback = null;
+}
+
+function clearSig(){resetSigCanvas()}
+
+function confirmSig(){
+  var dataUrl = sigCanvas.toDataURL('image/png');
+  if(sigCallback) sigCallback(dataUrl);
+  closeSig();
+}
+
+// ===== Utility =====
+function escapeHtml(s){
+  if(!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatTime(t){
+  if(!t) return '';
+  try{
+    var d = new Date(t);
+    if(isNaN(d.getTime())) return t;
+    return (d.getMonth()+1)+'/'+d.getDate()+' '+pad(d.getHours())+':'+pad(d.getMinutes());
+  }catch(e){return t}
+}
+function pad(n){return n<10?'0'+n:n}
+
+// Override page switches for inventory
+var origSwitchTab = switchTab;
+switchTab = function(tab){
+  origSwitchTab(tab);
+  if(tab==='inventory') renderInventory();
+};
+</script>
+</body>
+</html>

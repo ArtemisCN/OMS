@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.batch-step { display:flex;align-items:center;gap:8px;margin-bottom:16px; }
+.batch-step .step-num { width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff; }
+.batch-step .step-bar { flex:1;height:2px;background:#e2e8f0;border-radius:1px; }
+.batch-section { background:#fff;border-radius:10px;border:1px solid #e5e7eb;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,0.03); }
+[data-theme="dark"] .batch-section { background:#1a1d27;border-color:#2a2e3a; }
+.batch-section-title { font-size:13px;font-weight:700;color:#1e293b;margin-bottom:10px;display:flex;align-items:center;gap:6px; }
+[data-theme="dark"] .batch-section-title { color:#e2e8f0; }
+.person-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:4px; }
+.person-item { display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:6px;border:1px solid #f1f5f9;font-size:12px;transition:all 0.1s; }
+.person-item:hover { background:#f8fafc;border-color:#e2e8f0; }
+.person-item .form-check-input { margin:0; }
+.person-item .form-check-label { font-size:12px; }
+.person-item .weight-input { width:36px;height:20px;font-size:10px;padding:0 2px;text-align:center;border:1px solid #e2e8f0;border-radius:4px; }
+.team-chip { display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #e2e8f0;transition:all 0.15s;user-select:none; }
+.team-chip:hover { border-color:#6366f1;background:rgba(99,102,241,0.04); }
+.team-chip.active { background:#6366f1;color:#fff;border-color:#6366f1; }
+.ftg-group-wrap { background:#f8f9fc;border-radius:8px;padding:10px 12px;margin-bottom:8px;border:1px solid #eef1f5; }
+[data-theme="dark"] .ftg-group-wrap { background:#0f1117;border-color:#2a2e3a; }
+.ftg-group-title { font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;display:flex;align-items:center;gap:6px; }
+.ftg-item { display:flex;align-items:center;gap:8px;padding:3px 0; }
+.ftg-item label { font-size:12px;color:#1e293b;flex:1; }
+.ftg-item input[type=number] { width:60px;font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid #e2e8f0;text-align:center; }
+.no-groups-hint { font-size:12px;color:#94a3b8;padding:10px;text-align:center; }
+.verify-row { display:flex;gap:8px;align-items:center;flex-wrap:wrap; }
+.verify-row input { font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid #e2e8f0; }
+.verify-hint { font-size:11px;color:#94a3b8; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h5 class="mb-0 fw-bold" style="font-size:16px;"><i class="fas fa-wand-magic-sparkles text-primary"></i> 批量生成工单</h5>
+    <a href="{{ url_for('orders.list_orders') }}" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left"></i> 返回</a>
+</div>
+
+{% if preview_orders %}
+<!-- ===== 第二步：预览 ===== -->
+<div class="batch-step">
+    <div class="step-num" style="background:#6366f1;">2</div><span style="font-size:13px;font-weight:600;">确认保存</span>
+    <div class="step-bar"></div>
+</div>
+
+<div class="alert alert-info py-2" style="font-size:13px;">
+    <i class="fas fa-eye"></i> 已生成 <strong>{{ preview_total }}</strong> 条工单，确认无误后保存到 {{ year }}年{{ month }}月
+</div>
+
+<div class="batch-section">
+    <div class="batch-section-title"><i class="fas fa-list"></i> 生成预览（共 {{ preview_total }} 条）</div>
+    <div class="table-responsive" style="max-height:400px;">
+        <table class="table table-hover table-sm mb-0" style="font-size:12px;">
+            <thead class="table-light sticky-top">
+                <tr><th>日期</th><th>工单名称</th><th>故障</th><th>地址</th><th>人员</th><th>时间</th></tr>
+            </thead>
+            <tbody>
+                {% for d in sorted_dates %}{% for o in by_date[d] %}
+                <tr>
+                    <td><small>{{ d[5:] }}</small></td>
+                    <td>{{ o.title }}</td>
+                    <td><span class="badge bg-{{ 'info' if o.fault_type=='软件' else 'warning' if o.fault_type=='硬件' else 'secondary' }}" style="font-size:10px;">{{ o.fault_type }}</span></td>
+                    <td><small>{{ o.building }} {{ o.location[:12] }}{{ '…' if o.location|length > 12 }}</small></td>
+                    <td>{{ o.person }}</td>
+                    <td><small>{{ o.start_time[11:16] if o.start_time }}-{{ o.end_time[11:16] if o.end_time }}</small></td>
+                </tr>
+                {% endfor %}{% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<form method="post">
+    <input type="hidden" name="action" value="confirm">
+    <textarea name="preview_json" class="d-none">{{ preview_json|safe }}</textarea>
+    <div class="d-flex gap-2 justify-content-center">
+        <button type="submit" class="btn btn-success px-4" onclick="return confirm('确认将 {{ preview_total }} 条工单保存到当月工单？')">
+            <i class="fas fa-save"></i> 确认保存
+        </button>
+        <a href="{{ url_for('orders.batch_create') }}" class="btn btn-outline-secondary px-4"><i class="fas fa-times"></i> 重新设置</a>
+    </div>
+</form>
+
+{% else %}
+<!-- ===== 反悔撤回 ===== -->
+{% if can_undo %}
+<div class="alert alert-success py-2 d-flex justify-content-between align-items-center" style="font-size:13px;">
+    <span><i class="fas fa-undo-alt"></i> 最近生成了 <strong>{{ undo_count }}</strong> 条工单（5分钟内可撤回）</span>
+    <form method="post" action="{{ url_for('orders.batch_undo') }}"
+          onsubmit="return confirm('确认撤销最近生成的 {{ undo_count }} 条工单？')" style="display:inline">
+        <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-undo"></i> 撤回</button>
+    </form>
+</div>
+{% endif %}
+
+<!-- ===== 第一步：设置参数 ===== -->
+<div class="batch-step">
+    <div class="step-num" style="background:#6366f1;">1</div><span style="font-size:13px;font-weight:600;">设置参数</span>
+    <div class="step-bar"></div>
+</div>
+
+<form method="post">
+    <input type="hidden" name="action" value="preview">
+
+    <div class="row g-3">
+        <div class="col-md-6">
+            <!-- 故障模板组（按选中组动态显示） -->
+            <div class="batch-section">
+                <div class="batch-section-title"><i class="fas fa-cubes text-primary"></i> 故障类型与数量</div>
+                <div id="ftgContainer">
+                    {% for group in fault_groups %}
+                    <div class="ftg-group-wrap" data-teams="{{ group.teams }}">
+                        <div class="ftg-group-title"><i class="fas fa-layer-group" style="color:#6366f1;"></i> {{ group.name }} <span class="text-muted" style="font-weight:400;font-size:11px;">{% if group.teams %}({{ group.teams }}){% else %}全组通用{% endif %}</span></div>
+                        {% for item in fault_group_items.get(group.id, []) %}
+                        <div class="ftg-item">
+                            <span class="badge bg-{{ 'info' if item.fault_type=='软件' else 'warning' if item.fault_type=='硬件' else 'secondary' }}" style="font-size:10px;">{{ item.fault_type }}</span>
+                            <label>{{ item.display_name }}</label>
+                            <input type="number" name="fault_count_{{ item.id }}" class="fault-count" value="{{ item.default_count }}" min="0" max="999">
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="no-groups-hint"><i class="fas fa-info-circle"></i> 暂无可用的故障模板组，请先在<a href="{{ url_for('data.list_fault_template_groups') }}">数据管理→故障模板组</a>中配置</div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="batch-section">
+                <div class="batch-section-title"><i class="fas fa-pen text-info"></i> 自定义内容 <span class="badge bg-secondary" style="font-size:10px;">选填</span></div>
+                <div class="mb-2">
+                    <label style="font-size:12px;font-weight:600;color:#475569;">工单名称 <small class="text-muted" style="font-weight:400;">（留空随机生成）</small></label>
+                    <input type="text" name="custom_title" class="form-control form-control-sm" placeholder="如：日常科室运维-">
+                </div>
+                <div>
+                    <label style="font-size:12px;font-weight:600;color:#475569;">结单方案 <small class="text-muted" style="font-weight:400;">（留空随机生成）</small></label>
+                    <div class="d-flex gap-1">
+                        <select id="batchSolutionSelect" class="form-select form-select-sm" style="max-width:160px;font-size:11px;" onchange="document.getElementsByName('custom_solution')[0].value=this.value">
+                            <option value="">— 选方案模板 —</option>
+                            {% for t in templates %}
+                            <option value="{{ t.content }}">{{ t.title }}</option>
+                            {% endfor %}
+                        </select>
+                        <input type="text" name="custom_solution" class="form-control form-control-sm" placeholder="或手动输入方案" style="flex:1;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="batch-section">
+                <div class="batch-section-title"><i class="fas fa-clock text-warning"></i> 时间与日期</div>
+                <div class="row g-2">
+                    <div class="col-4"><label style="font-size:12px;font-weight:600;color:#475569;">年份</label><input type="number" name="year" class="form-control form-control-sm" value="{{ now.year }}"></div>
+                    <div class="col-4"><label style="font-size:12px;font-weight:600;color:#475569;">月份</label><input type="number" name="month" class="form-control form-control-sm" value="{{ now.month }}"></div>
+                </div>
+                <div class="row g-2 mt-1">
+                    <div class="col-4"><label style="font-size:12px;font-weight:600;color:#475569;">每日最小</label><input type="number" name="min_per_day" class="form-control form-control-sm" value="20" min="1"></div>
+                    <div class="col-4"><label style="font-size:12px;font-weight:600;color:#475569;">每日最大</label><input type="number" name="max_per_day" class="form-control form-control-sm" value="45"></div>
+                </div>
+                <div class="mt-2" style="font-size:12px;">
+                    <label class="form-check mb-1"><input type="checkbox" name="everyday" class="form-check-input" id="chkEveryday"><label class="form-check-label" for="chkEveryday">每天覆盖整个月</label></label>
+                    <label class="form-check mb-1"><input type="checkbox" name="use_schedule" class="form-check-input" id="chkSchedule"><label class="form-check-label" for="chkSchedule">按排班分配人员</label></label>
+                    <div><label style="font-size:12px;font-weight:600;color:#475569;">指定日期 <small class="text-muted" style="font-weight:400;">（如 1,3,5-10）</small></label>
+                    <input type="text" name="specific_dates" class="form-control form-control-sm" placeholder="留空=全月"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 人员名单 -->
+    <div class="batch-section">
+        <div class="batch-section-title">
+            <i class="fas fa-users text-success"></i> 人员名单
+            <a href="{{ url_for('data.list_persons') }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 ms-auto" style="font-size:11px;"><i class="fas fa-cog"></i> 管理</a>
+        </div>
+        <div class="d-flex flex-wrap gap-1 mb-2">
+            <span class="team-chip active" data-team="all" onclick="showTeam('all')">📋 全部</span>
+            {% for t in teams %}
+            <span class="team-chip" data-team="{{ t|e }}" onclick="showTeam('{{ t|e }}')">{{ t }}</span>
+            {% endfor %}
+        </div>
+        <div id="teamGroup_all" class="team-group" data-team="all">
+            <div class="person-grid">
+                {% for p in persons %}
+                <label class="person-item">
+                    <input type="checkbox" name="selected_names" class="form-check-input" value="{{ p.name }}" checked>
+                    <span class="form-check-label" style="flex:1;">{{ p.name }}</span>
+                    <input type="number" name="weight_{{ p.name }}" class="weight-input" value="1" min="1" max="10" title="权重">
+                </label>
+                {% else %}
+                <div class="text-muted" style="font-size:12px;">暂无人员</div>
+                {% endfor %}
+            </div>
+        </div>
+        {% for t in teams %}
+        <div id="teamGroup_{{ loop.index }}" class="team-group" data-team="{{ t|e }}" style="display:none;">
+            <div class="person-grid">
+                {% for p in team_groups[t] %}
+                <label class="person-item">
+                    <input type="checkbox" name="selected_names" class="form-check-input" value="{{ p.name }}" checked>
+                    <span class="form-check-label" style="flex:1;">{{ p.name }}</span>
+                    <input type="number" name="weight_{{ p.name }}" class="weight-input" value="1" min="1" max="10" title="权重">
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+        <div class="d-flex gap-3 mt-2" style="font-size:12px;">
+            <a href="#" id="selectAllPersons" class="text-primary">✅ 全选全部</a>
+            <a href="#" id="deselectAllPersons" class="text-secondary">⬜ 取消全部</a>
+            <a href="#" id="selectTeamPersons" class="text-info" style="display:none;">✅ 全选本组</a>
+            <a href="#" id="deselectTeamPersons" class="text-secondary" style="display:none;">⬜ 取消本组</a>
+            <span class="text-muted">工作日4人轮值，休息日1人值班</span>
+        </div>
+    </div>
+
+    <!-- 安全验证 + 提交 -->
+    <div class="batch-section">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <span style="font-size:12px;font-weight:600;color:#475569;"><i class="fas fa-shield-alt text-danger"></i> 验证身份</span>
+            <input type="text" name="verify_username" class="form-control form-control-sm" placeholder="登录账号" required style="width:140px;">
+            <input type="password" name="verify_password" class="form-control form-control-sm" placeholder="密码" required style="width:140px;">
+            <span class="verify-hint">需验证后方可生成</span>
+            <button type="submit" class="btn btn-primary btn-sm ms-auto"><i class="fas fa-wand-magic-sparkles"></i> 生成预览</button>
+            <a href="{{ url_for('orders.list_orders') }}" class="btn btn-outline-secondary btn-sm">取消</a>
+        </div>
+    </div>
+</form>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+var defaultTeam = '{{ default_team|e }}';
+var currentTeam = 'all';
+
+function showTeam(team) {
+    currentTeam = team;
+    document.querySelectorAll('.team-group').forEach(function(el) { el.style.display = 'none'; });
+    document.querySelectorAll('.team-chip').forEach(function(el) { el.classList.remove('active'); });
+    var target = document.querySelector('.team-group[data-team="' + team.replace(/['"]/g, '') + '"]');
+    if (target) target.style.display = '';
+    document.querySelectorAll('.team-chip').forEach(function(el) {
+        var txt = el.getAttribute('data-team') || el.textContent.trim();
+        if (txt === team || (team === 'all' && txt === 'all')) el.classList.add('active');
+    });
+    var selTeam = document.getElementById('selectTeamPersons');
+    var deselTeam = document.getElementById('deselectTeamPersons');
+    if (selTeam && deselTeam) {
+        selTeam.style.display = team === 'all' ? 'none' : 'inline';
+        deselTeam.style.display = team === 'all' ? 'none' : 'inline';
+    }
+    // 根据选中的组过滤故障模板组
+    filterFaultGroups(team);
+}
+
+function filterFaultGroups(team) {
+    document.querySelectorAll('.ftg-group-wrap').forEach(function(el) {
+        var teams = el.getAttribute('data-teams') || '';
+        if (team === 'all' || !teams) {
+            el.style.display = '';
+        } else {
+            var teamList = teams.split(',');
+            el.style.display = teamList.indexOf(team) >= 0 ? '' : 'none';
+        }
+    });
+}
+
+document.getElementById('selectTeamPersons')?.addEventListener('click', function(e) {
+    e.preventDefault();
+    var cbs = document.querySelector('.team-group[data-team="' + currentTeam.replace(/['"]/g, '') + '"]');
+    if (cbs) cbs.querySelectorAll('input[name="selected_names"]').forEach(function(cb) { cb.checked = true; });
+});
+document.getElementById('deselectTeamPersons')?.addEventListener('click', function(e) {
+    e.preventDefault();
+    var cbs = document.querySelector('.team-group[data-team="' + currentTeam.replace(/['"]/g, '') + '"]');
+    if (cbs) cbs.querySelectorAll('input[name="selected_names"]').forEach(function(cb) { cb.checked = false; });
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (defaultTeam) showTeam(defaultTeam);
+});
+document.getElementById('selectAllPersons')?.addEventListener('click', function(e) {
+    e.preventDefault();
+    document.querySelectorAll('input[name="selected_names"]').forEach(function(cb) { cb.checked = true; });
+});
+document.getElementById('deselectAllPersons')?.addEventListener('click', function(e) {
+    e.preventDefault();
+    document.querySelectorAll('input[name="selected_names"]').forEach(function(cb) { cb.checked = false; });
+});
+</script>
+{% endblock %}

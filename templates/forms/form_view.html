@@ -1,0 +1,716 @@
+{% extends "base.html" %}
+{% block title %}{{ form.name }} - 电子表单{% endblock %}
+{% block content %}
+<style>
+/* ===== Print protection ===== */
+@media print {
+  body { background: #fff !important; }
+  body * { display: none !important; }
+  body::after {
+    display: block !important;
+    content: '请点击页面上的「打印/导出PDF」按钮进行打印' !important;
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 20px; color: #666;
+    text-align: center;
+    white-space: nowrap;
+  }
+}
+
+/* ===== A4 Paper ===== */
+.a4-form-wrap { display:flex; justify-content:center; padding:10px 0; }
+.a4-form {
+    width:794px; min-height:1123px; background:#fff; position:relative;
+    box-shadow:0 2px 12px rgba(0,0,0,.15); border-radius:2px;
+}
+.a4-form h3 {
+    text-align:center; font-weight:700; font-size:18px;
+    padding:12px 0 8px; margin:0; letter-spacing:2px;
+    position:absolute; top:0; left:0; right:0; z-index:1;
+    pointer-events:none;
+}
+.form-no { position:absolute; top:8px; right:20px; font-size:12px; color:#666; }
+.form-no input { width:120px; border:none; border-bottom:1px solid #999; text-align:right; font-size:12px; }
+
+/* ===== Absolute-positioned field ===== */
+.a4-field {
+    position:absolute; box-sizing:border-box; padding:4px 6px;
+    border:1px solid #e5e7eb; border-radius:2px; background:#fff;
+}
+.a4-field .fld-label {
+    font-size:11px; font-weight:600; color:#374151; margin-bottom:2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.a4-field input, .a4-field select, .a4-field textarea {
+    width:100%; border:1px solid #d1d5db; border-radius:3px; padding:3px 6px;
+    font-size:12px; box-sizing:border-box;
+}
+.a4-field input:focus, .a4-field select:focus, .a4-field textarea:focus {
+    border-color:var(--primary); outline:none; box-shadow:0 0 0 2px rgba(79,70,229,.1);
+}
+.a4-field textarea { resize:none; }
+.a4-field .checkbox-group, .a4-field .radio-group {
+    display:flex; flex-wrap:wrap; gap:4px 8px; padding:2px 0;
+}
+.a4-field .checkbox-group label, .a4-field .radio-group label {
+    font-size:12px; display:inline-flex; align-items:center; gap:2px; cursor:pointer;
+}
+.a4-field .checkbox-group input, .a4-field .radio-group input { width:auto; }
+.a4-field.type-signature {
+    min-height: 32px;
+    overflow: visible;
+    z-index: 5;
+    background: transparent;
+    border-color: #c7d2fe;
+    cursor: pointer;
+    transition: all .2s;
+}
+.a4-field.type-signature:hover {
+    border-color: #4f46e5;
+    background: #f5f3ff;
+}
+.a4-field.type-signature .sig-qrcode {
+    min-width: 0;
+}
+.a4-field.type-signature .sig-qrcode img {
+    border-radius: 4px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    flex-shrink: 0;
+}
+.a4-field.type-signature .sig-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #4f46e5;
+    background: #eef2ff;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all .2s;
+    border: none;
+    position: relative;
+}
+.a4-field.type-signature .sig-btn:hover {
+    background: #dbeafe;
+}
+.a4-field.type-signature .sig-btn i {
+    font-size: 14px;
+}
+/* 二级弹窗：hover 时在按钮上方弹出二维码 */
+.a4-field.type-signature .sig-btn .sig-tooltip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.12);
+    z-index: 100;
+    white-space: nowrap;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+.a4-field.type-signature .sig-btn .sig-tooltip img {
+    width: 120px;
+    height: 120px;
+    border-radius: 4px;
+    display: block;
+}
+.a4-field.type-signature .sig-btn .sig-tooltip .tip-label {
+    font-size: 10px;
+    color: #64748b;
+    white-space: nowrap;
+}
+.a4-field.type-signature .sig-btn .sig-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #fff;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,.08));
+}
+.a4-field.type-signature .sig-btn:hover .sig-tooltip {
+    display: flex;
+}
+.a4-field.type-signature .sig-btn .sig-tooltip:hover {
+    display: flex;
+}
+.a4-field.type-divider { border:none; padding:0; }
+
+/* ===== Searchable Select ===== */
+.searchable-select { position:relative; }
+.searchable-select .ss-input {
+    width:100%; border:1px solid #d1d5db; border-radius:3px;
+    padding:3px 6px; font-size:12px; box-sizing:border-box; cursor:pointer;
+    background:#fff;
+}
+.searchable-select .ss-input:focus { border-color:var(--primary); outline:none; box-shadow:0 0 0 2px rgba(79,70,229,.1); }
+.searchable-select .ss-dropdown {
+    position:absolute; top:100%; left:0; right:0; z-index:1000;
+    background:#fff; border:1px solid #d1d5db; border-radius:3px;
+    max-height:180px; overflow-y:auto; display:none; box-shadow:0 4px 12px rgba(0,0,0,.12);
+}
+.searchable-select .ss-dropdown .ss-item {
+    padding:4px 8px; font-size:12px; cursor:pointer; color:#333;
+    border-bottom:1px solid #f1f5f9;
+}
+.searchable-select .ss-dropdown .ss-item:hover { background:#eef2ff; color:var(--primary); }
+.searchable-select .ss-dropdown .ss-item.selected { background:#eef2ff; font-weight:600; color:var(--primary); }
+.searchable-select .ss-dropdown .ss-empty { padding:8px; font-size:12px; color:#9ca3af; text-align:center; }
+.searchable-select.ss-open .ss-dropdown { display:block; }
+.searchable-select.ss-open .ss-input { border-bottom-left-radius:0; border-bottom-right-radius:0; }
+
+/* ===== Required star ===== */
+.required-star { color:#dc2626; margin-left:2px; }
+
+/* ===== Save indicator ===== */
+.save-indicator {
+    display:inline-flex; align-items:center; gap:6px;
+    font-size:12px; padding:4px 12px; border-radius:20px; transition:all .3s;
+}
+.save-indicator.saved { background:#d1fae5; color:#065f46; }
+.save-indicator.saving { background:#fef3c7; color:#92400e; }
+.save-indicator.error { background:#fef2f2; color:#991b1b; }
+</style>
+
+<div class="container-fluid px-4 py-3 no-print">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">
+            <i class="fas fa-file-alt me-2"></i>{{ form.name }}
+            {% if form.status == 'draft' %}
+            <span class="status-badge status-draft" style="font-size:12px;padding:3px 10px;border-radius:20px;font-weight:500;background:#fef3c7;color:#92400e;margin-left:8px">📄 草稿</span>
+            {% elif form.status == 'submitted' %}
+            <span class="status-badge" style="font-size:12px;padding:3px 10px;border-radius:20px;font-weight:500;background:#fef3c7;color:#92400e;margin-left:8px">⏳ 待审批</span>
+            {% elif form.status == 'active' %}
+            <span class="status-badge status-active" style="font-size:12px;padding:3px 10px;border-radius:20px;font-weight:500;background:#dbeafe;color:#1e40af;margin-left:8px">🔄 进行中</span>
+            {% elif form.status == 'completed' %}
+            <span class="status-badge status-completed" style="font-size:12px;padding:3px 10px;border-radius:20px;font-weight:500;background:#d1fae5;color:#065f46;margin-left:8px">✅ 已完成</span>
+            {% endif %}
+            {% if form.work_order_id %}
+            <a href="{{ url_for('orders.detail', order_id=form.work_order_id) }}" class="btn btn-sm btn-outline-info ms-2">
+                <i class="fas fa-external-link-alt"></i> 工单 #{{ form.work_order_id }}
+            </a>
+            {% endif %}
+        </h4>
+        <div>
+            <span class="save-indicator me-2" id="saveIndicator2">💾 已保存</span>
+            {% if form.status == 'draft' %}
+            <button class="btn btn-sm btn-primary me-1" onclick="saveAllFields()"><i class="fas fa-save me-1"></i>保存全部</button>
+            {% endif %}
+            <a href="{{ url_for('forms.form_list') }}" class="btn btn-sm btn-outline-secondary me-1">
+                <i class="fas fa-arrow-left"></i> 返回列表
+            </a>
+            {% if form.status == 'draft' %}
+            <form method="POST" action="{{ url_for('forms.form_publish', fid=form.id) }}" style="display:inline" onsubmit="return confirm('确认发布？将生成关联工单供手机端操作')">
+                <button type="submit" class="btn btn-sm btn-success me-1"><i class="fas fa-paper-plane"></i> 发布</button>
+            </form>
+            {% elif form.status == 'submitted' %}
+            <form method="POST" action="{{ url_for('forms.form_approve', fid=form.id) }}" style="display:inline" onsubmit="return confirm('确认审批通过？工单将自动完结')">
+                <button type="submit" class="btn btn-sm btn-success me-1"><i class="fas fa-check-circle"></i> 审批通过</button>
+            </form>
+            {% endif %}
+            <a href="{{ url_for('forms.form_print', fid=form.id) }}" class="btn btn-sm btn-success" target="_blank">
+                <i class="fas fa-print"></i> 打印
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- ===== A4 Form (Absolute Positioning) ===== -->
+{% set d = form.form_data or {} %}
+{% set fields = template.fields_json or [] %}
+<div class="a4-form-wrap">
+<div class="a4-form" id="dynamicForm">
+    <div class="form-no no-print">
+        编号：<input type="text" id="field_form_no" value="{{ d.get('form_no', '') }}" placeholder="自动生成" data-field-id="form_no">
+    </div>
+    <h3>{{ template.name }}</h3>
+
+    {% for field in fields %}
+    {% set fid = field.id %}
+    {% set ftype = field.type or 'text' %}
+    {% set flabel = field.label or fid %}
+    {% set frequired = field.required or false %}
+    {% set fplaceholder = field.placeholder or '' %}
+    {% set foptions = field.options or [] %}
+    {% set fdata_source = field.get('dataSource', field.get('data_source', '')) %}
+    {% set fvalue = d.get(fid, '') %}
+    {% set is_signature = (ftype == 'signature') %}
+    {% set fw = field.w or 40 %}
+    {% set fh = field.h or 5 %}
+    {% set fx = field.x or 0 %}
+    {% set fy = field.y or 0 %}
+    {% set fs = field.fontSize or None %}
+    {% set ta = field.textAlign or '' %}
+
+    <div class="a4-field type-{{ ftype }}" style="left:{{ fx }}%; top:{{ fy }}%; width:{{ fw }}%;{% if is_signature %}min-height:{{ fh }}%;{% else %}height:{{ fh }}%;{% endif %}{% if fs %}font-size:{{ fs }}pt;{% endif %}{% if ta %}text-align:{{ ta }};{% endif %}">
+
+        {# ===== Title ===== #}
+        {% if ftype == 'title' %}
+            <div style="font-size:{{ fs or 18 }}pt;font-weight:700;text-align:{{ ta or 'center' }};padding:2px;">{{ flabel }}</div>
+
+        {# ===== Divider ===== #}
+        {% elif ftype == 'divider' %}
+            <div style="background:#1d2939;height:100%;border-radius:1px;"></div>
+
+        {# ===== Richtext ===== #}
+        {% elif ftype == 'richtext' %}
+            <div style="font-size:{{ fs or 11 }}pt;{% if ta %}text-align:{{ ta }};{% endif %}padding:2px;line-height:1.5;">{{ flabel | safe }}</div>
+
+        {# ===== Signature ===== #}
+        {% elif is_signature %}
+            {% set sig_data = d.get(fid, '') %}
+            {% set sign_token = form.id|string + '-' + fid %}
+            {% set sign_url = url_for('forms.mobile_sign_page', token=sign_token, _external=True) %}
+            {% set qr_size = (fh * 10)|int %}
+            {% if qr_size < 28 %}{% set qr_size = 28 %}{% endif %}
+            {% if qr_size > 60 %}{% set qr_size = 60 %}{% endif %}
+            {% set qr_url = url_for('api_mobile.generate_qr', size=qr_size, data=sign_url, _external=True) %}
+            <div class="fld-label">{{ flabel }}{% if frequired %}<span class="required-star">*</span>{% endif %}</div>
+            {% if sig_data and sig_data.startswith('data:image') %}
+            <div class="sig-signed" data-field-id="{{ fid }}" style="text-align:center;padding:2px;">
+                <img src="{{ sig_data }}" alt="签名" style="max-height:{{ qr_size }}px;">
+                <div style="font-size:10px;color:#16a34a;">✅ 已签名</div>
+            </div>
+            {% else %}
+            <div class="sig-qrcode" data-field-id="{{ fid }}" data-token="{{ sign_token }}" style="display:none;align-items:center;gap:4px;padding:2px;">
+                <img src="{{ qr_url }}" alt="扫码签名" style="width:{{ qr_size }}px;height:{{ qr_size }}px;flex-shrink:0;">
+                <div style="font-size:10px;color:#64748b;line-height:1.2;">
+                    <div>📱 扫码签名</div>
+                    <div class="sig-status" style="color:#94a3b8;">等待签名...</div>
+                </div>
+            </div>
+            <div class="sig-btn" onclick="toggleSigQR(this)" title="点击固定显示二维码">
+                <i class="fas fa-qrcode"></i> 扫码签名
+                <div class="sig-tooltip">
+                    <img src="{{ qr_url }}" alt="二维码">
+                    <span class="tip-label">📱 手机扫码签名</span>
+                </div>
+            </div>
+            {% endif %}
+
+        {# ===== Text / Number / Email / Tel / URL ===== #}
+        {% elif ftype in ('text', 'number', 'email', 'tel', 'url') %}
+            <div class="fld-label">{{ flabel }}{% if frequired %}<span class="required-star">*</span>{% endif %}</div>
+            {% if fdata_source %}
+            <div class="searchable-select" data-field-id="{{ fid }}" data-data-source="{{ fdata_source }}" data-placeholder="{{ fplaceholder or '请选择...' }}">
+                <input type="text" class="ss-input" placeholder="搜索..." autocomplete="off"
+                       data-field-id="{{ fid }}" readonly onfocus="this.removeAttribute('readonly')">
+                <input type="hidden" name="{{ fid }}" id="field_{{ fid }}" value="{{ fvalue }}"
+                       data-field-id="{{ fid }}" {% if frequired %}required{% endif %}>
+                <div class="ss-dropdown"></div>
+            </div>
+            {% else %}
+            <input type="{{ ftype }}" name="{{ fid }}" id="field_{{ fid }}"
+                   value="{{ fvalue }}" placeholder="{{ fplaceholder }}"
+                   {% if frequired %}required{% endif %}
+                   data-field-id="{{ fid }}"
+                   oninput="scheduleSave(this)">
+            {% endif %}
+
+        {# ===== Textarea ===== #}
+        {% elif ftype == 'textarea' %}
+            <div class="fld-label">{{ flabel }}{% if frequired %}<span class="required-star">*</span>{% endif %}</div>
+            <textarea name="{{ fid }}" id="field_{{ fid }}" rows="2"
+                      placeholder="{{ fplaceholder }}"
+                      {% if frequired %}required{% endif %}
+                      data-field-id="{{ fid }}"
+                      oninput="scheduleSave(this)" style="height:calc(100% - 20px)">{{ fvalue }}</textarea>
+
+        {# ===== Date ===== #}
+        {% elif ftype == 'date' %}
+            <div class="fld-label">{{ flabel }}{% if frequired %}<span class="required-star">*</span>{% endif %}</div>
+            <input type="date" name="{{ fid }}" id="field_{{ fid }}"
+                   value="{{ fvalue }}" {% if frequired %}required{% endif %}
+                   data-field-id="{{ fid }}"
+                   onchange="scheduleSave(this)">
+
+        {# ===== Datetime ===== #}
+        {% elif ftype == 'datetime' %}
+            <div class="fld-label">{{ flabel }}{% if frequired %}<span class="required-star">*</span>{% endif %}</div>
+            <input type="datetime-local" name="{{ fid }}" id="field_{{ fid }}"
+                   value="{{ fvalue }}" {% if frequired %}required{% endif %}
+                   data-field-id="{{ fid }}"
+                   onchange="scheduleSave(this)">
+
+        {# ===== Select ===== #}
+        {% elif ftype == 'select' %}
+            <div class="fld-label">{{ flabel }}{% if frequired %}<span class="required-star">*</span>{% endif %}</div>
+            <select name="{{ fid }}" id="field_{{ fid }}"
+                    {% if frequired %}required{% endif %}
+                    data-field-id="{{ fid }}"
+                    onchange="scheduleSave(this)">
+                <option value="">{{ fplaceholder or '请选择...' }}</option>
+                {% for opt in foptions %}
+                <option value="{{ opt }}" {% if fvalue == opt %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+            </select>
+
+        {# ===== Radio ===== #}
+        {% elif ftype == 'radio' %}
+            <div class="fld-label">{{ flabel }}{% if frequired %}<span class="required-star">*</span>{% endif %}</div>
+            <div class="radio-group">
+                {% for opt in foptions %}
+                <label>
+                    <input type="radio" name="{{ fid }}" value="{{ opt }}"
+                           {% if fvalue == opt %}checked{% endif %}
+                           {% if frequired %}required{% endif %}
+                           data-field-id="{{ fid }}"
+                           onchange="scheduleSave(this)">
+                    {{ opt }}
+                </label>
+                {% endfor %}
+            </div>
+
+        {# ===== Checkbox ===== #}
+        {% elif ftype == 'checkbox' %}
+            <div class="fld-label">{{ flabel }}{% if frequired %}<span class="required-star">*</span>{% endif %}</div>
+            <div class="checkbox-group">
+                {% for opt in foptions %}
+                {% set checked = fvalue is string and fvalue == opt %}
+                <label>
+                    <input type="checkbox" name="{{ fid }}" value="{{ opt }}"
+                           {% if checked %}checked{% endif %}
+                           data-field-id="{{ fid }}"
+                           data-multi="false"
+                           onchange="saveCheckbox(this, '{{ fid }}')">
+                    {{ opt }}
+                </label>
+                {% endfor %}
+            </div>
+
+        {# ===== Default (file upload etc.) ===== #}
+        {% else %}
+            <div class="fld-label">{{ flabel }}{% if frequired %}<span class="required-star">*</span>{% endif %}</div>
+            {% if ftype == 'file' %}
+            <div style="font-size:12px;color:#9ca3af;padding:4px;">📎 文件上传 (暂不支持直接上传)</div>
+            {% else %}
+            <input type="text" name="{{ fid }}" id="field_{{ fid }}"
+                   value="{{ fvalue }}" placeholder="{{ fplaceholder }}"
+                   {% if frequired %}required{% endif %}
+                   data-field-id="{{ fid }}"
+                   oninput="scheduleSave(this)">
+            {% endif %}
+        {% endif %}
+
+    </div>
+    {% endfor %}
+
+</div>
+</div>
+
+{% if form.status != 'draft' or form.status == 'completed' %}
+<div class="text-center mt-3 no-print">
+    <a href="{{ url_for('forms.form_print', fid=form.id) }}" class="btn btn-success px-4" target="_blank">
+        <i class="fas fa-print me-1"></i>打印/导出PDF
+    </a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ===== Save debounce =====
+var saveTimer = null;
+var isSaving = false;
+
+function scheduleSave(el) {
+    clearTimeout(saveTimer);
+    showSaving();
+    saveTimer = setTimeout(function() { saveField(el); }, 600);
+}
+function showSaving() {
+    var ind = document.getElementById('saveIndicator2');
+    if (!ind) return;
+    ind.className = 'save-indicator saving';
+    ind.innerHTML = '⏳ 保存中…';
+}
+function showSaved() {
+    var ind = document.getElementById('saveIndicator2');
+    if (!ind) return;
+    ind.className = 'save-indicator saved';
+    ind.innerHTML = '💾 已保存';
+}
+function showError() {
+    var ind = document.getElementById('saveIndicator2');
+    if (!ind) return;
+    ind.className = 'save-indicator error';
+    ind.innerHTML = '❌ 保存失败';
+}
+
+// ===== Save single field =====
+function saveField(el) {
+    if (isSaving) return;
+    var fid = el.getAttribute('data-field-id');
+    if (!fid) return;
+    var value = '';
+    if (el.type === 'checkbox') {
+        value = el.checked ? el.value : '';
+    } else if (el.type === 'radio') {
+        var checked = document.querySelector('input[name="' + el.name + '"]:checked');
+        value = checked ? checked.value : '';
+    } else {
+        value = el.value;
+    }
+    saveFieldValue(fid, value);
+}
+function saveCheckbox(el, fid) {
+    var value = el.checked ? el.value : '';
+    showSaving();
+    saveFieldValue(fid, value);
+}
+function saveFieldValue(fid, value) {
+    isSaving = true; showSaving();
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '{{ url_for("forms.form_save_fields", fid=form.id) }}', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function() { isSaving = false; xhr.status === 200 ? showSaved() : showError(); };
+    xhr.onerror = function() { isSaving = false; showError(); };
+    xhr.send(JSON.stringify({field_values: {[fid]: value}}));
+}
+
+// ===== Save all fields =====
+function saveAllFields() {
+    var values = {};
+    document.querySelectorAll('[data-field-id]').forEach(function(el) {
+        var fid = el.getAttribute('data-field-id');
+        if (!fid || fid === 'form_no') return;
+        var val;
+        if (el.type === 'checkbox') { val = el.checked ? el.value : ''; }
+        else if (el.type === 'radio') {
+            var checked = document.querySelector('input[name="' + el.name + '"]:checked');
+            val = checked ? checked.value : '';
+        } else { val = el.value; }
+        values[fid] = val;
+    });
+    var formNoEl = document.getElementById('field_form_no');
+    if (formNoEl) values['form_no'] = formNoEl.value;
+    isSaving = true; showSaving();
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '{{ url_for("forms.form_save_fields", fid=form.id) }}', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function() {
+        isSaving = false;
+        if (xhr.status === 200) { showSaved(); alert('✅ 全部字段已保存'); }
+        else { showError(); alert('❌ 保存失败，请重试'); }
+    };
+    xhr.onerror = function() { isSaving = false; showError(); alert('❌ 网络错误，请重试'); };
+    xhr.send(JSON.stringify({field_values: values}));
+}
+
+// ===== Self-contained Canvas Signature Pad =====
+var sigPads = {};
+var sigDrawing = {};
+
+function initSignaturePad(canvas, fid) {
+    var wrapper = canvas.closest('.signature-wrapper');
+    if (!wrapper) return;
+    var saved = wrapper.getAttribute('data-saved') === 'true';
+    if (saved) return;
+    var ctx = canvas.getContext('2d');
+    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    var state = { drawing: false, hasContent: false, points: [] };
+    sigDrawing[fid] = state;
+    sigPads[fid] = {
+        isEmpty: function() { return !state.hasContent; },
+        clear: function() { state.hasContent = false; state.points = []; ctx.clearRect(0,0,canvas.width,canvas.height); },
+        toDataURL: function(type) { return canvas.toDataURL(type || 'image/png'); }
+    };
+    function getPos(e) {
+        var rect = canvas.getBoundingClientRect();
+        var scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+        var clientX, clientY;
+        if (e.touches) { clientX = e.touches[0].clientX; clientY = e.touches[0].clientY; e.preventDefault(); }
+        else { clientX = e.clientX; clientY = e.clientY; }
+        return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+    }
+    function startDrawing(e) { e.preventDefault();
+        var p = getPos(e); state.drawing = true; state.hasContent = true;
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); state.points = [p]; }
+    function draw(e) {
+        if (!state.drawing) return; e.preventDefault();
+        var p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); state.points.push(p); }
+    function stopDrawing() { state.drawing = false; }
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseleave', stopDrawing);
+    canvas.addEventListener('touchstart', startDrawing, {passive:false});
+    canvas.addEventListener('touchmove', draw, {passive:false});
+    canvas.addEventListener('touchend', stopDrawing);
+}
+
+function clearSignature(fid) {
+    if (!sigPads[fid]) return;
+    sigPads[fid].clear();
+    var wrapper = document.querySelector('.signature-wrapper[data-field-id="' + fid + '"]');
+    if (wrapper) {
+        wrapper.querySelector('.sig-preview').style.display = 'none';
+        wrapper.setAttribute('data-saved', 'false');
+    }
+}
+function saveSignature(fid) {
+    if (!sigPads[fid] || sigPads[fid].isEmpty()) { alert('请先在签名区签写姓名'); return; }
+    var dataUrl = sigPads[fid].toDataURL();
+    var wrapper = document.querySelector('.signature-wrapper[data-field-id="' + fid + '"]');
+    if (!wrapper) return;
+    showSaving();
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '{{ url_for("forms.form_save_fields", fid=form.id) }}', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function() {
+        if (xhr.status === 200) {
+            showSaved(); wrapper.setAttribute('data-saved', 'true');
+            var preview = wrapper.querySelector('.sig-preview');
+            if (preview) { preview.querySelector('img').src = dataUrl; preview.style.display = 'block'; }
+            var status = wrapper.querySelector('.sig-status');
+            if (status) status.textContent = '✅ 已签名';
+        } else { showError(); alert('保存签名失败'); }
+    };
+    xhr.onerror = function() { showError(); alert('网络错误'); };
+    xhr.send(JSON.stringify({field_id: fid, signature: dataUrl}));
+}
+
+// ===== Searchable Select =====
+// Initialize all searchable selects after data sources are loaded
+(function() {
+    var wrappers = document.querySelectorAll('.searchable-select');
+    if (wrappers.length === 0) return;
+
+    // Build label map from all wrappers (for placeholder text)
+    wrappers.forEach(function(w) {
+        var fid = w.getAttribute('data-field-id');
+        // Find the label
+        var labelEl = w.closest('.a4-field').querySelector('.fld-label');
+        if (labelEl) w._label = labelEl.textContent.replace('*','').trim();
+    });
+
+    fetch('{{ url_for("forms.form_data_sources") }}')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            wrappers.forEach(function(w) {
+                var ds = w.getAttribute('data-data-source');
+                var fid = w.getAttribute('data-field-id');
+                var placeholder = w.getAttribute('data-placeholder') || '请选择...';
+                var sourceData = data[ds];
+                if (!sourceData) return;
+                if (!Array.isArray(sourceData)) {
+                    if (sourceData && sourceData.value !== undefined) sourceData = [sourceData];
+                    else return;
+                }
+
+                var input = w.querySelector('.ss-input');
+                var hidden = w.querySelector('input[type="hidden"]');
+                var dropdown = w.querySelector('.ss-dropdown');
+                var currentVal = hidden.value;
+
+                // Build option items
+                function renderItems(filter) {
+                    var html = '';
+                    var matched = 0;
+                    sourceData.forEach(function(opt) {
+                        var val = opt.value || opt;
+                        var label = opt.label || opt;
+                        if (filter && !label.toLowerCase().includes(filter.toLowerCase())) return;
+                        matched++;
+                        var sel = (val === currentVal) ? ' selected' : '';
+                        html += '<div class="ss-item' + sel + '" data-value="' + val.replace(/"/g,'&quot;') + '">' + label.replace(/</g,'&lt;') + '</div>';
+                    });
+                    if (matched === 0) html += '<div class="ss-empty">无匹配结果</div>';
+                    dropdown.innerHTML = html;
+
+                    // Click handler for items
+                    dropdown.querySelectorAll('.ss-item').forEach(function(item) {
+                        item.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            var val = this.getAttribute('data-value');
+                            var text = this.textContent;
+                            currentVal = val;
+                            input.value = text;
+                            hidden.value = val;
+                            w.classList.remove('ss-open');
+                            input.blur();
+                            // Schedule save
+                            scheduleSave(hidden);
+                        });
+                    });
+                }
+
+                // Set initial display
+                var initOpt = sourceData.find(function(o) { return (o.value || o) === currentVal; });
+                input.value = initOpt ? (initOpt.label || initOpt) : '';
+                if (!input.value && currentVal) input.value = currentVal;
+
+                // Open/close dropdown
+                function openDropdown() { renderItems(''); w.classList.add('ss-open'); }
+                function closeDropdown() { w.classList.remove('ss-open'); }
+
+                input.addEventListener('focus', function() { openDropdown(); });
+                input.addEventListener('blur', function() { setTimeout(closeDropdown, 200); });
+                input.addEventListener('input', function() { renderItems(this.value); if (!w.classList.contains('ss-open')) w.classList.add('ss-open'); });
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') closeDropdown();
+                    if (e.key === 'Enter') { closeDropdown(); this.blur(); }
+                });
+            });
+        }).catch(function() {});
+})();
+
+// ===== Toggle QR Code visibility =====
+function toggleSigQR(btn) {
+    var field = btn.closest('.a4-field');
+    var qrDiv = field ? field.querySelector('.sig-qrcode') : null;
+    if (!qrDiv) return;
+    if (qrDiv.style.display === 'none' || qrDiv.style.display === '') {
+        qrDiv.style.display = 'flex';
+        btn.style.display = 'none';
+    } else {
+        qrDiv.style.display = 'none';
+        btn.style.display = 'inline-flex';
+    }
+}
+
+// ===== QR Code Signature Polling =====
+(function() {
+    var sigFields = document.querySelectorAll('.sig-qrcode');
+    sigFields.forEach(function(el) {
+        var fid = el.getAttribute('data-field-id');
+        var token = el.getAttribute('data-token');
+        var statusEl = el.querySelector('.sig-status');
+        if (!token || !statusEl) return;
+        // Find the corresponding toggle button
+        var field = el.closest('.a4-field');
+        var btn = field ? field.querySelector('.sig-btn') : null;
+        
+        function checkSig() {
+            fetch('{{ url_for("forms.check_signature", token="") }}' + token)
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.signed) {
+                        statusEl.textContent = '✅ 已签名';
+                        statusEl.style.color = '#16a34a';
+                        // Replace QR with signature image
+                        el.innerHTML = '<img src="' + data.signature + '" alt="签名" style="max-height:60px;"><div style="font-size:11px;color:#16a34a;margin-top:2px;">✅ 已签名</div>';
+                        // Auto-show signature on PC
+                        el.style.display = 'flex';
+                        if (btn) { btn.style.display = 'none'; }
+                    } else {
+                        setTimeout(checkSig, 3000);
+                    }
+                })
+                .catch(function() { setTimeout(checkSig, 5000); });
+        }
+        setTimeout(checkSig, 2000);
+    });
+})();
+</script>
+{% endblock %}

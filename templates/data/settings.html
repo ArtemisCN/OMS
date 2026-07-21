@@ -1,0 +1,754 @@
+<!-- 系统参数设置 - 全新交互版 -->
+{% extends "base.html" %}
+{% block extra_head %}
+<style>
+:root {
+  --set-bg: #f8f9fc;
+  --set-card: #ffffff;
+  --set-border: #eef1f5;
+  --set-text: #1e293b;
+  --set-muted: #8896ab;
+  --set-accent: #4f46e5;
+  --set-accent-light: #eef1ff;
+  --set-success: #10b981;
+}
+[data-theme="dark"] {
+  --set-bg: #0f1117;
+  --set-card: #1a1d27;
+  --set-border: #2a2e3a;
+  --set-text: #e2e8f0;
+  --set-muted: #6b7a8f;
+  --set-accent-light: #1e1b4b;
+}
+.settings-page { background:var(--set-bg); min-height:calc(100vh - 60px); padding:24px 28px; }
+.settings-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
+.settings-header h1 { font-size:22px; font-weight:700; color:var(--set-text); display:flex; align-items:center; gap:10px; margin:0; }
+.settings-header h1 i { color:var(--set-accent); font-size:24px; }
+.settings-actions { display:flex; gap:8px; }
+.btn-soft { border:1px solid var(--set-border); background:var(--set-card); color:var(--set-text); border-radius:8px; padding:8px 16px; font-size:14px; font-weight:500; transition:all .2s; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+.btn-soft:hover { border-color:var(--set-accent); color:var(--set-accent); background:var(--set-accent-light); }
+
+.cat-tabs { display:flex; gap:6px; margin-bottom:28px; flex-wrap:wrap; }
+.cat-tab { padding:10px 20px; border-radius:22px; font-size:14px; font-weight:500; cursor:pointer;
+  border:1px solid var(--set-border); background:var(--set-card); color:var(--set-muted);
+  transition:all .3s cubic-bezier(.4,0,.2,1); display:flex; align-items:center; gap:6px; user-select:none; }
+.cat-tab:hover { border-color:var(--set-accent); color:var(--set-accent); background:var(--set-accent-light); }
+.cat-tab.active { background:var(--set-accent); border-color:var(--set-accent); color:#fff; }
+.cat-tab .badge-count { background:var(--set-border); color:var(--set-muted); font-size:12px; padding:2px 10px; border-radius:12px; }
+.cat-tab.active .badge-count { background:rgba(255,255,255,.2); color:rgba(255,255,255,.85); }
+
+.cat-panel { display:none; animation: fadeSlide .35s ease; }
+.cat-panel.active { display:block; }
+@keyframes fadeSlide { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+.param-row { display:flex; align-items:center; padding:18px 22px; background:var(--set-card);
+  border-radius:12px; margin-bottom:8px; border:1px solid var(--set-border);
+  transition:all .2s; gap:16px; }
+.param-row:hover { border-color:var(--set-accent); box-shadow:0 2px 16px rgba(79,70,229,.08); }
+.param-icon { width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+  font-size:18px; flex-shrink:0; background:var(--set-accent-light); color:var(--set-accent); }
+.param-info { flex:1; min-width:0; }
+.param-label { font-size:15px; font-weight:600; color:var(--set-text); margin-bottom:2px; }
+.param-desc { font-size:13px; color:var(--set-muted); line-height:1.5; }
+.param-control { flex-shrink:0; min-width:160px; display:flex; align-items:center; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
+
+.set-select { padding:8px 32px 8px 14px; border-radius:8px; border:1px solid var(--set-border);
+  background:var(--set-card); color:var(--set-text); font-size:14px; appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238896ab' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 10px center; cursor:pointer;
+  min-width:150px; transition:border-color .2s; }
+.set-select:focus { border-color:var(--set-accent); outline:none; box-shadow:0 0 0 3px rgba(79,70,229,.12); }
+
+.set-stepper { display:flex; align-items:center; gap:0; border:1px solid var(--set-border);
+  border-radius:8px; overflow:hidden; background:var(--set-card); }
+.set-stepper button { width:36px; height:36px; border:none; background:transparent; color:var(--set-muted);
+  font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .15s; }
+.set-stepper button:hover { background:var(--set-accent-light); color:var(--set-accent); }
+.set-stepper input { width:60px; height:36px; border:none; text-align:center; font-size:14px; font-weight:600;
+  color:var(--set-text); background:transparent; outline:none; -moz-appearance:textfield; }
+.set-stepper input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+
+.set-toggle-group { display:flex; border:1px solid var(--set-border); border-radius:8px; overflow:hidden; }
+.set-toggle-opt { padding:8px 16px; font-size:13px; font-weight:500; cursor:pointer; border-right:1px solid var(--set-border);
+  transition:all .2s; color:var(--set-muted); background:transparent; user-select:none; }
+.set-toggle-opt:last-child { border-right:none; }
+.set-toggle-opt.active { background:var(--set-accent); color:#fff; border-color:var(--set-accent); }
+.set-toggle-opt.active + .set-toggle-opt { border-left-color:var(--set-accent); }
+
+.tag-input-wrap { min-width:220px; }
+.tag-list { display:flex; flex-wrap:wrap; gap:6px; padding:8px 10px; border:1px solid var(--set-border);
+  border-radius:8px; min-height:38px; background:var(--set-card); cursor:text; transition:border-color .2s; }
+.tag-list:focus-within { border-color:var(--set-accent); box-shadow:0 0 0 3px rgba(79,70,229,.12); }
+.tag-chip { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; background:var(--set-accent-light);
+  color:var(--set-accent); border-radius:6px; font-size:13px; font-weight:500; }
+.tag-chip .tag-del { cursor:pointer; font-size:14px; line-height:1; opacity:.6; transition:opacity .15s; }
+.tag-chip .tag-del:hover { opacity:1; }
+.tag-input-native { border:none; outline:none; background:transparent; font-size:14px; color:var(--set-text);
+  min-width:60px; flex:1; padding:2px 4px; }
+
+.set-time { padding:8px 14px; border-radius:8px; border:1px solid var(--set-border);
+  background:var(--set-card); color:var(--set-text); font-size:14px; transition:border-color .2s; }
+.set-time:focus { border-color:var(--set-accent); outline:none; box-shadow:0 0 0 3px rgba(79,70,229,.12); }
+
+.set-text { padding:8px 14px; border-radius:8px; border:1px solid var(--set-border);
+  background:var(--set-card); color:var(--set-text); font-size:14px; min-width:160px; transition:border-color .2s; }
+.set-text:focus { border-color:var(--set-accent); outline:none; box-shadow:0 0 0 3px rgba(79,70,229,.12); }
+
+.save-indicator { font-size:13px; color:var(--set-success); opacity:0; transition:opacity .3s; display:flex; align-items:center; gap:4px; white-space:nowrap; }
+.save-indicator.show { opacity:1; }
+
+/* 医院推送 */
+.hospital-strip { margin-top:24px; }
+.hospital-strip-header { display:flex; align-items:center; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+.hospital-strip-header h3 { font-size:17px; font-weight:600; color:var(--set-text); margin:0; display:flex; align-items:center; gap:8px; }
+.hospital-strip-header h3 i { color:var(--set-accent); }
+.hospital-strip-header .hint { font-size:13px; color:var(--set-muted); }
+.hospital-scroll { display:flex; gap:12px; overflow-x:auto; padding:4px 0 12px; scroll-snap-type:x mandatory; }
+.hospital-card { flex:0 0 280px; scroll-snap-align:start; background:var(--set-card); border-radius:12px;
+  border:1px solid var(--set-border); padding:18px;
+.hospital-card:hover { border-color:var(--set-accent); box-shadow:0 4px 16px rgba(79,70,229,.1); }
+.hospital-card-header { display:flex; align-items:center; margin-bottom:10px; }
+.hospital-card-name { font-size:15px; font-weight:600; color:var(--set-text); }
+.hospital-card .form-switch { margin-left:auto; }
+.hospital-card .form-check-input:checked { background-color:var(--set-success); border-color:var(--set-success); }
+.hospital-card .webhook-input { font-size:13px; font-family:'SF Mono',monospace; padding:6px 10px; border-radius:8px;
+  border:1px solid var(--set-border); background:var(--set-bg); color:var(--set-text); width:100%;
+  transition:border-color .2s; }
+.hospital-card .webhook-input:focus { border-color:var(--set-accent); outline:none; }
+
+@media(max-width:768px) {
+  .settings-page { padding:16px; }
+  .param-row { flex-wrap:wrap; }
+  .param-control { width:100%; justify-content:flex-start; }
+  .hospital-card { flex:0 0 220px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% set cat_icons = {
+  '仪表盘':'fas fa-chart-pie', '工单':'fas fa-file-alt', '人员':'fas fa-users-cog',
+  '资产':'fas fa-boxes', '界面':'fas fa-paint-brush', '基本':'fas fa-cog',
+  '系统':'fas fa-server', '通知':'fas fa-bell', 'SLA':'fas fa-hourglass-half',
+  '短信':'fas fa-sms', '关键词':'fas fa-key', '功能开关':'fas fa-toggle-on',
+  '运维大屏':'fas fa-tv',
+} %}
+{% set param_meta = {
+  'auto_refresh_interval':     {'icon':'sync-alt','label':'自动刷新间隔','desc':'每隔多少秒自动刷新仪表盘数据？设为 0 则改为手动刷新','unit':'秒'},
+  'default_fault_type':        {'icon':'tools','label':'默认故障类型','desc':'创建工单时自动选中的故障类型，仍可在发布页修改'},
+  'default_priority':          {'icon':'exclamation-triangle','label':'默认紧急程度','desc':'新工单的紧急等级默认值'},
+  'person_teams':              {'icon':'users','label':'人员组别选项','desc':'人员管理中可选的角色组，回车添加新组','unit':''},
+  'person_sort_order':         {'icon':'sort-amount-down','label':'人员排序方式','desc':'人员列表默认按什么顺序排列'},
+  'person_show_inactive':      {'icon':'user-slash','label':'显示已离职人员','desc':'人员列表中是否包含已停用/离职人员'},
+  'person_default_team':       {'icon':'user-tag','label':'默认人员组别','desc':'新建人员时自动选中的组，留空不自动选择'},
+  'order_page_size':           {'icon':'list-ol','label':'每页显示条数','desc':'工单列表每页显示多少条记录','unit':'条'},
+  'mobile_page_size':          {'icon':'mobile-alt','label':'手机端每页条数','desc':'手机小程序/网页每页显示多少条','unit':'条'},
+  'asset_page_size':           {'icon':'box','label':'资产列表每页条数','desc':'资产台账每页显示多少条','unit':'条'},
+  'photo_quality':             {'icon':'image','label':'照片压缩质量','desc':'上传照片的 JPEG 压缩质量，70 以下文件小但可能模糊','unit':'%'},
+  'auto_close_days':           {'icon':'clock','label':'超时自动关闭','desc':'超过多少天未更新的工单自动标记为已关闭，0=关闭此功能','unit':'天'},
+  'order_prefix':              {'icon':'tag','label':'工单编号前缀','desc':'维修单编号的自定义前缀，如「七院-」'},
+  'upload_max_mb':             {'icon':'upload','label':'上传大小限制','desc':'单张照片允许的最大 MB 数，医院网络慢可以设小点','unit':'MB'},
+  'default_order_sort':        {'icon':'sort','label':'默认排序方式','desc':'工单列表默认按什么顺序排列'},
+  'hide_closed_orders':        {'icon':'eye-slash','label':'隐藏已关闭工单','desc':'默认隐藏已关闭的单子，建议打开减少干扰'},
+  'editable_window_minutes':   {'icon':'edit','label':'工单可编辑时长','desc':'发布后多少分钟内还可以修改工单，0=随时可编辑','unit':'分钟'},
+  'photo_max_dim':             {'icon':'expand','label':'照片最大边长','desc':'上传时压到多少像素，0=不压缩 1280=720p 1920=1080p','unit':'px'},
+  'default_export_format':     {'icon':'file-export','label':'导出格式','desc':'导出数据时默认的文件格式'},
+  'maintenance_reminder_days': {'icon':'bell','label':'保修到期提醒','desc':'保修到期前多少天开始显示提醒标记','unit':'天'},
+  'asset_code_prefix':         {'icon':'barcode','label':'资产编号前缀','desc':'资产编码的前缀，如「ZC-」「SB-」'},
+  'asset_default_status':      {'icon':'check-circle','label':'默认资产状态','desc':'新建资产时默认的库存状态'},
+  'sidebar_auto_hide_seconds': {'icon':'chevron-left','label':'侧边栏自动收起','desc':'鼠标静止几秒后自动收起，0=关闭','unit':'秒'},
+  'default_dashboard_team':    {'icon':'layer-group','label':'默认显示组别','desc':'进入仪表盘时默认选中的组'},
+  'default_hospital_id':       {'icon':'hospital','label':'默认显示医院','desc':'登录后默认切换到哪个医院'},
+  'font_scale':                {'icon':'text-height','label':'字体缩放比例','desc':'全局字体大小百分比，100=默认 110=偏大','unit':'%'},
+  'sidebar_default_expand':    {'icon':'arrows-alt-h','label':'侧边栏默认展开','desc':'登录后侧边栏默认展开还是收起'},
+  'animation_enabled':         {'icon':'magic','label':'页面动画','desc':'页面切换和交互是否带动画效果，低配电脑可关闭'},
+  'default_dark_mode':         {'icon':'moon','label':'默认主题','desc':'登录后默认用浅色还是深色'},
+  'table_density':              {'icon':'table','label':'表格行密度','desc':'数据表格的行高，紧凑=看更多行 宽松=更易读'},
+  'daily_order_limit':         {'icon':'ban','label':'每日工单上限','desc':'单个用户每天最多能创建多少工单，0=不限制','unit':'单'},
+  'order_attachment_limit':    {'icon':'paperclip','label':'附件数量上限','desc':'单个工单最多上传几张照片/附件','unit':'个'},
+  'order_title_template':      {'icon':'heading','label':'标题生成模板','desc':'自动生成标题的模板，支持{fault}{device}{location}变量'},
+  'order_remind_interval':     {'icon':'bell','label':'催单最短间隔','desc':'同一工单两次催单最少间隔多少分钟','unit':'分钟'},
+  'order_delete_window':       {'icon':'trash-alt','label':'工单可删除时长','desc':'发布后多少分钟内可删除，0=不可删除','unit':'分钟'},
+  'default_device_type':       {'icon':'desktop','label':'默认设备类型','desc':'新建工单时设备类型的默认选项'},
+  'daily_summary_enabled':     {'icon':'clipboard-list','label':'每日汇总推送','desc':'每晚推送当日工单汇总到企业微信'},
+  'notify_order_complete':     {'icon':'check-double','label':'完成通知','desc':'工单完成时通知提交人'},
+  'notify_order_assign':       {'icon':'user-plus','label':'分配通知','desc':'工单分配负责人时通知负责人'},
+  'audit_log_retention_days':  {'icon':'archive','label':'审计日志保留','desc':'自动清理超过多少天的日志，0=永久保留','unit':'天'},
+  'password_min_length':       {'icon':'lock','label':'密码最小长度','desc':'用户设置密码时最少几位字符','unit':'位'},
+  'search_default_days':       {'icon':'search','label':'搜索默认天数','desc':'搜索工单默认查最近多少天的数据','unit':'天'},
+  'confirm_destructive':       {'icon':'exclamation-triangle','label':'操作确认弹窗','desc':'删除操作是否需要二次确认，建议打开防误删'},
+  'session_timeout_minutes':   {'icon':'clock','label':'会话超时时间','desc':'无操作多少分钟自动登出','unit':'分钟'},
+  'show_system_version':       {'icon':'info-circle','label':'显示版本号','desc':'页面底部是否显示系统版本和运行时长'},
+  'primary_color':             {'icon':'palette','label':'系统主色调','desc':'主题色，改完后刷新看效果'},
+  'timezone':                  {'icon':'globe-asia','label':'系统时区','desc':'系统默认时区，影响时间显示'},
+  'maintenance_mode':          {'icon':'shield-alt','label':'维护模式','desc':'开启后普通用户看到维护提示，仅管理员可进'},
+  'personnel_default_team':     {'icon':'users','label':'效能看板默认团队','desc':'人员效能看板默认选中的团队，空=全部'},
+  'ops_display_groups':        {'icon':'layer-group','label':'运维大屏分组配置','desc':'大屏角色组显示配置，JSON格式'},
+  'wecom_push_schedule':       {'icon':'calendar-day','label':'推送时间模式','desc':'企业微信在哪些日期执行推送'},
+  'wecom_push_time_start':     {'icon':'clock','label':'推送开始时间','desc':'每天几点开始允许推送'},
+  'wecom_push_time_end':       {'icon':'clock','label':'推送结束时间','desc':'每天几点停止推送'},
+  'wecom_timeout_hours':       {'icon':'hourglass-half','label':'超时提醒阈值','desc':'超过多少小时未完成标记为超时','unit':'小时'},
+  'wecom_push_template_today': {'icon':'pencil-alt','label':'今日工单推送模板','desc':'每日汇总推送到企业微信的消息模板，支持变量'},
+  'wecom_push_template_unaccepted': {'icon':'pencil-alt','label':'未接单提醒模板','desc':'手动推送未接单工单时用的消息模板，支持变量'},
+  'sms_enabled':               {'icon':'sms','label':'启用短信通知','desc':'开启后工单分配/完成时发短信通知相关人员'},
+  'sms_api_url':               {'icon':'link','label':'短信API地址','desc':'短信服务商的API接口地址'},
+  'sms_api_key':               {'icon':'key','label':'短信API密钥','desc':'短信服务商的API密钥/Token'},
+  'digital_twin_positions':    {'icon':'map-marked-alt','label':'数字孪生建筑位置','desc':'各楼栋在地图中的位置坐标，JSON格式，一般自动生成'},
+  'digital_twin_map_url':      {'icon':'map','label':'数字孪生地图图片','desc':'数字孪生底图路径，上传后自动填充'},
+  'heatmap_enabled':           {'icon':'fire','label':'故障热力图','desc':'数字孪生页面是否显示楼栋故障热力图'},
+  'fault_keywords':            {'icon':'search','label':'故障关键词库','desc':'各故障类型的匹配关键词，JSON格式，一般不用手动改'},
+  'device_keywords':           {'icon':'search-plus','label':'设备关键词库','desc':'各设备类型的匹配关键词，JSON格式，一般不用手动改'},
+  'sla_response_emergency':    {'icon':'bolt','label':'特急响应时限','desc':'特急工单从创建到接单不能超过几小时','unit':'小时'},
+  'sla_response_urgent':       {'icon':'exclamation-triangle','label':'紧急响应时限','desc':'紧急工单从创建到接单不能超过几小时','unit':'小时'},
+  'sla_response_normal':       {'icon':'clock','label':'普通响应时限','desc':'普通工单从创建到接单不能超过几小时','unit':'小时'},
+  'sla_resolution_emergency':  {'icon':'bolt','label':'特急解决时限','desc':'特急工单从接单到完成不能超过几小时','unit':'小时'},
+  'sla_resolution_urgent':    {'icon':'exclamation-triangle','label':'紧急解决时限','desc':'紧急工单从接单到完成不能超过几小时','unit':'小时'},
+  'sla_resolution_normal':    {'icon':'clock','label':'普通解决时限','desc':'普通工单从接单到完成不能超过几小时','unit':'小时'},
+  'finance_invoice_types':    {'icon':'file-invoice','label':'发票类型映射','desc':'发票类型代码→名称，JSON格式，如 {"0001":"增值税发票","0002":"普通发票"} 系统自动读取'},
+} %}
+{% set stepper_cfg = {
+  'font_scale':                {'step':5, 'min':50, 'max':200},
+  'auto_refresh_interval':     {'step':5, 'min':0, 'max':600},
+  'order_page_size':           {'step':5, 'min':5, 'max':200},
+  'mobile_page_size':          {'step':5, 'min':5, 'max':200},
+  'asset_page_size':           {'step':5, 'min':5, 'max':200},
+  'maintenance_reminder_days': {'step':5, 'min':0, 'max':365},
+  'sidebar_auto_hide_seconds': {'step':5, 'min':0, 'max':300},
+  'photo_quality':             {'step':5, 'min':1, 'max':100},
+  'auto_close_days':           {'step':1, 'min':0, 'max':365},
+  'upload_max_mb':             {'step':5, 'min':1, 'max':100},
+  'editable_window_minutes':   {'step':5, 'min':0, 'max':480},
+  'photo_max_dim':             {'step':160, 'min':0, 'max':3840},
+  'order_attachment_limit':    {'step':1, 'min':1, 'max':20},
+  'daily_order_limit':         {'step':5, 'min':0, 'max':500},
+  'order_remind_interval':     {'step':5, 'min':5, 'max':240},
+  'order_delete_window':       {'step':5, 'min':0, 'max':1440},
+  'search_default_days':       {'step':7, 'min':1, 'max':365},
+  'password_min_length':       {'step':1, 'min':4, 'max':32},
+  'audit_log_retention_days':  {'step':30, 'min':0, 'max':3650},
+  'session_timeout_minutes':   {'step':30, 'min':30, 'max':1440},
+  'wecom_timeout_hours':       {'step':0.5, 'min':0.5, 'max':168},
+  'sla_response_emergency':    {'step':0.5, 'min':0.1, 'max':24},
+  'sla_response_urgent':       {'step':0.5, 'min':0.5, 'max':48},
+  'sla_response_normal':       {'step':1, 'min':1, 'max':72},
+  'sla_resolution_emergency':  {'step':0.5, 'min':0.5, 'max':48},
+  'sla_resolution_urgent':     {'step':1, 'min':1, 'max':96},
+  'sla_resolution_normal':     {'step':2, 'min':2, 'max':168},
+} %}
+
+<div class="settings-page">
+  <!-- 顶部 -->
+  <div class="settings-header">
+    <h1><i class="fas fa-sliders-h"></i> 系统参数设置</h1>
+    <div class="settings-actions">
+      <form method="post" action="{{ url_for('settings.init_defaults') }}" style="display:inline;">
+        <button type="submit" class="btn-soft"><i class="fas fa-redo-alt"></i> 恢复默认</button>
+      </form>
+      <a href="{{ url_for('data.index') }}" class="btn-soft"><i class="fas fa-arrow-left"></i> 返回</a>
+    </div>
+  </div>
+
+  {% if not settings %}
+  <div style="text-align:center;padding:60px 0;color:var(--set-muted);">
+    <i class="fas fa-info-circle" style="font-size:40px;display:block;margin-bottom:12px;"></i>
+    暂无系统参数，点击「恢复默认」创建
+  </div>
+  {% else %}
+
+  <!-- 分类标签 -->
+  <div class="cat-tabs" id="catTabs">
+    {% for cat in categories %}
+    {% if cat_counts.get(cat, 0) > 0 %}
+    <div class="cat-tab {% if loop.first %}active{% endif %}" data-cat="{{ cat }}"
+         onclick="switchCat(this, '{{ cat }}')">
+      <i class="{{ cat_icons.get(cat, 'fas fa-cog') }}"></i> {{ cat }}
+      <span class="badge-count">{{ cat_counts.get(cat, 0) }}</span>
+    </div>
+    {% endif %}
+    {% endfor %}
+    <div class="cat-tab" data-cat="__push__" onclick="switchCat(this, '__push__')">
+      <i class="fab fa-weixin"></i> 推送配置 <span class="badge-count">{{ hospitals|length }}</span>
+    </div>
+  </div>
+
+  <!-- 参数面板 -->
+  {% for cat in categories %}
+  {% set cat_settings = settings|selectattr('category', 'equalto', cat)|list %}
+  {% if cat_settings %}
+  <div class="cat-panel {% if loop.first %}active{% endif %}" id="panel-{{ cat }}">
+    {% for s in cat_settings %}
+    {% set meta = param_meta.get(s.key, {'icon':'cog','label':s.label or s.key,'desc':s.description or '','unit':''}) %}
+    {% set cfg = stepper_cfg.get(s.key, {}) %}
+    <div class="param-row" id="row-{{ s.id }}" data-key="{{ s.key }}">
+      <div class="param-icon"><i class="fas fa-{{ meta.icon }}"></i></div>
+      <div class="param-info">
+        <div class="param-label">{{ meta.label }}</div>
+        <div class="param-desc">{{ meta.desc }}</div>
+      </div>
+      <div class="param-control">
+        {% if s.key == 'default_priority' %}
+        <div class="set-toggle-group">
+          <div class="set-toggle-opt {% if s.value == 'normal' %}active{% endif %}"
+               onclick="togglePriority({{ s.id }}, this, 'normal')">🟢 普通</div>
+          <div class="set-toggle-opt {% if s.value == 'urgent' %}active{% endif %}"
+               onclick="togglePriority({{ s.id }}, this, 'urgent')">🟡 加急</div>
+          <div class="set-toggle-opt {% if s.value == 'emergency' %}active{% endif %}"
+               onclick="togglePriority({{ s.id }}, this, 'emergency')">🔴 紧急</div>
+        </div>
+
+        {% elif s.key == 'default_fault_type' %}
+        <select class="set-select" onchange="saveSetting({{ s.id }}, this)" data-key="{{ s.key }}">
+          {% for ft in fault_types %}
+          <option value="{{ ft }}" {% if s.value == ft %}selected{% endif %}>{{ ft }}</option>
+          {% endfor %}
+        </select>
+
+        {% elif s.key == 'default_hospital_id' %}
+        <select class="set-select" onchange="saveSetting({{ s.id }}, this)" data-key="{{ s.key }}">
+          <option value="" {% if not s.value %}selected{% endif %}>🌐 全部医院</option>
+          {% for h in hospitals %}
+          <option value="{{ h.id }}" {% if s.value|string == h.id|string %}selected{% endif %}>{{ h.name }}</option>
+          {% endfor %}
+        </select>
+
+        {% elif s.key == 'personnel_default_team' %}
+        <select class="set-select" onchange="saveSetting({{ s.id }}, this)" data-key="{{ s.key }}">
+          <option value="" {% if not s.value %}selected{% endif %}>🌐 全部团队</option>
+          {% for t in team_list %}
+          <option value="{{ t }}" {% if s.value == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+
+        {% elif s.key == 'default_dashboard_team' %}
+        <select class="set-select" onchange="saveSetting({{ s.id }}, this)" data-key="{{ s.key }}">
+          <option value="" {% if not s.value %}selected{% endif %}>📋 全部组</option>
+          {% for t in team_list %}
+          <option value="{{ t }}" {% if s.value == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+
+        {% elif s.key == 'person_teams' %}
+        <div class="tag-input-wrap">
+          <div class="tag-list" id="tag-list-{{ s.id }}" onclick="document.getElementById('tag-input-{{ s.id }}').focus()">
+            {% set tags = s.value.split(',') if s.value else [] %}
+            {% for t in tags %}
+            {% set tname = t.strip() %}
+            {% if tname %}
+            <span class="tag-chip">{{ tname }}<span class="tag-del" onclick="event.stopPropagation();removeTag({{ s.id }}, '{{ tname }}')">×</span></span>
+            {% endif %}
+            {% endfor %}
+            <input class="tag-input-native" id="tag-input-{{ s.id }}" placeholder="输入组名按回车"
+                   onkeydown="addTag(event, {{ s.id }})">
+          </div>
+        </div>
+
+        {% elif s.key == 'wecom_push_schedule' %}
+        <div class="set-toggle-group">
+          <div class="set-toggle-opt {% if s.value == 'all' %}active{% endif %}"
+               onclick="toggleGroup({{ s.id }}, this, 'all')">📅 全年推送</div>
+          <div class="set-toggle-opt {% if s.value == 'workday' %}active{% endif %}"
+               onclick="toggleGroup({{ s.id }}, this, 'workday')">💼 仅工作日</div>
+        </div>
+
+        {% elif s.key in ('wecom_push_time_start', 'wecom_push_time_end') %}
+        <input type="time" class="set-time" value="{{ s.value or '' }}"
+               onchange="saveSetting({{ s.id }}, this)" data-key="{{ s.key }}">
+
+        {% elif s.key == 'default_dark_mode' %}
+        <div class="set-toggle-group">
+          <div class="set-toggle-opt {% if s.value == 'light' %}active{% endif %}"
+               onclick="saveSettingVal({{ s.id }}, this, 'light')">☀️ 浅色</div>
+          <div class="set-toggle-opt {% if s.value == 'dark' %}active{% endif %}"
+               onclick="saveSettingVal({{ s.id }}, this, 'dark')">🌙 深色</div>
+          <div class="set-toggle-opt {% if s.value == 'auto' %}active{% endif %}"
+               onclick="saveSettingVal({{ s.id }}, this, 'auto')">🔄 跟随系统</div>
+        </div>
+
+        {% elif s.key == 'table_density' %}
+        <div class="set-toggle-group">
+          <div class="set-toggle-opt {% if s.value == 'compact' %}active{% endif %}"
+               onclick="saveSettingVal({{ s.id }}, this, 'compact')">📋 紧凑</div>
+          <div class="set-toggle-opt {% if s.value == 'comfortable' %}active{% endif %}"
+               onclick="saveSettingVal({{ s.id }}, this, 'comfortable')">📋 适中</div>
+          <div class="set-toggle-opt {% if s.value == 'loose' %}active{% endif %}"
+               onclick="saveSettingVal({{ s.id }}, this, 'loose')">📋 宽松</div>
+        </div>
+
+        {% elif s.key == 'default_order_sort' %}
+        <div class="set-toggle-group">
+          <div class="set-toggle-opt {% if s.value == 'newest' %}active{% endif %}"
+               onclick="saveSettingVal({{ s.id }}, this, 'newest')">🆕 最新在前</div>
+          <div class="set-toggle-opt {% if s.value == 'oldest' %}active{% endif %}"
+               onclick="saveSettingVal({{ s.id }}, this, 'oldest')">⏰ 最早在前</div>
+          <div class="set-toggle-opt {% if s.value == 'urgent' %}active{% endif %}"
+               onclick="saveSettingVal({{ s.id }}, this, 'urgent')">🔴 紧急优先</div>
+          <div class="set-toggle-opt {% if s.value == 'updated' %}active{% endif %}"
+               onclick="saveSettingVal({{ s.id }}, this, 'updated')">📝 最近更新</div>
+        </div>
+
+        {% elif s.key == 'default_export_format' %}
+        <div class="set-toggle-group">
+          <div class="set-toggle-opt {% if s.value == 'excel' %}active{% endif %}"
+               onclick="saveSettingVal({{ s.id }}, this, 'excel')">📊 Excel</div>
+          <div class="set-toggle-opt {% if s.value == 'csv' %}active{% endif %}"
+               onclick="saveSettingVal({{ s.id }}, this, 'csv')">📄 CSV</div>
+          <div class="set-toggle-opt {% if s.value == 'pdf' %}active{% endif %}"
+               onclick="saveSettingVal({{ s.id }}, this, 'pdf')">📕 PDF</div>
+        </div>
+
+        {% elif s.key == 'person_sort_order' %}
+        <div class="set-toggle-group">
+          <div class="set-toggle-opt {% if s.value == 'team' %}active{% endif %}"
+               onclick="saveSettingVal({{ s.id }}, this, 'team')">👥 按组别</div>
+          <div class="set-toggle-opt {% if s.value == 'name' %}active{% endif %}"
+               onclick="saveSettingVal({{ s.id }}, this, 'name')">👤 按姓名</div>
+          <div class="set-toggle-opt {% if s.value == 'employee_id' %}active{% endif %}"
+               onclick="saveSettingVal({{ s.id }}, this, 'employee_id')">🆔 按工号</div>
+        </div>
+
+        {% elif s.key == 'person_default_team' %}
+        <select class="set-select" onchange="saveSetting({{ s.id }}, this)" data-key="{{ s.key }}">
+          <option value="" {% if not s.value %}selected{% endif %}>📋 不自动选择</option>
+          {% for t in team_list %}
+          <option value="{{ t }}" {% if s.value == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+
+        {% elif s.key in ('wecom_push_template_today', 'wecom_push_template_unaccepted') %}
+        <div style="width:100%;max-width:520px;">
+          <textarea class="set-text template-editor" id="tmpl-{{ s.id }}"
+                    style="width:100%;min-height:140px;font-family:'SF Mono','Consolas',monospace;font-size:13px;line-height:1.6;border-radius:8px;border:1px solid var(--set-border);padding:10px 14px;background:var(--set-card);color:var(--set-text);resize:vertical;"
+                    data-key="{{ s.key }}" placeholder="输入消息模板...">{{ s.value or '' }}</textarea>
+          <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+            {% set vars = '{total} = 总单数 • {done} = 已完成 • {pending} = 待接单 • {in_progress} = 处理中 • {unfinished} = 未完成 • {urgent} = 紧急/加急 • {date} = 日期 • {faults_list} = 故障类型列表 • {buildings_list} = 楼区分布' %}
+            {% if 'unaccepted' in s.key %}
+            {% set vars = vars + ' • {overdue} = 超24小时未接单' %}
+            {% endif %}
+            <span style="font-size:11px;color:var(--set-muted);margin-right:6px;">可用变量:</span>
+            <span style="font-size:11px;color:var(--set-accent);">{{ vars }}</span>
+            <button class="btn-soft btn btn-sm" style="margin-left:auto;padding:3px 12px;font-size:11px;background:var(--set-accent);color:#fff;border-color:var(--set-accent);" onclick="saveTemplate({{ s.id }})">保存</button>
+          </div>
+        </div>
+
+        {% elif s.value == '0' or s.value == '1' %}
+        <div class="form-check form-switch" style="margin:0;">
+          <input class="form-check-input" type="checkbox" role="switch"
+                 id="switch-{{ s.id }}" style="width:44px;height:24px;cursor:pointer;"
+                 {{ 'checked' if s.value == '1' else '' }}
+                 onchange="saveBoolSetting({{ s.id }}, this)">
+        </div>
+
+        {% elif cfg %}
+        <div class="set-stepper">
+          <button onclick="stepper({{ s.id }}, -{{ cfg.step }}, {{ cfg.min }}, {{ cfg.max }})">−</button>
+          <input type="number" value="{{ s.value or cfg.min }}" data-key="{{ s.key }}"
+                 step="{{ cfg.step }}" min="{{ cfg.min }}" max="{{ cfg.max }}"
+                 onchange="saveSetting({{ s.id }}, this)">
+          <button onclick="stepper({{ s.id }}, {{ cfg.step }}, {{ cfg.min }}, {{ cfg.max }})">+</button>
+        </div>
+        {% if meta.unit %}<span style="font-size:12px;color:var(--set-muted);min-width:20px;">{{ meta.unit }}</span>{% endif %}
+
+        {% elif s.key in ('fault_keywords', 'device_keywords') %}
+        <div style="width:100%;max-width:420px;">
+          <textarea class="set-text" style="width:100%;min-height:80px;font-family:monospace;font-size:12px;border-radius:8px;border:1px solid var(--set-border);padding:8px 12px;background:var(--set-card);color:var(--set-text);"
+                    data-key="{{ s.key }}" placeholder="JSON 格式">{% if s.value %}{{ s.value }}{% else %}{}{% endif %}</textarea>
+          <div style="margin-top:6px;display:flex;gap:6px;">
+            <button class="btn-soft btn btn-sm" style="padding:4px 12px;font-size:12px;" onclick="prettyJson(this)">格式化</button>
+            <button class="btn-soft btn btn-sm" style="padding:4px 12px;font-size:12px;background:var(--set-accent);color:#fff;border-color:var(--set-accent);" onclick="saveJsonSetting({{ s.id }}, this)">保存</button>
+          </div>
+        </div>
+
+        {% else %}
+        <input type="text" class="set-text" value="{{ s.value or '' }}" data-key="{{ s.key }}"
+               onchange="saveSetting({{ s.id }}, this)" placeholder="输入值...">
+        {% endif %}
+        <span class="save-indicator" id="ok-{{ s.id }}"><i class="fas fa-check-circle"></i> 已保存</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  <!-- 推送配置 -->
+  <div class="cat-panel" id="panel-__push__">
+    <div class="hospital-strip">
+      <div class="hospital-strip-header">
+        <h3><i class="fab fa-weixin"></i> 各医院企业微信推送</h3>
+        <span class="hint">每所医院可独立配置推送开关和 Webhook 地址</span>
+      </div>
+      <div class="hospital-scroll">
+        {% for h in hospitals %}
+        <div class="hospital-card">
+          <div class="hospital-card-header">
+            <span class="hospital-card-name">{{ h.name }}</span>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch"
+                     id="push-en-{{ h.id }}" style="cursor:pointer;"
+                     {{ 'checked' if hospital_push_enabled.get(h.id, True) else '' }}
+                     onchange="savePushToggle({{ h.id }}, this)">
+            </div>
+          </div>
+          <input type="text" class="webhook-input" id="wh-{{ h.id }}"
+                 value="{{ hospital_webhooks.get(h.id, '') }}"
+                 placeholder="粘贴企业微信群 Webhook 地址..."
+                 onchange="saveWebhook({{ h.id }})"
+                 style="{% if not hospital_push_enabled.get(h.id, True) %}opacity:.4{% endif %}">
+          <div style="margin-top:6px;text-align:right;">
+            <span class="save-indicator" id="ok-wh-{{ h.id }}"><i class="fas fa-check-circle"></i> 已保存</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {% endif %}
+</div>
+
+<script>
+// 分类切换
+function switchCat(el, cat) {
+  document.querySelectorAll('.cat-tab').forEach(function(t){ t.classList.remove('active'); });
+  document.querySelectorAll('.cat-panel').forEach(function(p){ p.classList.remove('active'); });
+  el.classList.add('active');
+  var panel = document.getElementById('panel-' + cat);
+  if (panel) panel.classList.add('active');
+}
+
+// 保存
+function saveSetting(id, input) {
+  var key = input.getAttribute('data-key');
+  if (!key) return;
+  var val = input.value;
+  var ok = document.getElementById('ok-' + id);
+  var fd = new FormData();
+  fd.append('key', key);
+  fd.append('value', val);
+  fetch('/settings/save', {method:'POST', body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(d.ok) showSaved(ok); });
+}
+
+function showSaved(el) {
+  el.classList.add('show');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(function(){ el.classList.remove('show'); }, 1800);
+}
+
+// 步进器
+function stepper(id, step, min, max) {
+  var row = document.getElementById('row-' + id);
+  if (!row) return;
+  var input = row.querySelector('input[type="number"]');
+  if (!input) return;
+  var val = parseFloat(input.value) || 0;
+  var stepAbs = Math.abs(step);
+  if (stepAbs >= 1) {
+    val = Math.round((val + step) / stepAbs) * stepAbs;
+  } else {
+    val = Math.round((val + step) / 0.5) * 0.5;
+  }
+  val = Math.max(min, Math.min(max, val));
+  input.value = val;
+  input.dispatchEvent(new Event('change'));
+}
+
+// 优先级三选一
+function togglePriority(id, el, val) {
+  var parent = el.parentElement;
+  parent.querySelectorAll('.set-toggle-opt').forEach(function(o){ o.classList.remove('active'); });
+  el.classList.add('active');
+  var ok = document.getElementById('ok-' + id);
+  var fd = new FormData();
+  fd.append('key', 'default_priority');
+  fd.append('value', val);
+  fetch('/settings/save', {method:'POST', body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(d.ok) showSaved(ok); });
+}
+
+// 二选一
+function toggleGroup(id, el, val) {
+  var parent = el.parentElement;
+  parent.querySelectorAll('.set-toggle-opt').forEach(function(o){ o.classList.remove('active'); });
+  el.classList.add('active');
+  var ok = document.getElementById('ok-' + id);
+  var fd = new FormData();
+  fd.append('key', 'wecom_push_schedule');
+  fd.append('value', val);
+  fetch('/settings/save', {method:'POST', body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(d.ok) showSaved(ok); });
+}
+
+// 通用三选一/多选一（通过 data-key 获取 key）
+function saveSettingVal(id, el, val) {
+  var parent = el.parentElement;
+  parent.querySelectorAll('.set-toggle-opt').forEach(function(o){ o.classList.remove('active'); });
+  el.classList.add('active');
+  var ok = document.getElementById('ok-' + id);
+  var row = document.getElementById('row-' + id);
+  var key = row ? row.getAttribute('data-key') : '';
+  if (!key) return;
+  var fd = new FormData();
+  fd.append('key', key);
+  fd.append('value', val);
+  fetch('/settings/save', {method:'POST', body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(d.ok) showSaved(ok); });
+}
+
+// 布尔开关
+function saveBoolSetting(id, cb) {
+  var ok = document.getElementById('ok-' + id);
+  var row = document.getElementById('row-' + id);
+  var key = row ? row.getAttribute('data-key') : '';
+  if (!key) return;
+  var fd = new FormData();
+  fd.append('key', key);
+  fd.append('value', cb.checked ? '1' : '0');
+  fetch('/settings/save', {method:'POST', body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(d.ok) showSaved(ok); });
+}
+
+// 标签输入
+function addTag(event, id) {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  var input = document.getElementById('tag-input-' + id);
+  var text = input.value.trim();
+  if (!text) return;
+  var list = document.getElementById('tag-list-' + id);
+  var chips = list.querySelectorAll('.tag-chip');
+  var tags = [];
+  chips.forEach(function(c){
+    var t = c.childNodes[0].textContent.trim();
+    if (t) tags.push(t);
+  });
+  if (tags.indexOf(text) !== -1) { input.value = ''; return; }
+  tags.push(text);
+  saveTags(id, tags, list, input);
+}
+
+function removeTag(id, text) {
+  var list = document.getElementById('tag-list-' + id);
+  var chips = list.querySelectorAll('.tag-chip');
+  var tags = [];
+  chips.forEach(function(c){
+    var t = c.childNodes[0].textContent.trim();
+    if (t && t !== text) tags.push(t);
+  });
+  saveTags(id, tags, list, document.getElementById('tag-input-' + id));
+}
+
+function saveTags(id, tags, list, input) {
+  var val = tags.join(',');
+  var ok = document.getElementById('ok-' + id);
+  var fd = new FormData();
+  fd.append('key', 'person_teams');
+  fd.append('value', val);
+  fetch('/settings/save', {method:'POST', body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.ok) {
+        list.innerHTML = '';
+        tags.forEach(function(t){
+          var chip = document.createElement('span');
+          chip.className = 'tag-chip';
+          var del = document.createElement('span');
+          del.className = 'tag-del';
+          del.textContent = '×';
+          del.onclick = function(e){
+            e.stopPropagation();
+            removeTag(id, t);
+          };
+          chip.appendChild(document.createTextNode(t));
+          chip.appendChild(del);
+          list.appendChild(chip);
+        });
+        if (input) { list.appendChild(input); input.value = ''; input.focus(); }
+        showSaved(ok);
+      }
+    });
+}
+
+// 推送开关
+function savePushToggle(hid, cb) {
+  var card = cb.closest('.hospital-card');
+  var input = card.querySelector('.webhook-input');
+  input.style.opacity = cb.checked ? '1' : '.4';
+  var fd = new FormData();
+  fd.append('hospital_id', hid);
+  fd.append('key', 'wecom_push_enabled');
+  fd.append('value', cb.checked ? '1' : '0');
+  fetch('/settings/save_webhook_setting', {method:'POST', body:fd});
+}
+
+// 保存推送地址
+function saveWebhook(hid) {
+  var input = document.getElementById('wh-' + hid);
+  var ok = document.getElementById('ok-wh-' + hid);
+  var fd = new FormData();
+  fd.append('hospital_id', hid);
+  fd.append('value', input.value);
+  fetch('/settings/save_webhook', {method:'POST', body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(d.ok) showSaved(ok); });
+}
+
+// JSON 配置编辑器
+function prettyJson(btn) {
+  var ta = btn.closest('div').previousElementSibling;
+  if (!ta || ta.tagName !== 'TEXTAREA') {
+    ta = btn.parentElement.previousElementSibling;
+  }
+  if (!ta) return;
+  try {
+    var obj = JSON.parse(ta.value || '{}');
+    ta.value = JSON.stringify(obj, null, 2);
+  } catch(e) {
+    alert('JSON 格式错误：' + e.message);
+  }
+}
+function saveJsonSetting(id, btn) {
+  var div = btn.closest('div');
+  var ta = div.previousElementSibling;
+  if (!ta || ta.tagName !== 'TEXTAREA') {
+    ta = btn.parentElement.previousElementSibling;
+  }
+  if (!ta) return;
+  try {
+    JSON.parse(ta.value || '{}');
+  } catch(e) {
+    alert('JSON 格式错误，请先格式化检查：' + e.message);
+    return;
+  }
+  var key = ta.getAttribute('data-key');
+  var ok = document.getElementById('ok-' + id);
+  var fd = new FormData();
+  fd.append('key', key);
+  fd.append('value', ta.value);
+  fetch('/settings/save', {method:'POST', body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.ok) { showSaved(ok); }
+      else { alert('保存失败'); }
+    });
+}
+// 保存消息模板
+function saveTemplate(id) {
+  var ta = document.getElementById('tmpl-' + id);
+  if (!ta) return;
+  var key = ta.getAttribute('data-key');
+  var ok = document.getElementById('ok-' + id);
+  var fd = new FormData();
+  fd.append('key', key);
+  fd.append('value', ta.value);
+  fetch('/settings/save', {method:'POST', body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(d.ok) showSaved(ok); });
+}
+</script>
+{% endblock %}

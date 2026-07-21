@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.form-card { border: 1px solid #e5e7eb; border-radius: 10px; }
+.form-card .card-body { padding: 16px; }
+.form-label { font-size: 12px; font-weight: 500; margin-bottom: 2px; }
+</style>
+
+<div class="mb-3">
+    <a href="{{ url_for('finance_asset.delivery_list') }}" class="text-muted" style="font-size:13px;">
+        <i class="fas fa-arrow-left"></i> 返回出库单列表
+    </a>
+</div>
+
+<h5 class="fw-bold mb-3" style="font-size:15px;">
+    <i class="fas fa-{{ 'edit' if delivery else 'plus-circle' }}" style="color:#f59e0b;"></i>
+    {{ '编辑出库单' if delivery else '新建出库单' }}
+</h5>
+
+<form method="POST" id="deliveryForm">
+    <!-- 基本信息 -->
+    <div class="card form-card mb-3">
+        <div class="card-body">
+            <h6 class="fw-bold mb-3" style="font-size:13px;"><i class="fas fa-info-circle" style="color:#f59e0b;"></i> 基本信息</h6>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">单据编号</label>
+                    <input type="text" class="form-control form-control-sm" name="doc_no" value="{{ delivery.doc_no if delivery else '' }}" readonly>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">出库标题 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-sm" name="title" value="{{ delivery.title if delivery else '' }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">供应商</label>
+                    <select class="form-select form-select-sm" name="supplier_id">
+                        <option value="">-- 请选择供应商 --</option>
+                        {% for s in suppliers %}
+                        <option value="{{ s.id }}" {{ 'selected' if delivery and delivery.supplier_id == s.id }}>{{ s.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">仓库 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-sm" name="warehouse" value="{{ delivery.warehouse if delivery else '' }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">出库日期 <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control form-control-sm" name="delivery_date" value="{{ delivery.delivery_date.strftime('%Y-%m-%d') if delivery and delivery.delivery_date else '' }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">领料人/科室 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-sm" name="recipient" value="{{ delivery.recipient if delivery else '' }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">发票类型</label>
+                    <select class="form-select form-select-sm" name="invoice_type">
+                        <option value="">-- 请选择 --</option>
+                        <option value="增值税专用发票" {{ 'selected' if delivery and delivery.invoice_type == '增值税专用发票' }}>增值税专用发票</option>
+                        <option value="增值税普通发票" {{ 'selected' if delivery and delivery.invoice_type == '增值税普通发票' }}>增值税普通发票</option>
+                        <option value="收据" {{ 'selected' if delivery and delivery.invoice_type == '收据' }}>收据</option>
+                        <option value="其他" {{ 'selected' if delivery and delivery.invoice_type == '其他' }}>其他</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">发货人</label>
+                    <input type="text" class="form-control form-control-sm" name="sender" value="{{ delivery.sender if delivery else '' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">接收人</label>
+                    <input type="text" class="form-control form-control-sm" name="receiver" value="{{ delivery.receiver if delivery else '' }}">
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label">备注</label>
+                    <textarea class="form-control form-control-sm" name="remark" rows="2">{{ delivery.remark if delivery else '' }}</textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 明细 -->
+    <div class="card form-card mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0" style="font-size:13px;"><i class="fas fa-list" style="color:#f59e0b;"></i> 出库明细</h6>
+                <button type="button" class="btn btn-sm btn-outline-warning" onclick="addRow()"><i class="fas fa-plus"></i> 添加行</button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle mb-0" style="border-color:#e5e7eb;font-size:13px;" id="detailTable">
+                    <thead>
+                        <tr>
+                            <th style="width:18%;">品名</th>
+                            <th style="width:10%;">单位</th>
+                            <th style="width:12%;">数量</th>
+                            <th style="width:14%;">单价(元)</th>
+                            <th style="width:14%;">金额(元)</th>
+                            <th style="width:18%;">发票号码</th>
+                            <th style="width:6%;text-align:center;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detailBody">
+                        {% if delivery and delivery.items %}
+                        {% for item in delivery.items %}
+                        <tr class="detail-row">
+                            <td><input type="text" class="form-control form-control-sm" name="item_name[]" value="{{ item.item_name or '' }}"></td>
+                            <td><input type="text" class="form-control form-control-sm" name="unit[]" value="{{ item.unit or '' }}"></td>
+                            <td><input type="number" step="0.01" class="form-control form-control-sm quantity" name="quantity[]" value="{{ item.quantity or 0 }}" oninput="calcRow(this);calcTotal();"></td>
+                            <td><input type="number" step="0.01" class="form-control form-control-sm unit-price" name="unit_price[]" value="{{ item.unit_price or 0 }}" oninput="calcRow(this);calcTotal();"></td>
+                            <td><input type="number" step="0.01" class="form-control form-control-sm amount" name="amount[]" value="{{ item.amount or 0 }}" readonly style="background:#f9fafb;color:#f59e0b;font-weight:600;"></td>
+                            <td><input type="text" class="form-control form-control-sm" name="invoice_no[]" value="{{ item.invoice_no or '' }}"></td>
+                            <td style="text-align:center;"><button type="button" class="btn btn-sm btn-outline-danger px-2" onclick="removeRow(this)"><i class="fas fa-times"></i></button></td>
+                        </tr>
+                        {% endfor %}
+                        {% endif %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="4" style="text-align:right;font-weight:700;">合计：</td>
+                            <td><strong id="totalAmount" style="color:#f59e0b;">¥0.00</strong></td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-warning"><i class="fas fa-save"></i> 保存出库单</button>
+        <a href="{{ url_for('finance_asset.delivery_list') }}" class="btn btn-outline-secondary">取消</a>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let rowIndex = {{ delivery.items.count() if delivery and delivery.items else 0 }};
+
+function addRow(itemName, unit, quantity, unitPrice, amount, invoiceNo) {
+    rowIndex++;
+    const html = `
+    <tr class="detail-row">
+        <td><input type="text" class="form-control form-control-sm" name="item_name[]" value="${itemName||''}"></td>
+        <td><input type="text" class="form-control form-control-sm" name="unit[]" value="${unit||''}"></td>
+        <td><input type="number" step="0.01" class="form-control form-control-sm quantity" name="quantity[]" value="${quantity||0}" oninput="calcRow(this);calcTotal();"></td>
+        <td><input type="number" step="0.01" class="form-control form-control-sm unit-price" name="unit_price[]" value="${unitPrice||0}" oninput="calcRow(this);calcTotal();"></td>
+        <td><input type="number" step="0.01" class="form-control form-control-sm amount" name="amount[]" value="${amount||0}" readonly style="background:#f9fafb;color:#f59e0b;font-weight:600;"></td>
+        <td><input type="text" class="form-control form-control-sm" name="invoice_no[]" value="${invoiceNo||''}"></td>
+        <td style="text-align:center;"><button type="button" class="btn btn-sm btn-outline-danger px-2" onclick="removeRow(this)"><i class="fas fa-times"></i></button></td>
+    </tr>`;
+    document.getElementById('detailBody').insertAdjacentHTML('beforeend', html);
+    calcTotal();
+}
+
+function removeRow(btn) {
+    const tr = btn.closest('tr');
+    if (document.querySelectorAll('.detail-row').length <= 1) return;
+    tr.remove();
+    calcTotal();
+}
+
+function calcRow(el) {
+    const tr = el.closest('tr');
+    const qty = parseFloat(tr.querySelector('.quantity').value) || 0;
+    const price = parseFloat(tr.querySelector('.unit-price').value) || 0;
+    tr.querySelector('.amount').value = (qty * price).toFixed(2);
+}
+
+function calcTotal() {
+    let total = 0;
+    document.querySelectorAll('.amount').forEach(el => {
+        total += parseFloat(el.value) || 0;
+    });
+    document.getElementById('totalAmount').textContent = '¥' + total.toFixed(2);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    calcTotal();
+    if (document.querySelectorAll('.detail-row').length === 0) {
+        addRow();
+    }
+});
+</script>
+{% endblock %}

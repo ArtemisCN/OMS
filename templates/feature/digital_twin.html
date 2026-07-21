@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数字孪生 · 医院工单系统</title>
+    <link href="/static/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/vendor/fontawesome/all.min.css" rel="stylesheet">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        html, body {
+            width:100%; height:100%; overflow:hidden;
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #0a0e27;
+            color: #e2e8f0;
+        }
+        .twin-container {
+            width:100vw; height:100vh;
+            position:relative; overflow:hidden;
+            background: linear-gradient(180deg, #0a0e27 0%, #0d1b3e 50%, #0f2027 100%);
+        }
+        /* 地图背景层 */
+        .map-layer {
+            position:absolute; inset:60px 0 0 0; z-index:0;
+            background: radial-gradient(ellipse at center, rgba(79,70,229,0.05) 0%, transparent 70%),
+                        repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 40px),
+                        repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 40px);
+            transition: all 0.5s;
+        }
+        .twin-header {
+            position:absolute; top:0; left:0; right:0; height:60px;
+            display:flex; align-items:center; justify-content:space-between;
+            padding:0 30px;
+            background: rgba(10,14,39,0.9);
+            border-bottom:1px solid rgba(255,255,255,0.06);
+            backdrop-filter:blur(12px);
+            z-index:100;
+        }
+        .twin-title {
+            font-size:22px; font-weight:700;
+            background: linear-gradient(135deg, #a78bfa, #60a5fa);
+            -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+            background-clip:text;
+        }
+        .twin-title i { -webkit-text-fill-color:#4f46e5; margin-right:10px; }
+        .twin-controls { display:flex; align-items:center; gap:12px; }
+        .twin-btn {
+            padding:6px 16px; border-radius:8px; border:1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.04); color:#cbd5e1;
+            font-size:13px; cursor:pointer; transition:all 0.2s;
+        }
+        .twin-btn:hover { background: rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.2); }
+        .twin-btn.primary { background:rgba(79,70,229,0.3); border-color:rgba(79,70,229,0.4); color:#a78bfa; }
+        .twin-btn.primary:hover { background:rgba(79,70,229,0.5); }
+        .twin-btn.success { background:rgba(34,197,94,0.2); border-color:rgba(34,197,94,0.3); color:#4ade80; }
+        .twin-btn.danger { background:rgba(239,68,68,0.2); border-color:rgba(239,68,68,0.3); color:#f87171; }
+        .twin-back { text-decoration:none; color:#94a3b8; font-size:13px; }
+        .twin-back:hover { color:#e2e8f0; }
+
+        /* 建筑元素 — 按实际卫星图形状 */
+        .building {
+            position:absolute;
+            cursor:grab; user-select:none;
+            z-index:10; transition:filter 0.3s, box-shadow 0.3s;
+            text-align:center;
+        }
+        .building.dragging {
+            cursor:grabbing; z-index:50;
+            filter:brightness(1.3);
+            transition:none;
+        }
+        .building:hover { z-index:20; }
+        .building-body {
+            position:relative;
+            display:flex; align-items:center; justify-content:center;
+            font-size:22px; font-weight:800; color:#fff;
+            text-shadow:0 2px 8px rgba(0,0,0,0.6);
+            border:2px solid rgba(255,255,255,0.2);
+            box-shadow:0 4px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15);
+            transition:all 0.3s;
+        }
+        .building-body::after {
+            content:'';
+            position:absolute; top:-6px; left:-6px; right:-6px; bottom:-6px;
+            border-radius:inherit;
+            background:inherit;
+            filter:blur(16px); opacity:0.3;
+            z-index:-1;
+            transition:opacity 0.3s;
+        }
+        .building:hover .building-body::after { opacity:0.6; }
+        .building:hover .building-body {
+            transform:scale(1.06);
+            box-shadow:0 0 30px rgba(99,102,241,0.3);
+        }
+        .building-label {
+            position:absolute;
+            bottom:-18px; left:50%; transform:translateX(-50%);
+            font-size:11px; color:#94a3b8;
+            background:rgba(0,0,0,0.7); padding:2px 8px; border-radius:4px;
+            white-space:nowrap; backdrop-filter:blur(4px);
+            border:1px solid rgba(255,255,255,0.05);
+            pointer-events:none;
+        }
+        .building .b-count {
+            position:absolute; top:-8px; right:-8px;
+            background:rgba(0,0,0,0.7);
+            font-size:10px; font-weight:600;
+            color:rgba(255,255,255,0.8);
+            padding:1px 6px; border-radius:8px;
+            backdrop-filter:blur(4px);
+        }
+        .admin-mode .building { cursor:move; }
+        .admin-mode .building:hover .building-body { box-shadow:0 0 0 2px #4f46e5, 0 0 20px rgba(79,70,229,0.3); }
+
+        /* 建筑容器 — 必须明确尺寸和定位上下文，否则子元素 position:absolute 脱离文档流使高度为 0 */
+        #buildingContainer {
+            position:relative;
+            width:100%;
+            height:100%;
+        }
+
+        /* 图例 */
+        .legend {
+            position:absolute; bottom:30px; right:30px;
+            display:flex; gap:6px; align-items:center;
+            background:rgba(0,0,0,0.6); padding:8px 14px;
+            border-radius:10px; backdrop-filter:blur(8px);
+            border:1px solid rgba(255,255,255,0.05);
+            z-index:50; font-size:11px;
+        }
+        .legend-dot { width:12px; height:12px; border-radius:4px; }
+        .legend-label { color:#94a3b8; }
+
+        /* 统计浮窗 */
+        .stats-overlay {
+            position:absolute; top:70px; left:20px;
+            display:flex; flex-direction:column; gap:6px;
+            z-index:50; font-size:12px;
+            background:rgba(0,0,0,0.5); padding:12px 16px;
+            border-radius:10px; backdrop-filter:blur(8px);
+            border:1px solid rgba(255,255,255,0.05);
+        }
+        .stats-row { display:flex; gap:16px; }
+        .stats-item { text-align:center; }
+        .stats-item .val { font-size:18px; font-weight:700; color:#f1f5f9; }
+        .stats-item .lbl { font-size:10px; color:#64748b; }
+
+        /* 管理面板 */
+        .admin-panel {
+            position:absolute; top:70px; right:20px;
+            width:260px;
+            background:rgba(10,14,39,0.95);
+            border-radius:12px; border:1px solid rgba(255,255,255,0.08);
+            backdrop-filter:blur(16px);
+            padding:16px; z-index:100;
+            display:none;
+        }
+        .admin-panel.show { display:block; }
+        .admin-panel label {
+            font-size:11px; color:#94a3b8; display:block; margin-top:10px; margin-bottom:4px;
+        }
+        .admin-panel input[type="text"] {
+            width:100%; padding:6px 10px; border-radius:6px;
+            border:1px solid rgba(255,255,255,0.1);
+            background:rgba(255,255,255,0.04);
+            color:#e2e8f0; font-size:12px;
+        }
+        .admin-panel .btn-row { display:flex; gap:8px; margin-top:12px; }
+        .admin-panel .btn-row button { flex:1; }
+
+        /* Toast */
+        .toast-msg {
+            position:fixed; top:20px; left:50%; transform:translateX(-50%);
+            padding:8px 20px; border-radius:8px;
+            z-index:999; font-size:13px;
+            transition:all 0.3s; opacity:0;
+        }
+        .toast-msg.show { opacity:1; }
+        .toast-msg.success { background:rgba(34,197,94,0.9); color:#fff; }
+        .toast-msg.error { background:rgba(239,68,68,0.9); color:#fff; }
+        .toast-msg.info { background:rgba(79,70,229,0.9); color:#fff; }
+
+        /* 加载 */
+        .loading-overlay {
+            position:fixed; inset:0; background:#0a0e27;
+            display:flex; align-items:center; justify-content:center;
+            z-index:9999; transition:opacity 0.5s;
+        }
+        .loading-overlay.hidden { opacity:0; pointer-events:none; }
+        .loading-spinner { width:40px; height:40px; border:3px solid rgba(79,70,229,0.2); border-top-color:#818cf8; border-radius:50%; animation:spin 1s linear infinite; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+    </style>
+</head>
+<body>
+<div class="loading-overlay" id="loadingOverlay"><div class="loading-spinner"></div></div>
+
+<div class="twin-container">
+    <!-- 地图背景 -->
+    <div class="map-layer" id="mapLayer">
+        <img id="mapImage" style="display:none;width:100%;height:100%;object-fit:cover;position:absolute;inset:0;z-index:1;" />
+    </div>
+
+    <!-- 顶部 -->
+    <div class="twin-header">
+        <div>
+            <a href="javascript:history.back()" class="twin-back"><i class="fas fa-arrow-left me-1"></i> 返回</a>
+            <span class="twin-title"><i class="fas fa-cube"></i>数字孪生 · 医院建筑故障热力</span>
+        </div>
+        <div class="twin-controls">
+            <a href="/feature/digital-twin-3d" class="twin-btn primary"><i class="fas fa-cubes me-1"></i> 3D视图</a>
+            {% if user_is_admin %}
+            <button class="twin-btn" onclick="toggleAdmin()"><i class="fas fa-pen me-1"></i> <span id="adminBtnText">编辑布局</span></button>
+            <button class="twin-btn primary d-none" id="saveBtn" onclick="savePositions()"><i class="fas fa-save me-1"></i> 保存</button>
+            <button class="twin-btn success d-none" id="resetBtn" onclick="resetPositions()"><i class="fas fa-redo me-1"></i> 重置</button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 统计 -->
+    <div class="stats-overlay" id="statsOverlay"></div>
+
+    <!-- 建筑容器 -->
+    <div id="buildingContainer"></div>
+
+    <!-- 图例 -->
+    <div class="legend">
+        <span class="legend-dot" style="background:#22c55e;"></span>
+        <span class="legend-label">低(≤10)</span>
+        <span class="legend-dot" style="background:#eab308;"></span>
+        <span class="legend-label">中(10-100)</span>
+        <span class="legend-dot" style="background:#ef4444;"></span>
+        <span class="legend-label">高(>100)</span>
+        <span class="legend-dot" style="background:#a855f7;"></span>
+        <span class="legend-label">极高(>500)</span>
+    </div>
+
+    <!-- 管理面板 -->
+    <div class="admin-panel" id="adminPanel">
+        <div style="font-size:13px;font-weight:600;color:#f1f5f9;"><i class="fas fa-pen me-1"></i> 编辑布局</div>
+        <label>地图背景 URL</label>
+        <input type="text" id="mapUrlInput" placeholder="https://... 留空使用网格背景">
+        <label>或者上传图片</label>
+        <div style="display:flex;gap:6px;">
+            <input type="file" id="mapFileInput" accept="image/*" style="flex:1;font-size:11px;color:#94a3b8;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:4px 8px;">
+            <button class="twin-btn success" onclick="uploadMapFile()" style="white-space:nowrap;"><i class="fas fa-upload me-1"></i> 上传</button>
+        </div>
+        <label>操作说明</label>
+        <div style="font-size:11px;color:#64748b;line-height:1.5;">
+            拖拽建筑到对应位置后点击"保存"。建筑颜色表示故障数量等级。
+        </div>
+        <div class="btn-row">
+            <button class="twin-btn success" onclick="saveMapUrl()"><i class="fas fa-image me-1"></i> 设置地图</button>
+            <button class="twin-btn" onclick="toggleAdmin()">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-msg" id="toastMsg"></div>
+
+<script>
+// ===== 状态 =====
+let buildings = [];
+let positions = {};
+let isAdmin = false;
+let dragBuilding = null;
+let dragOffsetX = 0, dragOffsetY = 0;
+
+// ===== 地图背景 =====
+function setMapBg(url) {
+    const img = document.getElementById('mapImage');
+    const layer = document.getElementById('mapLayer');
+    if (url) {
+        img.src = url;
+        img.style.display = 'block';
+        layer.style.background = 'rgba(10,14,39,0.85)';  // 半透明底色衬托
+    } else {
+        img.style.display = 'none';
+        img.src = '';
+        layer.style.background = '';  // 恢复默认渐变+网格
+    }
+}
+
+// ===== 加载数据 =====
+async function loadData() {
+    try {
+        const res = await fetch('/feature/digital-twin/data');
+        const data = await res.json();
+        if (!data.success) return;
+        buildings = data.buildings || [];
+        positions = data.positions || {};
+        renderBuildings();
+        renderStats(data.stats);
+        // 地图背景
+        if (data.map_url) {
+            setMapBg(data.map_url);
+            document.getElementById('mapUrlInput').value = data.map_url;
+        }
+    } catch(e) {
+        console.error('加载失败:', e);
+    } finally {
+        document.getElementById('loadingOverlay').classList.add('hidden');
+    }
+}
+
+// ===== 建筑形状数据（匹配卫星图实际轮廓）=====
+const BUILDING_SHAPES = {
+  '7号楼':  { w:220, h:70,  rx:8,  roof:'#8B4513', wall:'#5c4033', fullName:'7号楼' },
+  '6号楼':  { w:120, h:140, rx:6,  roof:'#8B4513', wall:'#5c4033', fullName:'6号楼' },
+  '1号楼':  { w:130, h:150, rx:6,  roof:'#6B7280', wall:'#4B5563', fullName:'1号楼' },
+  '2号楼':  { w:110, h:70,  rx:5,  roof:'#9CA3AF', wall:'#6B7280', fullName:'2号楼' },
+  '3号楼':  { w:90,  h:70,  rx:5,  roof:'#A0522D', wall:'#6B4226', fullName:'3号楼' },
+  '4号楼':  { w:80,  h:60,  rx:5,  roof:'#9CA3AF', wall:'#6B7280', fullName:'4号楼' },
+  '8号楼':  { w:90,  h:55,  rx:4,  roof:'#9CA3AF', wall:'#6B7280', fullName:'8号楼' },
+  '5号楼':  { w:75,  h:65,  rx:4,  roof:'#9CA3AF', wall:'#6B7280', fullName:'5号楼' },
+  '15号楼': { w:60,  h:120, rx:4,  roof:'#9CA3AF', wall:'#6B7280', fullName:'15号楼' },
+  '16号楼': { w:70,  h:50,  rx:4,  roof:'#9CA3AF', wall:'#6B7280', fullName:'16号楼' },
+};
+function getShape(name) {
+  return BUILDING_SHAPES[name] || { w:80, h:60, rx:5, roof:'#6B7280', wall:'#4B5563', fullName:name };
+}
+
+// ===== 建筑渲染（按卫星图实际形状）=====
+function renderBuildings() {
+    const container = document.getElementById('buildingContainer');
+    container.innerHTML = '';
+    
+    buildings.forEach(b => {
+        const pos = positions[b.building] || b.default_pos || {x: Math.random() * 80 + 10, y: Math.random() * 60 + 20};
+        b.pos = pos;
+        const shape = getShape(b.building);
+        
+        const el = document.createElement('div');
+        el.className = 'building';
+        el.dataset.building = b.building;
+        el.style.left = pos.x + '%';
+        el.style.top = pos.y + '%';
+        
+        // 故障密度颜色
+        const densityColor = getDensityColor(b.fault_count);
+        
+        // 建筑本体 — 按卫星图实际比例
+        const body = document.createElement('div');
+        body.className = 'building-body';
+        body.style.width = shape.w + 'px';
+        body.style.height = shape.h + 'px';
+        body.style.borderRadius = shape.rx + 'px';
+        body.style.background = `linear-gradient(135deg, ${shape.roof}, ${densityColor})`;
+        body.style.borderColor = densityColor + '88';
+        body.textContent = extractNum(b.building);
+        
+        // 故障数角标
+        const badge = document.createElement('span');
+        badge.className = 'b-count';
+        badge.textContent = b.fault_count + '次';
+        body.appendChild(badge);
+        
+        // 名称标签
+        const label = document.createElement('div');
+        label.className = 'building-label';
+        label.textContent = b.building;
+        
+        el.appendChild(body);
+        el.appendChild(label);
+        
+        // 拖拽事件
+        el.addEventListener('mousedown', onDragStart);
+        el.addEventListener('touchstart', onDragStart, {passive:false});
+        
+        // 点击隔离显示
+        el.addEventListener('click', () => isolateBuilding(b));
+        
+        container.appendChild(el);
+    });
+}
+
+// ===== 密度颜色（基于故障数）=====
+function getDensityColor(count) {
+    if (count > 500) return 'rgba(168,85,247,0.6)';  // 紫
+    if (count > 100) return 'rgba(239,68,68,0.6)';   // 红
+    if (count > 10) return 'rgba(234,179,8,0.6)';    // 黄
+    return 'rgba(34,197,94,0.6)';                     // 绿
+}
+
+function extractNum(name) {
+    const m = name.match(/(\d+)/);
+    return m ? m[1] : name.charAt(0);
+}
+
+function renderStats(stats) {
+    if (!stats) return;
+    document.getElementById('statsOverlay').innerHTML = `
+        <div class="stats-row">
+            <div class="stats-item"><div class="val">${stats.total_buildings||0}</div><div class="lbl">建筑</div></div>
+            <div class="stats-item"><div class="val">${stats.total_orders||0}</div><div class="lbl">总工单</div></div>
+            <div class="stats-item"><div class="val">${stats.in_progress||0}</div><div class="lbl">处理中</div></div>
+            <div class="stats-item"><div class="val">${stats.top_building||'-'}</div><div class="lbl">最多故障</div></div>
+        </div>
+    `;
+}
+
+// ===== 拖拽 =====
+function onDragStart(e) {
+    if (!isAdmin) return;
+    e.preventDefault();
+    const el = e.currentTarget;
+    dragBuilding = el;
+    el.classList.add('dragging');
+    
+    const rect = el.getBoundingClientRect();
+    const cx = e.clientX || e.touches[0].clientX;
+    const cy = e.clientY || e.touches[0].clientY;
+    dragOffsetX = cx - rect.left;
+    dragOffsetY = cy - rect.top;
+    
+    document.addEventListener('mousemove', onDragMove);
+    document.addEventListener('mouseup', onDragEnd);
+    document.addEventListener('touchmove', onDragMove, {passive:false});
+    document.addEventListener('touchend', onDragEnd, {passive:false});
+}
+
+function onDragMove(e) {
+    if (!dragBuilding) return;
+    e.preventDefault();
+    const cx = e.clientX || e.touches[0].clientX;
+    const cy = e.clientY || e.touches[0].clientY;
+    
+    const mapRect = document.getElementById('buildingContainer').getBoundingClientRect();
+    let x = ((cx - dragOffsetX - mapRect.left) / mapRect.width) * 100;
+    let y = ((cy - dragOffsetY - mapRect.top) / mapRect.height) * 100;
+    x = Math.max(0, Math.min(100, x));
+    y = Math.max(0, Math.min(100, y));
+    
+    dragBuilding.style.left = x + '%';
+    dragBuilding.style.top = y + '%';
+}
+
+function onDragEnd() {
+    if (!dragBuilding) return;
+    dragBuilding.classList.remove('dragging');
+    const building = dragBuilding.dataset.building;
+    const pctX = parseFloat(dragBuilding.style.left);
+    const pctY = parseFloat(dragBuilding.style.top);
+    positions[building] = {x: Math.round(pctX * 10) / 10, y: Math.round(pctY * 10) / 10};
+    dragBuilding = null;
+    document.removeEventListener('mousemove', onDragMove);
+    document.removeEventListener('mouseup', onDragEnd);
+    document.removeEventListener('touchmove', onDragMove);
+    document.removeEventListener('touchend', onDragEnd);
+}
+
+// ===== 管理 =====
+function toggleAdmin() {
+    isAdmin = !isAdmin;
+    document.getElementById('adminBtnText').textContent = isAdmin ? '退出编辑' : '编辑布局';
+    document.getElementById('saveBtn').classList.toggle('d-none', !isAdmin);
+    document.getElementById('resetBtn').classList.toggle('d-none', !isAdmin);
+    document.getElementById('adminPanel').classList.toggle('show', isAdmin);
+    document.querySelectorAll('.building').forEach(el => {
+        el.classList.toggle('admin-mode', isAdmin);
+    });
+}
+
+async function savePositions() {
+    try {
+        const res = await fetch('/feature/digital-twin/save-positions', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({positions})
+        });
+        const data = await res.json();
+        showToast(data.success ? '保存成功 ✅' : '保存失败', data.success ? 'success' : 'error');
+    } catch(e) {
+        showToast('保存失败: ' + e.message, 'error');
+    }
+}
+
+function resetPositions() {
+    if (!confirm('重置所有建筑位置？')) return;
+    positions = {};
+    buildings.forEach(b => {
+        positions[b.building] = {x: Math.random() * 80 + 10, y: Math.random() * 60 + 20};
+    });
+    buildings.forEach(b => {
+        const el = document.querySelector(`[data-building="${b.building}"]`);
+        if (el) {
+            const p = positions[b.building];
+            el.style.left = p.x + '%';
+            el.style.top = p.y + '%';
+        }
+    });
+    showToast('已重置，点击保存生效', 'info');
+}
+
+async function saveMapUrl() {
+    const url = document.getElementById('mapUrlInput').value.trim();
+    try {
+        const res = await fetch('/feature/digital-twin/save-map', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({map_url: url})
+        });
+        const data = await res.json();
+        if (data.success) {
+            setMapBg(url || '');
+            showToast('地图已更新 ✅', 'success');
+        } else {
+            showToast('保存失败', 'error');
+        }
+    } catch(e) {
+        showToast('保存失败: ' + e.message, 'error');
+    }
+}
+
+async function uploadMapFile() {
+    const fileInput = document.getElementById('mapFileInput');
+    const file = fileInput.files[0];
+    if (!file) { showToast('请先选择图片', 'error'); return; }
+    if (file.size > 10 * 1024 * 1024) { showToast('图片不能超过10MB', 'error'); return; }
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await fetch('/feature/digital-twin/upload-map', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+            setMapBg(data.map_url);
+            document.getElementById('mapUrlInput').value = data.map_url;
+            fileInput.value = '';
+            showToast('图片上传成功 ✅', 'success');
+        } else {
+            showToast(data.error || '上传失败', 'error');
+        }
+    } catch(e) {
+        showToast('上传失败: ' + e.message, 'error');
+    }
+}
+
+// ===== 隔离模式（点击建筑只显示该楼）=====
+let isolatedBuildingName = null;
+
+function isolateBuilding(b) {
+    if (isolatedBuildingName === b.building) {
+        clearIsolate(); return;
+    }
+    isolatedBuildingName = b.building;
+    
+    document.querySelectorAll('.building').forEach(el => {
+        if (el.dataset.building === b.building) {
+            el.style.display = 'block';
+            el.style.zIndex = 100;
+            el.querySelector('.building-body').style.transform = 'scale(1.12)';
+            el.querySelector('.building-body').style.boxShadow = '0 0 40px rgba(99,102,241,0.5)';
+        } else {
+            el.style.display = 'none';
+        }
+    });
+    
+    const shape = getShape(b.building);
+    showToast(
+        `🔍 ${b.building} · ${b.fault_count}次故障 · ${shape.roof === '#8B4513' ? '红褐' : '金属'}屋顶`,
+        'info'
+    );
+}
+
+function clearIsolate() {
+    isolatedBuildingName = null;
+    document.querySelectorAll('.building').forEach(el => {
+        el.style.display = 'block';
+        el.style.zIndex = 10;
+        el.querySelector('.building-body').style.transform = '';
+        el.querySelector('.building-body').style.boxShadow = '';
+    });
+    showToast('已显示全部建筑', 'info');
+}
+
+// ===== Toast =====
+function showToast(msg, type) {
+    const el = document.getElementById('toastMsg');
+    el.textContent = msg;
+    el.className = 'toast-msg show ' + (type || 'info');
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ===== 启动 =====
+loadData();
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<div class="q-header">
+    <span class="q-number">#{{ loop.index }}</span>
+    <select name="q_type[]" class="q-type-select" onchange="updateOpts({{ q_idx }})">
+        <option value="single" {{ 'selected' if q.question_type=='single' else '' }}>单选题</option>
+        <option value="multi" {{ 'selected' if q.question_type=='multi' else '' }}>多选题</option>
+        <option value="judge" {{ 'selected' if q.question_type=='judge' else '' }}>判断题</option>
+        <option value="fill" {{ 'selected' if q.question_type=='fill' else '' }}>填空题</option>
+    </select>
+    <button type="button" class="q-remove" onclick="this.closest('.question-card').remove()"><i class="fas fa-times"></i></button>
+</div>
+<input type="text" name="q_title[]" class="q-text-input" value="{{ q.question_text }}" placeholder="请输入题目内容...">
+<div class="options-editor" id="opts_{{ q_idx }}">
+    {% set opts = q.get_options() %}
+    {% if q.question_type == 'judge' %}
+    <div class="q-type-hint"><i class="fas fa-balance-scale"></i> 判断题无需填写选项，答案填 <code>T</code> 或 <code>F</code></div>
+    {% elif q.question_type == 'fill' %}
+    <div class="q-type-hint"><i class="fas fa-edit"></i> 填空题无需选项，在答案框中填写标准答案</div>
+    {% else %}
+    {% for opt in opts %}
+    <div class="option-row">
+        <span class="opt-label">{{ opt.label }}</span>
+        <input type="text" value="{{ opt.text }}" placeholder="选项内容" oninput="updateOptsJSON({{ q_idx }})">
+        <input type="hidden" class="opt-label-val" value="{{ opt.label }}">
+        <button type="button" class="opt-remove" onclick="this.parentElement.remove();updateOptsJSON({{ q_idx }})"><i class="fas fa-times"></i></button>
+    </div>
+    {% endfor %}
+    <button type="button" class="opt-add-btn" onclick="addOption({{ q_idx }})"><i class="fas fa-plus"></i> 添加选项</button>
+    {% endif %}
+</div>
+<div class="q-meta-row">
+    <span class="q-meta-item">
+        <label>分值</label>
+        <input type="number" name="q_score[]" value="{{ q.score }}" min="0" step="0.5">
+    </span>
+    <span class="q-meta-item">
+        <label>答案</label>
+        <input type="text" name="q_answer[]" class="q-answer-input" value="{{ q.answer }}" placeholder="正确答案">
+    </span>
+    <span class="q-meta-item wide">
+        <label>解析</label>
+        <input type="text" name="q_analysis[]" class="q-answer-input" value="{{ q.analysis }}" placeholder="答案解析（可选）">
+    </span>
+</div>
+<input type="hidden" name="q_options_{{ q_idx }}" id="qopt_json_{{ q_idx }}" value='{{ q.options|safe }}'>

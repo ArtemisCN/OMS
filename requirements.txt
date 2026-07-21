@@ -1,0 +1,8 @@
+flask>=3.0
+flask-login>=0.6
+flask-sqlalchemy>=3.0
+wtforms>=3.0
+fuzzywuzzy>=0.18
+python-Levenshtein>=0.12
+openpyxl>=3.0
+gunicorn>=20.0

@@ -1,0 +1,1382 @@
+{% extends "base.html" %}
+{% block extra_head %}
+    <link href="/static/css/dashboard.css?v=2" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div id="dashboard-content">
+<!-- 标题栏 -->
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <div>
+        <h5 class="mb-0 fw-bold" style="font-size:18px;">
+            <i class="fas fa-chart-pie dashboard-title-icon"></i>
+            仪表盘
+            {% if dashboard_date == today_str %}
+                <span class="text-muted fw-normal ms-1" style="font-size:13px">{{ now.year }}年{{ now.month }}月</span>
+            {% else %}
+                <span class="fw-bold ms-1" style="font-size:13px;color:#d97706;">📅 {{ dashboard_date }} 历史查看</span>
+            {% endif %}
+        </h5>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;">
+        {% if teams and current_user.is_admin %}
+        <select name="team" id="dashTeamSelect" style="font-size:13px;padding:6px 10px;border:1px solid var(--border,#e2e8f0);border-radius:8px;outline:none;background:var(--input-bg,#fff);color:var(--text);cursor:pointer;" onchange="goDashboardTeam()">
+            <option value="">全部组</option>
+            {% for t in teams %}
+            <option value="{{ t }}" {% if team_sel==t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+        <input type="date" id="dashboardDatePicker" value="{{ dashboard_date }}" style="font-size:16px;padding:8px 14px;border:2px solid var(--primary,#6366f1);border-radius:10px;outline:none;color:#1e293b;background:#ffffff;font-weight:600;min-width:190px;cursor:pointer;box-shadow:0 2px 8px rgba(99,102,241,0.15);">
+        <button onclick="goDashboardDate()" style="font-size:14px;padding:8px 20px;border:none;border-radius:10px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;cursor:pointer;white-space:nowrap;font-weight:600;box-shadow:0 2px 8px rgba(79,70,229,0.3);">📅 查询</button>
+        {% if dashboard_date and dashboard_date != today_str %}
+        <a href="/" style="font-size:11px;padding:3px 10px;border:1px solid #e2e8f0;border-radius:6px;color:#64748b;text-decoration:none;white-space:nowrap;">← 返回今日</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if current_user.is_admin or user_assigned_hospitals|length > 1 %}
+<!-- 医院切换下拉 -->
+<div style="margin-bottom:10px;padding:8px 14px;background:linear-gradient(135deg,rgba(99,102,241,.06),rgba(6,182,212,.06));border:1px solid rgba(99,102,241,.15);border-radius:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <i class="fas fa-hospital" style="color:var(--primary);font-size:14px;"></i>
+    <span style="font-size:13px;font-weight:500;color:var(--text);">当前院区:</span>
+    <div style="position:relative;flex:1;min-width:160px;">
+        <div onclick="toggleDashHospitalDropdown()" style="display:flex;align-items:center;gap:6px;padding:4px 12px;border:1px solid rgba(99,102,241,.3);border-radius:6px;cursor:pointer;background:var(--input-bg,rgba(255,255,255,.8));font-size:13px;font-weight:600;color:var(--primary);">
+            <span style="flex:1;">{{ current_hospital.name if current_hospital else '未选择' }}</span>
+            <i class="fas fa-chevron-down" style="font-size:10px;color:var(--text-muted);"></i>
+        </div>
+        <div id="dashHospitalDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:100;margin-top:4px;border:1px solid var(--border,#e2e8f0);border-radius:8px;background:var(--card-bg,#fff);box-shadow:0 8px 24px rgba(0,0,0,.12);overflow:hidden;">
+            {% set switch_list = all_hospitals if current_user.is_admin else user_assigned_hospitals %}
+            {% if current_user.is_admin %}
+            <a href="{{ url_for('data.switch_hospital', hid=0) }}"
+               style="display:flex;align-items:center;gap:8px;padding:8px 14px;font-size:13px;color:var(--text);text-decoration:none;transition:background .1s;
+                      {% if current_hospital and current_hospital.id == 0 %}background:rgba(99,102,241,.1);font-weight:600;{% endif %}"
+               onmouseover="this.style.background='rgba(99,102,241,.08)'"
+               onmouseout="this.style.background={% if current_hospital and current_hospital.id == 0 %}'rgba(99,102,241,.1)'{% else %}'transparent'{% endif %}">
+                <i class="fas fa-{% if current_hospital and current_hospital.id == 0 %}dot-circle{% else %}circle{% endif %}" style="font-size:10px;color:{% if current_hospital and current_hospital.id == 0 %}var(--primary){% else %}var(--text-muted){% endif %};"></i>
+                🌐 全部医院
+            </a>
+            {% endif %}
+            {% for h in switch_list %}
+            <a href="{{ url_for('data.switch_hospital', hid=h.id) }}"
+               style="display:flex;align-items:center;gap:8px;padding:8px 14px;font-size:13px;color:var(--text);text-decoration:none;transition:background .1s;
+                      {% if current_hospital and current_hospital.id == h.id %}background:rgba(99,102,241,.1);font-weight:600;{% endif %}"
+               onmouseover="this.style.background='rgba(99,102,241,.08)'"
+               onmouseout="this.style.background={% if current_hospital and current_hospital.id == h.id %}'rgba(99,102,241,.1)'{% else %}'transparent'{% endif %}">
+                <i class="fas fa-{% if current_hospital and current_hospital.id == h.id %}dot-circle{% else %}circle{% endif %}" style="font-size:10px;color:{% if current_hospital and current_hospital.id == h.id %}var(--primary){% else %}var(--text-muted){% endif %};"></i>
+                {{ h.name }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+<script>
+function toggleDashHospitalDropdown() {
+    var dd = document.getElementById('dashHospitalDropdown');
+    if (dd) dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', function(e) {
+    var dd = document.getElementById('dashHospitalDropdown');
+    if (dd && !e.target.closest('[onclick^=\"toggleDashHospitalDropdown\"]') && !e.target.closest('#dashHospitalDropdown')) {
+        dd.style.display = 'none';
+    }
+});
+</script>
+{% endif %}
+
+{% if dashboard_date and dashboard_date != today_str %}
+<!-- 历史查看模式提示条 -->
+<div style="margin-bottom:12px;padding:8px 14px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:8px;">
+    <i class="fas fa-history" style="color:#d97706;"></i>
+    <span>历史查看模式 — 所有数据以 <strong>{{ dashboard_date }}</strong> 为基准（当月/当日趋势截止到该日期）</span>
+</div>
+{% endif %}
+
+<!-- 实时状态条 -->
+<div style="margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;color:#64748b;padding:6px 10px;background:rgba(255,255,255,0.4);border-radius:10px;backdrop-filter:blur(8px);border:1px solid rgba(0,0,0,0.03);">
+    <span style="display:flex;align-items:center;gap:4px;">
+        <span style="width:6px;height:6px;border-radius:50%;background:#10b981;animation:pulse-soft 2s infinite;"></span>
+        系统运行中
+    </span>
+    <span style="display:flex;align-items:center;gap:4px;">
+        <i class="fas fa-file-alt" style="color:#6366f1;font-size:10px;"></i>
+        本月工单 <strong style="color:#1e293b;">{{ monthly_count }}</strong>
+    </span>
+    <span style="display:flex;align-items:center;gap:4px;">
+        <i class="fas fa-check-circle" style="color:#10b981;font-size:10px;"></i>
+        今日完成 <strong style="color:#1e293b;">{{ today_completed }}</strong>
+    </span>
+    <span style="display:flex;align-items:center;gap:4px;">
+        <i class="fas fa-clock" style="color:#f59e0b;font-size:10px;"></i>
+        待处理 <strong style="color:#1e293b;">{{ today_pending }}</strong>
+    </span>
+    <span style="display:flex;align-items:center;gap:4px;margin-left:auto;">
+        <span class="live-clock-text" style="font-weight:500;"></span>
+    </span>
+</div>
+
+<!-- 第一行：4个统计卡片（入场动画） -->
+<div class="row g-2 mb-2 animate-in">
+    <div class="col-md-3 col-6 mb-2">
+        <div class="card card-stat h-100" onclick="location.href='/orders/?status=completed'" style="cursor:pointer;background:linear-gradient(135deg,#f0fdf4,#ecfdf5);">
+            <div class="stat-bar" style="background:linear-gradient(180deg,#10b981,#34d399);"></div>
+            <div class="stat-body">
+                <div class="stat-icon" style="background:linear-gradient(135deg,#d1fae5,#a7f3d0);color:#10b981;">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div>
+                    <div class="stat-label" style="color:#059669;">今日完成</div>
+                    <div class="stat-value stat-counter" data-target="{{ today_completed }}" style="color:#1e293b;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6 mb-2">
+        <div class="card card-stat h-100" onclick="location.href='/orders/?status=in_progress'" style="cursor:pointer;background:linear-gradient(135deg,#fffbeb,#fef3c7);">
+            <div class="stat-bar" style="background:linear-gradient(180deg,#f59e0b,#fbbf24);"></div>
+            <div class="stat-body">
+                <div class="stat-icon" style="background:linear-gradient(135deg,#fef3c7,#fde68a);color:#f59e0b;">
+                    <i class="fas fa-spinner"></i>
+                </div>
+                <div>
+                    <div class="stat-label" style="color:#d97706;">处理中</div>
+                    <div class="stat-value stat-counter" data-target="{{ today_in_progress }}" style="color:#1e293b;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6 mb-2">
+        <div class="card card-stat h-100" onclick="location.href='/orders/?status=pending'" style="cursor:pointer;background:linear-gradient(135deg,#fef2f2,#fee2e2);">
+            <div class="stat-bar" style="background:linear-gradient(180deg,#ef4444,#f87171);"></div>
+            <div class="stat-body">
+                <div class="stat-icon" style="background:linear-gradient(135deg,#fee2e2,#fecaca);color:#ef4444;">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div>
+                    <div class="stat-label" style="color:#dc2626;">待接单</div>
+                    <div class="stat-value" style="color:#1e293b;">
+                        <span class="stat-counter" data-target="{{ today_pending }}"></span>
+                        {% if pending_emergency > 0 %}
+                        <span class="badge-urgent" style="background:#dc2626;box-shadow:0 0 8px rgba(220,38,38,0.3);"><i class="fas fa-exclamation-triangle" style="font-size:8px;"></i> {{ pending_emergency }}</span>
+                        {% endif %}
+                        {% if pending_urgent > 0 %}
+                        <span class="badge-urgent" style="background:#d97706;box-shadow:0 0 8px rgba(217,119,6,0.3);"><i class="fas fa-exclamation-triangle" style="font-size:8px;"></i> {{ pending_urgent }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6 mb-2">
+        <div class="card card-stat h-100" onclick="location.href='/report/'" style="cursor:pointer;background:linear-gradient(135deg,#eef2ff,#e0e7ff);">
+            <div class="stat-bar" style="background:linear-gradient(180deg,#4f46e5,#818cf8);"></div>
+            <div class="stat-body">
+                <div class="stat-icon" style="background:linear-gradient(135deg,#e0e7ff,#c7d2fe);color:#4f46e5;">
+                    <i class="fas fa-percentage"></i>
+                </div>
+                <div>
+                    <div class="stat-label" style="color:#4338ca;">完成率</div>
+                    <div class="stat-value" style="color:#1e293b;"><span class="stat-counter" data-target="{{ today_rate }}"></span>%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 第二行：4个统计（入场动画） -->
+<div class="row g-2 mb-2 animate-in">
+    <div class="col-md-3 col-6 mb-2">
+        <div class="card card-stat h-100" onclick="location.href='/orders/?status=all'" style="cursor:pointer;background:linear-gradient(135deg,#ecfeff,#cffafe);">
+            <div class="stat-bar" style="background:linear-gradient(180deg,#0ea5e9,#38bdf8);"></div>
+            <div class="stat-body">
+                <div class="stat-icon" style="background:linear-gradient(135deg,#cffafe,#a5f3fc);color:#0ea5e9;">
+                    <i class="fas fa-file-alt"></i>
+                </div>
+                <div>
+                    <div class="stat-label" style="color:#0284c7;">本月工单</div>
+                    <div class="stat-value stat-counter" data-target="{{ monthly_count }}" style="color:#1e293b;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6 mb-2">
+        <div class="card card-stat h-100" onclick="location.href='/orders/?status=all'" style="cursor:pointer;background:linear-gradient(135deg,#f5f3ff,#ede9fe);">
+            <div class="stat-bar" style="background:linear-gradient(180deg,#8b5cf6,#a78bfa);"></div>
+            <div class="stat-body">
+                <div class="stat-icon" style="background:linear-gradient(135deg,#ede9fe,#ddd6fe);color:#8b5cf6;">
+                    <i class="fas fa-database"></i>
+                </div>
+                <div>
+                    <div class="stat-label" style="color:#7c3aed;">工单总数</div>
+                    <div class="stat-value stat-counter" data-target="{{ total_all }}" style="color:#1e293b;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6 mb-2">
+        <div class="card card-stat h-100" onclick="location.href='/data/persons'" style="cursor:pointer;background:linear-gradient(135deg,#fff7ed,#ffedd5);">
+            <div class="stat-bar" style="background:linear-gradient(180deg,#f97316,#fb923c);"></div>
+            <div class="stat-body">
+                <div class="stat-icon" style="background:linear-gradient(135deg,#ffedd5,#fed7aa);color:#f97316;">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div>
+                    <div class="stat-label" style="color:#ea580c;">维保人员</div>
+                    <div class="stat-value stat-counter" data-target="{{ person_stats|length }}" style="color:#1e293b;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6 mb-2">
+        <div class="card card-stat h-100" onclick="location.href='/data/fault-types'" style="cursor:pointer;background:linear-gradient(135deg,#f0fdfa,#ccfbf1);">
+            <div class="stat-bar" style="background:linear-gradient(180deg,#14b8a6,#2dd4bf);"></div>
+            <div class="stat-body">
+                <div class="stat-icon" style="background:linear-gradient(135deg,#ccfbf1,#99f6e4);color:#14b8a6;">
+                    <i class="fas fa-tag"></i>
+                </div>
+                <div>
+                    <div class="stat-label" style="color:#0d9488;">故障类型</div>
+                    <div class="stat-value stat-counter" data-target="{{ type_stats|length }}" style="color:#1e293b;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SLA 时效评分卡（入场动画） -->
+<div class="row g-2 mb-3 animate-in">
+    <div class="col-12">
+        <div class="card" style="border:1px solid rgba(0,0,0,0.04);border-radius:16px;box-shadow:0 2px 12px rgba(0,0,0,0.04);overflow:hidden;">
+            <!-- 顶部渐变条 -->
+            <div style="height:4px;background:linear-gradient(90deg,#10b981,#34d399,#f59e0b,#f97316,#ef4444,#f472b6);"></div>
+            <div onclick="location.href='/report/'" style="padding:18px 22px;cursor:pointer;" title="查看SLA详细报告">
+                <div class="row g-2 align-items-stretch">
+                    <!-- 准时率 - 圆环进度 -->
+                    <div class="col-md-2 d-flex flex-column align-items-center justify-content-center" style="border-right:1px solid #f1f5f9;">
+                        {% set ontime_rate = ((monthly_count - overdue_count) / monthly_count * 100)|round(1) if monthly_count else 100 %}
+                        {% if ontime_rate >= 98 %}
+                        {% set rc = '#10b981' %}{% set rbg = '#d1fae5' %}{% set rl = '优秀' %}
+                        {% elif ontime_rate >= 90 %}
+                        {% set rc = '#f59e0b' %}{% set rbg = '#fef3c7' %}{% set rl = '良好' %}
+                        {% else %}
+                        {% set rc = '#ef4444' %}{% set rbg = '#fee2e2' %}{% set rl = '待提升' %}
+                        {% endif %}
+                        {% set r = ontime_rate|int %}
+                        <svg width="104" height="104" viewBox="0 0 72 72" style="margin-bottom:6px;outline:none;border:none;" class="sla-ring">
+                            <circle cx="36" cy="36" r="30" fill="none" stroke="#f1f5f9" stroke-width="8"/>
+                            <circle cx="36" cy="36" r="30" fill="none" stroke="{{ rc }}" stroke-width="8"
+                                    stroke-dasharray="188.5" stroke-dashoffset="{{ 188.5*(1-r/100) }}"
+                                    transform="rotate(-90,36,36)" stroke-linecap="round"
+                                    id="sla-ring-arc"/>
+                            <text x="36" y="36" text-anchor="middle" font-size="14" font-weight="800" fill="{{ rc }}" id="sla-ring-text" dominant-baseline="central" style="text-shadow:0 0 4px rgba(255,255,255,0.8);">{{ r }}%</text>
+                        </svg>
+                        <div style="display:inline-block;padding:2px 10px;border-radius:8px;background:{{ rbg }};color:{{ rc }};font-size:11px;font-weight:600;">{{ rl }}</div>
+                    </div>
+
+                    <!-- SLA 分布 -->
+                    <div class="col-md-5 d-flex flex-column justify-content-center" style="border-right:1px solid #f1f5f9;">
+                        <div style="font-size:11px;color:#64748b;margin-bottom:8px;">
+                            <i class="fas fa-chart-pie" style="color:#8b5cf6;"></i> SLA 评级分布
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;">
+                            {% set bars_info = [('极速','#10b981','≤30分'),('快速','#059669','≤60分'),('较快','#f59e0b','≤2小时'),('一般','#f97316','≤4小时'),('较慢','#ef4444','≤8小时'),('很慢','#dc2626','>8小时')] %}
+                            {% set max_cnt = [sla_distribution.get('极速',0),sla_distribution.get('快速',0),sla_distribution.get('较快',0),sla_distribution.get('一般',0),sla_distribution.get('较慢',0),sla_distribution.get('很慢',0)]|max %}
+                            {% for name, bar_c, bar_desc in bars_info %}
+                            {% set cnt = sla_distribution.get(name, 0) %}
+                            {% set pct = (cnt/max_cnt*100)|int if max_cnt else 0 %}
+                            <div>
+                                <div style="display:flex;align-items:center;gap:4px;">
+                                    <span style="width:8px;height:8px;border-radius:50%;background:{{ bar_c }};flex-shrink:0;"></span>
+                                    <span style="font-size:10px;color:#64748b;">{{ name }}</span>
+                                    <span style="margin-left:auto;font-size:11px;font-weight:700;color:{{ bar_c }};">{{ cnt }}人</span>
+                                </div>
+                                <div style="margin-top:1px;height:6px;background:#f1f5f9;border-radius:3px;overflow:hidden;">
+                                    <div class="sla-bar-fill" style="height:100%;width:0;background:{{ bar_c }};border-radius:3px;transition:width 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);"></div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- 关键指标 -->
+                    <div class="col-md-5 d-flex flex-wrap align-items-center" style="gap:6px;">
+                        {% set kpis = [
+                            ('参与人数', sla_items|length, '#8b5cf6', 'fa-users'),
+                            ('平均响应', '%.0f'|format(sla_items|sum(attribute='avg_resp') / sla_items|length) if sla_items else '0', '#0ea5e9', 'fa-clock'),
+                            ('超时数', overdue_count, '#ef4444', 'fa-exclamation-triangle'),
+                            ('本月总单', monthly_count, '#f59e0b', 'fa-file-alt'),
+                        ] %}
+                        {% for label, val, color, icon in kpis %}
+                        <div style="flex:1;min-width:80px;text-align:center;padding:10px 4px;background:#f8fafc;border-radius:12px;border:1px solid rgba(0,0,0,0.03);transition:all 0.2s;" onmouseover="this.style.background='#f1f5f9';this.style.transform='scale(1.03)'" onmouseout="this.style.background='#f8fafc';this.style.transform=''">
+                            <div style="font-size:18px;color:{{ color }};"><i class="fas {{ icon }}"></i></div>
+                            <div style="font-size:22px;font-weight:800;color:#1e293b;line-height:1.2;">{{ val }}</div>
+                            <div style="font-size:10px;color:#94a3b8;font-weight:500;">{{ label }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 图表轮播（入场动画） -->
+<div class="row g-3 mb-3 animate-in">
+    <div class="col-12">
+        <div class="card card-trend">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-chart-line" style="color:var(--accent);background:rgba(6,182,212,0.1);width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;"></i> <span id="chartTitle">近7日工单趋势</span></span>
+                <span style="font-size:11px;color:#94a3b8;display:flex;align-items:center;gap:6px;">
+                    <span id="chartDot1" class="chart-dot active"></span>
+                    <span id="chartDot2" class="chart-dot"></span>
+                    <span class="ms-2" id="chartCountdown" style="font-size:11px;color:#94a3b8;">15s</span>
+                    <a href="/report/" style="color:var(--primary);text-decoration:none;font-size:11px;font-weight:600;margin-left:4px;" title="查看详细报告"><i class="fas fa-external-link-alt" style="font-size:10px;"></i> 报告</a>
+                </span>
+            </div>
+            <div class="card-body" style="min-height:230px; position:relative;">
+                <div style="position:absolute;top:0;left:0;right:0;bottom:0;padding:12px;overflow:hidden;">
+                    <canvas id="trendChart"></canvas>
+                </div>
+                <div style="position:absolute;top:0;left:0;right:0;bottom:0;padding:12px;overflow:hidden;display:none;" id="respChartWrap">
+                    <canvas id="responseTrendChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 底部4个等大卡片（入场动画） -->
+<div class="row g-3 animate-in">
+    <!-- 故障类型 / 故障复现 -->
+    <div class="col-md-3">
+        <div class="card card-section h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-chart-bar" style="color:var(--primary);background:rgba(99,102,241,0.1);width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:5px;"></i> <span id="faultTypeTitle">故障类型</span></span>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <span id="faultTypeTabBtn" class="badge" style="background:#4f46e5;cursor:pointer;font-size:11px;">类型</span>
+                    <span id="repeatFaultTabBtn" class="badge" style="background:#e2e8f0;color:#475569;cursor:pointer;font-size:11px;">复现</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- 故障类型视图 -->
+                <div id="faultTypeView">
+                {% if type_stats %}
+                {% set colors = ['primary','info','warning','success','secondary','danger'] %}
+                {% set ft_icons = ['fa-print','fa-laptop','fa-tools','fa-question-circle','fa-cog','fa-exclamation-triangle'] %}
+                {% set ft_dots = ['#4f46e5','#0ea5e9','#f59e0b','#10b981','#94a3b8','#ef4444'] %}
+                {% set ft_sorted = type_stats.items()|list|sort(attribute='1', reverse=True) %}
+                {% for ft, cnt in ft_sorted[:3] %}
+                 <div class="item-box fault-item" onclick="location.href='/orders/?fault_type={{ ft|urlencode }}&amp;status='" style="cursor:pointer;" title="查看「{{ ft }}」类工单">
+                     <div class="d-flex align-items-center mb-1">
+                         <span style="width:20px;text-align:center;color:{{ ft_dots[loop.index0 % 6] }};flex-shrink:0;font-size:14px;"><i class="fas {{ ft_icons[loop.index0 % 6] }}"></i></span>
+                         <span style="font-size:14px;font-weight:500;color:#334155;margin-left:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ ft }}</span>
+                         <div style="margin-left:auto;display:flex;align-items:baseline;gap:4px;">
+                             <span class="fw-bold" style="font-size:18px;color:#1e293b;">{{ cnt }}</span>
+                             <span class="text-muted" style="font-size:11px;">/ {{ monthly_count }}</span>
+                         </div>
+                     </div>
+                     <div class="progress" style="height:6px;background:#f1f5f9;border-radius:3px;margin-left:24px;">
+                         <div class="progress-bar rounded-pill bg-{{ colors[loop.index0 % 6] }}" style="width:{{ (cnt/monthly_count*100)|int if monthly_count else 0 }}%"></div>
+                     </div>
+                 </div>
+                {% endfor %}
+                {% if ft_sorted|length > 3 %}
+                <div class="text-center text-muted mt-1" style="font-size:11px;">+{{ ft_sorted|length - 3 }} 种其它类型</div>
+                {% endif %}
+                <div class="text-muted text-center mt-1" style="font-size:10px;border-top:1px solid #f1f5f9;padding-top:5px;">
+                    {{ type_stats|length }} 类 / {{ monthly_count }} 单
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-4 small">暂无数据</div>
+                {% endif %}
+                </div>
+                <!-- 故障复现视图 -->
+                <div id="repeatFaultView" style="display:none;">
+                {% if repeat_faults %}
+                {% set rcolors = ['danger','warning','primary','info','success','secondary'] %}
+                {% set ricons = ['fa-map-marker-alt','fa-map-marker-alt','fa-map-marker-alt','fa-map-marker-alt','fa-map-marker-alt','fa-map-marker-alt'] %}
+                {% set rdots = ['#ef4444','#f59e0b','#4f46e5','#0ea5e9','#10b981','#94a3b8'] %}
+                {% for item in repeat_faults[:3] %}
+                 <div class="item-box fault-item" onclick="location.href='{{ item.link_url }}'" style="cursor:pointer;" title="查看「{{ item.location }} - {{ item.fault_type }}」工单">
+                     <div class="d-flex align-items-center mb-1">
+                         <span style="width:20px;text-align:center;color:{{ rdots[loop.index0 % 6] }};flex-shrink:0;font-size:14px;"><i class="fas {{ ricons[loop.index0 % 6] }}"></i></span>
+                         <span style="font-size:13px;font-weight:500;color:#334155;margin-left:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;max-width:70px;" title="{{ item.location }}">{{ item.location }}</span>
+                         <span style="font-size:11px;color:#94a3b8;margin:0 3px;">-</span>
+                         <span style="font-size:13px;font-weight:500;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{{ item.fault_type }}">{{ item.fault_type }}</span>
+                         <div style="margin-left:auto;display:flex;align-items:baseline;gap:4px;">
+                             <span class="fw-bold" style="font-size:18px;color:#dc2626;">{{ item.count }}</span>
+                             <span class="text-muted" style="font-size:11px;">次</span>
+                         </div>
+                     </div>
+                     <div class="progress" style="height:6px;background:#fef2f2;border-radius:3px;margin-left:24px;">
+                         <div class="progress-bar rounded-pill bg-{{ rcolors[loop.index0 % 6] }}" style="width:{{ (item.count/repeat_faults[0].count*100)|int if repeat_faults else 0 }}%"></div>
+                     </div>
+                 </div>
+                {% endfor %}
+                {% if repeat_faults|length > 3 %}
+                <div class="text-center text-muted mt-1" style="font-size:11px;">+{{ repeat_faults|length - 3 }} 处其它</div>
+                {% endif %}
+                <div class="text-muted text-center mt-1" style="font-size:10px;border-top:1px solid #f1f5f9;padding-top:5px;">
+                    {{ repeat_faults|length }} 处故障复现
+                </div>
+                {% else %}
+                <div class="text-center py-4" style="color:#94a3b8;">
+                    <div style="font-size:32px;margin-bottom:8px;color:#e2e8f0;"><i class="fas fa-check-circle"></i></div>
+                    <div style="font-size:13px;font-weight:500;">本月暂无高频复现故障</div>
+                    <div style="font-size:11px;margin-top:2px;">同地址+同类型均未达2次</div>
+                </div>
+                {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SLA 榜 + 接单榜 -->
+    <div class="col-md-3">
+        <div class="card card-section h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-trophy" style="color:#f59e0b;background:rgba(245,158,11,0.12);width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:5px;"></i> <span id="slaRankTitle">SLA 榜</span></span>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <span id="slaTabBtn" class="badge" style="background:#4f46e5;cursor:pointer;font-size:11px;">SLA</span>
+                    <span id="countTabBtn" class="badge" style="background:#e2e8f0;color:#475569;cursor:pointer;font-size:11px;">接单量</span>
+                    <a href="/data/persons" style="color:#4f46e5;text-decoration:none;font-size:10px;font-weight:600;margin-left:2px;" title="查看维保人员排名"><i class="fas fa-external-link-alt" style="font-size:9px;"></i> 排名</a>
+                </div>
+            </div>
+            <div class="card-body" style="display:flex;flex-direction:column;">
+                <!-- SLA 视图 -->
+                <div id="slaRankView" style="display:flex;flex-direction:column;justify-content:space-between;min-height:0;flex:1;">
+                    {% if sla_items %}
+                    <div style="display:grid;grid-template-columns:20px 1fr auto auto;align-items:center;gap:4px 4px;padding:0 10px 4px;font-size:9px;color:#94a3b8;font-weight:600;border-bottom:1px solid #f1f5f9;margin-bottom:4px;">
+                        <span>#</span>
+                        <span>姓名</span>
+                        <span>响应时间</span>
+                        <span>超时</span>
+                    </div>
+                    <div style="flex:1;overflow-y:auto;">
+                    {% for person in sla_items[:10] %}
+                    {% set p_lbl = person.sla_label or '响应较慢' %}
+                    {% if '极速' in p_lbl %}{% set pc = '#10b981' %}{% set pb = '#d1fae5' %}
+                    {% elif '快速' in p_lbl %}{% set pc = '#059669' %}{% set pb = '#a7f3d0' %}
+                    {% elif '较快' in p_lbl %}{% set pc = '#f59e0b' %}{% set pb = '#fef3c7' %}
+                    {% elif '较慢' in p_lbl %}{% set pc = '#f97316' %}{% set pb = '#ffedd5' %}
+                    {% elif '一般' in p_lbl %}{% set pc = '#ef4444' %}{% set pb = '#fee2e2' %}
+                    {% else %}{% set pc = '#ef4444' %}{% set pb = '#fee2e2' %}
+                    {% endif %}
+                    <div class="item-box" style="display:grid;grid-template-columns:20px 1fr auto auto;align-items:center;gap:4px 6px;cursor:pointer;" onclick="location.href='/orders/?person={{ person.name|urlencode }}&amp;status=all'" title="查看{{ person.name }}的工单">
+                        <span style="font-size:12px;color:{{ '#f59e0b' if loop.index <= 3 else '#94a3b8' }};">
+                            {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% else %}{{ loop.index }}{% endif %}
+                        </span>
+                        <div style="display:flex;align-items:center;gap:4px;min-width:0;">
+                            <span style="font-size:12px;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ person.name }}</span>
+                            <span style="font-size:8px;padding:0 5px;border-radius:6px;background:{{ pb }};color:{{ pc }};white-space:nowrap;flex-shrink:0;">{{ p_lbl }}</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:3px;font-size:11px;">
+                            {% if person.avg_resp <= 30 %}
+                            <span style="color:#10b981;font-weight:700;">{{ person.avg_resp }}分</span>
+                            {% elif person.avg_resp <= 60 %}
+                            <span style="color:#059669;font-weight:600;">{{ person.avg_resp }}分</span>
+                            {% elif person.avg_resp <= 120 %}
+                            <span style="color:#f59e0b;font-weight:600;">{{ person.avg_resp }}分</span>
+                            {% else %}
+                            <span style="color:#ef4444;font-weight:600;">{{ person.avg_resp }}分</span>
+                            {% endif %}
+                        </div>
+                        <div style="display:flex;align-items:center;gap:2px;">
+                            {% if person.overdue > 0 %}
+                            <i class="fas fa-exclamation-triangle" style="font-size:10px;color:#ef4444;"></i>
+                            <span style="font-size:11px;font-weight:700;color:#ef4444;">{{ person.overdue }}</span>
+                            {% else %}
+                            <i class="fas fa-check-circle" style="font-size:10px;color:#10b981;"></i>
+                            <span style="font-size:11px;font-weight:600;color:#10b981;">0</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                    </div>
+                    {% set sla_avg_resp = (sla_items|sum(attribute='avg_resp') / sla_items|length)|round(1) if sla_items else 0 %}
+                    {% set sla_on_time = ((monthly_count - overdue_count) / monthly_count * 100)|round(1) if monthly_count else 100 %}
+                    <div class="d-flex text-center" style="border-top:1px solid #f1f5f9;padding-top:6px;flex-shrink:0;">
+                        <div style="flex:1;"><span class="fw-bold" style="font-size:18px;color:#1e293b;">{{ sla_items|length }}</span><br><span class="text-muted" style="font-size:11px;">参与人数</span></div>
+                        <div style="flex:1;"><span class="fw-bold" style="font-size:18px;color:#0ea5e9;">{{ sla_avg_resp }}分</span><br><span class="text-muted" style="font-size:11px;">平均响应</span></div>
+                        <div style="flex:1;"><span class="fw-bold" style="font-size:18px;color:#ef4444;">{{ overdue_count }}</span><br><span class="text-muted" style="font-size:11px;">超时数</span></div>
+                        <div style="flex:1;"><span class="fw-bold" style="font-size:18px;color:#10b981;">{{ sla_on_time }}%</span><br><span class="text-muted" style="font-size:11px;">准时率</span></div>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-4 small" style="flex:1;display:flex;align-items:center;justify-content:center;">暂无数据</div>
+                    {% endif %}
+                </div>
+                <!-- 接单量视图 -->
+                <div id="countRankView" style="display:none;flex-direction:column;justify-content:space-between;min-height:0;flex:1;">
+                    {% set medals = ['🥇','🥈','🥉'] %}
+                    {% set bar_colors = ['#f59e0b','#94a3b8','#d97706','#10b981','#0ea5e9','#8b5cf6','#f97316','#6366f1'] %}
+                    {% set max_cnt = person_stats.values()|first if person_stats else 0 %}
+                    <div style="flex:1;overflow-y:auto;">
+                    {% for p, cnt in (person_stats.items()|list)[:10] %}
+                    <div class="item-box" style="display:grid;grid-template-columns:20px auto 1fr 24px;align-items:center;cursor:pointer;padding:6px 0;" onclick="location.href='/orders/?person={{ p|urlencode }}&amp;status=all'" title="查看{{ p }}的接单记录">
+                        <div style="text-align:center;">
+                            {% if loop.index <= 3 %}
+                            <span style="font-size:16px">{{ medals[loop.index0] }}</span>
+                            {% else %}
+                            <span class="text-muted" style="font-size:12px;">{{ loop.index }}</span>
+                            {% endif %}
+                        </div>
+                        <div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px 0 4px;">{{ p }}</div>
+                        <div style="padding-right:4px;">
+                            <div class="progress" style="height:7px;background:#f1f5f9;">
+                                <div class="progress-bar rounded-pill" style="width:{{ (cnt/max_cnt*100)|int if max_cnt else 0 }}%;background:{{ bar_colors[loop.index0 % 8] }};"></div>
+                            </div>
+                        </div>
+                        <div style="font-weight:700;text-align:right;font-size:13px;color:#1e293b;">{{ cnt }}</div>
+                    </div>
+                    {% endfor %}
+                    </div>
+                    <div class="d-flex text-center" style="border-top:1px solid #f1f5f9;padding-top:6px;flex-shrink:0;">
+                        <div style="flex:1;"><span class="fw-bold" style="font-size:18px;color:#1e293b;">{{ monthly_count }}</span><br><span class="text-muted" style="font-size:11px;">本月总工单</span></div>
+                        <div style="flex:1;"><span class="fw-bold" style="font-size:18px;color:#1e293b;">{{ person_stats|length }}</span><br><span class="text-muted" style="font-size:11px;">参与人数</span></div>
+                        <div style="flex:1;"><span class="fw-bold" style="font-size:18px;color:#1e293b;">{{ (person_stats.values()|sum / person_stats|length)|round(1) if person_stats else 0 }}</span><br><span class="text-muted" style="font-size:11px;">人均工单</span></div>
+                        <div style="flex:1;"><span class="fw-bold" style="font-size:18px;color:#f59e0b;">{{ max_cnt }}</span><br><span class="text-muted" style="font-size:11px;">最高处理</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 今日动态 -->
+    <div class="col-md-3">
+        <div class="card card-section h-100">
+            <div class="card-header"><i class="fas fa-clock" style="color:#f97316;background:rgba(249,115,22,0.1);width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:5px;"></i> 今日工单动态 <a href="/orders/?status=all" style="float:right;font-size:10px;color:var(--primary);font-weight:600;text-decoration:none;" title="查看今日全部工单">查看全部 →</a></div>
+            <div class="card-body" style="display:flex;flex-direction:column;padding-bottom:4px;">
+                {% if today_orders %}
+                {% set per_page = 4 %}
+                <div class="scroll-wrap" id="newsScroll" style="flex:1;min-height:0;">
+                    <div class="scroll-list" id="newsList">
+                    {% for chunk in today_orders[:8]|batch(per_page) %}
+                    <div class="scroll-page">
+                        {% for o in chunk %}
+                         <div class="item-box" onclick="location.href='/orders/{{ o.id }}'" style="cursor:pointer;" title="查看工单 #{{ o.id }}">
+                            <div class="d-flex align-items-center" style="min-width:0;">
+                                {% set status_icon = 'fa-check-circle text-success' if o.status == 'completed' else 'fa-spinner text-warning' if o.status == 'in_progress' else 'fa-clock text-danger' %}
+                                <span style="width:16px;text-align:center;flex-shrink:0;font-size:10px;"><i class="fas {{ status_icon }}"></i></span>
+                                <span class="text-muted ms-1" style="width:38px;flex-shrink:0;font-size:11px;text-align:center;white-space:nowrap;">{{ o.created_at.strftime('%H:%M') }}</span>
+                                <span style="flex:1;min-width:0;font-size:12px;color:#334155;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ o.title }}</span>
+                                {% if o.person %}
+                                <span class="text-muted ms-1" style="font-size:10px;flex-shrink:0;white-space:nowrap;background:#f1f5f9;padding:0 4px;border-radius:3px;">{{ o.person }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                    </div>
+                </div>
+                {% set news_pages = (today_orders[:8]|length / per_page)|round(0, 'ceil')|int %}
+                <div class="d-flex justify-content-between align-items-center" style="border-top:1px solid #f1f5f9;padding-top:1px;margin-bottom:1px;">
+                    <div class="text-muted" style="font-size:11px;">今日共 {{ today_orders|length }} 条</div>
+                    <div class="scroll-dots" id="newsDots">
+                        {% for i in range(news_pages) %}
+                        <span class="scroll-dot {% if loop.first %}active{% endif %}" data-page="{{ i }}"></span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-4 small" style="flex:1;display:flex;align-items:center;justify-content:center;">今日暂无</div>
+                {% endif %}
+                {% if building_stats %}
+                {% set bg_sorted = building_stats.items()|list|sort(attribute='1', reverse=True) %}
+                {% set bg_colors = ['#f97316','#4f46e5','#0ea5e9','#10b981','#f59e0b','#ef4444'] %}
+                <div style="margin-top:auto;padding-top:2px;border-top:1px solid #f1f5f9;">
+                    <div class="text-muted" style="font-size:11px;margin-bottom:1px;">🏢 楼区热度</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:3px;">
+                    {% for b, c in bg_sorted[:6] %}
+                        <span style="font-size:12px;padding:1px 7px;border:1px solid {{ bg_colors[loop.index0 % 6] }};border-radius:4px;color:{{ bg_colors[loop.index0 % 6] }};white-space:nowrap;cursor:pointer;" onclick="location.href='/orders/?building={{ b|urlencode }}&amp;status=all'" title="查看{{ b }}的工单">
+                            {{ b[:4] }} <span class="fw-bold">{{ c }}</span>
+                        </span>
+                    {% endfor %}
+                    {% if bg_sorted|length > 6 %}
+                        <span style="font-size:12px;padding:1px 7px;border:1px solid #d0d5dd;border-radius:4px;color:#94a3b8;">+{{ bg_sorted|length - 6 }}</span>
+                    {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 科室排行 -->
+    <div class="col-md-3">
+        <div class="card card-section h-100">
+            <div class="card-header"><i class="fas fa-building" style="color:#6366f1;background:rgba(99,102,241,0.1);width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:5px;"></i> 本月科室报修排行 <a href="/orders/?status=all" style="float:right;font-size:10px;color:var(--primary);font-weight:600;text-decoration:none;" title="查看全科室工单">查看全部 →</a></div>
+            <div class="card-body">
+                {% set dept_sorted = dept_stats.items()|list|sort(attribute='1', reverse=True) if dept_stats else [] %}
+                {% if dept_sorted %}
+                {% set max_dept = dept_sorted[0][1] %}
+                {% set dept_per_page = 4 %}
+                <div class="scroll-wrap" id="deptScroll">
+                    <div class="scroll-list" id="deptList">
+                    {% for chunk in dept_sorted[:12]|batch(dept_per_page) %}
+                    <div class="scroll-page">
+                        {% for d, cnt in chunk %}
+                        <div class="item-box d-flex align-items-center" onclick="location.href='/orders/?department={{ d|urlencode }}&amp;status=all'" style="cursor:pointer;" title="查看「{{ d }}」科室的报修">
+                            <span style="width:8px;height:8px;border-radius:50%;background:{{ ['#818cf8','#f97316','#10b981','#f59e0b','#0ea5e9','#ef4444','#8b5cf6','#14b8a6'][loop.index0 % 8] }};flex-shrink:0;margin-right:6px;"></span>
+                            <span class="text-truncate" style="flex:1;font-size:12px;color:#334155;">{{ d }}</span>
+                            <span class="fw-bold" style="width:22px;text-align:right;flex-shrink:0;font-size:13px;color:#1e293b;">{{ cnt }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                    </div>
+                </div>
+                {% set dept_pages = (dept_sorted[:12]|length / dept_per_page)|round(0, 'ceil')|int %}
+                <div class="d-flex justify-content-between align-items-center mt-1" style="border-top:1px solid #f1f5f9;padding-top:4px;">
+                    <div class="text-muted" style="font-size:11px;">Top{{ dept_sorted[:12]|length }} / 共{{ dept_stats|length }}科</div>
+                    <div class="scroll-dots" id="deptDots">
+                        {% for i in range(dept_pages) %}
+                        <span class="scroll-dot {% if loop.first %}active{% endif %}" data-page="{{ i }}"></span>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="d-flex text-center mt-1" style="font-size:10px;border-top:1px solid #f1f5f9;padding-top:5px;">
+                    <div style="flex:1;"><span class="fw-bold" style="font-size:13px;color:#1e293b;">{{ dept_stats|length }}</span><br><span class="text-muted" style="font-size:10px;">涉及科室</span></div>
+                    <div style="flex:1;"><span class="fw-bold" style="font-size:13px;color:#1e293b;">{{ monthly_count }}</span><br><span class="text-muted" style="font-size:10px;">本月报修</span></div>
+                    <div style="flex:1;"><span class="fw-bold" style="font-size:13px;color:#ef4444;">{{ dept_sorted[0][0][:6] }}{{ '…' if dept_sorted[0][0]|length > 6 else '' }}</span><br><span class="text-muted" style="font-size:10px;">报修最多</span></div>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-4 small">暂无数据</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- ===== 新增内容行：深度看板 ===== -->
+<div class="row g-3 mt-2 animate-in">
+    <!-- 紧急程度分布 -->
+    <div class="col-md-4">
+        <div class="card card-section h-100">
+            <div class="card-header"><i class="fas fa-exclamation-triangle" style="color:#ef4444;background:rgba(239,68,68,0.1);width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:5px;"></i> 本月紧急程度分布</div>
+            <div class="card-body">
+                <div style="display:flex;align-items:stretch;gap:10px;">
+                    {% set total_priority = priority_dist.get('emergency',0) + priority_dist.get('urgent',0) + priority_dist.get('normal',0) %}
+                    {% set em_pct = (priority_dist.get('emergency',0) / total_priority * 100)|round(1) if total_priority else 0 %}
+                    {% set ur_pct = (priority_dist.get('urgent',0) / total_priority * 100)|round(1) if total_priority else 0 %}
+                    {% set no_pct = (priority_dist.get('normal',0) / total_priority * 100)|round(1) if total_priority else 0 %}
+                    
+                    <!-- 总数 + 三色指示 -->
+                    <div style="flex-shrink:0;width:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <span style="width:10px;height:10px;border-radius:50%;background:#ef4444;"></span>
+                            <span style="width:10px;height:10px;border-radius:50%;background:#f59e0b;"></span>
+                            <span style="width:10px;height:10px;border-radius:50%;background:#6366f1;"></span>
+                        </div>
+                        <div style="font-size:28px;font-weight:800;color:#1e293b;line-height:1;">{{ total_priority }}</div>
+                        <div style="font-size:9px;color:#94a3b8;">本月总工单</div>
+                    </div>
+                    
+                    <!-- 图例 -->
+                    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:8px;">
+                        {% set priority_info = [
+                            ('🔴 紧急', priority_dist.get('emergency',0), em_pct, '#ef4444'),
+                            ('🟡 加急', priority_dist.get('urgent',0), ur_pct, '#f59e0b'),
+                            ('🔵 普通', priority_dist.get('normal',0), no_pct, '#6366f1'),
+                        ] %}
+                        {% for label, cnt, pct, color in priority_info %}
+                        <div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
+                                <span style="font-size:12px;color:#475569;">{{ label }}</span>
+                                <span style="font-size:13px;font-weight:700;color:{{ color }};">{{ cnt }} <span style="font-size:10px;color:#94a3b8;font-weight:400;">({{ pct }}%)</span></span>
+                            </div>
+                            <div style="height:6px;background:#f1f5f9;border-radius:3px;overflow:hidden;">
+                                <div style="height:100%;width:{{ pct }}%;background:{{ color }};border-radius:3px;transition:width 1s ease;"></div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 月度对比 -->
+    <div class="col-md-4">
+        <div class="card card-section h-100">
+            <div class="card-header"><i class="fas fa-chart-bar" style="color:#f59e0b;background:rgba(245,158,11,0.1);width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:5px;"></i> 工作量对比</div>
+            <div class="card-body" style="display:flex;flex-direction:column;justify-content:center;">
+                <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;">
+                    <div style="flex:1;text-align:center;padding:14px 10px;background:#f8fafc;border-radius:12px;border:1px solid rgba(0,0,0,0.03);">
+                        <div style="font-size:11px;color:#94a3b8;margin-bottom:4px;">📅 本月</div>
+                        <div style="font-size:28px;font-weight:800;color:#6366f1;">{{ monthly_count }}</div>
+                    </div>
+                    <div style="flex:1;text-align:center;padding:14px 10px;background:#f8fafc;border-radius:12px;border:1px solid rgba(0,0,0,0.03);">
+                        <div style="font-size:11px;color:#94a3b8;margin-bottom:4px;">📅 上月</div>
+                        <div style="font-size:28px;font-weight:800;color:#64748b;">{{ last_month_count }}</div>
+                    </div>
+                </div>
+                <div style="text-align:center;">
+                    {% if month_change > 0 %}
+                    <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 14px;border-radius:20px;background:#fef2f2;color:#ef4444;font-size:13px;font-weight:600;">
+                        <i class="fas fa-arrow-up"></i> 较上月增加 {{ month_change }} 单
+                    </span>
+                    {% elif month_change < 0 %}
+                    <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 14px;border-radius:20px;background:#ecfdf5;color:#10b981;font-size:13px;font-weight:600;">
+                        <i class="fas fa-arrow-down"></i> 较上月减少 {{ -month_change }} 单
+                    </span>
+                    {% else %}
+                    <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 14px;border-radius:20px;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:600;">
+                        与上月持平
+                    </span>
+                    {% endif %}
+                </div>
+                {% if building_stats %}
+                {% set top_building = building_stats.items()|list|sort(attribute='1', reverse=True)|first %}
+                <div style="margin-top:12px;padding-top:10px;border-top:1px solid #f1f5f9;font-size:12px;color:#64748b;text-align:center;">
+                    🏢 报修最多楼栋：<strong style="color:#1e293b;">{{ top_building[0] }}</strong>（{{ top_building[1] }}单）
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 热门报修位置 Top 5 -->
+    <div class="col-md-4">
+        <div class="card card-section h-100">
+            <div class="card-header"><i class="fas fa-map-marker-alt" style="color:#f97316;background:rgba(249,115,22,0.1);width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:5px;"></i> 热门报修位置 TOP 5</div>
+            <div class="card-body" style="display:flex;flex-direction:column;">
+                {% if hot_locations %}
+                {% set hl_colors = ['#ef4444','#f59e0b','#6366f1','#10b981','#06b6d4'] %}
+                {% set max_hl = hot_locations[0][3] if hot_locations else 1 %}
+                {% for loc in hot_locations %}
+                <div class="item-box d-flex align-items-center" style="cursor:pointer;padding:7px 10px;" onclick="location.href='/orders/?building={{ loc[0]|urlencode }}&status=all'" title="查看{{ loc[0] }}工单">
+                    <span style="width:7px;height:7px;border-radius:50%;background:{{ hl_colors[loop.index0 % 5] }};flex-shrink:0;margin-right:8px;"></span>
+                    <div style="flex:1;min-width:0;">
+                        <span style="font-size:12px;font-weight:500;color:#334155;">
+                            {{ loc[0] }}{% if loc[1] %} · {{ loc[1] }}层{% endif %}{% if loc[2] %} · {{ loc[2] }}{% endif %}
+                        </span>
+                    </div>
+                    <div style="width:40px;text-align:right;">
+                        <span style="font-size:14px;font-weight:700;color:#1e293b;">{{ loc[3] }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+                <div class="mt-auto" style="padding-top:8px;border-top:1px solid #f1f5f9;font-size:11px;color:#94a3b8;text-align:center;">
+                    🏢 共涉及 {{ building_stats|length }} 个区域
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-4 small" style="flex:1;display:flex;align-items:center;justify-content:center;">暂无数据</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<!-- 自动刷新控制 -->
+<div id="autoRefreshPill" onclick="toggleRefresh()" title="点击暂停/继续自动刷新">
+    <i class="fas fa-sync-alt" id="refreshIcon"></i>
+    <span id="refreshCountdown">30</span>s
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ===== 自适应缩放 =====
+(function() {
+    var dc = document.getElementById('dashboard-content');
+    if (!dc) return;
+    function fit() {
+        if (window.innerWidth < 768) {
+            dc.style.zoom = ''; dc.style.width = '';
+            return;
+        }
+        var sb = document.querySelector('.sidebar');
+        var sw = sb ? sb.offsetWidth : 0;
+        var aw = window.innerWidth - sw - 12;
+        var ah = window.innerHeight - 10;
+        var s = Math.min(aw / 1300, ah / 1080, 1);
+        s = Math.max(s, 0.5);
+        s = Math.round(s * 10) / 10;
+        dc.style.zoom = s;
+        dc.style.width = '100%';
+    }
+    fit();
+    var t;
+    window.addEventListener('resize', function() { clearTimeout(t); t = setTimeout(fit, 80); });
+})();
+</script>
+<script src="/static/vendor/chartjs/chart.umd.min.js"></script>
+<script>
+// ===== 🎆 粒子背景动画（交互版） =====
+(function() {
+    var canvas = document.getElementById('particle-canvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var particles = [];
+    var w, h;
+    var mouse = { x: -9999, y: -9999 };
+
+    function resize() {
+        w = canvas.width = window.innerWidth;
+        h = canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // 鼠标跟踪
+    document.addEventListener('mousemove', function(e) {
+        mouse.x = e.clientX;
+        mouse.y = e.clientY;
+    });
+
+    var colors = ['99,102,241', '6,182,212', '139,92,246', '16,185,129', '245,158,11', '236,72,153'];
+
+    for (var i = 0; i < 100; i++) {
+        particles.push({
+            x: Math.random() * w,
+            y: Math.random() * h,
+            r: Math.random() * 3 + 0.5,
+            dx: (Math.random() - 0.5) * 0.8,
+            dy: (Math.random() - 0.5) * 0.8,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            alpha: Math.random() * 0.3 + 0.1,
+            pulse: Math.random() * Math.PI * 2
+        });
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, w, h);
+
+        // 先绘制连线
+        for (var i = 0; i < particles.length; i++) {
+            for (var j = i + 1; j < particles.length; j++) {
+                var p1 = particles[i], p2 = particles[j];
+                var dx = p1.x - p2.x;
+                var dy = p1.y - p2.y;
+                var dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < 150) {
+                    var alpha = 0.08 * (1 - dist / 150);
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.strokeStyle = 'rgba(99,102,241,' + alpha + ')';
+                    ctx.lineWidth = 0.6;
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // 鼠标连接线
+        for (var i = 0; i < particles.length; i++) {
+            var p = particles[i];
+            var dx = p.x - mouse.x;
+            var dy = p.y - mouse.y;
+            var dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 200) {
+                var alpha = 0.12 * (1 - dist / 200);
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(mouse.x, mouse.y);
+                ctx.strokeStyle = 'rgba(139,92,246,' + alpha + ')';
+                ctx.lineWidth = 0.8;
+                ctx.stroke();
+            }
+        }
+
+        // 绘制粒子
+        for (var i = 0; i < particles.length; i++) {
+            var p = particles[i];
+            // 鼠标排斥/吸引
+            var dx = p.x - mouse.x;
+            var dy = p.y - mouse.y;
+            var dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 120 && dist > 0) {
+                var force = (120 - dist) / 120 * 0.3;
+                p.x += (dx / dist) * force;
+                p.y += (dy / dist) * force;
+            }
+
+            p.x += p.dx;
+            p.y += p.dy;
+
+            // 边界反弹+循环
+            if (p.x < 0) { p.x = 0; p.dx *= -1; }
+            if (p.x > w) { p.x = w; p.dx *= -1; }
+            if (p.y < 0) { p.y = 0; p.dy *= -1; }
+            if (p.y > h) { p.y = h; p.dy *= -1; }
+
+            // 粒子大小脉动
+            p.pulse += 0.02;
+            var radius = p.r + Math.sin(p.pulse) * 0.3;
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+            // 外发光
+            var glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius * 3);
+            glow.addColorStop(0, 'rgba(' + p.color + ',' + Math.min(p.alpha + 0.1, 0.5) + ')');
+            glow.addColorStop(0.5, 'rgba(' + p.color + ',' + p.alpha * 0.3 + ')');
+            glow.addColorStop(1, 'rgba(' + p.color + ',0)');
+            ctx.fillStyle = glow;
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, radius * 0.6, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(' + p.color + ',' + p.alpha + ')';
+            ctx.fill();
+        }
+        requestAnimationFrame(draw);
+    }
+    draw();
+})();
+
+// ===== 状态栏时钟更新 =====
+(function() {
+    var el = document.querySelector('.live-clock-text');
+    if (!el) return;
+    function update() {
+        var now = new Date();
+        el.textContent = now.getFullYear() + '-' + 
+            String(now.getMonth()+1).padStart(2,'0') + '-' + 
+            String(now.getDate()).padStart(2,'0') + ' ' +
+            String(now.getHours()).padStart(2,'0') + ':' + 
+            String(now.getMinutes()).padStart(2,'0') + ':' + 
+            String(now.getSeconds()).padStart(2,'0');
+    }
+    update();
+    setInterval(update, 1000);
+})();
+
+// ===== 3D 卡片悬浮倾角 =====
+(function() {
+    var cards = document.querySelectorAll('.card-stat');
+    // 先添加呼吸动画延迟
+    cards.forEach(function(card, i) {
+        card.style.animationDelay = (i * 0.15) + 's';
+    });
+    cards.forEach(function(card) {
+        card.addEventListener('mousemove', function(e) {
+            var rect = this.getBoundingClientRect();
+            var x = e.clientX - rect.left;
+            var y = e.clientY - rect.top;
+            var cx = rect.width / 2;
+            var cy = rect.height / 2;
+            var angleX = (y - cy) / cy * -6;
+            var angleY = (x - cx) / cx * 6;
+            this.style.transform = 'perspective(1000px) rotateX(' + angleX + 'deg) rotateY(' + angleY + 'deg) translateY(-5px) scale(1.02)';
+        });
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = '';
+        });
+    });
+})();
+
+// ===== 🎉 数字滚动动画 =====
+(function() {
+    var counters = document.querySelectorAll('.stat-counter');
+    counters.forEach(function(el) {
+        var target = parseInt(el.getAttribute('data-target'));
+        if (isNaN(target) || target === 0) { el.textContent = '0'; return; }
+        var duration = 800;
+        var steps = 30;
+        var increment = target / steps;
+        var current = 0;
+        var i = 0;
+        var timer = setInterval(function() {
+            i++;
+            current = Math.round(increment * i);
+            if (i >= steps) {
+                current = target;
+                clearInterval(timer);
+            }
+            el.textContent = current;
+        }, duration / steps);
+    });
+})();
+
+// ===== SLA 分布条动画 =====
+(function() {
+    setTimeout(function() {
+        var bars = document.querySelectorAll('.sla-bar-fill');
+        bars.forEach(function(bar) {
+            bar.style.width = bar.parentElement.getAttribute('data-pct') || bar.style.width || '80%';
+            // read the inline width from bar's parent's parent's structure
+            var pct = bar.getAttribute('data-pct');
+            if (!pct) {
+                // Try to compute from the grid item
+                var parentRow = bar.closest('div');
+                if (parentRow) {
+                    // Find the cnt text
+                    var cntSpan = parentRow.querySelector('span[style*="font-weight:700"]');
+                    if (cntSpan) {
+                        var cnt = parseInt(cntSpan.textContent);
+                        var maxCnt = 0;
+                        // Find max
+                        document.querySelectorAll('.sla-bar-fill').forEach(function(b) {
+                            var row = b.closest('div');
+                            if (row) {
+                                var cs = row.querySelector('span[style*="font-weight:700"]');
+                                if (cs) { var v = parseInt(cs.textContent); if (v > maxCnt) maxCnt = v; }
+                            }
+                        });
+                        if (maxCnt > 0) bar.style.width = (cnt / maxCnt * 100) + '%';
+                        else bar.style.width = '0%';
+                    }
+                }
+            }
+        });
+    }, 300);
+})();
+
+// ===== 卡片导航事件委托 =====
+document.addEventListener('click', function(e) {
+    var tag = e.target.tagName.toLowerCase();
+    if (tag === 'a' || tag === 'button' || tag === 'select' || tag === 'input' || tag === 'label') return;
+    if (e.target.closest && (
+        e.target.closest('.scroll-dot') ||
+        e.target.closest('.chart-dot') ||
+        e.target.closest('#slaTabBtn') ||
+        e.target.closest('#countTabBtn') ||
+        e.target.closest('#faultTypeTabBtn') ||
+        e.target.closest('#repeatFaultTabBtn')
+    )) return;
+    var el = e.target;
+    while (el && el !== document.body) {
+        var onclick = el.getAttribute ? el.getAttribute('onclick') : null;
+        if (onclick) {
+            var match = onclick.match(/location\.href='([^']+)'/);
+            if (match) {
+                e.preventDefault ? e.preventDefault() : (e.returnValue = false);
+                location.href = match[1];
+                return;
+            }
+        }
+        el = el.parentElement;
+    }
+});
+
+(function() {
+    // ===== 图1：近7日工单趋势 =====
+    var ctx = document.getElementById('trendChart').getContext('2d');
+    // 创建渐变填充
+    var gradient = ctx.createLinearGradient(0, 0, 0, 196);
+    gradient.addColorStop(0, 'rgba(99,102,241,0.2)');
+    gradient.addColorStop(1, 'rgba(99,102,241,0.01)');
+
+    var trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [{% for item in daily_stats %}'{{ item.date }}'{% if not loop.last %},{% endif %}{% endfor %}],
+            datasets: [{
+                label: '工单数',
+                data: [{% for item in daily_stats %}{{ item.count }}{% if not loop.last %},{% endif %}{% endfor %}],
+                borderColor: '#6366f1',
+                backgroundColor: gradient,
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: '#6366f1',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                borderWidth: 2.5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0, font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.04)' } },
+                x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+            },
+            interaction: { intersect: false, mode: 'index' },
+            animation: { duration: 800, easing: 'easeOutQuart' }
+        }
+    });
+    setTimeout(function() { trendChart.resize(); }, 50);
+
+    // ===== 图2：响应时长趋势（懒加载） =====
+    var respLabels = [{% for item in response_trend['items'] %}'{{ item.month }}'{% if not loop.last %},{% endif %}{% endfor %}];
+    var respData = [{% for item in response_trend['items'] %}{{ item.avg_minutes }}{% if not loop.last %},{% endif %}{% endfor %}];
+    var respChart = null;
+    var respChartInited = false;
+
+    function initRespChart() {
+        if (respChartInited || !respLabels.length) return;
+        respChartInited = true;
+        var rctx = document.getElementById('responseTrendChart');
+        if (!rctx) return;
+        try {
+            var rg = rctx.getContext('2d').createLinearGradient(0, 0, 0, 196);
+            rg.addColorStop(0, 'rgba(245,158,11,0.2)');
+            rg.addColorStop(1, 'rgba(245,158,11,0.01)');
+            respChart = new Chart(rctx.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: respLabels,
+                    datasets: [{
+                        label: '响应时长(分钟)',
+                        data: respData,
+                        borderColor: '#f59e0b',
+                        backgroundColor: rg,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#f59e0b',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        borderWidth: 2.5,
+                        spanGaps: false,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top', labels: { boxWidth: 12, padding: 12, font: { size: 11 } } },
+                    },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.04)' }, title: { display: true, text: '分钟', font: { size: 11 } } },
+                        x: { grid: { display: false }, ticks: { font: { size: 9, maxRotation: 45 } } }
+                    },
+                    interaction: { intersect: false, mode: 'index' },
+                    animation: { duration: 800, easing: 'easeOutQuart' }
+                }
+            });
+            setTimeout(function() { if (respChart) respChart.resize(); }, 100);
+        } catch(e) { console.error('响应图表初始化失败:', e); }
+    }
+
+    // ===== 图表轮播 =====
+    var chartInterval = 15000;
+    var chartTimer, chartCdTimer;
+    var chartIdx = 0;
+    var titles = ['近7日工单趋势', '最近32单响应时长'];
+
+    function switchChart(idx) {
+        chartIdx = idx;
+        var c1 = document.getElementById('trendChart');
+        var c2wrap = document.getElementById('respChartWrap');
+        var title = document.getElementById('chartTitle');
+        title.textContent = titles[idx];
+        if (idx === 0) {
+            c1.parentElement.style.display = 'block';
+            c2wrap.style.display = 'none';
+            if (trendChart) setTimeout(function() { trendChart.resize(); }, 50);
+        } else {
+            initRespChart();
+            c1.parentElement.style.display = 'none';
+            c2wrap.style.display = 'block';
+            if (respChart) setTimeout(function() { respChart.resize(); }, 100);
+        }
+        document.getElementById('chartDot1').classList.toggle('active', idx === 0);
+        document.getElementById('chartDot2').classList.toggle('active', idx === 1);
+        resetChartTimer();
+    }
+
+    function nextChart() { switchChart(chartIdx === 0 ? 1 : 0); }
+
+    function resetChartTimer() {
+        if (chartTimer) clearInterval(chartTimer);
+        if (chartCdTimer) clearInterval(chartCdTimer);
+        chartTimer = setInterval(nextChart, chartInterval);
+        var cd = 15;
+        document.getElementById('chartCountdown').textContent = cd + 's';
+        chartCdTimer = setInterval(function() {
+            cd--;
+            if (cd <= 0) cd = 15;
+            document.getElementById('chartCountdown').textContent = cd + 's';
+        }, 1000);
+    }
+
+    document.getElementById('chartDot1').addEventListener('click', function() { switchChart(0); });
+    document.getElementById('chartDot2').addEventListener('click', function() { switchChart(1); });
+
+    document.getElementById('respChartWrap').style.display = 'none';
+    resetChartTimer();
+
+    function initCarousel(wrapId, listId, dotsId) {
+        var wrap = document.getElementById(wrapId);
+        var list = document.getElementById(listId);
+        var dotsContainer = document.getElementById(dotsId);
+        if (!list || !dotsContainer) return;
+        var pages = list.querySelectorAll('.scroll-page');
+        if (pages.length <= 1) { dotsContainer.style.display = 'none'; return; }
+        var dots = dotsContainer.querySelectorAll('.scroll-dot');
+        var current = 0, timer, h;
+
+        function measure() {
+            var maxH = 0;
+            Array.from(pages).forEach(function(p) {
+                p.style.minHeight = '';
+                if (p.offsetHeight > maxH) maxH = p.offsetHeight;
+            });
+            if (maxH > 0) {
+                Array.from(pages).forEach(function(p) { p.style.minHeight = maxH + 'px'; });
+            }
+            h = maxH;
+            return h > 0;
+        }
+
+        function goTo(idx) {
+            if (idx >= pages.length) idx = 0;
+            if (idx < 0) idx = pages.length - 1;
+            list.style.transform = 'translateY(-' + (idx * h) + 'px)';
+            dots.forEach(function(d, i) { d.classList.toggle('active', i === idx); });
+            current = idx;
+        }
+
+        function next() { goTo(current + 1); }
+
+        setTimeout(function() {
+            if (measure()) { timer = setInterval(next, 3500); }
+        }, 100);
+
+        dots.forEach(function(dot) {
+            dot.addEventListener('click', function() {
+                clearInterval(timer);
+                goTo(parseInt(this.getAttribute('data-page')));
+                timer = setInterval(next, 3500);
+            });
+        });
+
+        if (wrap) {
+            wrap.addEventListener('mouseenter', function() { clearInterval(timer); });
+            wrap.addEventListener('mouseleave', function() { timer = setInterval(next, 3500); });
+        }
+    }
+
+    initCarousel('newsScroll', 'newsList', 'newsDots');
+    initCarousel('deptScroll', 'deptList', 'deptDots');
+})();
+
+// ===== 自动刷新 =====
+(function() {
+    if (!document.getElementById('autoRefreshPill')) return;
+    var INTERVAL = 300;
+    var countdown = INTERVAL;
+    var paused = false;
+    var el = document.getElementById('autoRefreshPill');
+    var cdEl = document.getElementById('refreshCountdown');
+    var iconEl = document.getElementById('refreshIcon');
+
+    function tick() {
+        if (paused) return;
+        countdown--;
+        if (countdown <= 0) {
+            iconEl.className = 'fas fa-spinner fa-spin';
+            setTimeout(function() { location.reload(); }, 300);
+            return;
+        }
+        cdEl.textContent = countdown;
+    }
+
+    function resetCountdown() { countdown = INTERVAL; cdEl.textContent = countdown; }
+
+    document.addEventListener('click', function() { if (!paused) resetCountdown(); });
+    document.addEventListener('submit', function() { if (!paused) resetCountdown(); });
+
+    setInterval(tick, 1000);
+    window.toggleRefresh = function() {
+        paused = !paused;
+        el.classList.toggle('paused');
+        if (paused) {
+            cdEl.textContent = '暂停';
+            iconEl.className = 'fas fa-pause';
+        } else {
+            resetCountdown();
+            iconEl.className = 'fas fa-sync-alt';
+        }
+    };
+})();
+
+// ===== 故障类型 / 故障复现 切换 =====
+(function() {
+    var typeBtn = document.getElementById('faultTypeTabBtn');
+    var repeatBtn = document.getElementById('repeatFaultTabBtn');
+    var typeView = document.getElementById('faultTypeView');
+    var repeatView = document.getElementById('repeatFaultView');
+    var title = document.getElementById('faultTypeTitle');
+    if (!typeBtn || !repeatBtn) return;
+
+    function showType() {
+        typeView.style.display = ''; repeatView.style.display = 'none';
+        typeBtn.style.background = '#4f46e5'; typeBtn.style.color = '#fff';
+        repeatBtn.style.background = '#e2e8f0'; repeatBtn.style.color = '#475569';
+        title.textContent = '故障类型';
+    }
+    function showRepeat() {
+        typeView.style.display = 'none'; repeatView.style.display = '';
+        repeatBtn.style.background = '#ef4444'; repeatBtn.style.color = '#fff';
+        typeBtn.style.background = '#e2e8f0'; typeBtn.style.color = '#475569';
+        title.innerHTML = '故障复现 <span style="font-size:10px;color:#ef4444;font-weight:400;">≥2次</span>';
+    }
+
+    typeBtn.addEventListener('click', function() { showType(); resetTimer(); });
+    repeatBtn.addEventListener('click', function() { showRepeat(); resetTimer(); });
+
+    var isType = true;
+    function toggleView() {
+        isType = !isType;
+        if (isType) showType(); else showRepeat();
+    }
+    var faultTimer = setInterval(toggleView, 15000);
+    function resetTimer() {
+        clearInterval(faultTimer);
+        faultTimer = setInterval(toggleView, 15000);
+        isType = !isType;
+    }
+})();
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var slaBtn = document.getElementById('slaTabBtn');
+    var countBtn = document.getElementById('countTabBtn');
+    var slaView = document.getElementById('slaRankView');
+    var countView = document.getElementById('countRankView');
+    var title = document.getElementById('slaRankTitle');
+    if (slaBtn && countBtn) {
+        function showSla() {
+            slaView.style.display = 'flex'; countView.style.display = 'none';
+            slaBtn.style.background = '#4f46e5'; slaBtn.style.color = '#fff';
+            countBtn.style.background = '#e2e8f0'; countBtn.style.color = '#475569';
+            title.textContent = 'SLA 榜';
+        }
+        function showCount() {
+            slaView.style.display = 'none'; countView.style.display = 'flex';
+            countBtn.style.background = '#4f46e5'; countBtn.style.color = '#fff';
+            slaBtn.style.background = '#e2e8f0'; slaBtn.style.color = '#475569';
+            title.textContent = '接单榜';
+        }
+        slaBtn.addEventListener('click', function() { showSla(); resetSlaTimer(); });
+        countBtn.addEventListener('click', function() { showCount(); resetSlaTimer(); });
+        var isSla = true;
+        function toggleSlaView() {
+            isSla = !isSla;
+            if (isSla) showSla(); else showCount();
+        }
+        var slaTimer = setInterval(toggleSlaView, 15000);
+        function resetSlaTimer() {
+            clearInterval(slaTimer);
+            slaTimer = setInterval(toggleSlaView, 15000);
+            isSla = !isSla;
+        }
+    }
+});
+
+// 仪表盘日期查询
+function goDashboardDate() {
+    var val = document.getElementById('dashboardDatePicker').value;
+    if (!val) return;
+    var team = document.getElementById('dashTeamSelect');
+    var teamParam = (team && team.value) ? '&team=' + team.value : '';
+    window.location.href = '/?date=' + val + teamParam;
+}
+// 仪表盘组别筛选
+function goDashboardTeam() {
+    var team = document.getElementById('dashTeamSelect');
+    if (!team) return;
+    window.location.href = '/?team=' + team.value;
+}
+</script>
+{% endblock %}

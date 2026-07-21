@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+:root {
+  --ftg-bg: #f8f9fc; --ftg-card: #fff; --ftg-border: #eef1f5; --ftg-text: #1e293b; --ftg-muted: #8896ab; --ftg-accent: #4f46e5; --ftg-accent-light: #eef1ff;
+}
+[data-theme="dark"] { --ftg-bg: #0f1117; --ftg-card: #1a1d27; --ftg-border: #2a2e3a; --ftg-text: #e2e8f0; --ftg-muted: #6b7a8f; --ftg-accent-light: #1e1b4b; }
+.ftg-page { background:var(--ftg-bg); min-height:calc(100vh - 60px); padding:24px 28px; }
+.ftg-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
+.ftg-header h1 { font-size:20px; font-weight:700; color:var(--ftg-text); display:flex; align-items:center; gap:10px; margin:0; }
+.ftg-header h1 i { color:var(--ftg-accent); }
+.ftg-card { background:var(--ftg-card); border:1px solid var(--ftg-border); border-radius:12px; margin-bottom:16px; overflow:hidden; }
+.ftg-card-header { padding:14px 20px; border-bottom:1px solid var(--ftg-border); display:flex; justify-content:space-between; align-items:center; }
+.ftg-card-body { padding:14px 20px; }
+.ftg-badge { display:inline-block; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:500; background:var(--ftg-accent-light); color:var(--ftg-accent); margin:2px; }
+.ftg-item-row { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--ftg-border); font-size:13px; }
+.ftg-item-row:last-child { border-bottom:none; }
+.item-type-badge { font-size:10px; padding:1px 8px; border-radius:4px; background:#e2e8f0; color:#475569; }
+</style>
+
+<div class="ftg-page">
+  <div class="ftg-header">
+    <h1><i class="fas fa-layer-group"></i> 故障模板组</h1>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('data.index') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> 返回</a>
+    </div>
+  </div>
+
+  <!-- 新增 -->
+  <div class="ftg-card">
+    <div class="ftg-card-header">
+      <span style="font-size:14px;font-weight:600;"><i class="fas fa-plus text-success"></i> 新建模板组</span>
+    </div>
+    <div class="ftg-card-body">
+      <form method="post" action="{{ url_for('data.add_fault_template_group') }}" class="row g-2">
+        <div class="col-md-3">
+          <input type="text" name="name" class="form-control form-control-sm" placeholder="模板组名称" required>
+        </div>
+        <div class="col-md-4">
+          <select name="teams" class="form-select form-select-sm" multiple style="height:auto;min-height:32px;">
+            <option value="" style="font-style:italic;color:#999;">— 全组通用 —</option>
+            {% for t in all_teams %}
+            <option value="{{ t }}">{{ t }}</option>
+            {% endfor %}
+          </select>
+          <small class="text-muted" style="font-size:10px;">按住 Ctrl 多选；不选则全组通用</small>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-sm btn-success w-100"><i class="fas fa-plus"></i> 创建</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 列表 -->
+  {% for g in groups %}
+  <div class="ftg-card">
+    <div class="ftg-card-header">
+      <div class="d-flex align-items-center gap-3">
+        <span style="font-size:15px;font-weight:600;">{{ g.name }}</span>
+        {% if g.teams %}
+          {% for t in g.teams.split(',') %}
+          <span class="ftg-badge">{{ t }}</span>
+          {% endfor %}
+        {% else %}
+          <span class="ftg-badge" style="background:#f0fdf4;color:#16a34a;">全组通用</span>
+        {% endif %}
+        <span class="text-muted" style="font-size:11px;">{{ g.items.count() }} 项故障</span>
+      </div>
+      <div class="d-flex gap-1">
+        <form method="post" action="{{ url_for('data.edit_fault_template_group', gid=g.id) }}" class="d-inline">
+          <input type="hidden" name="field" value="name">
+          <input type="text" name="value" value="{{ g.name }}" class="form-control form-control-sm" style="width:100px;display:inline;font-size:11px;" onchange="this.form.submit()" title="重命名">
+        </form>
+        <form method="post" action="{{ url_for('data.delete_fault_template_group', gid=g.id) }}" class="d-inline" onsubmit="return confirm('确定删除模板组「{{ g.name }}」？将同时删除组内所有故障项')">
+          <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+        </form>
+      </div>
+    </div>
+    <div class="ftg-card-body">
+      <!-- 故障项列表 -->
+      {% for item in g.items %}
+      <div class="ftg-item-row">
+        <span class="item-type-badge">{{ item.fault_type }}</span>
+        <span style="flex:1;font-weight:500;">{{ item.display_name }}</span>
+        <span class="text-muted" style="font-size:11px;">默认 {{ item.default_count }} 条</span>
+        <form method="post" action="{{ url_for('data.edit_fault_template_item', gid=g.id, iid=item.id) }}" class="d-inline-flex gap-1 align-items-center">
+          <select name="fault_type" class="form-select form-select-sm" style="width:70px;font-size:10px;" onchange="this.form.submit()">
+            <option value="软件" {{ 'selected' if item.fault_type=='软件' }}>软件</option>
+            <option value="硬件" {{ 'selected' if item.fault_type=='硬件' }}>硬件</option>
+            <option value="打印机" {{ 'selected' if item.fault_type=='打印机' }}>打印机</option>
+            <option value="协助" {{ 'selected' if item.fault_type=='协助' }}>协助</option>
+          </select>
+          <input type="text" name="display_name" value="{{ item.display_name }}" class="form-control form-control-sm" style="width:100px;font-size:11px;" placeholder="显示名称">
+          <input type="number" name="default_count" value="{{ item.default_count }}" class="form-control form-control-sm" style="width:50px;font-size:11px;" min="1">
+          <button type="submit" class="btn btn-sm btn-outline-primary py-0"><i class="fas fa-save" style="font-size:10px;"></i></button>
+        </form>
+        <form method="post" action="{{ url_for('data.delete_fault_template_item', gid=g.id, iid=item.id) }}" class="d-inline" onsubmit="return confirm('确定删除此故障项？')">
+          <button type="submit" class="btn btn-sm btn-outline-danger py-0"><i class="fas fa-times" style="font-size:10px;"></i></button>
+        </form>
+      </div>
+      {% endfor %}
+
+      <!-- 新增故障项 -->
+      <div class="ftg-item-row" style="border-top:1px dashed var(--ftg-border);margin-top:6px;padding-top:8px;">
+        <form method="post" action="{{ url_for('data.add_fault_template_item', gid=g.id) }}" class="row g-1 w-100">
+          <div class="col-md-2">
+            <select name="fault_type" class="form-select form-select-sm" style="font-size:11px;">
+              <option value="软件">软件</option>
+              <option value="硬件" selected>硬件</option>
+              <option value="打印机">打印机</option>
+              <option value="协助">协助</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <input type="text" name="display_name" class="form-control form-control-sm" placeholder="显示名称（如：电脑故障）" style="font-size:11px;">
+          </div>
+          <div class="col-md-2">
+            <input type="number" name="default_count" class="form-control form-control-sm" value="1" min="1" style="font-size:11px;">
+          </div>
+          <div class="col-md-2">
+            <button type="submit" class="btn btn-sm btn-outline-success w-100"><i class="fas fa-plus"></i> 添加</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="text-center text-muted py-4">暂无故障模板组，请在上方创建</div>
+  {% endfor %}
+</div>
+{% endblock %}

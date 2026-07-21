@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.ip-wrap { max-width:1060px; margin:0 auto; }
+.ip-topbar { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+.ip-topbar h4 { margin:0; font-size:20px; font-weight:800; display:flex; align-items:center; gap:10px; letter-spacing:-0.3px; }
+.ip-topbar h4 i { background:linear-gradient(135deg,#667eea,#764ba2); -webkit-background-clip:text; -webkit-text-fill-color:transparent; font-size:19px; }
+.ip-stats { display:flex; gap:4px; margin-bottom:18px; flex-wrap:wrap; }
+.ip-stat { flex:1; min-width:70px; padding:8px 10px; border-radius:10px; text-align:center; font-size:11px; font-weight:500; background:var(--card-bg,rgba(255,255,255,0.5)); backdrop-filter:blur(8px); border:1px solid var(--card-border,rgba(229,231,235,0.3)); color:var(--text-muted,#94a3b8); line-height:1.3; }
+.ip-stat strong { display:block; font-size:22px; font-weight:800; color:var(--text,#1e293b); letter-spacing:-0.5px; }
+.ip-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; }
+.ip-card { border-radius:14px; overflow:hidden; background:var(--card-bg,rgba(255,255,255,0.6)); backdrop-filter:blur(8px); border:1px solid var(--card-border,rgba(229,231,235,0.4)); transition:all .25s cubic-bezier(0.34,1.56,0.64,1); display:flex; flex-direction:column; }
+.ip-card:hover { transform:translateY(-3px); box-shadow:0 8px 30px rgba(79,70,229,0.08); border-color:var(--primary,#4f46e5); }
+.ip-card-top { padding:14px 16px 8px; display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+.ip-card-name { font-size:15px; font-weight:700; color:var(--text,#1e293b); }
+.ip-card-items { padding:0 16px 6px; display:flex; flex-wrap:wrap; gap:4px; }
+.ip-card-item { font-size:11px; padding:2px 8px; border-radius:5px; background:var(--set-bg,rgba(79,70,229,0.06)); color:var(--text-secondary,#475569); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ip-card-ft { padding:10px 16px; border-top:1px solid var(--card-border,#e5e7eb); display:flex; justify-content:flex-end; gap:6px; margin-top:auto; }
+.ip-card-ft button, .ip-card-ft a.ip-btn { width:30px; height:30px; border-radius:7px; border:none; background:transparent; cursor:pointer; font-size:12px; color:var(--text-muted,#94a3b8); transition:all .15s; display:inline-flex; align-items:center; justify-content:center; text-decoration:none; }
+.ip-card-ft button:hover, .ip-card-ft a.ip-btn:hover { background:rgba(79,70,229,0.08); color:var(--primary,#4f46e5); }
+.ip-card-ft .btn-del:hover { background:rgba(239,68,68,0.08); color:#ef4444; }
+.ip-empty { text-align:center; padding:60px 20px; }
+.ip-empty-icon { width:72px; height:72px; margin:0 auto 16px; background:linear-gradient(135deg,#667eea12,#764ba212); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--text-muted,#94a3b8); }
+[data-theme="dark"] .ip-card { background:rgba(26,29,39,0.6); border-color:rgba(42,46,58,0.4); }
+[data-theme="dark"] .ip-stat strong { color:#e2e8f0; }
+</style>
+<div class="ip-wrap">
+  <div class="ip-topbar">
+    <h4><i class="fas fa-clipboard-list"></i> 巡检模板</h4>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('inspection.list_plans') }}" class="kh-cat" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:500;border:1.5px solid var(--card-border,#e5e7eb);color:var(--text-secondary,#475569);text-decoration:none;transition:all .15s;">
+        <i class="fas fa-list"></i> 巡检计划
+      </a>
+      <a href="{{ url_for('inspection.publish_plan') }}" class="kh-cat" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:500;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-color:transparent;text-decoration:none;box-shadow:0 2px 8px rgba(102,126,234,0.25);">
+        <i class="fas fa-calendar-plus"></i> 发布巡检
+      </a>
+      <button class="kh-cat" onclick="showCreateModal()" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:500;border:1.5px solid var(--card-border,#e5e7eb);color:var(--text-secondary,#475569);background:var(--card-bg,rgba(255,255,255,0.4));cursor:pointer;transition:all .15s;">
+        <i class="fas fa-plus"></i> 新建模板
+      </button>
+    </div>
+  </div>
+  {% set total = templates|length %}
+  {% set total_items = templates|map(attribute='items')|map('length')|sum %}
+  <div class="ip-stats">
+    <div class="ip-stat"><strong>{{ total }}</strong>模板</div>
+    <div class="ip-stat"><strong style="color:var(--primary);">{{ total_items }}</strong>巡检项</div>
+  </div>
+  {% if templates %}
+  <div class="ip-grid">
+    {% for t in templates %}
+    <div class="ip-card" style="animation:khFadeUp 0.3s ease both;animation-delay:{{ loop.index0*0.05 }}s;">
+      <div class="ip-card-top">
+        <span class="ip-card-name">🔍 {{ t.name }}</span>
+      </div>
+      <div class="ip-card-items">
+        {% for item in t.items[:8] %}
+        <span class="ip-card-item">{{ item }}</span>
+        {% endfor %}
+        {% if t.items|length > 8 %}
+        <span class="ip-card-item" style="background:var(--primary-light,rgba(79,70,229,0.08));color:var(--primary);">+{{ t.items|length - 8 }}</span>
+        {% endif %}
+      </div>
+      <div class="ip-card-ft">
+        <button onclick="editTemplate({{ t.id }},'{{ t.name|e }}',{{ t.items|tojson }})" title="编辑"><i class="fas fa-pen"></i></button>
+        <form method="post" action="{{ url_for('inspection.delete_template', tid=t.id) }}" style="display:inline;" onsubmit="return confirm('确定删除模板「{{ t.name }}」？')">
+          <button class="btn-del" title="删除"><i class="fas fa-trash"></i></button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="ip-empty">
+    <div class="ip-empty-icon"><i class="fas fa-clipboard-list"></i></div>
+    <div style="font-size:16px;font-weight:600;color:var(--text,#1e293b);margin-bottom:4px;">暂无巡检模板</div>
+    <div style="font-size:13px;color:var(--text-muted,#94a3b8);">点击「新建模板」创建第一个巡检模板</div>
+  </div>
+  {% endif %}
+</div>
+<!-- 新建/编辑弹窗 -->
+<div class="modal fade" id="tplModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:14px;border:none;box-shadow:0 16px 48px rgba(0,0,0,0.12);">
+      <div class="modal-header border-0 pb-0" style="padding:20px 22px 0;">
+        <h6 class="modal-title fw-bold" id="tplModalTitle" style="font-size:16px;"><i class="fas fa-pen" style="color:var(--primary);"></i> <span id="tplModalTitleText">新建模板</span></h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="tplForm">
+        <div class="modal-body" style="padding:14px 22px;">
+          <input type="hidden" name="edit_id" id="tplEditId" value="">
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">模板名称 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="name" id="tplName" required placeholder="例如：机房巡检"
+                   style="border-radius:10px;padding:10px 14px;border:1.5px solid var(--card-border,#e5e7eb);font-size:14px;">
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold" style="font-size:13px;">巡检内容 <small class="text-muted" style="font-weight:400;">（每行一项）</small></label>
+            <textarea name="items" id="tplItems" class="form-control" rows="6" placeholder="例：&#10;机房温度检查&#10;UPS运行状态&#10;服务器指示灯"
+                      style="border-radius:10px;padding:10px 14px;border:1.5px solid var(--card-border,#e5e7eb);font-size:14px;resize:vertical;"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-0" style="padding:0 22px 18px;">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius:10px;padding:8px 20px;font-size:13px;">取消</button>
+          <button type="submit" class="btn btn-primary" style="border-radius:10px;padding:8px 24px;font-size:13px;background:linear-gradient(135deg,#667eea,#764ba2);border:none;box-shadow:0 2px 8px rgba(102,126,234,0.25);"><i class="fas fa-check"></i> 保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+function showCreateModal() {
+  document.getElementById('tplModalTitleText').textContent = '新建模板';
+  document.getElementById('tplForm').action = '{{ url_for("inspection.create_template") }}';
+  document.getElementById('tplEditId').value = '';
+  document.getElementById('tplName').value = '';
+  document.getElementById('tplItems').value = '';
+  new bootstrap.Modal(document.getElementById('tplModal')).show();
+}
+function editTemplate(id, name, items) {
+  document.getElementById('tplModalTitleText').textContent = '编辑模板';
+  document.getElementById('tplForm').action = '/inspection/template/' + id + '/edit';
+  document.getElementById('tplEditId').value = id;
+  document.getElementById('tplName').value = name;
+  document.getElementById('tplItems').value = (items || []).join('\n');
+  new bootstrap.Modal(document.getElementById('tplModal')).show();
+}
+</script>
+<style>@keyframes khFadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}</style>
+{% endblock %}

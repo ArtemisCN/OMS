@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>{{ order.order_no }} - 维修单打印</title>
+<style>
+@page { margin: 0; size: {{ order.template.page_size or 'A4' }} {{ 'landscape' if order.template and order.template.orientation=='landscape' else 'portrait' }}; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  font-family: 'SimSun', '宋体', serif;
+  color: #1d2939;
+  font-size: 11pt;
+  width: 794px; min-height:1123px; margin:0 auto; background:#fff;
+}
+@media print {
+  html, body { width: auto; margin:0; }
+}
+/* ===== A4 absolute layout ===== */
+.a4-form { width:794px; min-height:1123px; position:relative; background:#fff; }
+.a4-form h3 {
+    text-align:center; font-weight:700; font-size:18px;
+    padding:12px 0 8px; margin:0; letter-spacing:2px;
+    position:absolute; top:0; left:0; right:0; z-index:1;
+    pointer-events:none;
+}
+.a4-field {
+    position:absolute; box-sizing:border-box; padding:4px 6px;
+    border:1px solid #e5e7eb; border-radius:2px; background:#fff;
+    overflow:hidden;
+}
+.a4-field .fld-label {
+    font-size:11px; font-weight:600; color:#374151; margin-bottom:2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.a4-field .value-display {
+    font-size:12px; color:#1e293b; line-height:1.4;
+    word-break:break-word; overflow:hidden;
+}
+.a4-field .checkbox-group, .a4-field .radio-group {
+    display:flex; flex-wrap:wrap; gap:4px 8px; padding:2px 0;
+}
+.a4-field .checkbox-group label, .a4-field .radio-group label {
+    font-size:12px; display:inline-flex; align-items:center; gap:2px;
+}
+.a4-field .checkbox-group input, .a4-field .radio-group input { width:auto; }
+.a4-field.type-divider { border:none; padding:0; }
+.sig-placeholder { font-size:12px; color:#9ca3af; text-align:center; padding:4px; }
+.sig-signed { text-align:center; padding:2px; }
+.sig-signed img { max-height:80px; }
+</style>
+</head>
+<body>
+{% set tpl = order.template %}
+{% set fields = (tpl.fields_json or []) if tpl else [] %}
+{% set fv = order.field_values or {} %}
+{% set sigs = order.signatures or {} %}
+
+<div class="a4-form">
+  <h3>{{ tpl.name if tpl else '' }}</h3>
+
+  {% for f in fields %}
+  {% set val = fv.get(f.id, '') %}
+  {% set ftype = f.type or 'text' %}
+  {% set flabel = f.label or f.id %}
+  {% set foptions = f.options or [] %}
+  {% set fw = f.w or 40 %}
+  {% set fh = f.h or 5 %}
+  {% set fx = f.x or 0 %}
+  {% set fy = f.y or 0 %}
+  {% set fs = f.fontSize or None %}
+  {% set ta = f.textAlign or '' %}
+  {% set is_signature = (ftype == 'signature') %}
+  <div class="a4-field type-{{ ftype }}" style="left:{{ fx }}%; top:{{ fy }}%; width:{{ fw }}%;{% if is_signature %}min-height:{{ fh }}%;{% else %}height:{{ fh }}%;{% endif %}{% if fs %}font-size:{{ fs }}pt;{% endif %}{% if ta %}text-align:{{ ta }};{% endif %}">
+
+    {# ===== Title ===== #}
+    {% if ftype == 'title' %}
+      <div style="font-size:{{ fs or 18 }}pt;font-weight:700;text-align:{{ ta or 'center' }};padding:2px;">{{ flabel }}</div>
+
+    {# ===== Divider ===== #}
+    {% elif ftype == 'divider' %}
+      <div style="background:#1d2939;height:100%;border-radius:1px;"></div>
+
+    {# ===== Richtext ===== #}
+    {% elif ftype == 'richtext' %}
+      <div style="font-size:{{ fs or 11 }}pt;{% if ta %}text-align:{{ ta }};{% endif %}padding:2px;line-height:1.5;">{{ flabel | safe }}</div>
+
+    {# ===== Signature ===== #}
+    {% elif is_signature %}
+      <div class="fld-label">{{ flabel }}</div>
+      {% set sig_data = sigs.get(f.id, '') %}
+      {% if sig_data %}
+      <div class="sig-signed"><img src="{{ sig_data }}" alt="签名"></div>
+      {% else %}
+      <div class="sig-placeholder">（待签名）</div>
+      {% endif %}
+
+    {# ===== Select ===== #}
+    {% elif ftype == 'select' %}
+      <div class="fld-label">{{ flabel }}</div>
+      <div class="value-display" style="font-size:{{ fs or 12 }}pt;padding:2px 4px;min-height:22px;">{{ val if val else '______' }}</div>
+
+    {# ===== Radio ===== #}
+    {% elif ftype == 'radio' %}
+      <div class="fld-label">{{ flabel }}</div>
+      <div class="radio-group">
+        {% for opt in foptions %}
+        <label style="font-size:{{ fs or 12 }}pt;display:inline-flex;align-items:center;gap:2px;">
+          <input type="radio" name="{{ f.id }}" value="{{ opt }}" {% if val == opt %}checked{% endif %} disabled>
+          {{ opt }}
+        </label>
+        {% endfor %}
+      </div>
+
+    {# ===== Checkbox ===== #}
+    {% elif ftype == 'checkbox' %}
+      <div class="fld-label">{{ flabel }}</div>
+      <div class="checkbox-group">
+        {% for opt in foptions %}
+        {% set checked = (val == opt) %}
+        <label style="font-size:{{ fs or 12 }}pt;display:inline-flex;align-items:center;gap:2px;">
+          <input type="checkbox" value="{{ opt }}" {% if checked %}checked{% endif %} disabled>
+          {{ opt }}
+        </label>
+        {% endfor %}
+      </div>
+
+    {# ===== Textarea ===== #}
+    {% elif ftype == 'textarea' %}
+      <div class="fld-label">{{ flabel }}</div>
+      <div class="value-display" style="font-size:{{ fs or 12 }}pt;padding:2px 4px;white-space:pre-wrap;line-height:1.4;">{{ val if val else '' }}</div>
+
+    {# ===== Text / Number / Email / Tel / URL / Date / Datetime ===== #}
+    {% else %}
+      <div class="fld-label">{{ flabel }}</div>
+      <div class="value-display" style="font-size:{{ fs or 12 }}pt;padding:2px 4px;min-height:22px;">
+        {{ val if val else '______' }}
+      </div>
+    {% endif %}
+
+  </div>
+  {% endfor %}
+</div>
+</body>
+</html>

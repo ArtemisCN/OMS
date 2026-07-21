@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}SLA 时限监控{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <i class="fas fa-clock text-primary"></i>
+    <h4 class="mb-0">SLA 时限监控</h4>
+  </div>
+
+  <!-- SLA 概览卡片 -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="fs-3 fw-bold" id="slaTotal">-</div>
+          <div class="small text-muted mt-1">工单总数</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="fs-3 fw-bold text-danger" id="slaOverdue">-</div>
+          <div class="small text-muted mt-1">超时工单</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="fs-3 fw-bold text-warning" id="slaRate">-</div>
+          <div class="small text-muted mt-1">超时率</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="fs-3 fw-bold text-success" id="slaCompliant">-</div>
+          <div class="small text-muted mt-1">合规工单</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 按优先级统计 -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-white d-flex align-items-center gap-2">
+          <span class="badge bg-info" style="width:10px;height:10px;border-radius:50%;padding:0;"></span>
+          普通
+        </div>
+        <div class="card-body text-center">
+          <div class="fs-4 fw-bold" id="slaNormalTotal">-</div>
+          <div class="small"><span class="text-danger" id="slaNormalOverdue">-</span> 超时</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-white d-flex align-items-center gap-2">
+          <span class="badge bg-warning" style="width:10px;height:10px;border-radius:50%;padding:0;"></span>
+          加急
+        </div>
+        <div class="card-body text-center">
+          <div class="fs-4 fw-bold" id="slaUrgentTotal">-</div>
+          <div class="small"><span class="text-danger" id="slaUrgentOverdue">-</span> 超时</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-white d-flex align-items-center gap-2">
+          <span class="badge bg-danger" style="width:10px;height:10px;border-radius:50%;padding:0;"></span>
+          紧急
+        </div>
+        <div class="card-body text-center">
+          <div class="fs-4 fw-bold" id="slaEmergencyTotal">-</div>
+          <div class="small"><span class="text-danger" id="slaEmergencyOverdue">-</span> 超时</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 阈值设置（管理员可见） -->
+  {% if current_user.is_admin %}
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-white">
+      <a class="text-decoration-none" data-bs-toggle="collapse" href="#slaSettingsPanel" role="button">
+        <i class="fas fa-cog me-1"></i>SLA 阈值设置
+        <i class="fas fa-chevron-down ms-1 small"></i>
+      </a>
+    </div>
+    <div class="collapse" id="slaSettingsPanel">
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead>
+              <tr><th>优先级</th><th>响应时限(h)</th><th>解决时限(h)</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>普通</td>
+                <td><input type="number" step="0.5" min="0.1" class="form-control form-control-sm sla-resp" data-priority="normal" value="{{ thresholds.normal.response if thresholds and thresholds.normal else 4 }}"></td>
+                <td><input type="number" step="0.5" min="0.1" class="form-control form-control-sm sla-resol" data-priority="normal" value="{{ thresholds.normal.resolution if thresholds and thresholds.normal else 24 }}"></td>
+              </tr>
+              <tr>
+                <td>加急</td>
+                <td><input type="number" step="0.5" min="0.1" class="form-control form-control-sm sla-resp" data-priority="urgent" value="{{ thresholds.urgent.response if thresholds and thresholds.urgent else 2 }}"></td>
+                <td><input type="number" step="0.5" min="0.1" class="form-control form-control-sm sla-resol" data-priority="urgent" value="{{ thresholds.urgent.resolution if thresholds and thresholds.urgent else 8 }}"></td>
+              </tr>
+              <tr>
+                <td>紧急</td>
+                <td><input type="number" step="0.5" min="0.1" class="form-control form-control-sm sla-resp" data-priority="emergency" value="{{ thresholds.emergency.response if thresholds and thresholds.emergency else 0.5 }}"></td>
+                <td><input type="number" step="0.5" min="0.1" class="form-control form-control-sm sla-resol" data-priority="emergency" value="{{ thresholds.emergency.resolution if thresholds and thresholds.emergency else 2 }}"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <button class="btn btn-primary btn-sm mt-2" onclick="saveThresholds()">
+          <i class="fas fa-save me-1"></i>保存设置
+        </button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- 超时工单列表 -->
+  <div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+      <span><i class="fas fa-exclamation-triangle text-danger me-1"></i>超时工单列表</span>
+      <button class="btn btn-sm btn-outline-primary" onclick="loadSlaData()"><i class="fas fa-sync me-1"></i>刷新</button>
+    </div>
+    <div class="card-body p-0" id="overdueContainer">
+      <div class="text-center py-5 text-muted"><i class="fas fa-spinner fa-spin me-1"></i>加载中…</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', loadSlaData);
+
+async function loadSlaData() {
+  var container = document.getElementById('overdueContainer');
+  container.innerHTML = '<div class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-1"></i>加载中…</div>';
+
+  try {
+    var resp = await fetch('/feature/sla/data');
+    var data = await resp.json();
+    if (!data.success) throw new Error(data.error);
+
+    document.getElementById('slaTotal').textContent = data.total_count;
+    document.getElementById('slaOverdue').textContent = data.overdue_count;
+    var rate = data.total_count > 0 ? (data.overdue_count / data.total_count * 100).toFixed(1) : '0.0';
+    document.getElementById('slaRate').textContent = rate + '%';
+    document.getElementById('slaCompliant').textContent = data.total_count - data.overdue_count;
+
+    if (data.by_priority) {
+      var priMap = {normal: 'Normal', urgent: 'Urgent', emergency: 'Emergency'};
+      for (var pri in priMap) {
+        var info = data.by_priority[pri];
+        if (info) {
+          document.getElementById('sla' + priMap[pri] + 'Total').textContent = info.total;
+          document.getElementById('sla' + priMap[pri] + 'Overdue').textContent = info.overdue + ' (' + info.rate + '%)';
+        }
+      }
+    }
+
+    var list = data.overdue_list || [];
+    var html = '';
+    if (list.length === 0) {
+      html = '<div class="text-center py-5 text-muted"><i class="fas fa-check-circle fa-2x text-success mb-2 d-block"></i>暂无超时工单 🎉</div>';
+    } else {
+      html = '<div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr>' +
+        '<th>#</th><th>标题</th><th>优先级</th><th>状态</th><th>处理人</th><th>科室</th><th>耗时</th>' +
+        '</tr></thead><tbody>';
+      for (var i = 0; i < list.length; i++) {
+        var wo = list[i];
+        var pLabel = {emergency: '紧急', urgent: '加急', normal: '普通'};
+        var pBadge = {emergency: 'bg-danger', urgent: 'bg-warning text-dark', normal: 'bg-info'};
+        var sLabel = {pending: '待处理', in_progress: '进行中', completed: '已完成'};
+        html += '<tr>' +
+          '<td><a href="/orders/' + wo.id + '" target="_blank">#' + wo.id + '</a></td>' +
+          '<td>' + escHtml(wo.title) + '</td>' +
+          '<td><span class="badge ' + (pBadge[wo.priority] || 'bg-secondary') + '">' + (pLabel[wo.priority] || wo.priority) + '</span></td>' +
+          '<td>' + (sLabel[wo.status] || wo.status) + '</td>' +
+          '<td>' + escHtml(wo.person) + '</td>' +
+          '<td>' + escHtml(wo.department) + '</td>' +
+          '<td class="text-danger fw-bold">' + (wo.display_time || (wo.cost_hours ? wo.cost_hours.toFixed(1) + 'h' : '-')) + '</td>' +
+          '</tr>';
+      }
+      html += '</tbody></table></div>';
+    }
+    container.innerHTML = html;
+
+  } catch(e) {
+    container.innerHTML = '<div class="text-center py-4 text-danger">加载失败: ' + e.message + '</div>';
+  }
+}
+
+async function saveThresholds() {
+  var data = {};
+  var respInputs = document.querySelectorAll('.sla-resp');
+  var resolInputs = document.querySelectorAll('.sla-resol');
+  for (var i = 0; i < respInputs.length; i++) {
+    var pri = respInputs[i].dataset.priority;
+    data[pri + '_response'] = parseFloat(respInputs[i].value) || 0;
+  }
+  for (var i = 0; i < resolInputs.length; i++) {
+    var pri = resolInputs[i].dataset.priority;
+    data[pri + '_resolution'] = parseFloat(resolInputs[i].value) || 0;
+  }
+
+  try {
+    var resp = await fetch('/feature/sla/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data)
+    });
+    var result = await resp.json();
+    if (result.success) {
+      showToast('SLA 阈值已保存', 'success');
+    } else {
+      showToast(result.error || '保存失败', 'error');
+    }
+  } catch(e) {
+    showToast('网络错误', 'error');
+  }
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, function(m) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+  });
+}
+</script>
+{% endblock %}

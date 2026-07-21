@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.form-card { background:#fff; border-radius:12px; padding:28px; max-width:600px; margin:0 auto; box-shadow:0 1px 4px rgba(0,0,0,.06); }
+.scope-option { display:inline-flex; align-items:center; gap:8px; padding:8px 16px; border:2px solid #e5e7eb; border-radius:8px; cursor:pointer; transition:all .2s; }
+.scope-option:hover { border-color:#4f46e5; }
+.scope-option input:checked + span { color:#4f46e5; font-weight:600; }
+.scope-option:has(input:checked) { border-color:#4f46e5; background:#eef2ff; }
+</style>
+
+<div class="mb-3">
+    <a href="{{ url_for('inventory.list_view') }}" class="text-decoration-none text-muted">
+        <i class="fas fa-arrow-left"></i> 返回盘点列表
+    </a>
+</div>
+
+<div class="form-card">
+    <h5 class="fw-bold mb-3"><i class="fas fa-plus-circle text-primary"></i> 新建盘点</h5>
+    <form method="POST">
+        <div class="mb-3">
+            <label class="form-label fw-medium">盘点名称 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="name" required
+                   placeholder="例：2025年7月全院资产盘点" style="border-radius:8px;padding:10px 14px;">
+        </div>
+        <div class="mb-3">
+            <label class="form-label fw-medium">盘点范围</label>
+            <div class="d-flex gap-3">
+                <label class="scope-option">
+                    <input type="radio" name="scope" value="building" checked>
+                    <span>按楼区分组</span>
+                </label>
+                <label class="scope-option">
+                    <input type="radio" name="scope" value="department">
+                    <span>按科室分组</span>
+                </label>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label fw-medium">备注</label>
+            <textarea class="form-control" name="notes" rows="2"
+                      placeholder="可选备注" style="border-radius:8px;"></textarea>
+        </div>
+        <div class="d-grid">
+            <button type="submit" class="btn btn-primary" style="border-radius:8px;padding:10px;">
+                <i class="fas fa-play"></i> 开始盘点
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

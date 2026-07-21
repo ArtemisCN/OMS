@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}403 - 权限不足{% endblock %}
+{% block content %}
+<div class="text-center py-5">
+    <h1 class="display-1 text-warning">403</h1>
+    <p class="lead">权限不足</p>
+    <p class="text-muted">您没有权限访问此页面。</p>
+    <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary mt-3">
+        <i class="fas fa-home"></i> 返回首页
+    </a>
+</div>
+{% endblock %}

@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.hospital-card {
+    transition: box-shadow .2s, border-color .2s;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+}
+.hospital-card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    border-color: #c7d2fe;
+}
+.hospital-icon {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-right: 14px; font-size: 18px;
+}
+</style>
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="mb-0 fw-bold" style="font-size:15px;">
+        <i class="fas fa-hospital text-primary"></i> 医院管理
+        <span class="text-muted ms-2" style="font-size:12px;font-weight:400;">{{ hospitals|length }} 家医院</span>
+    </h5>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal">
+            <i class="fas fa-plus"></i> 新增医院
+        </button>
+        <a href="{{ url_for('data.index') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> 返回</a>
+    </div>
+</div>
+
+<div class="row g-3">
+    {% for h in hospitals %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card hospital-card h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-start mb-2">
+                    <div class="hospital-icon" style="background:rgba(79,70,229,.1);color:#4f46e5;">
+                        <i class="fas fa-hospital"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="fw-bold" style="font-size:15px;">{{ h.name }}</div>
+                                <div class="text-muted small">编码: {{ h.code }}</div>
+                            </div>
+                            <span class="badge bg-{{ 'success' if h.is_active else 'secondary' }}">{{ '启用' if h.is_active else '禁用' }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% if h.address or h.phone %}
+                <div class="small text-muted mb-2">
+                    {% if h.address %}<div><i class="fas fa-map-marker-alt" style="width:16px;"></i> {{ h.address }}</div>{% endif %}
+                    {% if h.phone %}<div><i class="fas fa-phone" style="width:16px;"></i> {{ h.phone }}</div>{% endif %}
+                </div>
+                {% endif %}
+                <div class="text-muted small mb-2">创建: {{ h.created_at.strftime('%Y-%m-%d') }}</div>
+                <div class="d-flex gap-3 small mb-2">
+                    <span><i class="fas fa-users text-primary" style="width:14px;"></i> {{ person_counts.get(h.id, 0) }} 人</span>
+                    <span><i class="fas fa-user-cog text-info" style="width:14px;"></i> {{ user_counts.get(h.id, 0) }} 个账号</span>
+                </div>
+                <div class="d-flex gap-1 mt-auto">
+                    <button class="btn btn-sm btn-outline-primary" onclick="editHospital({{ h.id }}, '{{ h.name|e }}', '{{ h.code|e }}', '{{ h.address|e }}', '{{ h.phone|e }}')">
+                        <i class="fas fa-edit"></i> 编辑
+                    </button>
+                    <form method="post" action="{{ url_for('data.toggle_hospital', hid=h.id) }}" style="display:inline;">
+                        <button type="submit" class="btn btn-sm btn-outline-{{ 'warning' if h.is_active else 'success' }}">
+                            <i class="fas fa-{{ 'pause' if h.is_active else 'play' }}"></i> {{ '停用' if h.is_active else '启用' }}
+                        </button>
+                    </form>
+                    <a href="{{ url_for('data.switch_hospital', hid=h.id) }}" class="btn btn-sm btn-outline-info">
+                        <i class="fas fa-eye"></i> 切换查看
+                    </a>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#personList{{ h.id }}" onclick="event.stopPropagation();">
+                        <i class="fas fa-list"></i> 人员
+                    </button>
+                </div>
+                <!-- 人员列表（按组分可折叠） -->
+                <div class="collapse mt-2" id="personList{{ h.id }}">
+                    <div style="max-height:320px;overflow-y:auto;border-top:1px solid var(--border,#e5e7eb);padding-top:6px;">
+                        {% set team_data = hospital_person_teams.get(h.id, {}) %}
+                        {% if team_data %}
+                        {% for tname, tpersons in team_data.items() %}
+                        <div style="margin-bottom:6px;">
+                            <div style="font-size:11px;font-weight:700;color:#64748b;padding:3px 4px;background:#f8fafc;border-radius:4px;margin-bottom:2px;">
+                                {{ tname }}
+                                <span style="font-weight:400;color:#94a3b8;">{{ tpersons|length }}人</span>
+                            </div>
+                            <table style="width:100%;font-size:11px;">
+                                <tbody>
+                                    {% for p in tpersons %}
+                                    <tr>
+                                        <td style="padding:2px 4px;font-weight:500;">{{ p.name }}</td>
+                                        <td style="padding:2px 4px;color:var(--muted,#64748b);">
+                                            {%- if p.has_account -%}
+                                            <span class="text-success">●</span> {{ p.username }}
+                                            {%- else -%}
+                                            <span class="text-secondary">○</span> 无账号
+                                            {%- endif -%}
+                                        </td>
+                                        <td style="padding:2px 4px;color:var(--muted,#64748b);">{{ p.phone }}</td>
+                                        <td style="padding:2px 4px;text-align:center;">
+                                            <span class="badge bg-{{ 'success' if p.is_active else 'secondary' }}" style="font-size:9px;">{{ '启用' if p.is_active else '禁用' }}</span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <div class="text-muted text-center py-2">暂无人员</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="text-center text-muted py-5">
+            <i class="fas fa-hospital" style="font-size:48px;opacity:.3;"></i>
+            <p class="mt-2">暂无医院数据，请先添加医院</p>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- 新增医院模态框 -->
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:12px;">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title fw-bold"><i class="fas fa-plus-circle text-primary"></i> 新增医院</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('data.add_hospital') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">医院名称 <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="form-control" required placeholder="如: 总院、东院区">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">医院编码 <span class="text-danger">*</span></label>
+                        <input type="text" name="code" class="form-control" required placeholder="如: main、east">
+                        <small class="text-muted">唯一编码，用于数据隔离标识</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">地址</label>
+                        <input type="text" name="address" class="form-control" placeholder="医院地址">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">电话</label>
+                        <input type="text" name="phone" class="form-control" placeholder="联系电话">
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-save"></i> 保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑医院模态框 -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:12px;">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title fw-bold"><i class="fas fa-edit text-primary"></i> 编辑医院</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" id="editForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">医院名称 <span class="text-danger">*</span></label>
+                        <input type="text" name="name" id="editName" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">医院编码 <span class="text-danger">*</span></label>
+                        <input type="text" name="code" id="editCode" class="form-control" required>
+                        <small class="text-muted">唯一编码，修改需谨慎</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">地址</label>
+                        <input type="text" name="address" id="editAddress" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">电话</label>
+                        <input type="text" name="phone" id="editPhone" class="form-control">
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-save"></i> 保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function editHospital(id, name, code, address, phone) {
+    document.getElementById('editForm').action = '/data/hospitals/' + id + '/edit';
+    document.getElementById('editName').value = name;
+    document.getElementById('editCode').value = code;
+    document.getElementById('editAddress').value = address;
+    document.getElementById('editPhone').value = phone;
+    new bootstrap.Modal(document.getElementById('editModal')).show();
+}
+</script>
+{% endblock %}

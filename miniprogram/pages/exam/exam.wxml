@@ -1,0 +1,45 @@
+<view class="page">
+  <view class="page-header">
+    <text class="page-title">在线考试</text>
+    <text class="page-desc">参加考试，检验学习成果</text>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-wrap">
+    <view class="loading-spinner"></view>
+    <text>加载中...</text>
+  </view>
+
+  <view wx:elif="{{exams.length === 0 && history.length === 0}}" class="empty-state">
+    <text class="empty-icon">📝</text>
+    <text>暂无可用的考试</text>
+  </view>
+
+  <view wx:else>
+    <!-- 可参加的考试 -->
+    <view class="section-title" wx:if="{{exams.length > 0}}">可参加的考试</view>
+    <view class="exam-list" wx:if="{{exams.length > 0}}">
+      <view class="exam-card" wx:for="{{exams}}" wx:key="id" data-id="{{item.id}}" bindtap="goExam">
+        <view class="exam-card-body">
+          <view class="exam-title">{{item.title}}</view>
+          <view class="exam-meta">{{item.question_count}}题 · {{item.duration_minutes}}分钟 · {{item.pass_score}}%及格</view>
+        </view>
+        <view class="exam-arrow">›</view>
+      </view>
+    </view>
+
+    <!-- 历史记录 -->
+    <view class="section-title" wx:if="{{history.length > 0}}" bindtap="toggleHistory" style="margin-top:20rpx;">
+      <text>历史记录 ({{history.length}})</text>
+      <text class="toggle-icon">{{showHistory ? '收起' : '展开'}}</text>
+    </view>
+    <view wx:if="{{showHistory && history.length > 0}}" class="exam-list">
+      <view class="exam-card history" wx:for="{{history}}" wx:key="id" data-id="{{item.id}}" bindtap="goExam">
+        <view class="exam-card-body">
+          <view class="exam-title">{{item.title}}</view>
+          <view class="exam-meta">{{item.question_count}}题 · 上次得分: {{item.last_score}}/{{item.total_score}}</view>
+        </view>
+        <view class="exam-arrow">›</view>
+      </view>
+    </view>
+  </view>
+</view>

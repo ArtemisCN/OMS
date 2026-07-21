@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}排名 - {{ exam.title }} - {{ system_name }}{% endblock %}
+{% block extra_head %}
+<link href="/static/css/exam.css?v=3" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <a href="{{ url_for('exam.exam_detail', exam_id=exam.id) }}" style="color:var(--text-secondary);text-decoration:none;margin-right:12px;"><i class="fas fa-arrow-left"></i></a>
+    <h2><i class="fas fa-trophy"></i> {{ exam.title }} — 排名榜</h2>
+    <div class="sub">共 {{ submissions|length }} 人提交</div>
+</div>
+
+<div class="card-section" style="background:var(--card-bg,#fff);border-radius:12px;border:1px solid var(--border-color,#e2e8f0);overflow:hidden;">
+    {% if submissions %}
+    <table class="ranking-table">
+        <thead><tr><th style="width:50px;">#</th><th>考生</th><th>得分</th><th>正确率</th><th>正确/总</th><th>用时</th><th>交卷时间</th><th>结果</th></tr></thead>
+        <tbody>
+            {% for s in submissions %}
+            {% set pct = '%.1f'|format((s.score/s.total_possible*100) if s.total_possible>0 else 0) %}
+            {% set m = s.duration_seconds // 60 %}
+            {% set sec = s.duration_seconds % 60 %}
+            <tr>
+                <td class="rank-num rank-{{ s._rank if s._rank <= 3 else '' }}">
+                    {% if s._rank == 1 %}<i class="fas fa-trophy trophy-icon" style="color:var(--gold);"></i>
+                    {% elif s._rank == 2 %}<i class="fas fa-medal trophy-icon" style="color:var(--silver);"></i>
+                    {% elif s._rank == 3 %}<i class="fas fa-medal trophy-icon" style="color:var(--bronze);"></i>
+                    {% else %}{{ s._rank }}{% endif %}
+                </td>
+                <td><strong>{{ s.user.display_name if s.user else '未知' }}</strong></td>
+                <td class="score-cell">{{ '%.1f'|format(s.score) }} <span class="max">/ {{ '%.1f'|format(s.total_possible) }}</span></td>
+                <td>{{ pct }}%</td>
+                <td>{{ s.correct_count }}/{{ s.total_count }}</td>
+                <td>{{ m }}分{{ sec }}秒</td>
+                <td style="font-size:.82rem;color:var(--text-tertiary);">{{ s.submitted_at }}</td>
+                <td class="{{ 'passed' if s.is_passed(exam.pass_score) else 'failed' }}">
+                    {{ '✓ 及格' if s.is_passed(exam.pass_score) else '✗ 不及格' }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="text-align:center;padding:60px 20px;color:var(--text-tertiary,#94a3b8);">
+        <i class="fas fa-trophy" style="font-size:3rem;display:block;margin-bottom:12px;opacity:.4;"></i>
+        <p>暂无排名数据</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

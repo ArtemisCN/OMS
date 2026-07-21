@@ -1,0 +1,108 @@
+{% extends "mobile/base.html" %}
+
+{% block content %}
+<style>
+.exam-m-list { padding: 12px; }
+.exam-m-card {
+  background: var(--bg-card,#fff); border-radius: 14px; padding: 16px;
+  margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  border: 1px solid var(--border-color,#e8ecf1); display: block; text-decoration: none;
+  color: inherit; transition: transform .15s;
+}
+.exam-m-card:active { transform: scale(0.98); }
+.exam-m-card .top {
+  display: flex; justify-content: space-between;
+  align-items: flex-start; margin-bottom: 6px;
+}
+.exam-m-card .title { font-size: 15px; font-weight: 600; color: var(--text-primary,#1e293b); flex:1; }
+.exam-m-card .status {
+  display: inline-block; padding: 2px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 500; flex-shrink:0; margin-left: 8px;
+}
+.exam-m-card .status.published { background: #dcfce7; color: #166534; }
+.exam-m-card .status.closed { background: #fee2e2; color: #991b1b; }
+.exam-m-card .desc { font-size: 13px; color: var(--text-secondary,#64748b); margin-bottom: 10px; line-height: 1.5; }
+.exam-m-card .meta { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--text-tertiary,#94a3b8); }
+.exam-m-card .meta span { display: inline-flex; align-items: center; gap: 4px; }
+.exam-m-card .bottom {
+  display: flex; justify-content: space-between;
+  align-items: center; margin-top: 12px; padding-top: 10px;
+  border-top: 1px solid var(--border-color,#f1f5f9);
+}
+.exam-m-card .score { font-size: 13px; font-weight: 600; }
+.exam-m-card .score.pass { color: #059669; }
+.exam-m-card .score.fail { color: #dc2626; }
+.exam-m-card .btn-start {
+  display: inline-block; padding: 6px 18px; border-radius: 8px;
+  font-size: 13px; font-weight: 600; text-decoration: none;
+  background: var(--exam-primary,#4f46e5); color: #fff; border: none;
+}
+.exam-m-card .btn-start.continue { background: #f59e0b; }
+.empty-state {
+  text-align: center; padding: 60px 20px; color: var(--text-tertiary,#94a3b8);
+}
+.empty-state i { font-size: 48px; opacity: .25; margin-bottom: 12px; display: block; }
+.empty-state p { font-size: 14px; }
+[data-theme="dark"] .exam-m-card { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .exam-m-card .title { color: #e2e8f0; }
+[data-theme="dark"] .exam-m-card .desc { color: #94a3b8; }
+[data-theme="dark"] .exam-m-card .meta { color: #64748b; }
+[data-theme="dark"] .exam-m-card .bottom { border-color: #334155; }
+[data-theme="dark"] .exam-m-card .status.published { background: rgba(34,197,94,.15); color: #4ade80; }
+[data-theme="dark"] .exam-m-card .status.closed { background: rgba(239,68,68,.15); color: #f87171; }
+</style>
+
+<div class="exam-m-list">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+    <i class="fas fa-graduation-cap" style="color:var(--exam-primary,#4f46e5);font-size:20px;"></i>
+    <h2 style="margin:0;font-size:18px;font-weight:600;color:var(--text-primary,#1e293b);">在线考试</h2>
+  </div>
+
+  {% if exams %}
+  {% for e in exams %}
+  {% set statusLabel = '进行中' if e.status == 'published' else '已结束' %}
+  {% set statusClass = 'published' if e.status == 'published' else 'closed' %}
+  <a class="exam-m-card" href="{{ url_for('exam.exam_take', id=e.id) }}{% if e.in_progress_id %}?continue=1{% endif %}">
+    <div class="top">
+      <div class="title">{{ e.title }}</div>
+      <span class="status {{ statusClass }}">{{ statusLabel }}</span>
+    </div>
+    <div class="desc">{{ e.description or '暂无说明' }}</div>
+    <div class="meta">
+      <span>📝 {{ e.question_count }} 题</span>
+      <span>⏱ {{ e.duration_minutes }} 分钟</span>
+      <span>🎯 {{ e.pass_score }}% 及格</span>
+      {% if e.max_attempts > 0 %}
+      <span>🔄 {{ e.max_attempts - (e.attempt_count|default(0)) }}/{{ e.max_attempts }} 次</span>
+      {% else %}
+      <span>♾ 不限次</span>
+      {% endif %}
+    </div>
+    <div class="bottom">
+      {% if e.last_score is not none and not e.in_progress_id %}
+      <div class="score {{ 'pass' if e.last_passed else 'fail' }}">
+        {{ '✅' if e.last_passed else '❌' }} {{ e.last_score }}分
+      </div>
+      {% else %}
+      <div></div>
+      {% endif %}
+      {% if e.in_progress_id %}
+      <span class="btn-start continue">继续答题</span>
+      {% elif e.can_start %}
+      <span class="btn-start">开始考试</span>
+      {% elif e.last_score is not none %}
+      <span style="font-size:12px;color:var(--text-tertiary,#94a3b8);">已完成</span>
+      {% else %}
+      <span style="font-size:12px;color:var(--text-tertiary,#94a3b8);">不可参加</span>
+      {% endif %}
+    </div>
+  </a>
+  {% endfor %}
+  {% else %}
+  <div class="empty-state">
+    <i class="fas fa-graduation-cap"></i>
+    <p>暂无可用考试</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

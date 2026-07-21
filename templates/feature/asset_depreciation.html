@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}设备折旧计算{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-chart-bar text-primary"></i> 设备折旧计算</h5>
+    <a href="{{ url_for('asset.list_view') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-left"></i> 返回资产台账
+    </a>
+</div>
+
+<!-- 汇总卡片 -->
+<div class="row mb-3">
+    <div class="col-md-4">
+        <div class="card text-center border-primary">
+            <div class="card-body py-3">
+                <div class="text-muted small">资产原值总和</div>
+                <div class="fs-4 fw-bold text-primary">{{ '%.2f' | format(total.purchase_total) }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center border-warning">
+            <div class="card-body py-3">
+                <div class="text-muted small">累计折旧总和</div>
+                <div class="fs-4 fw-bold text-warning">{{ '%.2f' | format(total.depreciation_total) }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center border-success">
+            <div class="card-body py-3">
+                <div class="text-muted small">当前净值总和</div>
+                <div class="fs-4 fw-bold text-success">{{ '%.2f' | format(total.current_total) }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 图表 -->
+<div class="card mb-3">
+    <div class="card-header">
+        <span><i class="fas fa-chart-bar text-primary"></i> 剩余价值 Top 10</span>
+    </div>
+    <div class="card-body">
+        <canvas id="depreciationChart" height="80"></canvas>
+    </div>
+</div>
+
+<!-- 详细表格 -->
+<div class="card">
+    <div class="card-header">
+        <span><i class="fas fa-table text-primary"></i> 详细折旧数据</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="depreciationTable">
+                <thead class="table-light">
+                    <tr>
+                        <th>资产编号</th>
+                        <th>资产名称</th>
+                        <th>原值(元)</th>
+                        <th>购入日期</th>
+                        <th>使用年限</th>
+                        <th>已用年数</th>
+                        <th>年折旧(元)</th>
+                        <th>当前净值(元)</th>
+                        <th>折旧率</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td>{{ item.asset_no }}</td>
+                        <td>{{ item.device_type }}</td>
+                        <td>{{ '%.2f' | format(item.purchase_price) }}</td>
+                        <td>{{ item.purchase_date_str }}</td>
+                        <td>{{ item.lifespan_years }}</td>
+                        <td>{{ '%.1f' | format(item.age_years) }}</td>
+                        <td>{{ '%.2f' | format(item.annual_depreciation) }}</td>
+                        <td>
+                            {% if item.current_value > 0 %}
+                            <span class="fw-bold text-success">{{ '%.2f' | format(item.current_value) }}</span>
+                            {% else %}
+                            <span class="text-muted">0.00</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% set rate = (item.depreciation_rate * 100) %}
+                            <div class="progress" style="height:16px;width:100px;">
+                                <div class="progress-bar {% if rate >= 80 %}bg-danger{% elif rate >= 50 %}bg-warning{% else %}bg-success{% endif %}"
+                                     style="width:{{ rate }}%;">
+                                    {{ '%.0f' | format(rate) }}%
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="9" class="text-center text-muted py-4">暂无资产折旧数据（需要设置购入原值和折旧年限）</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var ctx = document.getElementById('depreciationChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: {{ chart_labels | safe }},
+            datasets: [
+                {
+                    label: '当前净值',
+                    data: {{ chart_values | safe }},
+                    backgroundColor: 'rgba(34, 197, 94, 0.6)',
+                    borderColor: 'rgba(34, 197, 94, 1)',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                },
+                {
+                    label: '已折旧',
+                    data: {{ chart_depreciated | safe }},
+                    backgroundColor: 'rgba(239, 68, 68, 0.4)',
+                    borderColor: 'rgba(239, 68, 68, 0.8)',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            return ctx.dataset.label + ': ¥' + parseFloat(ctx.raw).toFixed(2);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: '金额 (元)' }
+                },
+                x: {
+                    ticks: { maxRotation: 45, font: { size: 10 } }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

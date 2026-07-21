@@ -1,0 +1,131 @@
+<!-- 答题页面 -->
+<view wx:if="{{loading}}" class="loading-wrap">
+  <view class="loading-spinner"></view>
+  <text>加载中...</text>
+</view>
+
+<!-- 考试列表模式 -->
+<view wx:elif="{{!exam}}" class="page exam-list-page">
+  <view class="page-header">
+    <text class="page-title">在线考试</text>
+    <text class="page-desc">参加考试，检验学习成果</text>
+  </view>
+  <view wx:if="{{exams.length === 0}}" class="empty-state">
+    <text class="empty-icon">📝</text>
+    <text>暂无可用的考试</text>
+  </view>
+  <view wx:else class="exam-cards">
+    <view class="exam-card" wx:for="{{exams}}" wx:key="id" data-id="{{item.id}}" bindtap="goExam">
+      <view class="exam-card-body">
+        <view class="exam-title">{{item.title}}</view>
+        <view class="exam-meta">{{item.question_count}}题 · {{item.duration_minutes}}分钟</view>
+      </view>
+      <view class="exam-arrow">›</view>
+    </view>
+  </view>
+</view>
+
+<!-- 结果页面 -->
+<view wx:elif="{{submitted && result}}" class="result-page">
+  <view class="result-card">
+    <view class="result-circle {{passed ? 'passed' : 'failed'}}">
+      <text wx:if="{{passed}}" class="result-icon">✓</text>
+      <text wx:else class="result-icon">✗</text>
+    </view>
+    <text class="result-title">{{passed ? '恭喜通过！' : '再接再厉'}}</text>
+    <view class="result-score">{{result.score}} / {{result.total_possible}} 分</view>
+    <view class="result-detail">
+      <view class="detail-row"><text>正确率</text><text>{{result._accuracyStr}}</text></view>
+      <view class="detail-row"><text>正确题数</text><text>{{ result.correct_count }}/{{ result.total_count }}</text></view>
+      <view class="detail-row"><text>用时</text><text>{{result._durationStr}}</text></view>
+    </view>
+    <button class="btn-primary" bindtap="backToList">返回考试列表</button>
+  </view>
+</view>
+
+<!-- 答题模式 -->
+<view wx:elif="{{currentQ}}" class="exam-take">
+  <!-- 进度条 -->
+  <view class="progress-bar">
+    <view class="progress-fill" style="width: {{progress}}%"></view>
+  </view>
+  <view class="exam-header">
+    <text class="q-counter">第 {{currentIdx+1}}/{{questions.length}} 题</text>
+    <text class="timer {{timerStatus}}">{{timerStr}}</text>
+  </view>
+
+  <!-- 题目卡片 -->
+  <scroll-view class="q-scroll" scroll-y>
+    <view class="q-card">
+      <view class="q-type-badge">
+        <text wx:if="{{currentQ.question_type === 'single'}}">单选题</text>
+        <text wx:elif="{{currentQ.question_type === 'multi'}}">多选题</text>
+        <text wx:elif="{{currentQ.question_type === 'judge'}}">判断题</text>
+        <text wx:else>填空题</text>
+        <text class="q-score">{{currentQ.score}}分</text>
+      </view>
+      <view class="q-text">{{currentQ.question_text}}</view>
+
+      <!-- 选择题型 -->
+      <view wx:if="{{currentQ.question_type !== 'judge' && currentQ.question_type !== 'fill'}}" class="options-list">
+        <view class="option-item {{item.checked ? 'selected' : ''}}"
+              wx:for="{{currentQ.options}}" wx:key="label"
+              data-qid="{{currentQ.id}}" data-answer="{{item.label}}"
+              bindtap="selectAnswer">
+          <view class="opt-radio {{currentQ.question_type === 'multi' ? 'multi' : ''}}">
+            <text wx:if="{{item.checked}}" class="opt-check">✓</text>
+          </view>
+          <view class="opt-content">
+            <text class="opt-label">{{item.label}}</text>
+            <text class="opt-text">{{item.text}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 判断题 -->
+      <view wx:elif="{{currentQ.question_type === 'judge'}}" class="judge-btns">
+        <view class="judge-btn {{userAnswer === 'T' ? 'selected true' : ''}}" data-qid="{{currentQ.id}}" data-answer="T" bindtap="selectAnswer">
+          <text class="judge-icon">✓</text>
+          <text>正确</text>
+        </view>
+        <view class="judge-btn {{userAnswer === 'F' ? 'selected false' : ''}}" data-qid="{{currentQ.id}}" data-answer="F" bindtap="selectAnswer">
+          <text class="judge-icon">✗</text>
+          <text>错误</text>
+        </view>
+      </view>
+
+      <!-- 填空题 -->
+      <view wx:elif="{{currentQ.question_type === 'fill'}}" class="fill-wrap">
+        <input class="fill-input" type="text" placeholder="请输入答案..." value="{{userAnswer}}" data-qid="{{currentQ.id}}" bindinput="onFillInput" />
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 底部导航 -->
+  <view class="q-nav">
+    <button class="btn-prev {{currentIdx === 0 ? 'disabled' : ''}}" bindtap="prevQuestion" disabled="{{currentIdx === 0}}">上一题</button>
+    <button wx:if="{{!isLast}}" class="btn-next" bindtap="nextQuestion">下一题</button>
+    <button wx:else class="btn-submit" bindtap="showConfirm">交卷</button>
+  </view>
+
+  <!-- 导航点 -->
+  <scroll-view class="dot-scroll" scroll-x enable-flex>
+    <view class="q-dots">
+      <view class="q-dot {{idx === currentIdx ? 'active' : ''}} {{answers[String(q.id)] ? 'answered' : ''}}"
+            wx:for="{{questions}}" wx:key="id" data-idx="{{idx}}" bindtap="goQuestion">
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 交卷确认弹窗 -->
+  <view class="confirm-overlay {{showConfirm ? 'show' : ''}}">
+    <view class="confirm-dialog">
+      <text class="confirm-title">确认交卷</text>
+      <text class="confirm-desc">共 {{questions.length}} 题，已答 {{answeredCount}} 题。交卷后不可修改。</text>
+      <view class="confirm-btns">
+        <button class="btn-cancel" bindtap="hideConfirm">继续答题</button>
+        <button class="btn-confirm" bindtap="submitExam">确认交卷</button>
+      </view>
+    </view>
+  </view>
+</view>

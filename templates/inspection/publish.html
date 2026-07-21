@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-calendar-plus text-primary"></i> {% if plan %}编辑巡检{% else %}发布巡检{% endif %}</h5>
+    <a href="{{ url_for('inspection.list_plans') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-list"></i> 巡检计划
+    </a>
+</div>
+
+<div class="card" style="max-width:700px;">
+    <div class="card-body">
+        <form method="post">
+            <div class="mb-3">
+                <label class="form-label">巡检模板 <span class="text-danger">*</span></label>
+                <select name="template_id" class="form-select" required>
+                    <option value="">请选择...</option>
+                    {% for t in templates %}
+                    <option value="{{ t.id }}" {% if plan and plan.template_id == t.id %}selected{% endif %}>{{ t.name }}（{{ t.items|length }}项）</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="row g-2 mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">楼区</label>
+                    <select name="building" class="form-select" id="selBuilding">
+                        <option value="">请选择楼区...</option>
+                        {% for b in buildings %}
+                        <option value="{{ b }}" {% if plan and plan.building == b %}selected{% endif %}>{{ b }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">楼层</label>
+                    <select name="floor" class="form-select" id="selFloor">
+                        <option value="">先选楼区...</option>
+                        {% if plan and plan.floor %}
+                        <option value="{{ plan.floor }}" selected>{{ plan.floor }}</option>
+                        {% endif %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">科室</label>
+                    <select name="department" class="form-select" id="selDepartment">
+                        <option value="">先选楼区...</option>
+                        {% if plan and plan.department %}
+                        <option value="{{ plan.department }}" selected>{{ plan.department }}</option>
+                        {% endif %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">详细位置</label>
+                <input type="text" class="form-control" name="location" id="txtLocation"
+                       list="locDatalist" placeholder="选楼区后可从列表选，也可手动输入"
+                       value="{{ plan.location if plan else '' }}">
+                <datalist id="locDatalist"></datalist>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">巡检类型</label>
+                <div class="d-flex gap-3">
+                    <label class="form-check-label me-2">
+                        <input type="radio" name="schedule_type" value="once" {% if not plan or plan.schedule_type == 'once' %}checked{% endif %} onchange="toggleScheduleType()"> 单次
+                    </label>
+                    <label class="form-check-label me-2">
+                        <input type="radio" name="schedule_type" value="daily" {% if plan and plan.schedule_type == 'daily' %}checked{% endif %} onchange="toggleScheduleType()"> 每日
+                    </label>
+                    <label class="form-check-label me-2">
+                        <input type="radio" name="schedule_type" value="workday" {% if plan and plan.schedule_type == 'workday' %}checked{% endif %} onchange="toggleScheduleType()"> 工作日
+                    </label>
+                    <label class="form-check-label">
+                        <input type="radio" name="schedule_type" value="monthly" {% if plan and plan.schedule_type == 'monthly' %}checked{% endif %} onchange="toggleScheduleType()"> 每月
+                    </label>
+                </div>
+            </div>
+
+            <div id="recurringOptions" style="{% if plan and plan.schedule_type != 'once' %}display:block;{% else %}display:none;{% endif %}" class="mb-3">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label">定时时间</label>
+                        <input type="time" class="form-control" name="schedule_time" value="{{ plan.schedule_time if plan and plan.schedule_time else '09:00' }}">
+                    </div>
+                    <div class="col-md-6" id="monthlyDayGroup" style="{% if plan and plan.schedule_type == 'monthly' %}display:block;{% else %}display:none;{% endif %}">
+                        <label class="form-label">每月第几天</label>
+                        <input type="number" class="form-control" name="schedule_day" min="1" max="31" value="{{ plan.schedule_day if plan and plan.schedule_day else '1' }}">
+                    </div>
+                </div>
+                <div class="form-text">循环计划：首次按设定时间执行，后续按规则自动生成</div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">巡检时间 <span class="text-danger">*</span></label>
+                <input type="datetime-local" class="form-control" name="scheduled_time" required
+                       value="{{ now.strftime('%Y-%m-%dT%H:%M') }}">
+                <div class="form-text">设定的时间到达后，系统会自动创建巡检工单</div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="padding:10px 40px;">
+                <i class="fas fa-{% if plan %}save{% else %}paper-plane{% endif %}"></i> {% if plan %}保存修改{% else %}发布巡检{% endif %}
+            </button>
+            <a href="{{ url_for('inspection.list_plans') }}" class="btn btn-outline-secondary ms-2">查看计划</a>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function toggleScheduleType() {
+    var val = document.querySelector('input[name="schedule_type"]:checked').value;
+    var recurring = document.getElementById('recurringOptions');
+    var monthlyDay = document.getElementById('monthlyDayGroup');
+    if (val === 'once') {
+        recurring.style.display = 'none';
+    } else {
+        recurring.style.display = 'block';
+        monthlyDay.style.display = (val === 'monthly') ? 'block' : 'none';
+    }
+}
+
+document.getElementById('selBuilding').addEventListener('change', function() {
+    var building = this.value;
+    var floorSel = document.getElementById('selFloor');
+    var deptSel = document.getElementById('selDepartment');
+    var locInput = document.getElementById('txtLocation');
+    var locList = document.getElementById('locDatalist');
+
+    if (!building) {
+        floorSel.innerHTML = '<option value="">先选楼区...</option>';
+        deptSel.innerHTML = '<option value="">先选楼区...</option>';
+        locInput.value = '';
+        locList.innerHTML = '';
+        return;
+    }
+
+    fetch('/inspection/api/address_data?building=' + encodeURIComponent(building))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            floorSel.innerHTML = '<option value="">请选择楼层...</option>';
+            data.floors.forEach(function(f) {
+                floorSel.innerHTML += '<option value="' + f + '">' + f + '</option>';
+            });
+
+            deptSel.innerHTML = '<option value="">请选择科室...</option>';
+            data.departments.forEach(function(d) {
+                deptSel.innerHTML += '<option value="' + d + '">' + d + '</option>';
+            });
+
+            // 填充位置 datalist
+            locList.innerHTML = '';
+            data.locations.forEach(function(l) {
+                var opt = document.createElement('option');
+                opt.value = l;
+                locList.appendChild(opt);
+            });
+        });
+});
+
+// 当科室变化时，重新加载位置建议
+document.getElementById('selDepartment').addEventListener('change', function() {
+    var building = document.getElementById('selBuilding').value;
+    var department = this.value;
+    var locList = document.getElementById('locDatalist');
+    if (!building || !department) return;
+    fetch('/inspection/api/address_data?building=' + encodeURIComponent(building) + '&department=' + encodeURIComponent(department))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            locList.innerHTML = '';
+            data.locations.forEach(function(l) {
+                var opt = document.createElement('option');
+                opt.value = l;
+                locList.appendChild(opt);
+            });
+        });
+});
+</script>
+{% endblock %}

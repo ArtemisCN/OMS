@@ -1,0 +1,677 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+/* ============================================================
+   "Knowledge Hub" 知识库 — 支持图文/视频/音频/工单
+   ============================================================ */
+.kh-wrap { max-width: 1060px; margin: 0 auto; --kh-radius: 14px; }
+
+.kh-topbar { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+.kh-topbar h4 { margin:0; font-size:20px; font-weight:800; display:flex; align-items:center; gap:10px; letter-spacing:-0.3px; }
+.kh-topbar h4 i { background:linear-gradient(135deg,#0891b2,#06b6d4); -webkit-background-clip:text; -webkit-text-fill-color:transparent; font-size:19px; }
+.kh-topbar-right { display:flex; gap:8px; align-items:center; }
+
+/* 搜索 */
+.kh-search-wrap { position:relative; margin-bottom:18px; }
+.kh-search-wrap .kh-search-icon { position:absolute; left:16px; top:50%; transform:translateY(-50%); color:var(--text-muted,#94a3b8); font-size:15px; pointer-events:none; }
+.kh-search { width:100%; padding:12px 14px 12px 44px; border-radius:12px; border:1.5px solid var(--card-border,#e5e7eb); outline:none; font-size:15px; background:var(--card-bg,rgba(255,255,255,0.6)); backdrop-filter:blur(8px); color:var(--text,#1e293b); transition:all .2s; font-family:inherit; }
+.kh-search:focus { border-color:var(--primary,#4f46e5); box-shadow:0 0 0 3px rgba(79,70,229,0.12); }
+.kh-search::placeholder { color:#cbd5e1; }
+[data-theme="dark"] .kh-search { background:rgba(26,29,39,0.6); border-color:rgba(42,46,58,0.4); color:#e2e8f0; }
+[data-theme="dark"] .kh-search:focus { border-color:#4f46e5; }
+
+/* 统计 */
+.kh-stats { display:flex; gap:4px; margin-bottom:16px; flex-wrap:wrap; }
+.kh-stat { flex:1; min-width:70px; padding:8px 10px; border-radius:10px; text-align:center; font-size:11px; font-weight:500; background:var(--card-bg,rgba(255,255,255,0.5)); backdrop-filter:blur(8px); border:1px solid var(--card-border,rgba(229,231,235,0.3)); color:var(--text-muted,#94a3b8); line-height:1.3; }
+.kh-stat strong { display:block; font-size:20px; font-weight:800; color:var(--text,#1e293b); letter-spacing:-0.5px; }
+
+/* 分类标签 */
+.kh-cats { display:flex; gap:6px; margin-bottom:18px; flex-wrap:wrap; }
+.kh-cat { display:inline-flex; align-items:center; gap:6px; padding:7px 16px; border-radius:999px; font-size:13px; font-weight:500; cursor:pointer; border:1.5px solid var(--card-border,#e5e7eb); background:var(--card-bg,rgba(255,255,255,0.4)); color:var(--text-secondary,#475569); text-decoration:none; transition:all .2s; backdrop-filter:blur(4px); }
+.kh-cat:hover { border-color:var(--primary,#4f46e5); color:var(--primary,#4f46e5); }
+.kh-cat.active { border-color:var(--primary,#4f46e5); background:linear-gradient(135deg,rgba(79,70,229,0.1),rgba(79,70,229,0.04)); color:var(--primary,#4f46e5); font-weight:600; box-shadow:0 1px 4px rgba(79,70,229,0.1); }
+.kh-cat .cat-count { font-size:10px; padding:0 6px; border-radius:999px; background:var(--card-border,#e5e7eb); line-height:18px; font-weight:600; }
+.kh-cat.active .cat-count { background:rgba(79,70,229,0.12); color:var(--primary,#4f46e5); }
+[data-theme="dark"] .kh-cat { background:rgba(26,29,39,0.4); border-color:rgba(42,46,58,0.4); color:#9ca3af; }
+[data-theme="dark"] .kh-cat.active { background:rgba(79,70,229,0.15); border-color:#4f46e5; color:#a5b4fc; }
+
+/* 文章网格 */
+.kh-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px; }
+
+/* 文章卡片 */
+.kh-card { position:relative; border-radius:var(--kh-radius); overflow:hidden; background:var(--card-bg,rgba(255,255,255,0.6)); backdrop-filter:blur(8px); border:1px solid var(--card-border,rgba(229,231,235,0.4)); transition:all .25s cubic-bezier(0.34,1.56,0.64,1); cursor:pointer; display:flex; flex-direction:column; }
+.kh-card:hover { transform:translateY(-3px); box-shadow:0 8px 30px rgba(79,70,229,0.08); border-color:var(--primary,#4f46e5); }
+.kh-card:active { transform:translateY(0) scale(0.98); }
+.kh-card.pinned { border-color:#0891b2; background:linear-gradient(135deg,rgba(8,145,178,0.04),rgba(8,145,178,0.01)); }
+.kh-card-bar { height:4px; flex-shrink:0; }
+.kh-card[data-cat="公告"] .kh-card-bar { background:linear-gradient(90deg,#0891b2,#22d3ee); }
+.kh-card[data-cat="操作手册"] .kh-card-bar { background:linear-gradient(90deg,#4f46e5,#818cf8); }
+.kh-card[data-cat="常见问题"] .kh-card-bar { background:linear-gradient(90deg,#059669,#34d399); }
+.kh-card-body { padding:16px 18px 14px; flex:1; display:flex; flex-direction:column; }
+.kh-card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; gap:8px; }
+.kh-card-title { font-size:15px; font-weight:700; line-height:1.4; color:var(--text,#1e293b); overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.kh-card-pin { font-size:14px; flex-shrink:0; }
+.kh-card-meta { display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+.kh-card-badge { display:inline-flex; align-items:center; gap:4px; padding:2px 10px; border-radius:999px; font-size:10px; font-weight:600; line-height:20px; }
+.kh-card-badge.公告 { background:rgba(8,145,178,0.1); color:#0891b2; }
+.kh-card-badge.操作手册 { background:rgba(79,70,229,0.1); color:#4f46e5; }
+.kh-card-badge.常见问题 { background:rgba(5,150,105,0.1); color:#059669; }
+.kh-card-date { font-size:11px; color:var(--text-muted,#94a3b8); }
+/* 摘要 — 从富文本纯文本提取 */
+.kh-card-excerpt { font-size:13px; color:var(--text-secondary,#475569); line-height:1.6; overflow:hidden; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; flex:1; margin-bottom:10px; word-break:break-word; }
+.kh-card-media-badge { font-size:10px; color:var(--text-muted); display:flex; align-items:center; gap:3px; }
+.kh-card-footer { display:flex; justify-content:space-between; align-items:center; padding-top:10px; border-top:1px solid var(--card-border,#e5e7eb); flex-shrink:0; }
+.kh-card-actions { display:flex; gap:4px; }
+.kh-card-actions button { width:30px; height:30px; border-radius:7px; border:none; background:transparent; cursor:pointer; font-size:12px; color:var(--text-muted,#94a3b8); transition:all .15s; display:flex; align-items:center; justify-content:center; }
+.kh-card-actions button:hover { background:rgba(79,70,229,0.08); color:var(--primary,#4f46e5); }
+.kh-card-actions .btn-del:hover { background:rgba(239,68,68,0.08); color:#ef4444; }
+.kh-card-read { font-size:12px; color:var(--primary,#4f46e5); font-weight:600; display:flex; align-items:center; gap:4px; }
+
+.kh-empty { text-align:center; padding:60px 20px; }
+.kh-empty-icon { width:80px; height:80px; margin:0 auto 16px; background:linear-gradient(135deg,#667eea12,#764ba212); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:32px; color:var(--text-muted,#94a3b8); }
+
+/* 浮动新增按钮 */
+.kh-fab { position:fixed; bottom:100px; right:24px; z-index:100; width:52px; height:52px; border-radius:50%; border:none; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; font-size:22px; cursor:pointer; box-shadow:0 4px 20px rgba(102,126,234,0.35); transition:all .2s; display:none; align-items:center; justify-content:center; }
+.kh-fab:hover { transform:scale(1.1); box-shadow:0 6px 28px rgba(102,126,234,0.45); }
+@media(max-width:768px) { .kh-fab { display:flex; } }
+
+/* ── 阅读侧滑面板（富内容） ── */
+.kh-overlay { position:fixed; inset:0; z-index:9990; background:rgba(0,0,0,0.12); backdrop-filter:blur(4px); display:none; animation:fadeIn .2s ease; }
+.kh-overlay.show { display:block; }
+.kh-panel { position:fixed; top:0; right:-600px; bottom:0; z-index:9991; width:580px; max-width:94vw; background:var(--modal-bg,#fff); border-left:1px solid var(--card-border,#e5e7eb); box-shadow:-8px 0 40px rgba(0,0,0,0.08); transition:right 0.35s cubic-bezier(0.34,1.56,0.64,1); display:flex; flex-direction:column; overflow:hidden; }
+.kh-panel.open { right:0; }
+.kh-panel-header { display:flex; align-items:center; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--card-border,#e5e7eb); flex-shrink:0; }
+.kh-panel-header h6 { margin:0; font-size:16px; font-weight:700; display:flex; align-items:center; gap:8px; }
+.kh-panel-close { width:32px; height:32px; border-radius:8px; border:none; background:transparent; cursor:pointer; font-size:18px; color:var(--text-muted,#94a3b8); transition:all .15s; display:flex; align-items:center; justify-content:center; }
+.kh-panel-close:hover { background:rgba(0,0,0,0.05); color:var(--text,#1e293b); }
+[data-theme="dark"] .kh-panel-close:hover { background:rgba(255,255,255,0.06); }
+.kh-panel-body { flex:1; overflow-y:auto; padding:22px 26px 40px; }
+
+/* 富内容样式 */
+.kh-rich-content { font-size:15px; color:var(--text-secondary,#475569); line-height:1.8; word-break:break-word; }
+.kh-rich-content h1 { font-size:24px; font-weight:800; color:var(--text,#1e293b); margin:24px 0 12px; }
+.kh-rich-content h2 { font-size:20px; font-weight:700; color:var(--text,#1e293b); margin:20px 0 10px; }
+.kh-rich-content h3 { font-size:17px; font-weight:600; color:var(--text,#1e293b); margin:16px 0 8px; }
+.kh-rich-content p { margin:0 0 12px; }
+.kh-rich-content img { max-width:100%; border-radius:10px; margin:8px 0; box-shadow:0 2px 12px rgba(0,0,0,0.06); display:block; }
+.kh-rich-content video { max-width:100%; border-radius:10px; margin:8px 0; background:#000; }
+.kh-rich-content audio { width:100%; margin:8px 0; border-radius:8px; }
+.kh-rich-content blockquote { border-left:4px solid var(--primary,#4f46e5); padding:8px 16px; margin:12px 0; background:rgba(79,70,229,0.04); border-radius:0 8px 8px 0; color:var(--text-secondary,#475569); }
+.kh-rich-content code { background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px; font-size:13px; }
+.kh-rich-content pre { background:rgba(0,0,0,0.04); padding:14px; border-radius:10px; overflow-x:auto; font-size:13px; border:1px solid var(--card-border,#e5e7eb); margin:12px 0; }
+.kh-rich-content ul, .kh-rich-content ol { padding-left:22px; margin:8px 0 12px; }
+.kh-rich-content li { margin-bottom:4px; }
+.kh-rich-content a { color:var(--primary,#4f46e5); text-decoration:underline; }
+.kh-rich-content .wo-embed { display:inline-flex; align-items:center; gap:8px; padding:10px 16px; border-radius:10px; border:1px solid var(--card-border,#e5e7eb); background:var(--card-bg,rgba(255,255,255,0.5)); margin:8px 0; text-decoration:none; color:inherit; transition:all .15s; }
+.kh-rich-content .wo-embed:hover { border-color:var(--primary,#4f46e5); }
+.kh-rich-content .file-link { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:8px; border:1px dashed var(--card-border,#e5e7eb); margin:4px 0; text-decoration:none; color:var(--primary,#4f46e5); font-size:13px; }
+.kh-rich-content .file-link:hover { background:rgba(79,70,229,0.04); }
+
+[data-theme="dark"] .kh-panel { background:#111318; border-color:#2a2e3a; }
+[data-theme="dark"] .kh-rich-content h1, [data-theme="dark"] .kh-rich-content h2, [data-theme="dark"] .kh-rich-content h3 { color:#e2e8f0; }
+[data-theme="dark"] .kh-rich-content { color:#94a3b8; }
+[data-theme="dark"] .kh-rich-content code { background:rgba(255,255,255,0.08); }
+[data-theme="dark"] .kh-rich-content pre { background:rgba(0,0,0,0.3); border-color:#2a2e3a; }
+[data-theme="dark"] .kh-rich-content .wo-embed { background:rgba(26,29,39,0.5); border-color:#2a2e3a; }
+[data-theme="dark"] .kh-p-card { background:rgba(26,29,39,0.6); border-color:rgba(42,46,58,0.4); }
+[data-theme="dark"] .kh-card:hover { border-color:#4f46e5; }
+[data-theme="dark"] .kh-card.pinned { border-color:#0891b2; background:rgba(8,145,178,0.06); }
+[data-theme="dark"] .kh-stat strong { color:#e2e8f0; }
+
+/* ── Quill 编辑器样式 ── */
+/* 弹窗内 */
+#knowledgeModal .modal-dialog { max-width: 800px; }
+#knowledgeModal .modal-content { border-radius:14px; border:none; box-shadow:0 16px 48px rgba(0,0,0,0.12); }
+#editorContainer { border:1.5px solid var(--card-border,#e5e7eb); border-radius:10px; overflow:hidden; transition:border-color .2s; }
+#editorContainer:focus-within { border-color:var(--primary,#4f46e5); box-shadow:0 0 0 3px rgba(79,70,229,0.12); }
+.ql-toolbar { border: none !important; border-bottom:1px solid var(--card-border,#e5e7eb) !important; border-radius:10px 10px 0 0; background:var(--set-bg,#f8fafc); }
+.ql-container { border: none !important; font-size:15px; font-family:inherit; min-height:200px; }
+.ql-editor { min-height:200px; padding:14px 16px; line-height:1.8; color:var(--text,#1e293b); }
+.ql-editor.ql-blank::before { color:#cbd5e1; font-style:normal; font-size:14px; }
+.ql-editor img { max-width:100%; border-radius:8px; }
+.ql-editor video { max-width:100%; border-radius:8px; }
+[data-theme="dark"] .ql-toolbar { background:#1a1d27; border-color:#2a2e3a !important; }
+[data-theme="dark"] .ql-container { background:#111318; }
+[data-theme="dark"] .ql-editor { color:#e2e8f0; }
+[data-theme="dark"] .ql-editor.ql-blank::before { color:#4b5563; }
+[data-theme="dark"] .ql-stroke { stroke:#9ca3af !important; }
+[data-theme="dark"] .ql-fill { fill:#9ca3af !important; }
+[data-theme="dark"] .ql-picker-label { color:#9ca3af !important; }
+[data-theme="dark"] .ql-picker-options { background:#1a1d27 !important; border-color:#2a2e3a !important; }
+[data-theme="dark"] .ql-picker-item { color:#e2e8f0 !important; }
+
+/* 上传进度 */
+.upload-progress { position:fixed; bottom:100px; left:50%; transform:translateX(-50%); z-index:99999; background:rgba(0,0,0,0.75); backdrop-filter:blur(8px); color:#fff; padding:10px 20px; border-radius:10px; font-size:13px; display:flex; align-items:center; gap:8px; display:none; }
+.upload-progress.show { display:flex; }
+
+/* 插入工单弹窗 */
+.wo-search-modal .modal-content { border-radius:14px; border:none; }
+.wo-search-result { padding:8px 12px; border-radius:8px; border:1px solid var(--card-border,#e5e7eb); margin-bottom:4px; cursor:pointer; transition:all .12s; }
+.wo-search-result:hover { border-color:var(--primary,#4f46e5); background:rgba(79,70,229,0.04); }
+
+[data-theme="dark"] .wo-search-result { border-color:#2a2e3a; background:#1a1d27; }
+[data-theme="dark"] .wo-search-modal .modal-content { background:#111318; }
+
+/* 动画 */
+@keyframes khFadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+.kh-card { animation:khFadeUp 0.35s ease both; }
+
+@media(max-width:768px) {
+  .kh-grid { grid-template-columns:1fr; gap:10px; }
+  .kh-card-body { padding:12px 14px 10px; }
+  .kh-panel { width:100vw; max-width:100vw; right:-100vw; border-left:none; }
+  .kh-stats { gap:2px; }
+  .kh-stat { min-width:50px; padding:5px 6px; }
+  .kh-stat strong { font-size:16px; }
+  .kh-topbar h4 { font-size:17px; }
+}
+</style>
+
+<div class="kh-wrap">
+  <div class="kh-topbar">
+    <h4><i class="fas fa-book"></i> 知识库</h4>
+    <div class="kh-topbar-right">
+      <a href="{{ url_for('data.index') }}" class="kh-cat" style="font-size:12px;padding:5px 12px;"><i class="fas fa-arrow-left"></i> 返回</a>
+      <button class="kh-cat" onclick="showAddModal()" style="font-size:12px;padding:5px 12px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(102,126,234,0.25);"><i class="fas fa-plus"></i> 新增</button>
+    </div>
+  </div>
+
+  <div class="kh-search-wrap">
+    <i class="fas fa-search kh-search-icon"></i>
+    <input type="text" class="kh-search" id="khSearch" placeholder="搜索知识库… 标题、内容、分类" oninput="searchKnowledge(this.value)">
+  </div>
+
+  <!-- 统计 -->
+  {% set total = articles|length %}
+  {% set pinned = articles|selectattr('is_pinned')|list|length %}
+  {% set cats = articles|map(attribute='category')|list %}
+  {% set cat_set = cats|unique|list %}
+
+  <div class="kh-stats">
+    <div class="kh-stat"><strong>{{ total }}</strong>文章</div>
+    <div class="kh-stat"><strong style="color:#0891b2;">{{ pinned }}</strong>置顶</div>
+    {% for c in cat_set %}
+    {% set cc = cats|select('equalto', c)|list|length %}
+    <div class="kh-stat"><strong style="color:{% if c=='公告' %}#0891b2{% elif c=='操作手册' %}#4f46e5{% elif c=='常见问题' %}#059669{% else %}#6b7280{% endif %};">{{ cc }}</strong>{{ c }}</div>
+    {% endfor %}
+  </div>
+
+  <div class="kh-cats">
+    <a href="{{ url_for('data.list_knowledge') }}" class="kh-cat {% if not cur_cat %}active{% endif %}">📋 全部 <span class="cat-count">{{ total }}</span></a>
+    {% for c in cat_set %}
+    <a href="{{ url_for('data.list_knowledge', category=c) }}" class="kh-cat {% if cur_cat == c %}active{% endif %}">
+      {% if c == '公告' %}📢{% elif c == '操作手册' %}📖{% elif c == '常见问题' %}❓{% endif %} {{ c }}
+      <span class="cat-count">{{ cats|select('equalto', c)|list|length }}</span>
+    </a>
+    {% endfor %}
+  </div>
+
+  {% if articles %}
+  <div class="kh-grid" id="khGrid">
+    {% for a in articles %}
+    {% set delay = loop.index0 * 0.04 %}
+    {% set plain = a.content|striptags|truncate(150, true, '…') if a.content else '' %}
+    <div class="kh-card {% if a.is_pinned %}pinned{% endif %}" data-cat="{{ a.category }}" style="animation-delay:{{ delay }}s;" onclick="readArticle({{ a.id }})" title="点击阅读全文">
+      <div class="kh-card-bar"></div>
+      <div class="kh-card-body">
+        <div class="kh-card-header">
+          <div class="kh-card-title">{{ a.title }}</div>
+          {% if a.is_pinned %}<span class="kh-card-pin">📌</span>{% endif %}
+        </div>
+        <div class="kh-card-meta">
+          <span class="kh-card-badge {{ a.category }}">{{ a.category }}</span>
+          <span class="kh-card-date">{{ a.created_at.strftime('%Y-%m-%d') if a.created_at else '' }}</span>
+          {% if a.content and ('<img' in a.content or '<video' in a.content) %}<span class="kh-card-media-badge"><i class="fas fa-image"></i></span>{% endif %}
+          {% if a.content and '<audio' in a.content %}<span class="kh-card-media-badge"><i class="fas fa-headphones"></i></span>{% endif %}
+        </div>
+        <div class="kh-card-excerpt">{{ plain }}</div>
+        <div class="kh-card-footer" onclick="event.stopPropagation();">
+          <span class="kh-card-read">阅读全文 <i class="fas fa-chevron-right" style="font-size:10px;"></i></span>
+          <div class="kh-card-actions">
+            <button onclick="editArticle({{ a.id }})" title="编辑"><i class="fas fa-pen"></i></button>
+            <button class="btn-del" onclick="deleteArticle({{ a.id }}, '{{ a.title|e }}')" title="删除"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="kh-empty">
+    <div class="kh-empty-icon"><i class="fas fa-book"></i></div>
+    <div style="font-size:16px;font-weight:600;color:var(--text,#1e293b);margin-bottom:4px;">暂无文章</div>
+    <div style="font-size:13px;color:var(--text-muted,#94a3b8);">点击右上角「新增」添加第一篇知识文章</div>
+  </div>
+  {% endif %}
+</div>
+
+<button class="kh-fab" onclick="showAddModal()" title="新增文章"><i class="fas fa-plus"></i></button>
+
+<!-- ── 新增/编辑弹窗（含 Quill 富文本编辑器） ── -->
+<div class="modal fade" id="knowledgeModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0" style="padding:20px 22px 0;">
+        <h6 class="modal-title fw-bold" id="knowledgeModalTitle" style="font-size:16px;">
+          <i class="fas fa-pen" style="color:var(--primary,#4f46e5);"></i> <span id="modalTitleText">新增文章</span>
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="knowledgeForm">
+        <div class="modal-body" style="padding:14px 22px;">
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">标题 <span class="text-danger">*</span></label>
+            <input type="text" name="title" id="kTitle" class="form-control" required placeholder="请输入文章标题"
+                   style="border-radius:10px;padding:10px 14px;border:1.5px solid var(--card-border,#e5e7eb);font-size:14px;">
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" style="font-size:13px;">分类</label>
+              <select name="category" id="kCategory" class="form-select"
+                      style="border-radius:10px;padding:10px 14px;border:1.5px solid var(--card-border,#e5e7eb);font-size:14px;">
+                {% for c in cat_set %}
+                <option value="{{ c }}">{{ c }}</option>
+                {% else %}
+                <option value="公告">📢 公告</option>
+                <option value="操作手册">📖 操作手册</option>
+                <option value="常见问题">❓ 常见问题</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+              <div class="form-check mb-2">
+                <input type="checkbox" name="is_pinned" id="kPinned" class="form-check-input" style="border-radius:4px;border:1.5px solid var(--card-border,#e5e7eb);">
+                <label class="form-check-label fw-medium" for="kPinned" style="font-size:13px;"><i class="fas fa-thumbtack me-1" style="color:#0891b2;"></i> 置顶</label>
+              </div>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold" style="font-size:13px;">
+              内容
+              <small class="text-muted" style="font-weight:400;">支持图文混排、视频、音频、附件</small>
+            </label>
+            <!-- 隐藏域存 HTML 内容 -->
+            <textarea name="content" id="kContent" style="display:none;"></textarea>
+            <!-- Quill 编辑器容器 -->
+            <div id="editorContainer">
+              <div id="quillEditor" style="min-height:220px;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-0" style="padding:0 22px 18px;">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"
+                  style="border-radius:10px;padding:8px 20px;font-size:13px;">取消</button>
+          <button type="submit" class="btn btn-primary" id="submitBtn"
+                  style="border-radius:10px;padding:8px 24px;font-size:13px;background:linear-gradient(135deg,#667eea,#764ba2);border:none;box-shadow:0 2px 8px rgba(102,126,234,0.25);">
+            <i class="fas fa-check"></i> 保存
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── 阅读面板 ── -->
+<div class="kh-overlay" id="khOverlay" onclick="closeReadPanel()"></div>
+<div class="kh-panel" id="khPanel">
+  <div class="kh-panel-header">
+    <h6><i class="fas fa-book" style="color:var(--primary,#4f46e5);"></i> 文章详情</h6>
+    <button class="kh-panel-close" onclick="closeReadPanel()">&times;</button>
+  </div>
+  <div class="kh-panel-body" id="khPanelBody">
+    <div class="text-center py-5 text-muted" style="font-size:13px;">
+      <div class="spinner-border spinner-border-sm mb-2" role="status"></div><div>加载中...</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 工单搜索弹窗（插入工单链接） ── -->
+<div class="modal fade wo-search-modal" id="woSearchModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:480px;">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0" style="padding:16px 20px 0;">
+        <h6 class="modal-title fw-bold" style="font-size:15px;"><i class="fas fa-tasks" style="color:var(--primary,#4f46e5);"></i> 插入工单引用</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="padding:14px 20px 18px;">
+        <input type="text" class="form-control mb-2" id="woSearchInput" placeholder="搜索工单标题…"
+               style="border-radius:10px;padding:10px 14px;border:1.5px solid var(--card-border,#e5e7eb);font-size:14px;"
+               oninput="searchWorkOrders(this.value)">
+        <div id="woSearchResults" style="max-height:300px;overflow-y:auto;">
+          <div class="text-center text-muted py-3" style="font-size:13px;">输入关键词搜索工单</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 上传进度提示 ── -->
+<div class="upload-progress" id="uploadProgress">
+  <div class="spinner-border spinner-border-sm" role="status"></div>
+  <span>上传中…</span>
+</div>
+
+<!-- Quill CDN -->
+<link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
+
+<script>
+// ==================== Quill 编辑器 ====================
+var quill = null;
+var quillReady = false;
+var QUIL_TOOLBAR_OPTIONS = [
+  [{ 'header': [1,2,3,false] }],
+  ['bold','italic','underline','strike'],
+  [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+  ['blockquote','code-block'],
+  ['link', 'image', 'video'],
+  [{ 'color': [] }, { 'background': [] }],
+  ['clean']
+];
+
+function initQuill(htmlContent) {
+  var container = document.getElementById('quillEditor');
+  if (!container) return;
+  
+  // 清除旧实例
+  if (quill) {
+    quill.destroy();
+    quill = null;
+  }
+  container.innerHTML = '';
+
+  quill = new Quill('#quillEditor', {
+    theme: 'snow',
+    modules: {
+      toolbar: {
+        container: QUIL_TOOLBAR_OPTIONS,
+        handlers: {
+          image: function() { document.getElementById('khFileInput').click(); },
+          video: function() { insertVideo(); }
+        }
+      }
+    },
+    placeholder: '开始编写文章内容…\n\n可插入图片、视频、音频、工单引用等',
+  });
+
+  // 自定义工具栏按钮：工单引用
+  var toolbar = quill.getModule('toolbar');
+  var woBtn = document.createElement('button');
+  woBtn.innerHTML = '<i class="fas fa-tasks"></i>';
+  woBtn.title = '插入工单引用';
+  woBtn.type = 'button';
+  woBtn.style.cssText = 'font-size:16px;outline:none;';
+  woBtn.addEventListener('click', function() { openWOSearch(); });
+  toolbar.container.appendChild(woBtn);
+
+  // 音频按钮
+  var audioBtn = document.createElement('button');
+  audioBtn.innerHTML = '<i class="fas fa-headphones"></i>';
+  audioBtn.title = '插入音频';
+  audioBtn.type = 'button';
+  audioBtn.style.cssText = 'font-size:16px;outline:none;';
+  audioBtn.addEventListener('click', function() { document.getElementById('khAudioInput').click(); });
+  toolbar.container.appendChild(audioBtn);
+
+  // 附件按钮
+  var fileBtn = document.createElement('button');
+  fileBtn.innerHTML = '<i class="fas fa-paperclip"></i>';
+  fileBtn.title = '插入附件';
+  fileBtn.type = 'button';
+  fileBtn.style.cssText = 'font-size:16px;outline:none;';
+  fileBtn.addEventListener('click', function() { document.getElementById('khFileInput').click(); });
+  toolbar.container.appendChild(fileBtn);
+
+  // 如果已有内容，设置
+  if (htmlContent) {
+    quill.root.innerHTML = htmlContent;
+  }
+  quillReady = true;
+}
+
+// ── 隐藏的文件输入 ──
+// 图片/附件上传
+var fileInput = document.createElement('input');
+fileInput.id = 'khFileInput';
+fileInput.type = 'file';
+fileInput.accept = 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar';
+fileInput.style.display = 'none';
+fileInput.addEventListener('change', function() { uploadFile(this, 'image'); });
+document.body.appendChild(fileInput);
+
+// 音频上传
+var audioInput = document.createElement('input');
+audioInput.id = 'khAudioInput';
+audioInput.type = 'file';
+audioInput.accept = 'audio/*';
+audioInput.style.display = 'none';
+audioInput.addEventListener('change', function() { uploadFile(this, 'audio'); });
+document.body.appendChild(audioInput);
+
+function uploadFile(input, type) {
+  var file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  showProgress('上传中…');
+  var fd = new FormData();
+  fd.append('file', file);
+  fetch('/data/knowledge/upload', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      hideProgress();
+      if (!res.ok) { alert(res.msg || '上传失败'); return; }
+      if (!quill) return;
+      var range = quill.getSelection(true);
+      if (type === 'image' && res.media_type === 'image') {
+        quill.insertEmbed(range.index, 'image', res.url);
+      } else if (type === 'audio' || res.media_type === 'audio') {
+        quill.insertEmbed(range.index, 'video', res.url);
+        // 保存时替换video标签为audio
+      } else {
+        // 附件：插入文件链接
+        quill.insertText(range.index, file.name, { link: res.url });
+      }
+      quill.setSelection(range.index + 1);
+    })
+    .catch(function() { hideProgress(); alert('上传失败'); });
+}
+
+function insertVideo() {
+  var url = prompt('输入视频 URL（支持 mp4/webm/ogg）：');
+  if (!url || !quill) return;
+  var range = quill.getSelection(true);
+  quill.insertEmbed(range.index, 'video', url);
+  quill.setSelection(range.index + 1);
+}
+
+function showProgress(msg) {
+  var el = document.getElementById('uploadProgress');
+  el.querySelector('span').textContent = msg || '上传中…';
+  el.classList.add('show');
+}
+function hideProgress() {
+  document.getElementById('uploadProgress').classList.remove('show');
+}
+
+// ── 工单搜索 ──
+var woSearchTimer = null;
+function searchWorkOrders(q) {
+  clearTimeout(woSearchTimer);
+  if (!q.trim()) {
+    document.getElementById('woSearchResults').innerHTML = '<div class="text-center text-muted py-3" style="font-size:13px;">输入关键词搜索工单</div>';
+    return;
+  }
+  woSearchTimer = setTimeout(function() {
+    fetch('/orders/api/search?q=' + encodeURIComponent(q.trim()) + '&limit=10')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var html = '';
+        if (!data || data.length === 0) {
+          html = '<div class="text-center text-muted py-3" style="font-size:13px;">未找到匹配工单</div>';
+        } else {
+          data.forEach(function(o) {
+            html += '<div class="wo-search-result" onclick="insertWO(\'' + escapeAttr(o.detail_url) + '\',\'' + escapeAttr(o.title) + '\')">' +
+              '<div style="font-weight:600;font-size:14px;">#' + (o.id||'') + ' ' + escapeHtml(o.title) + '</div>' +
+              '<div style="font-size:11px;color:var(--text-muted,#94a3b8);">' + (o.person||'') + ' · ' + (o.building||'') + ' ' + (o.floor||'') + '</div></div>';
+          });
+        }
+        document.getElementById('woSearchResults').innerHTML = html;
+      });
+  }, 300);
+}
+
+function openWOSearch() {
+  document.getElementById('woSearchInput').value = '';
+  document.getElementById('woSearchResults').innerHTML = '<div class="text-center text-muted py-3" style="font-size:13px;">输入关键词搜索工单</div>';
+  var modal = new bootstrap.Modal(document.getElementById('woSearchModal'));
+  modal.show();
+  setTimeout(function() { document.getElementById('woSearchInput').focus(); }, 300);
+}
+
+function insertWO(url, title) {
+  if (!quill) return;
+  var range = quill.getSelection(true);
+  var html = '<a href="' + escapeAttr(url) + '" class="wo-embed" target="_blank">' +
+    '<span style="font-size:16px;">📋</span> <span>📋 关联工单：' + escapeHtml(title) + '</span>' +
+    '<span style="font-size:10px;color:var(--text-muted);">↗</span></a>&nbsp;';
+  quill.clipboard.dangerouslyPasteHTML(range.index, html);
+  quill.setSelection(range.index + 1);
+  bootstrap.Modal.getInstance(document.getElementById('woSearchModal')).hide();
+}
+
+// ── 弹窗控制 ──
+function showAddModal() {
+  document.getElementById('modalTitleText').textContent = '新增文章';
+  document.getElementById('knowledgeForm').action = '{{ url_for("data.add_knowledge") }}';
+  document.getElementById('kTitle').value = '';
+  document.getElementById('kCategory').value = '{{ cat_set[0] if cat_set else "公告" }}';
+  document.getElementById('kPinned').checked = false;
+  document.getElementById('kContent').value = '';
+  var modal = new bootstrap.Modal(document.getElementById('knowledgeModal'));
+  modal.show();
+  modal._element.addEventListener('shown.bs.modal', function() {
+    initQuill('');
+  }, { once: true });
+}
+
+function editArticle(id) {
+  fetch('/data/knowledge/api/' + id)
+    .then(function(r) { return r.json(); })
+    .then(function(a) {
+      document.getElementById('modalTitleText').textContent = '编辑文章';
+      document.getElementById('knowledgeForm').action = '/data/knowledge/' + id + '/edit';
+      document.getElementById('kTitle').value = a.title;
+      document.getElementById('kCategory').value = a.category;
+      document.getElementById('kPinned').checked = a.is_pinned;
+      document.getElementById('kContent').value = a.content;
+      var modal = new bootstrap.Modal(document.getElementById('knowledgeModal'));
+      modal.show();
+      modal._element.addEventListener('shown.bs.modal', function() {
+        initQuill(a.content);
+      }, { once: true });
+    });
+}
+
+// 表单提交前同步 Quill HTML 到隐藏域
+document.getElementById('knowledgeForm').addEventListener('submit', function() {
+  if (quill && quillReady) {
+    var html = quill.root.innerHTML;
+    // 将 video embed 转为 audio 标签（如果实际是音频URL）
+    html = html.replace(/<video src="([^"]+\.(mp3|wav|ogg|m4a|wma|aac)[^"]*)"><\/video>/gi, '<audio controls src="$1"></audio>');
+    document.getElementById('kContent').value = html;
+  }
+});
+
+function deleteArticle(id, title) {
+  event.stopPropagation();
+  if (!confirm('确定删除文章「' + title + '」？')) return;
+  var form = document.createElement('form');
+  form.method = 'POST';
+  form.action = '/data/knowledge/' + id + '/delete';
+  document.body.appendChild(form);
+  form.submit();
+}
+
+// ── 阅读面板 ──
+function readArticle(id) {
+  var overlay = document.getElementById('khOverlay');
+  var panel = document.getElementById('khPanel');
+  var body = document.getElementById('khPanelBody');
+  overlay.classList.add('show');
+  panel.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  body.innerHTML = '<div class="text-center py-5 text-muted" style="font-size:13px;"><div class="spinner-border spinner-border-sm mb-2" role="status"></div><div>加载中...</div></div>';
+
+  fetch('/data/knowledge/api/' + id)
+    .then(function(r) { return r.json(); })
+    .then(function(a) {
+      var catColor = a.category === '公告' ? '#0891b2' : a.category === '操作手册' ? '#4f46e5' : '#059669';
+      var catBg = a.category === '公告' ? 'rgba(8,145,178,0.08)' : a.category === '操作手册' ? 'rgba(79,70,229,0.08)' : 'rgba(5,150,105,0.08)';
+      body.innerHTML =
+        '<div class="kh-p-cat" style="display:inline-block;padding:2px 12px;border-radius:999px;font-size:11px;font-weight:600;margin-bottom:10px;background:' + catBg + ';color:' + catColor + ';">' + escapeHtml(a.category) + '</div>' +
+        '<div class="kh-p-title" style="font-size:22px;font-weight:800;line-height:1.35;color:var(--text,#1e293b);margin-bottom:8px;">' + escapeHtml(a.title) + (a.is_pinned ? ' <span style="font-size:16px;">📌</span>' : '') + '</div>' +
+        '<div class="kh-p-meta" style="font-size:12px;color:var(--text-muted,#94a3b8);margin-bottom:20px;">' + (a.created_at || '') + '</div>' +
+        '<div class="kh-rich-content">' + (a.content || '<p style="color:var(--text-muted)">暂无内容</p>') + '</div>';
+      // 让所有图片可点击放大
+      body.querySelectorAll('.kh-rich-content img:not([data-enlarged])').forEach(function(img) {
+        img.setAttribute('data-enlarged', '1');
+        img.style.cursor = 'zoom-in';
+        img.addEventListener('click', function(e) {
+          e.stopPropagation();
+          window.open(this.src, '_blank');
+        });
+      });
+    })
+    .catch(function() {
+      body.innerHTML = '<div class="text-center py-5" style="color:#ef4444;font-size:13px;"><i class="fas fa-exclamation-circle" style="font-size:28px;display:block;margin-bottom:6px;"></i>加载失败</div>';
+    });
+}
+
+function closeReadPanel() {
+  document.getElementById('khOverlay').classList.remove('show');
+  document.getElementById('khPanel').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// ── 搜索 ──
+var searchTimer = null;
+function searchKnowledge(q) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(function() {
+    var grid = document.getElementById('khGrid');
+    if (!grid) return;
+    if (!q.trim()) {
+      document.querySelectorAll('.kh-card').forEach(function(c) { c.style.display = ''; });
+      return;
+    }
+    fetch('/data/knowledge/api/search?q=' + encodeURIComponent(q.trim()) + '&limit=50')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        grid.innerHTML = '';
+        if (data.length === 0) {
+          grid.innerHTML = '<div class="kh-empty" style="grid-column:1/-1;"><div class="kh-empty-icon"><i class="fas fa-search"></i></div><div style="font-size:15px;font-weight:600;color:var(--text,#1e293b);">未找到匹配文章</div><div style="font-size:12px;color:var(--text-muted);margin-top:4px;">换个关键词试试</div></div>';
+          return;
+        }
+        data.forEach(function(a, i) {
+          var plain = (a.content||'').replace(/<[^>]*>/g,'').substring(0,150);
+          grid.innerHTML +=
+            '<div class="kh-card' + (a.is_pinned ? ' pinned' : '') + '" data-cat="' + escapeAttr(a.category) + '" style="animation-delay:' + (i*0.04) + 's;" onclick="readArticle(' + a.id + ')">' +
+            '<div class="kh-card-bar"></div>' +
+            '<div class="kh-card-body">' +
+            '<div class="kh-card-header"><div class="kh-card-title">' + escapeHtml(a.title) + '</div>' + (a.is_pinned ? '<span class="kh-card-pin">📌</span>' : '') + '</div>' +
+            '<div class="kh-card-meta"><span class="kh-card-badge ' + escapeAttr(a.category) + '">' + escapeHtml(a.category) + '</span></div>' +
+            '<div class="kh-card-excerpt">' + escapeHtml(plain) + '</div>' +
+            '<div class="kh-card-footer" onclick="event.stopPropagation();"><span class="kh-card-read">阅读全文 <i class="fas fa-chevron-right" style="font-size:10px;"></i></span></div></div></div>';
+        });
+      });
+  }, 300);
+}
+
+function escapeHtml(t) { if(!t)return''; var d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
+function escapeAttr(t) { if(!t)return''; return String(t).replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;'); }
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') { closeReadPanel(); }
+});
+</script>
+{% endblock %}

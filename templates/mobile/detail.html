@@ -1,0 +1,668 @@
+{% extends "mobile/base.html" %}
+{% block content %}
+
+<div class="detail-wrap">
+    <!-- 基本信息卡片 -->
+    <div class="detail-card">
+        <h3>📋 工单信息</h3>
+        <div class="row">
+            <span class="label">标题</span>
+            <span class="value">{{ order.title }}</span>
+        </div>
+        <div class="row">
+            <span class="label">位置</span>
+            <span class="value">{{ order.building }} {{ order.floor }} {{ order.department or '' }}</span>
+        </div>
+        {% if order.location %}
+        <div class="row">
+            <span class="label">详细地址</span>
+            <span class="value">{{ order.location }}</span>
+        </div>
+        {% endif %}
+        <div class="row">
+            <span class="label">设备</span>
+            <span class="value">{{ order.device_type }}</span>
+        </div>
+        <div class="row">
+            <span class="label">故障</span>
+            <span class="value">{{ order.fault_type }}{% if order.fault_subcategory %} > {{ order.fault_subcategory }}{% endif %}</span>
+        </div>
+        <div class="row">
+            <span class="label">紧急程度</span>
+            <span class="value">
+                {% if order.priority == 'emergency' %}
+                <span style="color:#ef4444;">🔴 紧急</span>
+                {% elif order.priority == 'urgent' %}
+                <span style="color:#f59e0b;">🟡 加急</span>
+                {% else %}
+                <span style="color:#22c55e;">🟢 普通</span>
+                {% endif %}
+            </span>
+        </div>
+        {% if order.person and order.status != 'pending' %}
+        <div class="row">
+            <span class="label">接单人</span>
+            <span class="value">{{ order.person }}</span>
+        </div>
+        {% endif %}
+        {% if order.start_time %}
+        <div class="row">
+            <span class="label">发布时间</span>
+            <span class="value">{{ order.start_time.strftime('%m/%d %H:%M') }}</span>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 巡检区域（仅巡检工单） -->
+    {% if order.work_type == 'inspection' %}
+    <div class="detail-card" style="border-left: 6rpx solid #2563eb; background: #eef2ff;">
+        <h3 style="color:#2563eb;">🔍 巡检区域</h3>
+        <div class="row">
+            <span class="label" style="color:#64748b;">楼区</span>
+            <span class="value">{{ order.building or '未指定' }}</span>
+        </div>
+        <div class="row">
+            <span class="label" style="color:#64748b;">楼层</span>
+            <span class="value">{{ order.floor or '未指定' }}</span>
+        </div>
+        <div class="row">
+            <span class="label" style="color:#64748b;">科室</span>
+            <span class="value">{{ order.department or '未指定' }}</span>
+        </div>
+        {% if order.location %}
+        <div class="row">
+            <span class="label" style="color:#64748b;">详细位置</span>
+            <span class="value">{{ order.location }}</span>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- 故障描述 -->
+    <div class="detail-card">
+        <h3>🔧 故障描述</h3>
+        <p style="font-size:15px;line-height:1.6;color:#334155;margin:0;">
+            {{ order.description or order.title }}
+        </p>
+    </div>
+
+    <!-- 巡检清单（已完成的巡检工单） -->
+    {% if order.work_type == 'inspection' and order.inspection_data %}
+    <div class="detail-card">
+        <h3>🔍 巡检清单</h3>
+        {% for item in order.inspection_data.get('items', []) %}
+        <div class="d-flex align-items-center py-1">
+            {% if item.result == true %}
+            <span style="color:#22c55e;margin-right:8px;">✅</span>
+            {% elif item.result == false %}
+            <span style="color:#ef4444;margin-right:8px;">❌</span>
+            {% else %}
+            <span style="color:#94a3b8;margin-right:8px;">⬜</span>
+            {% endif %}
+            <span>{{ item.name }}</span>
+        </div>
+        {% endfor %}
+        {% if order.inspection_data.signature %}
+        <div style="margin-top:16px;padding-top:16px;border-top:2px solid #f1f5f9;">
+            <span style="font-size:13px;color:#64748b;display:block;margin-bottom:6px;">签名确认</span>
+            <img src="{{ order.inspection_data.signature }}" style="height:60px;border:2px solid #e8ecf1;border-radius:6px;background:#fafafa;">
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- 电子表单 — 手机端内联填写（不跳转PC） -->
+    {% if paper_form and paper_form.template %}
+    {% set fd = paper_form.form_data or {} %}
+    {% set fields = paper_form.template.fields_json or [] %}
+    <div class="detail-card" style="border-left: 6rpx solid #4f46e5;" data-form-id="{{ paper_form.id }}" data-save-url="{{ url_for('forms.form_save_fields', fid=paper_form.id) }}" data-submit-url="{{ url_for('forms.form_api_submit', fid=paper_form.id) }}">
+        <h3 style="color:#4f46e5;">📋 {{ paper_form.template.name }}</h3>
+        <div style="margin-bottom:8px;">
+            <span style="font-size:12px;color:#64748b;">
+                状态：
+                {% if paper_form.status == 'active' %}<span style="color:#1e40af;">🔄 进行中</span>
+                {% elif paper_form.status == 'submitted' %}<span style="color:#92400e;">⏳ 待审批</span>
+                {% elif paper_form.status == 'completed' %}<span style="color:#065f46;">✅ 已完成</span>
+                {% endif %}
+            </span>
+        </div>
+
+        <!-- 表单字段（内联可编辑） -->
+        <div class="mobile-form-fields">
+        {% for f in fields %}
+        {% set val = fd.get(f.id, '') %}
+        <div class="mfield {{ 'mfield-sig' if f.type == 'signature' }}" data-fid="{{ f.id }}">
+            <label class="mfield-label">{{ f.label }}{% if f.required %}<span class="req">*</span>{% endif %}</label>
+
+            {% if f.type in ('text', 'number', 'email', 'tel', 'url') %}
+            <input class="mfield-input" type="{{ 'number' if f.type == 'number' else 'text' }}" value="{{ val }}" placeholder="{{ f.placeholder or '请输入' }}" data-fid="{{ f.id }}" data-data-source="{{ f.dataSource or '' }}">
+
+            {% elif f.type == 'textarea' %}
+            <textarea class="mfield-textarea" placeholder="{{ f.placeholder or '请输入' }}" data-fid="{{ f.id }}">{{ val }}</textarea>
+
+            {% elif f.type == 'select' %}
+            <select class="mfield-select" data-fid="{{ f.id }}">
+                <option value="">{{ f.placeholder or '请选择' }}</option>
+                {% for opt in f.options or [] %}
+                <option value="{{ opt }}" {% if val == opt %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+            </select>
+
+            {% elif f.type == 'radio' %}
+            <div class="mfield-radios">
+                {% for opt in f.options or [] %}
+                <label class="mradio"><input type="radio" name="f_{{ f.id }}" value="{{ opt }}" {% if val == opt %}checked{% endif %} data-fid="{{ f.id }}"><span>{{ opt }}</span></label>
+                {% endfor %}
+            </div>
+
+            {% elif f.type == 'checkbox' %}
+            <label class="mcheck"><input type="checkbox" data-fid="{{ f.id }}" value="1" {% if val and val != '0' %}checked{% endif %}><span>{% if val and val != '0' %}✅ 是{% else %}⬜ 否{% endif %}</span></label>
+
+            {% elif f.type == 'date' %}
+            <input class="mfield-input" type="date" value="{{ val[:10] if val else '' }}" data-fid="{{ f.id }}">
+
+            {% elif f.type == 'datetime' or f.type == 'datetime-local' %}
+            <input class="mfield-input" type="datetime-local" value="{{ val[:16] if val else '' }}" data-fid="{{ f.id }}">
+
+            {% elif f.type == 'signature' %}
+            <div class="mfield-sig-wrap">
+                {% if val and val.startswith('data:image') %}
+                <div class="sig-preview" data-fid="{{ f.id }}">
+                    <img src="{{ val }}" class="sig-img">
+                    <button type="button" class="sig-rebtn" onclick="openMobileSig('{{ f.id }}')">重签</button>
+                </div>
+                {% else %}
+                <button type="button" class="sig-btn" onclick="openMobileSig('{{ f.id }}')">✍ 点击签字</button>
+                {% endif %}
+                <input type="hidden" id="sig-{{ f.id }}" value="{{ val }}" data-fid="{{ f.id }}">
+            </div>
+
+            {% elif f.type in ('header', 'title') %}
+            <div class="mfield-header" style="{% if f.fontSize %}font-size:{{ f.fontSize }}pt;{% endif %}{% if f.textAlign %}text-align:{{ f.textAlign }};{% endif %}">{{ f.label }}</div>
+
+            {% elif f.type == 'richtext' %}
+            <div class="mfield-richtext" style="{% if f.fontSize %}font-size:{{ f.fontSize }}pt;{% endif %}{% if f.textAlign %}text-align:{{ f.textAlign }};{% endif %}padding:8px 0;line-height:1.6;">{{ f.label | safe }}</div>
+
+            {% elif f.type in ('divider', 'line') %}
+            <div style="background:#1d2939;height:3px;border-radius:2px;margin:4px 0;"></div>
+
+            {% elif f.type == 'label' %}
+            <div class="mfield-label-text">{{ f.label }}</div>
+
+            {% else %}
+            <input class="mfield-input" type="text" value="{{ val }}" placeholder="请输入" data-fid="{{ f.id }}">
+            {% endif %}
+        </div>
+        {% endfor %}
+        </div>
+
+        <!-- 操作按钮 -->
+        {% if paper_form.status == 'active' %}
+        <div style="display:flex;gap:8px;margin-top:12px;">
+            <button class="btn-block btn-primary-bg" onclick="saveMobileForm()" style="flex:1;padding:10px;font-size:14px;">💾 保存</button>
+            <button class="btn-block btn-success-bg" onclick="submitMobileForm()" style="flex:1;padding:10px;font-size:14px;">📤 提交审批</button>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+    // Mobile form inline JS
+    var _mobileFormData = {};
+
+    function collectMobileForm() {
+        var data = {};
+        document.querySelectorAll('.mobile-form-fields [data-fid]').forEach(function(el) {
+            var fid = el.dataset.fid;
+            if (el.type === 'checkbox') {
+                data[fid] = el.checked ? '1' : '0';
+            } else if (el.type === 'radio') {
+                if (el.checked) data[fid] = el.value;
+            } else if (el.tagName === 'SELECT') {
+                data[fid] = el.value;
+            } else if (el.tagName === 'TEXTAREA') {
+                data[fid] = el.value;
+            } else {
+                data[fid] = el.value;
+            }
+        });
+        // Load data sources + auto-fill
+        var dsInputs = document.querySelectorAll('.mfield-input[data-data-source]:not([data-data-source=""])');
+        if (dsInputs.length) {
+          fetch('/forms/api/data-sources').then(function(r){return r.json()}).then(function(data){
+            dsInputs.forEach(function(inp){
+              var src = inp.getAttribute('data-data-source');
+              if (!src || !data[src]) return;
+              if (Array.isArray(data[src])) {
+                // Convert to datalist
+                var dlId = 'dl-' + src;
+                var dl = document.getElementById(dlId);
+                if (!dl) {
+                  dl = document.createElement('datalist');
+                  dl.id = dlId;
+                  document.body.appendChild(dl);
+                  data[src].forEach(function(opt){
+                    var o = document.createElement('option');
+                    o.value = opt.value;
+                    o.textContent = opt.label || opt.value;
+                    dl.appendChild(o);
+                  });
+                }
+                inp.setAttribute('list', dlId);
+              } else {
+                // Auto-fill scalar values (current_user, current_date, etc.)
+                var val = data[src].value || data[src].label || '';
+                if (val && !inp.value) inp.value = val;
+              }
+            });
+          }).catch(function(e){console.warn('DS load err',e);});
+        }
+
+        // also collect hidden signature fields
+        document.querySelectorAll('.mobile-form-fields input[type="hidden"]').forEach(function(el) {
+            if (el.value) data[el.dataset.fid] = el.value;
+        });
+        return data;
+    }
+
+    function autoSaveMobileForm() {
+        var card = document.querySelector('.detail-card[data-form-id]');
+        if (!card) return;
+        var data = collectMobileForm();
+        var saveUrl = card.dataset.saveUrl;
+        fetch(saveUrl, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({field_values: data})
+        }).catch(function(){});
+    }
+
+    function saveMobileForm() {
+        var card = document.querySelector('.detail-card[data-form-id]');
+        if (!card) return;
+        var data = collectMobileForm();
+        var saveUrl = card.dataset.saveUrl;
+        card.querySelector('h3').innerHTML += ' <span style="font-size:11px;color:#22c55e;">保存中...</span>';
+        fetch(saveUrl, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({field_values: data})
+        }).then(function(r) {
+            if (r.ok) alert('✅ 已保存');
+        }).catch(function() {
+            alert('❌ 保存失败');
+        }).finally(function() {
+            var h3 = card.querySelector('h3');
+            h3.innerHTML = h3.innerHTML.replace(/ <span[^>]*>保存中...<\/span>/, '');
+        });
+    }
+
+    function submitMobileForm() {
+        var card = document.querySelector('.detail-card[data-form-id]');
+        if (!card) return;
+        if (!confirm('确认提交审批？提交后将等待管理员审核')) return;
+        var data = collectMobileForm();
+        var saveUrl = card.dataset.saveUrl;
+        var submitUrl = card.dataset.submitUrl;
+        // Save first, then submit
+        fetch(saveUrl, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({field_values: data})
+        }).then(function() {
+            return fetch(submitUrl, {method: 'POST', headers: {'Content-Type': 'application/json'}});
+        }).then(function(r) {
+            if (r.ok) { alert('✅ 已提交审批'); location.reload(); }
+            else { r.json().then(function(d) { alert('❌ ' + (d.error || '提交失败')); }); }
+        }).catch(function() {
+            alert('❌ 提交失败');
+        });
+    }
+
+    // Auto-save on input change
+    document.addEventListener('change', function(e) {
+        if (e.target.closest('.mobile-form-fields')) autoSaveMobileForm();
+    });
+    document.addEventListener('input', function(e) {
+        if (e.target.closest('.mobile-form-fields')) autoSaveMobileForm();
+    });
+
+    // ===== Mobile Signature =====
+    function openMobileSig(fid) {
+        var d = document.createElement('div');
+        d.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+        d.innerHTML = '<div style="background:#fff;border-radius:12px;padding:16px;width:90%;max-width:400px">' +
+            '<h4 style="margin-bottom:12px">✍ 签字</h4>' +
+            '<canvas id="mobileSigCanvas" width="320" height="90" style="width:100%;height:90px;border:2px solid #e0e4ea;border-radius:8px;background:#fafafa;touch-action:none;"></canvas>' +
+            '<div style="display:flex;gap:8px;margin-top:12px">' +
+            '<button type="button" class="btn-sm btn-secondary-bg" style="padding:8px 16px;border:none;border-radius:6px;font-size:14px;cursor:pointer" onclick="clearMobileSig()">清除</button>' +
+            '<button type="button" class="btn-sm btn-success-bg" style="padding:8px 16px;border:none;border-radius:6px;font-size:14px;cursor:pointer" onclick="confirmMobileSig(\'' + fid + '\')">确认签字</button>' +
+            '<button type="button" class="btn-sm btn-secondary-bg" style="padding:8px 16px;border:none;border-radius:6px;font-size:14px;cursor:pointer;margin-left:auto" onclick="this.closest(\'div[style*=\"fixed\"]\').remove()">取消</button>' +
+            '</div></div>';
+        document.body.appendChild(d);
+        setTimeout(initMobileSigCanvas, 100);
+    }
+
+    function initMobileSigCanvas() {
+        var c = document.getElementById('mobileSigCanvas');
+        if (!c) return;
+        c.width = c.offsetWidth;
+        c.height = c.offsetHeight;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#fafafa'; ctx.fillRect(0,0,c.width,c.height);
+        ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+        var drawing = false;
+        var getPos = function(e) {
+            var r = c.getBoundingClientRect();
+            return {x: (e.touches ? e.touches[0].clientX : e.clientX) - r.left,
+                    y: (e.touches ? e.touches[0].clientY : e.clientY) - r.top};
+        };
+        c._ctx = ctx;
+        c._drawing = false;
+        c.addEventListener('touchstart', function(e) { e.preventDefault(); var p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); c._drawing = true; });
+        c.addEventListener('touchmove', function(e) { e.preventDefault(); if (!c._drawing) return; var p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
+        c.addEventListener('touchend', function() { c._drawing = false; });
+        c.addEventListener('mousedown', function(e) { var p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); c._drawing = true; });
+        c.addEventListener('mousemove', function(e) { if (!c._drawing) return; var p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
+        c.addEventListener('mouseup', function() { c._drawing = false; });
+        c.addEventListener('mouseleave', function() { c._drawing = false; });
+    }
+
+    function clearMobileSig() {
+        var c = document.getElementById('mobileSigCanvas');
+        if (!c || !c._ctx) return;
+        c._ctx.fillStyle = '#fafafa'; c._ctx.fillRect(0,0,c.width,c.height);
+    }
+
+    function confirmMobileSig(fid) {
+        var c = document.getElementById('mobileSigCanvas');
+        if (!c) return;
+        var dataUrl = c.toDataURL('image/png');
+        document.getElementById('sig-' + fid).value = dataUrl;
+        // Update preview
+        var wrap = document.querySelector('.mfield-sig-wrap[data-fid="' + fid + '"]') || document.querySelector('.mfield[data-fid="' + fid + '"] .mfield-sig-wrap');
+        if (wrap) {
+            wrap.innerHTML = '<div class="sig-preview"><img src="' + dataUrl + '" class="sig-img"><button type="button" class="sig-rebtn" onclick="openMobileSig(\'' + fid + '\')">重签</button></div><input type="hidden" id="sig-' + fid + '" value="' + dataUrl + '" data-fid="' + fid + '">';
+        }
+        c.closest('div[style*="fixed"]').remove();
+        autoSaveMobileForm();
+    }
+    </script>
+    {% endif %}
+
+    <!-- 操作区 -->
+    {% if order.status == 'pending' %}
+    <form action="{{ url_for('mobile.accept_order', order_id=order.id) }}" method="post">
+        <button class="btn-block btn-primary-bg" type="submit">
+            <i class="fas fa-hand-paper"></i> 立即接单
+        </button>
+    </form>
+
+    {% elif order.status == 'in_progress' %}
+        {% if order.work_type == 'inspection' %}
+        <!-- 巡检工单：勾选框 + 签名 -->
+        <div class="detail-card">
+            <h3>🔍 巡检清单</h3>
+            <form id="inspectionForm" action="{{ url_for('mobile.submit_inspection', order_id=order.id) }}" method="post" onsubmit="return handleInspectionSubmit()">
+                {% for item in order.inspection_data.get('items', []) %}
+                <div class="d-flex align-items-center py-1">
+                    <label style="display:flex;align-items:center;width:100%;">
+                        <input type="checkbox" name="items" value="{{ item.name }}" class="mr-2 inspection-checkbox">
+                        <span>{{ item.name }}</span>
+                    </label>
+                </div>
+                {% endfor %}
+                <!-- 签名区域 -->
+                <div style="margin-top:16px;padding-top:16px;border-top:2px solid #f1f5f9;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                        <span style="font-size:15px;font-weight:600;color:#4f46e5;">📝 签字确认</span>
+                        <span id="signatureStatus" style="font-size:13px;color:#94a3b8;">未签字</span>
+                    </div>
+                    <canvas id="sigCanvas" width="280" height="80" style="width:100%;height:80px;border:2px solid #e8ecf1;border-radius:8px;background:#fafafa;touch-action:none;"></canvas>
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <button type="button" class="btn-sm btn-secondary-bg" onclick="clearCanvas()" style="flex:1;">清除</button>
+                        <input type="hidden" name="signature" id="signatureInput" value="">
+                    </div>
+                </div>
+                <button class="btn-block btn-success-bg" type="submit" style="margin-top:12px;">
+                    <i class="fas fa-check"></i> 提交巡检结果
+                </button>
+            </form>
+        </div>
+        <script>
+        let sigCtx, sigDrawing = false, sigData = '';
+        function initSigCanvas() {
+            const c = document.getElementById('sigCanvas');
+            if (!c) return;
+            c.width = c.offsetWidth * 2;
+            c.height = c.offsetHeight * 2;
+            sigCtx = c.getContext('2d');
+            sigCtx.scale(2, 2);
+            sigCtx.fillStyle = '#fafafa';
+            sigCtx.fillRect(0, 0, c.width/2, c.height/2);
+            sigCtx.strokeStyle = '#1e293b';
+            sigCtx.lineWidth = 2;
+            sigCtx.lineCap = 'round';
+            c.addEventListener('touchstart', sigStart);
+            c.addEventListener('touchmove', sigMove);
+            c.addEventListener('touchend', sigEnd);
+            c.addEventListener('mousedown', sigStart);
+            c.addEventListener('mousemove', sigMove);
+            c.addEventListener('mouseup', sigEnd);
+            c.addEventListener('mouseleave', sigEnd);
+        }
+        function sigStart(e) {
+            e.preventDefault();
+            const c = document.getElementById('sigCanvas');
+            const r = c.getBoundingClientRect();
+            const x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+            const y = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+            sigCtx.beginPath();
+            sigCtx.moveTo(x, y);
+            sigDrawing = true;
+        }
+        function sigMove(e) {
+            e.preventDefault();
+            if (!sigDrawing) return;
+            const c = document.getElementById('sigCanvas');
+            const r = c.getBoundingClientRect();
+            const x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+            const y = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+            sigCtx.lineTo(x, y);
+            sigCtx.stroke();
+        }
+        function sigEnd(e) {
+            sigDrawing = false;
+            const c = document.getElementById('sigCanvas');
+            if (c.width > 0) {
+                sigData = c.toDataURL('image/png');
+                document.getElementById('signatureInput').value = sigData;
+                document.getElementById('signatureStatus').innerHTML = '✅ 已签字';
+                document.getElementById('signatureStatus').style.color = '#059669';
+            }
+        }
+        function clearCanvas() {
+            const c = document.getElementById('sigCanvas');
+            sigCtx.fillStyle = '#fafafa';
+            sigCtx.fillRect(0, 0, c.width/2, c.height/2);
+            sigData = '';
+            document.getElementById('signatureInput').value = '';
+            document.getElementById('signatureStatus').innerHTML = '未签字';
+            document.getElementById('signatureStatus').style.color = '#94a3b8';
+        }
+        function handleInspectionSubmit() {
+            const checked = document.querySelectorAll('.inspection-checkbox:checked');
+            if (checked.length === 0) { alert('请至少选择一项'); return false; }
+            if (!sigData) { alert('请先签字确认'); return false; }
+            return true;
+        }
+        document.addEventListener('DOMContentLoaded', initSigCanvas);
+        </script>
+        {% elif not paper_form %}
+        <!-- 普通工单（无电子表单） -->
+        <div class="detail-card">
+            <h3>✏️ 填写解决方案</h3>
+            <form action="{{ url_for('mobile.solve_order', order_id=order.id) }}" method="post">
+                <textarea class="form-input" name="solution" placeholder="请描述处理过程及结果..." required></textarea>
+                <button class="btn-block btn-success-bg" type="submit" style="margin-top:12px;">
+                    <i class="fas fa-check"></i> 提交完成
+                </button>
+            </form>
+        </div>
+        {% endif %}
+
+    {% else %}
+    <!-- 已完成 -->
+    <div class="detail-card">
+        <h3>✅ 处理结果</h3>
+        <p style="font-size:15px;line-height:1.6;color:#334155;margin:0;">{{ order.solution }}</p>
+        {% if order.inspection_data and order.inspection_data.signature %}
+        <div style="margin-top:16px;padding-top:16px;border-top:2px solid #f1f5f9;">
+            <span style="font-size:13px;color:#64748b;display:block;margin-bottom:6px;">签名确认</span>
+            <img src="{{ order.inspection_data.signature }}" style="height:60px;border:2px solid #e8ecf1;border-radius:6px;background:#fafafa;">
+        </div>
+        {% endif %}
+        {% if order.completed_at %}
+        <p style="font-size:13px;color:#94a3b8;margin-top:8px;">
+            完成于 {{ order.completed_at.strftime('%m/%d %H:%M') }}
+        </p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- 📷 现场照片 -->
+    <div class="detail-card">
+        <h3>📷 现场照片</h3>
+        <form method="post" enctype="multipart/form-data"
+              action="{{ url_for('orders.upload_photo', order_id=order.id) }}"
+              style="margin-bottom:10px;">
+            <input type="file" name="photos" accept="image/*" multiple
+                   onchange="this.form.submit()" style="font-size:14px;">
+            <button type="submit" class="btn-block" style="margin-top:6px;padding:8px;background:#f1f5f9;border:1px dashed #94a3b8;border-radius:6px;color:#64748b;font-size:13px;width:100%;">📤 上传照片</button>
+        </form>
+        {% if photos %}
+        <div id="mobilePhotoGrid" style="display:flex;flex-wrap:wrap;gap:8px;">
+            {% for p in photos %}
+            <div class="mobile-photo-item" style="position:relative;width:90px;height:90px;border-radius:6px;overflow:hidden;">
+                <img src="{{ url_for('main.serve_upload', filename=p.filepath) }}"
+                     class="mobile-photo-blur"
+                     style="width:100%;height:100%;object-fit:cover;cursor:pointer;"
+                     onclick="mobilePreview('{{ url_for('main.serve_upload', filename=p.filepath) }}')"
+                     alt="{{ p.filename }}">
+                <form method="post" action="{{ url_for('orders.delete_photo', order_id=order.id, photo_id=p.id) }}"
+                      style="position:absolute;top:2px;right:2px;"
+                      onsubmit="return confirm('确定删除？')">
+                    <button style="padding:0 5px;font-size:11px;line-height:18px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;cursor:pointer;">✕</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="font-size:13px;color:#94a3b8;margin:0;">暂无照片</p>
+        {% endif %}
+    </div>
+
+    <a class="btn-block btn-secondary-bg" href="{{ url_for('mobile.dashboard') }}"
+       style="text-decoration:none;display:block;margin-top:8px;text-align:center;">
+        <i class="fas fa-arrow-left"></i> 返回列表
+    </a>
+</div>
+
+<!-- 移动端照片全屏预览 -->
+<div id="mobilePhotoOverlay" onclick="mobileClosePreview()"
+     style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:9999;justify-content:center;align-items:center;">
+    <img id="mobilePhotoPreview" src="" style="max-width:95%;max-height:90%;object-fit:contain;cursor:zoom-in;transition:transform .3s;"
+         ondblclick="this.style.transform='scale(1)';this.dataset.scale='1';">
+    <div style="position:absolute;top:16px;right:16px;color:#fff;font-size:24px;cursor:pointer;width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);border-radius:50%;" onclick="event.stopPropagation();mobileClosePreview()">✕</div>
+</div>
+
+<style>
+/* Mobile form field styles */
+.mobile-form-fields { margin-top: 8px; }
+.mfield { margin-bottom: 12px; border:1px solid #e0e4ea; border-radius:6px; padding:8px 10px; }
+.mfield-label { display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 4px; }
+.mfield-label .req { color: #ef4444; }
+.mfield-input, .mfield-textarea, .mfield-select {
+  width: 100%; padding: 10px 12px; border: 1px solid #e0e4ea; border-radius: 8px;
+  font-size: 14px; font-family: inherit; background: #fff; color: #1e293b;
+  outline: none; transition: border-color .2s; box-sizing: border-box;
+}
+.mfield-input:focus, .mfield-textarea:focus, .mfield-select:focus { border-color: #4f46e5; }
+.mfield-textarea { min-height: 80px; resize: vertical; }
+.mfield-header { font-size: 14px; font-weight: 700; color: #4f46e5; padding: 8px 0; }
+.mfield-label-text { font-size: 13px; color: #64748b; padding: 4px 0; }
+.mfield-radios { display: flex; flex-wrap: wrap; gap: 8px; }
+.mradio { display: flex; align-items: center; gap: 4px; font-size: 14px; cursor: pointer; }
+.mfield .mcheck { display: flex; align-items: center; gap: 6px; font-size: 14px; cursor: pointer; }
+.mfield-sig-wrap { margin: 4px 0; }
+.sig-preview { display: flex; align-items: center; gap: 8px; }
+.sig-img { max-height: 50px; border: 1px solid #e0e4ea; border-radius: 4px; }
+.sig-rebtn, .sig-btn { padding: 8px 16px; border: 1px solid #4f46e5; border-radius: 8px; background: #eef2ff; color: #4f46e5; font-size: 13px; cursor: pointer; }
+.sig-btn { width: 100%; text-align: center; }
+/* 照片模糊预览效果 */
+.mobile-photo-blur {
+    filter: blur(3px);
+    transition: filter .3s;
+}
+.mobile-photo-blur:hover {
+    filter: blur(0);
+}
+</style>
+
+<script>
+// 移动端照片预览 + 触摸缩放
+var mobilePhotoScale = 1;
+var mobilePhotoStartDist = 0;
+
+function mobilePreview(url) {
+    mobilePhotoScale = 1;
+    var img = document.getElementById('mobilePhotoPreview');
+    img.src = url;
+    img.style.transform = 'scale(1)';
+    img.dataset.scale = '1';
+    document.getElementById('mobilePhotoOverlay').style.display = 'flex';
+}
+
+function mobileClosePreview() {
+    document.getElementById('mobilePhotoOverlay').style.display = 'none';
+    document.getElementById('mobilePhotoPreview').src = '';
+}
+
+// 触摸缩放（双指 pinch）
+document.addEventListener('DOMContentLoaded', function() {
+    var img = document.getElementById('mobilePhotoPreview');
+
+    img.addEventListener('touchstart', function(e) {
+        if (e.touches.length === 2) {
+            mobilePhotoStartDist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+        }
+    });
+
+    img.addEventListener('touchmove', function(e) {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            var dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            var factor = dist / mobilePhotoStartDist;
+            mobilePhotoScale = parseFloat(img.dataset.scale || 1) * factor;
+            mobilePhotoScale = Math.max(0.5, Math.min(5, mobilePhotoScale));
+            img.style.transform = 'scale(' + mobilePhotoScale + ')';
+            img.dataset.scale = mobilePhotoScale;
+            mobilePhotoStartDist = dist;
+        }
+    }, { passive: false });
+
+    // 鼠标滚轮缩放（PC访问时）
+    img.addEventListener('wheel', function(e) {
+        if (document.getElementById('mobilePhotoOverlay').style.display === 'flex') {
+            e.preventDefault();
+            mobilePhotoScale = parseFloat(img.dataset.scale || 1) * (e.deltaY > 0 ? 0.9 : 1.1);
+            mobilePhotoScale = Math.max(0.5, Math.min(5, mobilePhotoScale));
+            img.style.transform = 'scale(' + mobilePhotoScale + ')';
+            img.dataset.scale = mobilePhotoScale;
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-edit text-primary"></i> 编辑工单 #{{ order.id }}</h5>
+    <a href="{{ url_for('orders.detail', order_id=order.id) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-left"></i> 返回详情
+    </a>
+</div>
+
+<div class="card" style="max-width:700px;">
+    <div class="card-body">
+        <form method="post" id="editForm">
+            <div class="mb-3">
+                <label class="form-label">工单名称 <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="title" value="{{ order.title }}" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">故障类型</label>
+                <select name="fault_type" class="form-select">
+                    <option value="硬件" {% if order.fault_type=='硬件' %}selected{% endif %}>硬件</option>
+                    <option value="软件" {% if order.fault_type=='软件' %}selected{% endif %}>软件</option>
+                    <option value="打印机" {% if order.fault_type=='打印机' %}selected{% endif %}>打印机</option>
+                    <option value="网络" {% if order.fault_type=='网络' %}selected{% endif %}>网络</option>
+                    <option value="其他" {% if order.fault_type=='其他' %}selected{% endif %}>其他</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">二级故障分类</label>
+                <input type="text" class="form-control" name="fault_subcategory" value="{{ order.fault_subcategory or '' }}" placeholder="可选，如：电脑、扫码墩">
+            </div>
+
+            <div class="row g-2 mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">楼区</label>
+                    <input type="text" class="form-control" name="building" value="{{ order.building }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">楼层</label>
+                    <input type="text" class="form-control" name="floor" value="{{ order.floor }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">科室</label>
+                    <input type="text" class="form-control" name="department" value="{{ order.department }}">
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">位置</label>
+                <input type="text" class="form-control" name="location" value="{{ order.location }}">
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">处理人员</label>
+                <select name="person" class="form-select">
+                    <option value="">未指派</option>
+                    {% for p in persons %}
+                    <option value="{{ p.name }}" {% if order.person==p.name %}selected{% endif %}>{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">状态</label>
+                <select name="status" class="form-select">
+                    <option value="pending" {% if order.status=='pending' %}selected{% endif %}>待接单</option>
+                    <option value="in_progress" {% if order.status=='in_progress' %}selected{% endif %}>处理中</option>
+                    <option value="completed" {% if order.status=='completed' %}selected{% endif %}>已完成</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">解决方案</label>
+                <textarea class="form-control" name="solution" rows="3">{{ order.solution }}</textarea>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label"><i class="fas fa-exclamation-triangle"></i> 紧急程度</label>
+                <div class="d-flex gap-2">
+                    <label class="btn btn-outline-success px-4 py-2" style="cursor:pointer; border-radius:8px; flex:1; text-align:center;" data-val="normal">
+                        <div style="font-size:20px;">🟢</div>
+                        <small>普通</small>
+                        <input type="radio" name="priority" value="normal" class="d-none" {% if order.priority=='normal' or not order.priority %}checked{% endif %}>
+                    </label>
+                    <label class="btn btn-outline-warning px-4 py-2" style="cursor:pointer; border-radius:8px; flex:1; text-align:center;" data-val="urgent">
+                        <div style="font-size:20px;">🟡</div>
+                        <small>加急</small>
+                        <input type="radio" name="priority" value="urgent" class="d-none" {% if order.priority=='urgent' %}checked{% endif %}>
+                    </label>
+                    <label class="btn btn-outline-danger px-4 py-2" style="cursor:pointer; border-radius:8px; flex:1; text-align:center;" data-val="emergency">
+                        <div style="font-size:20px;">🔴</div>
+                        <small>紧急</small>
+                        <input type="radio" name="priority" value="emergency" class="d-none" {% if order.priority=='emergency' %}checked{% endif %}>
+                    </label>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary" style="padding:10px 40px;">
+                    <i class="fas fa-save"></i> 保存修改
+                </button>
+                <a href="{{ url_for('orders.detail', order_id=order.id) }}" class="btn btn-outline-secondary">取消</a>
+                {% if order.status != 'completed' %}
+                <button type="button" class="btn btn-success ms-auto" style="padding:10px 30px;" onclick="quickComplete()">
+                    <i class="fas fa-check-circle"></i> 一键结单
+                </button>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+    document.querySelectorAll('[data-val]').forEach(function(el){
+        var rb = el.querySelector('input[type="radio"]');
+        if (rb && rb.checked) {
+            el.classList.remove('btn-outline-success','btn-outline-warning','btn-outline-danger');
+            if (rb.value === 'normal') el.classList.add('btn-success');
+            else if (rb.value === 'urgent') el.classList.add('btn-warning');
+            else if (rb.value === 'emergency') el.classList.add('btn-danger');
+        }
+        el.addEventListener('click', function(){
+            document.querySelectorAll('[data-val]').forEach(function(l){
+                l.classList.remove('btn-success','btn-warning','btn-danger');
+                l.classList.add('btn-outline-success','btn-outline-warning','btn-outline-danger');
+                l.querySelector('input[type="radio"]').checked = false;
+            });
+            el.querySelector('input[type="radio"]').checked = true;
+            var v = el.dataset.val;
+            el.classList.remove('btn-outline-success','btn-outline-warning','btn-outline-danger');
+            if (v === 'normal') el.classList.add('btn-success');
+            else if (v === 'urgent') el.classList.add('btn-warning');
+            else if (v === 'emergency') el.classList.add('btn-danger');
+        });
+    });
+});
+
+function quickComplete() {
+    if (!confirm('确认一键结单？')) return;
+    document.getElementById('editForm').querySelector('select[name="status"]').value = 'completed';
+    var inp = document.createElement('input');
+    inp.type = 'hidden';
+    inp.name = 'quick_complete';
+    inp.value = '1';
+    document.getElementById('editForm').appendChild(inp);
+    document.getElementById('editForm').submit();
+}
+</script>
+{% endblock %}

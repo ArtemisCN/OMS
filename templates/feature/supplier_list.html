@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}供应商管理{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-truck text-primary"></i> 供应商管理</h5>
+    <div>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#supplierModal" onclick="resetSupplierForm()">
+            <i class="fas fa-plus"></i> 新增供应商
+        </button>
+        <a href="{{ url_for('feature.suppliers') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-sync"></i> 刷新
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="supplierTable">
+                <thead class="table-light">
+                    <tr>
+                        <th>名称</th>
+                        <th>联系人</th>
+                        <th>电话</th>
+                        <th>邮箱</th>
+                        <th>供应类型</th>
+                        <th>评级</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in suppliers %}
+                    <tr>
+                        <td><strong>{{ s.name }}</strong></td>
+                        <td>{{ s.contact_person or '-' }}</td>
+                        <td>{{ s.phone or '-' }}</td>
+                        <td>{{ s.email or '-' }}</td>
+                        <td><span class="badge bg-info">{{ s.supply_type }}</span></td>
+                        <td>
+                            {% for i in range(5) %}
+                            <i class="fas fa-star{% if i < (s.rating or 0) %} text-warning{% else %} text-muted{% endif %}" style="font-size:12px;"></i>
+                            {% endfor %}
+                        </td>
+                        <td>
+                            {% if s.is_active %}
+                            <span class="badge bg-success">启用</span>
+                            {% else %}
+                            <span class="badge bg-secondary">停用</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="editSupplier({{ s.id }})">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <form method="post" action="{{ url_for('feature.supplier_delete', id=s.id) }}" class="d-inline"
+                                  onsubmit="return confirm('确定删除供应商「{{ s.name }}」？')">
+                                <button class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="text-center text-muted py-4">暂无供应商</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 供应商编辑弹窗 -->
+<div class="modal fade" id="supplierModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fas fa-edit text-primary"></i> <span id="supplierModalTitle">新增供应商</span></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('feature.supplier_save') }}" id="supplierForm">
+                <input type="hidden" name="id" id="supplierId" value="">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">供应商名称 <span class="text-danger">*</span></label>
+                            <input type="text" name="name" class="form-control" id="s_name" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">供应类型</label>
+                            <select name="supply_type" class="form-select" id="s_supply_type">
+                                <option value="综合">综合</option>
+                                <option value="备件">备件</option>
+                                <option value="耗材">耗材</option>
+                                <option value="维修">维修</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">联系人</label>
+                            <input type="text" name="contact_person" class="form-control" id="s_contact_person">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">电话</label>
+                            <input type="text" name="phone" class="form-control" id="s_phone">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">邮箱</label>
+                            <input type="email" name="email" class="form-control" id="s_email">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">评级</label>
+                            <select name="rating" class="form-select" id="s_rating">
+                                <option value="1">⭐</option>
+                                <option value="2">⭐⭐</option>
+                                <option value="3" selected>⭐⭐⭐</option>
+                                <option value="4">⭐⭐⭐⭐</option>
+                                <option value="5">⭐⭐⭐⭐⭐</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">地址</label>
+                        <input type="text" name="address" class="form-control" id="s_address">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">服务范围</label>
+                        <input type="text" name="service_scope" class="form-control" id="s_service_scope" placeholder="逗号分隔">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">备注</label>
+                        <textarea name="remark" class="form-control" rows="2" id="s_remark"></textarea>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" name="is_active" class="form-check-input" id="s_is_active" value="1" checked>
+                        <label class="form-check-label" for="s_is_active">启用</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-save"></i> 保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+var suppliersData = {{ suppliers_json | safe }};
+
+function resetSupplierForm() {
+    document.getElementById('supplierModalTitle').textContent = '新增供应商';
+    document.getElementById('supplierId').value = '';
+    document.getElementById('s_name').value = '';
+    document.getElementById('s_supply_type').value = '综合';
+    document.getElementById('s_contact_person').value = '';
+    document.getElementById('s_phone').value = '';
+    document.getElementById('s_email').value = '';
+    document.getElementById('s_rating').value = '3';
+    document.getElementById('s_address').value = '';
+    document.getElementById('s_service_scope').value = '';
+    document.getElementById('s_remark').value = '';
+    document.getElementById('s_is_active').checked = true;
+}
+
+function editSupplier(id) {
+    var s = suppliersData.find(function(x){ return x.id == id; });
+    if (!s) return;
+    document.getElementById('supplierModalTitle').textContent = '编辑供应商';
+    document.getElementById('supplierId').value = s.id;
+    document.getElementById('s_name').value = s.name || '';
+    document.getElementById('s_supply_type').value = s.supply_type || '综合';
+    document.getElementById('s_contact_person').value = s.contact_person || '';
+    document.getElementById('s_phone').value = s.phone || '';
+    document.getElementById('s_email').value = s.email || '';
+    document.getElementById('s_rating').value = s.rating || '3';
+    document.getElementById('s_address').value = s.address || '';
+    document.getElementById('s_service_scope').value = s.service_scope || '';
+    document.getElementById('s_remark').value = s.remark || '';
+    document.getElementById('s_is_active').checked = s.is_active !== false;
+    new bootstrap.Modal(document.getElementById('supplierModal')).show();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}新建维修单{% endblock %}
+{% block content %}
+<div class="container-fluid px-3 py-3">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('repair.order_list') }}">维修单</a></li>
+            <li class="breadcrumb-item active">新建维修单</li>
+        </ol>
+    </nav>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">📋 新建维修单</h5>
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% if wo %}
+                <div class="alert alert-info mb-3">
+                    关联工单 #{{ wo.id }}：<strong>{{ wo.title }}</strong>
+                    <input type="hidden" name="work_order_id" value="{{ wo.id }}">
+                </div>
+                {% endif %}
+
+                <div class="mb-3">
+                    <label class="form-label">选择模板 <span class="text-danger">*</span></label>
+                    <select class="form-select" name="template_id" required>
+                        <option value="">-- 请选择电子表单模板 --</option>
+                        {% for t in templates %}
+                        <option value="{{ t.id }}">{{ t.name }} ({{ t.fields_json|length }}字段)</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">维修单使用统一的电子表单模板，如需新建/编辑模板请到 <a href="{{ url_for('forms.template_list') }}">电子表单 → 模板管理</a></div>
+                </div>
+
+                {% if not wo %}
+                <div class="mb-3">
+                    <label class="form-label">标题</label>
+                    <input type="text" class="form-control" name="title" placeholder="可选，留空自动从模板生成">
+                </div>
+                {% endif %}
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">创建维修单</button>
+                    <a href="{{ url_for('repair.order_list') }}" class="btn btn-outline-secondary">取消</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

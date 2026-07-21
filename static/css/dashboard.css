@@ -1,0 +1,446 @@
+/* ====== 仪表盘全局 ====== */
+#dashboard-content {
+    font-size: 16px;
+}
+#dashboard-content .stat-label,
+#dashboard-content [style*="font-size:10px"],
+#dashboard-content [style*="font-size:9px"] {
+    font-size: 12px !important;
+}
+#dashboard-content [style*="font-size:11px"] { font-size: 13px !important; }
+#dashboard-content [style*="font-size:12px"] { font-size: 13px !important; }
+#dashboard-content [style*="font-size:13px"] { font-size: 14px !important; }
+#dashboard-content span[style*="font-size:13px"] { font-size: 15px !important; }
+
+/* 统计卡片 - 渐变 */
+.card-stat {
+    border-radius: 14px !important;
+    border: none !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    position: relative;
+}
+.card-stat .stat-body {
+    position: relative; z-index: 1;
+    padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+}
+.card-stat::before {
+    content: '';
+    position: absolute;
+    top: -50%; right: -30%;
+    width: 120px; height: 120px;
+    border-radius: 50%;
+    opacity: 0.06;
+    pointer-events: none;
+    background: radial-gradient(circle, currentColor, transparent);
+    z-index: 0;
+}
+.card-stat:hover {
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04) !important;
+    transform: translateY(-3px) scale(1.01);
+}
+.card-stat .stat-bar {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    border-radius: 14px 0 0 14px;
+    z-index: 2;
+}
+.card-stat .stat-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; flex-shrink: 0;
+    transition: transform 0.3s;
+}
+.card-stat:hover .stat-icon {
+    transform: scale(1.1) rotate(-5deg);
+}
+#dashboard-content .card-stat .stat-label {
+    font-size: 10px; font-weight: 700; letter-spacing: .5px;
+    margin-bottom: 0; text-transform: uppercase; opacity: .85;
+}
+
+/* ====== 🎆 额外花哨效果 ====== */
+
+/* 背景点阵网格 */
+#dashboard-content {
+    background-image: 
+        radial-gradient(circle, rgba(99,102,241,0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+    background-position: 0 0;
+}
+
+/* 粒子鼠标交互层（透明捕获鼠标事件） */
+#particle-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 0; pointer-events: none;
+}
+
+/* 统计卡呼吸光晕 - 全新立体效果 */
+@keyframes breathe-shadow {
+    0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02); }
+    50% { box-shadow: 0 0 30px 6px rgba(99,102,241,0.10), 0 0 60px 12px rgba(6,182,212,0.04), 0 4px 12px rgba(0,0,0,0.05); }
+}
+.card-stat {
+    animation: breathe-shadow 3s ease-in-out infinite;
+}
+
+/* 统计卡图标装饰旋转环 */
+@keyframes spin-ring {
+    to { transform: rotate(360deg); }
+}
+.card-stat .stat-icon {
+    position: relative;
+    z-index: 1;
+}
+.card-stat .stat-icon::before {
+    content: '';
+    position: absolute; top: -4px; left: -4px; right: -4px; bottom: -4px;
+    border-radius: 14px;
+    border: 1.5px solid transparent;
+    background: inherit;
+    -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: spin-ring 3s linear infinite;
+    opacity: 0.6;
+}
+/* 各卡片不同旋转速度 */
+.card-stat:nth-child(2n) .stat-icon::before { animation-duration: 4s; animation-direction: reverse; }
+.card-stat:nth-child(3n) .stat-icon::before { animation-duration: 2.5s; }
+
+/* 卡片悬停光扫效果 */
+@keyframes card-shine {
+    from { transform: translateX(-100%) skewX(-15deg); }
+    to { transform: translateX(200%) skewX(-15deg); }
+}
+.card-stat::after {
+    content: '' !important;
+    position: absolute !important;
+    top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+    background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.15) 50%, transparent 70%) !important;
+    transform: translateX(-100%) skewX(-15deg) !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    transition: none !important;
+    z-index: 5 !important;
+    border-radius: 14px !important;
+}
+.card-stat:hover::after {
+    animation: card-shine 0.6s ease !important;
+    opacity: 1 !important;
+}
+
+/* 渐变彩虹外发光 - hover时可见 - 改用box-shadow避免冲突 */
+@keyframes rainbow-glow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+.card-stat:hover {
+    box-shadow: 0 0 0 2px rgba(99,102,241,0.15), 0 0 20px 4px rgba(99,102,241,0.08), 0 8px 24px rgba(0,0,0,0.08) !important;
+}
+
+/* progress bar 闪烁流动 - 经典扫描线效果 */
+@keyframes progress-shimmer {
+    0% { background-position: -100% 0; }
+    100% { background-position: 200% 0; }
+}
+.progress-bar {
+    position: relative;
+    overflow: hidden;
+}
+.progress-bar::after {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.35) 50%, transparent 100%);
+    background-size: 100% 100%;
+    animation: progress-shimmer 2.5s ease-in-out infinite;
+    pointer-events: none;
+}
+
+/* 故障卡片 - 悬停旋转光晕 */
+.fault-item {
+    position: relative;
+    overflow: hidden;
+}
+@keyframes rotate-glow {
+    to { transform: rotate(360deg); }
+}
+.fault-item::before {
+    content: '';
+    position: absolute; top: -25%; left: -25%;
+    width: 150%; height: 150%;
+    background: conic-gradient(from 0deg, transparent 0deg, rgba(99,102,241,0.04) 30deg, transparent 60deg, rgba(99,102,241,0.04) 120deg, transparent 180deg);
+    animation: rotate-glow 6s linear infinite;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    border-radius: 50%;
+}
+.fault-item:hover::before {
+    opacity: 1;
+}
+
+/* 自动刷新按钮呼吸光 */
+#autoRefreshPill {
+    border: 1px solid rgba(99,102,241,0.15);
+    background: rgba(15,23,42,0.6);
+    backdrop-filter: blur(8px);
+    position:fixed; bottom:16px; right:16px; z-index:999;
+    color:rgba(255,255,255,0.7); cursor:pointer;
+    padding:3px 10px; border-radius:12px; font-size:11px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.15);
+    transition: all .3s;
+    line-height:1.6;
+    letter-spacing:0.3px;
+}
+#autoRefreshPill:not(.paused) {
+    animation: breathe-shadow 2s ease-in-out infinite;
+}
+#autoRefreshPill:hover {
+    background: rgba(15,23,42,0.8);
+    color:#fff;
+}
+#autoRefreshPill.paused {
+    background: rgba(107,114,128,0.35);
+    color:rgba(255,255,255,0.5);
+}
+#autoRefreshPill i { font-size: 10px; margin-right:2px; }
+#autoRefreshPill.paused i { color:rgba(255,255,255,0.4); }
+
+/* 卡片底部分隔线装饰 - 简单渐变 */
+.card-section .card-body .d-flex.text-center[style*="border-top"] {
+    position: relative;
+    background: linear-gradient(90deg, transparent, rgba(99,102,241,0.03), transparent);
+    border-radius: 0 0 12px 12px;
+}
+.card-section .card-body .d-flex.text-center[style*="border-top"]::before {
+    content: '';
+    position: absolute; top: -1px; left: 5%; right: 5%;
+    height: 1.5px;
+    background: linear-gradient(90deg, transparent, #6366f1, transparent);
+}
+
+/* 花哨滚动点 */
+.scroll-dot.active {
+    background: linear-gradient(90deg, #6366f1, #06b6d4);
+    box-shadow: 0 0 6px rgba(99,102,241,0.3);
+}
+.chart-dot.active {
+    background: linear-gradient(90deg, #6366f1, #06b6d4);
+    box-shadow: 0 0 4px rgba(99,102,241,0.2);
+}
+
+/* badge 切换按钮增强 */
+#slaTabBtn, #countTabBtn, #faultTypeTabBtn, #repeatFaultTabBtn {
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 时钟跳动 */
+@keyframes heart-beat {
+    0%, 100% { transform: scale(1); }
+    15% { transform: scale(1.2); }
+    30% { transform: scale(1); }
+    45% { transform: scale(1.1); }
+    60% { transform: scale(1); }
+}
+.live-clock .clock-dot {
+    animation: heart-beat 1.5s ease-in-out infinite !important;
+}
+
+/* SLA圆环呼吸光 */
+@keyframes circle-breathe {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+.sla-ring text {
+    animation: circle-breathe 2s ease-in-out infinite;
+}
+
+/* 标题渐变动画 - 缓慢颜色流动 */
+.dashboard-title-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 8px; margin-right: 8px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4);
+    background-size: 200% 200%;
+    animation: rainbow-glow 3s ease infinite;
+    color: #fff; font-size: 16px;
+}
+
+.card-stat .stat-value {
+    font-size: 25px; font-weight: 800; line-height: 1;
+    margin-top: 2px; display: flex; align-items: center; gap: 4px;
+}
+.card-stat .stat-value .stat-trend {
+    font-size: 10px; font-weight: 600; opacity: .5; margin-left: 2px;
+}
+.card-stat .stat-value .badge-urgent {
+    display: inline-flex; align-items: center; gap: 2px;
+    font-size: 10px; font-weight: 700; padding: 0 5px; line-height: 15px;
+    border-radius: 3px; color: #fff;
+}
+
+/* 图表卡片 & 区域卡片 */
+.card-trend, .card-section {
+    border-radius: 14px !important;
+    border: 1px solid rgba(0,0,0,0.05) !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03), 0 1px 2px rgba(0,0,0,0.02) !important;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    position: relative;
+    overflow: hidden;
+}
+/* 区域卡片顶部分类色条 */
+.card-section::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 3px;
+    opacity: 0.7;
+}
+/* 四个底部卡片不同颜色 */
+.card-section:nth-of-type(1)::before { background: linear-gradient(90deg, #6366f1, #818cf8); }
+.card-section:nth-of-type(2)::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.card-section:nth-of-type(3)::before { background: linear-gradient(90deg, #f97316, #fb923c); }
+.card-section:nth-of-type(4)::before { background: linear-gradient(90deg, #10b981, #34d399); }
+/* 图表的顶部分色条 */
+.card-trend::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #06b6d4, #22d3ee);
+    opacity: 0.7;
+}
+.card-trend:hover, .card-section:hover {
+    box-shadow: 0 8px 28px rgba(79,70,229,0.08), 0 2px 8px rgba(0,0,0,0.04) !important;
+    transform: translateY(-2px);
+    border-color: rgba(99,102,241,0.1) !important;
+}
+.card-trend .card-header, .card-section .card-header {
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+/* Item Box */
+.item-box {
+    background: #f8fafc;
+    border-radius: 10px;
+    padding: 6px 10px;
+    margin-bottom: 4px;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+    position: relative;
+}
+.item-box:hover {
+    background: #fff;
+    border-color: rgba(99,102,241,0.1);
+    box-shadow: 0 2px 8px rgba(99,102,241,0.06);
+}
+.item-box[style*="cursor:pointer"]:hover {
+    background: #fff;
+    border-color: rgba(99,102,241,0.15);
+    transform: translateX(3px);
+    box-shadow: 0 2px 10px rgba(99,102,241,0.08);
+}
+.item-box[style*="cursor:pointer"]:hover::after {
+    content: '';
+    position: absolute; left: 0; top: 2px; bottom: 2px;
+    width: 2px;
+    background: linear-gradient(180deg, #6366f1, #06b6d4);
+    border-radius: 0 3px 3px 0;
+}
+
+/* 故障分布条目 */
+.fault-item {
+    border: 1px solid rgba(0,0,0,0.04);
+    border-radius: 12px;
+    padding: 9px 13px;
+    margin-bottom: 9px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    transition: all 0.25s ease;
+}
+.fault-item:hover {
+    border-color: rgba(99,102,241,0.15);
+    box-shadow: 0 4px 16px rgba(99,102,241,0.08);
+    transform: translateY(-2px);
+}
+.fault-item .progress { height: 7px !important; border-radius: 4px !important; margin-top: 2px; }
+
+/* 滚动容器 */
+.scroll-wrap { position: relative; overflow: hidden; max-height: 200px; }
+.card-trend .card-body canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+}
+.scroll-list { display: flex; flex-direction: column; transition: transform .4s ease; }
+.scroll-page { min-width: 100%; flex-shrink: 0; }
+.scroll-dots { display: flex; gap: 3px; }
+.scroll-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #d1d5db; cursor: pointer; transition: all .3s;
+}
+.scroll-dot.active { background: var(--primary); width: 16px; border-radius: 3px; }
+.chart-dot {
+    display:inline-block; width:7px; height:7px; border-radius:50%;
+    background:#d1d5db; cursor:pointer; margin:0 2px; transition:all .3s;
+}
+.chart-dot.active { background:var(--primary); width:18px; border-radius:4px; }
+
+/* 超时闪烁 */
+@keyframes urgent-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .5; transform: scale(1.2); }
+}
+.badge-urgent i.fa-exclamation-triangle,
+.item-box i.fa-exclamation-triangle {
+    animation: urgent-pulse 1.2s ease-in-out infinite;
+}
+
+/* 自动刷新按钮 */
+#autoRefreshPill {
+    position:fixed; bottom:12px; right:12px; z-index:999;
+    background:rgba(15,23,42,0.6); color:rgba(255,255,255,0.7); cursor:pointer;
+    padding:2px 8px; border-radius:10px; font-size:10px;
+    backdrop-filter:blur(6px);
+    box-shadow:0 1px 4px rgba(0,0,0,0.12);
+    transition: all .3s;
+    border: 1px solid rgba(255,255,255,0.06);
+    line-height:1.5;
+}
+#autoRefreshPill:hover {
+    background:rgba(15,23,42,0.8);
+    color:#fff;
+}
+#autoRefreshPill.paused {
+    background:rgba(107,114,128,0.3);
+    color:rgba(255,255,255,0.4);
+}
+#autoRefreshPill i { font-size: 9px; }
+
+/* 自适应 */
+#dashboard-content {
+    backface-visibility: hidden;
+    animation: dash-enter 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes dash-enter {
+    from { opacity: 0; transform: scale(0.97) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+html { font-size: 15px; }
+@media (max-width: 1200px) {
+    .sidebar { width: 180px !important; }
+    .sidebar .brand { font-size: 15px; padding: 14px 14px 12px; }
+    .sidebar .nav-link { font-size: 13px; padding: 6px 10px; }
+    #dashboard-content { min-height: 800px; }
+}
+@media (max-width: 768px) {
+    .sidebar { display: none !important; }
+    .sidebar .brand, .sidebar .nav-link { display: none; }
+    .sidebar-toggle { display: none; }
+    #dashboard-content { min-height: 600px; }
+    #dashboard-content .card-stat .stat-value { font-size: 19px !important; }
+    #dashboard-content .card-stat .stat-label { font-size: 10px !important; }
+}

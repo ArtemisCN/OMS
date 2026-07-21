@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.al-wrap { max-width: 1140px; margin: 0 auto; }
+.al-topbar { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+.al-topbar h4 { margin:0; font-size:20px; font-weight:800; display:flex; align-items:center; gap:10px; letter-spacing:-0.3px; }
+.al-topbar h4 i { background:linear-gradient(135deg,#667eea,#764ba2); -webkit-background-clip:text; -webkit-text-fill-color:transparent; font-size:19px; }
+.al-stats { display:flex; gap:4px; margin-bottom:18px; flex-wrap:wrap; }
+.al-stat { flex:1; min-width:70px; padding:8px 10px; border-radius:10px; text-align:center; font-size:11px; font-weight:500; background:var(--card-bg,rgba(255,255,255,0.5)); backdrop-filter:blur(8px); border:1px solid var(--card-border,rgba(229,231,235,0.3)); color:var(--text-muted,#94a3b8); line-height:1.3; }
+.al-stat strong { display:block; font-size:22px; font-weight:800; color:var(--text,#1e293b); letter-spacing:-0.5px; }
+/* 双列布局 */
+.al-main { display:grid; grid-template-columns: 210px 1fr; gap: 18px; }
+@media(max-width:768px) { .al-main { grid-template-columns: 1fr; } }
+/* 左侧筛选 */
+.al-side { display:flex; flex-direction:column; gap:12px; }
+.al-filter-card { border-radius:14px; padding:16px; background:var(--card-bg,rgba(255,255,255,0.5)); backdrop-filter:blur(8px); border:1px solid var(--card-border,rgba(229,231,235,0.3)); }
+.al-filter-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:var(--text-muted,#94a3b8); margin-bottom:8px; }
+.al-filter-item { display:flex; justify-content:space-between; align-items:center; padding:5px 8px; border-radius:7px; font-size:13px; color:var(--text-secondary,#475569); text-decoration:none; transition:all .1s; cursor:pointer; }
+.al-filter-item:hover { background:var(--set-bg,rgba(79,70,229,0.04)); color:var(--primary,#4f46e5); }
+.al-filter-item.active { background:rgba(79,70,229,0.08); color:var(--primary,#4f46e5); font-weight:600; }
+.al-filter-item .cnt { font-size:11px; color:var(--text-muted,#94a3b8); background:var(--card-border,#e5e7eb); padding:0 6px; border-radius:999px; line-height:18px; font-weight:500; }
+.al-filter-item.active .cnt { background:rgba(79,70,229,0.12); color:var(--primary,#4f46e5); }
+/* 右侧内容 */
+.al-right { }
+/* 搜索栏 */
+.al-search { display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
+.al-search select, .al-search input { padding:7px 12px; border-radius:9px; border:1.5px solid var(--card-border,#e5e7eb); background:var(--card-bg,rgba(255,255,255,0.5)); backdrop-filter:blur(4px); font-size:13px; outline:none; color:var(--text,#1e293b); transition:border-color .15s; }
+.al-search select:focus, .al-search input:focus { border-color:var(--primary,#4f46e5); }
+.al-search input { flex:1; min-width:140px; }
+[data-theme="dark"] .al-search select, [data-theme="dark"] .al-search input { background:rgba(26,29,39,0.5); border-color:rgba(42,46,58,0.4); color:#e2e8f0; }
+.al-search-btn { padding:7px 16px; border-radius:9px; border:none; background:var(--primary,#4f46e5); color:#fff; font-size:13px; cursor:pointer; transition:all .15s; }
+.al-search-btn:hover { opacity:.85; }
+.al-clear-btn { padding:7px 12px; border-radius:9px; border:1.5px solid var(--card-border,#e5e7eb); background:transparent; color:var(--text-muted,#94a3b8); font-size:12px; cursor:pointer; text-decoration:none; display:inline-flex;align-items:center;gap:4px; }
+/* 日志列表 */
+.al-log-list { display:flex; flex-direction:column; gap:4px; }
+.al-log-item { display:grid; grid-template-columns:auto 90px 120px 1fr 80px 120px; align-items:center; gap:8px; padding:8px 14px; border-radius:10px; background:var(--card-bg,rgba(255,255,255,0.4)); border:1px solid transparent; transition:all .12s; font-size:13px; }
+.al-log-item:hover { background:var(--card-bg,rgba(255,255,255,0.7)); border-color:var(--card-border,#e5e7eb); }
+[data-theme="dark"] .al-log-item { background:rgba(26,29,39,0.3); }
+[data-theme="dark"] .al-log-item:hover { background:rgba(26,29,39,0.5); border-color:#2a2e3a; }
+.al-log-item .al-id { color:var(--text-muted,#94a3b8); font-size:11px; }
+.al-log-item .al-action { font-size:11px; padding:2px 10px; border-radius:999px; font-weight:500; text-align:center; }
+.al-action-create { background:#ecfdf5; color:#059669; }
+.al-action-update { background:#eef2ff; color:#4f46e5; }
+.al-action-delete { background:#fef2f2; color:#ef4444; }
+.al-action-login { background:#fffbeb; color:#b45309; }
+.al-action-logout { background:#f1f5f9; color:#64748b; }
+.al-action-export { background:#f0f9ff; color:#0284c7; }
+[data-theme="dark"] .al-action-create { background:#064e3b; color:#6ee7b7; }
+[data-theme="dark"] .al-action-update { background:#312e81; color:#a5b4fc; }
+[data-theme="dark"] .al-action-delete { background:#7f1d1d; color:#fca5a5; }
+[data-theme="dark"] .al-action-login { background:#78350f; color:#fbbf24; }
+[data-theme="dark"] .al-action-logout { background:#374151; color:#9ca3af; }
+[data-theme="dark"] .al-action-export { background:#1e3a5f; color:#7dd3fc; }
+.al-log-item .al-target { font-size:12px; color:var(--text-muted,#94a3b8); }
+.al-log-item .al-desc { font-weight:500; color:var(--text,#1e293b); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.al-log-item .al-desc .al-detail { font-weight:400; font-size:12px; color:var(--text-muted,#94a3b8); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+[data-theme="dark"] .al-log-item .al-desc { color:#e2e8f0; }
+.al-log-item .al-operator { color:var(--text-secondary,#475569); }
+.al-log-item .al-time { font-size:12px; color:var(--text-muted,#94a3b8); }
+/* 日志表格头 */
+.al-log-header { display:grid; grid-template-columns:auto 90px 120px 1fr 80px 120px; align-items:center; gap:8px; padding:8px 14px; font-size:11px; font-weight:600; color:var(--text-muted,#94a3b8); text-transform:uppercase; letter-spacing:0.5px; }
+.al-empty { text-align:center; padding:40px 0; color:var(--text-muted,#94a3b8); }
+.al-pagination { display:flex; justify-content:center; gap:4px; margin-top:16px; }
+.al-page { padding:6px 12px; border-radius:7px; font-size:13px; border:1px solid var(--card-border,#e5e7eb); color:var(--text-secondary,#475569); text-decoration:none; transition:all .12s; }
+.al-page:hover { border-color:var(--primary,#4f46e5); color:var(--primary,#4f46e5); }
+.al-page.active { background:var(--primary,#4f46e5); color:#fff; border-color:var(--primary,#4f46e5); }
+.al-page.disabled { opacity:.4; pointer-events:none; }
+[data-theme="dark"] .al-filter-card { background:rgba(26,29,39,0.5); border-color:rgba(42,46,58,0.3); }
+[data-theme="dark"] .al-stat strong { color:#e2e8f0; }
+</style>
+
+<div class="al-wrap">
+  <div class="al-topbar">
+    <h4><i class="fas fa-history"></i> 操作审计日志</h4>
+    <span class="text-muted" style="font-size:12px;">共 {{ pagination.total }} 条记录</span>
+  </div>
+
+  <div class="al-stats">
+    <div class="al-stat"><strong>{{ pagination.total }}</strong>总操作</div>
+    <div class="al-stat"><strong style="color:#059669;">{{ action_counts|selectattr('0','equalto','create')|map('last')|first|default(0) }}</strong>创建</div>
+    <div class="al-stat"><strong style="color:#4f46e5;">{{ action_counts|selectattr('0','equalto','update')|map('last')|first|default(0) }}</strong>修改</div>
+    <div class="al-stat"><strong style="color:#ef4444;">{{ action_counts|selectattr('0','equalto','delete')|map('last')|first|default(0) }}</strong>删除</div>
+    <div class="al-stat"><strong style="color:#b45309;">{{ action_counts|selectattr('0','equalto','login')|map('last')|first|default(0) }}</strong>登录</div>
+  </div>
+
+  <div class="al-main">
+    <!-- 左侧筛选 -->
+    <div class="al-side">
+      <div class="al-filter-card">
+        <div class="al-filter-title">按操作类型</div>
+        <a href="{{ url_for('audit.audit_logs') }}" class="al-filter-item {{ 'active' if not action }}">全部 <span class="cnt">{{ pagination.total }}</span></a>
+        {% for act, cnt in action_counts %}
+        <a href="{{ url_for('audit.audit_logs', action=act, target=target, keyword=keyword) }}"
+           class="al-filter-item {{ 'active' if action == act }}">
+          <span>{{ {'create':'创建','update':'修改','delete':'删除','login':'登录','logout':'登出','export':'导出'}.get(act,act) }}</span>
+          <span class="cnt">{{ cnt }}</span>
+        </a>
+        {% endfor %}
+      </div>
+      <div class="al-filter-card">
+        <div class="al-filter-title">按对象类型</div>
+        <a href="{{ url_for('audit.audit_logs') }}" class="al-filter-item {{ 'active' if not target }}">全部 <span class="cnt">{{ pagination.total }}</span></a>
+        {% for tgt, cnt in target_counts %}
+        <a href="{{ url_for('audit.audit_logs', target=tgt, action=action, keyword=keyword) }}"
+           class="al-filter-item {{ 'active' if target == tgt }}">
+          <span>{{ {'work_order':'工单','user':'用户','person':'人员','fault_type':'故障类型','solution_template':'方案模板','inspection_template':'巡检模板','inspection_plan':'巡检计划','asset':'资产','report':'报表','inventory':'盘点'}.get(tgt,tgt) }}</span>
+          <span class="cnt">{{ cnt }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- 右侧列表 -->
+    <div class="al-right">
+      <!-- 搜索 -->
+      <form class="al-search" method="get">
+        <input type="hidden" name="page" value="1">
+        <select name="action">
+          <option value="">全部操作</option>
+          <option value="create" {{ 'selected' if action == 'create' }}>创建</option>
+          <option value="update" {{ 'selected' if action == 'update' }}>修改</option>
+          <option value="delete" {{ 'selected' if action == 'delete' }}>删除</option>
+          <option value="login" {{ 'selected' if action == 'login' }}>登录</option>
+          <option value="logout" {{ 'selected' if action == 'logout' }}>登出</option>
+          <option value="export" {{ 'selected' if action == 'export' }}>导出</option>
+        </select>
+        <select name="target">
+          <option value="">全部对象</option>
+          <option value="work_order" {{ 'selected' if target == 'work_order' }}>工单</option>
+          <option value="user" {{ 'selected' if target == 'user' }}>用户</option>
+          <option value="person" {{ 'selected' if target == 'person' }}>人员</option>
+          <option value="asset" {{ 'selected' if target == 'asset' }}>资产</option>
+          <option value="inventory" {{ 'selected' if target == 'inventory' }}>盘点</option>
+          <option value="fault_type" {{ 'selected' if target == 'fault_type' }}>故障类型</option>
+          <option value="solution_template" {{ 'selected' if target == 'solution_template' }}>方案模板</option>
+          <option value="inspection_template" {{ 'selected' if target == 'inspection_template' }}>巡检模板</option>
+        </select>
+        <input type="text" name="keyword" placeholder="搜索操作人/内容…" value="{{ keyword }}">
+        <button class="al-search-btn"><i class="fas fa-search"></i></button>
+        {% if action or target or keyword %}
+        <a href="{{ url_for('audit.audit_logs') }}" class="al-clear-btn"><i class="fas fa-times"></i> 清除</a>
+        {% endif %}
+      </form>
+
+      {% if logs %}
+      <!-- 表头 -->
+      <div class="al-log-header" style="display:grid;grid-template-columns:auto 90px 120px 1fr 80px 120px;">
+        <span>ID</span><span>操作</span><span>对象</span><span>描述</span><span>操作人</span><span>时间</span>
+      </div>
+      <!-- 日志行 -->
+      <div class="al-log-list">
+        {% for log in logs %}
+        <div class="al-log-item" style="display:grid;grid-template-columns:auto 90px 120px 1fr 80px 120px;">
+          <span class="al-id">#{{ log.id }}</span>
+          <span class="al-action al-action-{{ log.action }}">{{ {'create':'创建','update':'修改','delete':'删除','login':'登录','logout':'登出','export':'导出'}.get(log.action,log.action) }}</span>
+          <span class="al-target">{{ {'work_order':'工单','user':'用户','person':'人员','asset':'资产','inventory':'盘点','fault_type':'故障类型','solution_template':'方案模板','inspection_template':'巡检模板','inspection_plan':'巡检计划','report':'报表'}.get(log.target_type,log.target_type) }}</span>
+          <span class="al-desc">
+            {{ log.target_desc or '' }}
+            {% if log.detail %}
+            <span class="al-detail">{{ log.detail[:100] }}{% if log.detail|length > 100 %}…{% endif %}</span>
+            {% endif %}
+          </span>
+          <span class="al-operator">{{ log.operator }}</span>
+          <span class="al-time">{{ log.created_at.strftime('%Y-%m-%d %H:%M') if log.created_at else log.created_at }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="al-empty">
+        <i class="fas fa-inbox" style="font-size:36px;display:block;margin-bottom:8px;opacity:.3;"></i>
+        暂无日志记录
+      </div>
+      {% endif %}
+
+      {% if pagination.pages > 1 %}
+      <div class="al-pagination">
+        <a class="al-page {{ 'disabled' if not pagination.has_prev }}"
+           href="{{ url_for('audit.audit_logs', page=pagination.prev_num, action=action, target=target, keyword=keyword) if pagination.has_prev else '#' }}">«</a>
+        {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+          {% if p %}
+          <a class="al-page {{ 'active' if p == pagination.page }}"
+             href="{{ url_for('audit.audit_logs', page=p, action=action, target=target, keyword=keyword) }}">{{ p }}</a>
+          {% else %}
+          <span class="al-page disabled">…</span>
+          {% endif %}
+        {% endfor %}
+        <a class="al-page {{ 'disabled' if not pagination.has_next }}"
+           href="{{ url_for('audit.audit_logs', page=pagination.next_num, action=action, target=target, keyword=keyword) if pagination.has_next else '#' }}">»</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

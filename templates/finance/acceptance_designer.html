@@ -1,0 +1,1098 @@
+{% extends "base.html" %}
+{% block extra_head %}
+<style>
+:root {
+  --grid-border: #e2e8f0;
+  --field-bg-title: #2563eb;
+  --field-bg-data: #f0fdf4;
+  --field-bg-separator: #fef3c7;
+  --field-bg-sign: #f3e8ff;
+  --grid-size: 40px;
+}
+body { background: #f8fafc; }
+
+.designer-layout { display: flex; height: calc(100vh - 60px); gap: 0; }
+
+/* ===== 左侧面板 ===== */
+.side-panel {
+  width: 240px;
+  min-width: 240px;
+  background: #fff;
+  border-right: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.side-panel h5 {
+  padding: 12px 14px 8px;
+  color: #1e293b;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 0;
+}
+.field-palette {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 10px 10px;
+}
+.field-palette .field-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  cursor: grab;
+  font-size: 13px;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  transition: all 0.15s;
+  user-select: none;
+}
+.field-palette .field-item:hover {
+  background: #eef2ff;
+  border-color: #818cf8;
+  transform: translateX(2px);
+}
+.field-palette .field-item:active { cursor: grabbing; }
+.field-item .fi-icon {
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.fi-icon.type-text { background: #dbeafe; color: #2563eb; }
+.fi-icon.type-date { background: #fce7f3; color: #db2777; }
+.fi-icon.type-number { background: #d1fae5; color: #059669; }
+.fi-icon.type-sign { background: #ede9fe; color: #7c3aed; }
+.fi-icon.type-separator { background: #fef3c7; color: #d97706; }
+.palette-actions {
+  padding: 10px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ===== 画布区域 ===== */
+.canvas-wrapper {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+  background: #e2e8f0;
+}
+.canvas-container {
+  background: #fff;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  position: relative;
+  flex-shrink: 0;
+}
+.canvas-container .ttl {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 8px;
+  border-bottom: 1px solid #000;
+  margin: 0 8px;
+  letter-spacing: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+.canvas-container .ttl:hover { background: #f0f9ff; }
+.canvas-grid {
+  position: relative;
+  background-image:
+    linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+}
+.canvas-grid .grid-field {
+  position: absolute;
+  border: 2px solid transparent;
+  border-radius: 3px;
+  cursor: move;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  font-size: 12px;
+  overflow: hidden;
+  transition: box-shadow 0.15s;
+}
+.canvas-grid .grid-field:hover {
+  box-shadow: 0 0 0 2px #2563eb55;
+}
+.canvas-grid .grid-field.selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px #2563eb55;
+  z-index: 10;
+}
+.grid-field .gf-label {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 4px;
+}
+.grid-field .gf-mock {
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+.grid-field.type-data {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+.grid-field.type-separator {
+  background: #fef3c7;
+  border-color: #fbbf24;
+  justify-content: center;
+  font-size: 11px;
+  color: #92400e;
+}
+.grid-field.type-sign {
+  background: #f3e8ff;
+  border-color: #c4b5fd;
+}
+.grid-field .gf-del {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 50%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  z-index: 20;
+}
+.grid-field.selected .gf-del { display: flex; }
+.grid-field .gf-resize {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 12px;
+  height: 12px;
+  background: #2563eb;
+  border-radius: 2px;
+  cursor: nwse-resize;
+  display: none;
+  z-index: 20;
+}
+.grid-field.selected .gf-resize { display: block; }
+
+/* ===== 属性面板 ===== */
+.prop-panel {
+  width: 280px;
+  min-width: 280px;
+  background: #fff;
+  border-left: 1px solid #e2e8f0;
+  padding: 14px;
+  overflow-y: auto;
+}
+.prop-panel h6 {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 0 0 10px;
+}
+.prop-group { margin-bottom: 12px; }
+.prop-group label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 3px;
+}
+.prop-group input, .prop-group select {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.prop-group input:focus, .prop-group select:focus {
+  border-color: #2563eb;
+  outline: none;
+  box-shadow: 0 0 0 2px #2563eb33;
+}
+.prop-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* ===== 模板列表 ===== */
+.tpl-list {
+  padding: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+.tpl-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.tpl-item:hover, .tpl-item.active { background: #eef2ff; }
+.tpl-item .tpl-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tpl-item .tpl-badge {
+  font-size: 9px;
+  background: #2563eb;
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 4px;
+}
+
+/* ===== 工具栏 ===== */
+.top-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+}
+.top-bar .btn {
+  font-size: 12px;
+  padding: 5px 12px;
+}
+.top-bar .tpl-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  flex: 1;
+}
+.import-btn-group { position: relative; display: inline-block; }
+.import-btn-group input[type=file] {
+  position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+  opacity: 0; cursor: pointer;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="top-bar">
+    <span class="tpl-title">
+        <span id="tplNameDisplay">{{ current_tpl.name if current_tpl else '默认模板' }}</span>
+        <span id="tplNameEdit" style="display:none;">
+            <input type="text" id="tplNameInput" value="{{ current_tpl.name if current_tpl else '默认模板' }}"
+                   style="font-size:14px;padding:2px 8px;border:1px solid #2563eb;border-radius:4px;width:200px;">
+            <button class="btn btn-sm btn-primary" onclick="saveTplName()">✓</button>
+            <button class="btn btn-sm btn-secondary" onclick="cancelTplName()">✗</button>
+        </span>
+    </span>
+    <span id="saveStatus" style="font-size:11px;color:#64748b;"></span>
+    <div class="import-btn-group">
+        <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('excelInput').click()">📊 导入 Excel</button>
+        <input type="file" id="excelInput" accept=".xlsx,.xls" onchange="importFile('excel')" style="display:none;">
+    </div>
+    <div class="import-btn-group">
+        <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('wordInput').click()">📄 导入 Word</button>
+        <input type="file" id="wordInput" accept=".docx" onchange="importFile('word')" style="display:none;">
+    </div>
+    <button class="btn btn-outline-info btn-sm" onclick="previewTemplate()">👁 预览</button>
+    <button class="btn btn-success btn-sm" onclick="saveLayout()">💾 保存</button>
+</div>
+
+<div class="designer-layout">
+    <!-- 左侧：字段面板 -->
+    <div class="side-panel">
+        <h5>可用字段</h5>
+        <div class="field-palette" id="fieldPalette">
+            {% for fd in field_defs %}
+            <div class="field-item" draggable="true" data-key="{{ fd.key }}" data-label="{{ fd.label }}" data-type="{{ fd.type }}" data-default="{{ fd.default }}">
+                <span class="fi-icon type-{{ fd.type }}">{{ {'text':'Aa','date':'📅','number':'#','sign':'✍','separator':'—','separator':'—'}[fd.type] or 'Aa' }}</span>
+                <span>{{ fd.label }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="palette-actions">
+            <button class="btn btn-outline-primary btn-sm" onclick="addSeparator()">➕ 添加分隔线</button>
+            <button class="btn btn-outline-info btn-sm" onclick="addTableRow()">📋 插入行</button>
+            <button class="btn btn-outline-info btn-sm" onclick="addTable()">🗂 插入表格</button>
+            <button class="btn btn-outline-danger btn-sm" onclick="clearAllFields()">🗑 清空画布</button>
+        </div>
+        <div class="tpl-list">
+            <h6 style="font-size:10px;margin:0 0 6px;color:#64748b;">模板列表</h6>
+            {% for tpl in templates %}
+            <div class="tpl-item{% if current_tpl and current_tpl.id == tpl.id %} active{% endif %}"
+                 onclick="location.href='{{ url_for('finance.acceptance_designer_edit', tpl_id=tpl.id) }}'">
+                <span class="tpl-name">{{ tpl.name }}</span>
+                {% if tpl.is_default %}<span class="tpl-badge">默认</span>{% endif %}
+            </div>
+            {% endfor %}
+            <div style="margin-top:8px;">
+                <input type="text" id="newTplName" class="form-control form-control-sm" placeholder="新模板名称" style="font-size:12px;">
+                <button class="btn btn-primary btn-sm w-100 mt-1" onclick="createTemplate()">＋ 新建模板</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 画布 -->
+    <div class="canvas-wrapper">
+        <div class="canvas-container" id="canvasContainer">
+            <div class="ttl" id="titleDisplay" onclick="editTitle()">{{ layout.title if layout and layout.title else '维修验收单' }}</div>
+            <div class="canvas-grid" id="canvasGrid"></div>
+        </div>
+    </div>
+
+    <!-- 属性面板 -->
+    <div class="prop-panel" id="propPanel">
+        <h6>画布设置</h6>
+        <div class="prop-group">
+            <label>验收单标题</label>
+            <input type="text" id="propTitle" value="{{ layout.title if layout and layout.title else '维修验收单' }}" onchange="updateCanvasSetting('title', this.value)">
+        </div>
+        <div class="prop-2col">
+            <div class="prop-group">
+                <label>列数</label>
+                <input type="number" id="propCols" value="{{ layout.cols if layout else 12 }}" min="4" max="24" onchange="resizeGrid()">
+            </div>
+            <div class="prop-group">
+                <label>行数</label>
+                <input type="number" id="propRows" value="{{ layout.rows if layout else 24 }}" min="6" max="60" onchange="resizeGrid()">
+            </div>
+        </div>
+        <div class="prop-2col">
+            <div class="prop-group">
+                <label>边框样式</label>
+                <select id="propBorder" onchange="updateCanvasSetting('border_style', this.value)">
+                    <option value="solid" {% if layout and layout.border_style == 'solid' %}selected{% endif %}>实线</option>
+                    <option value="dashed" {% if layout and layout.border_style == 'dashed' %}selected{% endif %}>虚线</option>
+                    <option value="dotted" {% if layout and layout.border_style == 'dotted' %}selected{% endif %}>点线</option>
+                    <option value="none" {% if layout and layout.border_style == 'none' %}selected{% endif %}>无边框</option>
+                </select>
+            </div>
+            <div class="prop-group">
+                <label>边框粗细</label>
+                <select id="propBorderWidth" onchange="updateCanvasSetting('border_width', parseInt(this.value))">
+                    <option value="0.5" {% if layout and layout.border_width == 0.5 %}selected{% endif %}>极细</option>
+                    <option value="1" {% if not layout or layout.border_width == 1 or layout.border_width is undefined %}selected{% endif %}>细</option>
+                    <option value="1.5" {% if layout and layout.border_width == 1.5 %}selected{% endif %}>中</option>
+                    <option value="2" {% if layout and layout.border_width == 2 %}selected{% endif %}>粗</option>
+                </select>
+            </div>
+        </div>
+        <div class="prop-2col" style="margin-top:8px;">
+            <div class="prop-group">
+                <label>纸张尺寸</label>
+                <select id="propPaperSize" onchange="onPaperChange()">
+                    <option value="A4"{% if layout and (layout.paper_size or 'A4') == 'A4' %} selected{% endif %}>A4 (210×297mm)</option>
+                    <option value="A3"{% if layout and layout.paper_size == 'A3' %} selected{% endif %}>A3 (297×420mm)</option>
+                    <option value="B5"{% if layout and layout.paper_size == 'B5' %} selected{% endif %}>B5 (176×250mm)</option>
+                    <option value="信函"{% if layout and layout.paper_size == '信函' %} selected{% endif %}>信函 (216×279mm)</option>
+                    <option value="自定义"{% if layout and layout.paper_size == '自定义' %} selected{% endif %}>自定义</option>
+                </select>
+            </div>
+            <div class="prop-group">
+                <label>方向</label>
+                <select id="propOrientation" onchange="onPaperChange()">
+                    <option value="portrait"{% if layout and (layout.orientation or 'portrait') == 'portrait' %} selected{% endif %}>纵向</option>
+                    <option value="landscape"{% if layout and layout.orientation == 'landscape' %} selected{% endif %}>横向</option>
+                </select>
+            </div>
+        </div>
+        <div id="customPaperRow" class="prop-2col" style="margin-top:4px;{% if layout and layout.paper_size == '自定义' %}{% else %}display:none;{% endif %}">
+            <div class="prop-group">
+                <label>宽度(mm)</label>
+                <input type="number" id="propPaperW" value="{{ layout.paper_w or 210 }}" min="50" max="500" onchange="onPaperSizeChange()">
+            </div>
+            <div class="prop-group">
+                <label>高度(mm)</label>
+                <input type="number" id="propPaperH" value="{{ layout.paper_h or 297 }}" min="50" max="500" onchange="onPaperSizeChange()">
+            </div>
+        </div>
+        <h6 style="margin-top:16px;">选中字段</h6>
+        <div id="fieldProps">
+            <p style="color:#94a3b8;font-size:12px;">点击画布上的字段编辑属性</p>
+        </div>
+        <div id="fieldPropEditor" style="display:none;">
+            <div class="prop-group">
+                <label>标签文字</label>
+                <input type="text" id="fpLabel" onchange="updateFieldProp('label', this.value)">
+            </div>
+            <div class="prop-group">
+                <label>数据字段</label>
+                <select id="fpKey" onchange="updateFieldProp('key', this.value)">
+                    <option value="date">维修日期</option>
+                    <option value="department">科室</option>
+                    <option value="device_type">设备类型</option>
+                    <option value="device_brand">设备品牌</option>
+                    <option value="device_model">设备型号</option>
+                    <option value="asset_no">资产编号</option>
+                    <option value="repair_content">维修内容</option>
+                    <option value="total_amount">金额(元)</option>
+                    <option value="complete_status">完成情况</option>
+                    <option value="acceptor">验收人签字</option>
+                    <option value="accept_date">验收日期</option>
+                    <option value="remark">备注</option>
+                    <option value="work_order_no">工单编号</option>
+                    <option value="repair_person">维修人员</option>
+                </select>
+            </div>
+            <div class="prop-2col">
+                <div class="prop-group">
+                    <label>X (列)</label>
+                    <input type="number" id="fpX" min="0" onchange="updateFieldPos()">
+                </div>
+                <div class="prop-group">
+                    <label>Y (行)</label>
+                    <input type="number" id="fpY" min="0" onchange="updateFieldPos()">
+                </div>
+            </div>
+            <div class="prop-2col">
+                <div class="prop-group">
+                    <label>宽度(列)</label>
+                    <input type="number" id="fpW" min="1" onchange="updateFieldSize()">
+                </div>
+                <div class="prop-group">
+                    <label>高度(行)</label>
+                    <input type="number" id="fpH" min="1" onchange="updateFieldSize()">
+                </div>
+            </div>
+            <div class="prop-2col">
+                <div class="prop-group">
+                    <label>字体大小</label>
+                    <select id="fpFontSize" onchange="updateFieldProp('font_size', parseInt(this.value))">
+                        <option value="7">7pt</option>
+                        <option value="8">8pt</option>
+                        <option value="9" selected>9pt</option>
+                        <option value="10">10pt</option>
+                        <option value="11">11pt</option>
+                        <option value="12">12pt</option>
+                        <option value="14">14pt</option>
+                    </select>
+                </div>
+                <div class="prop-group">
+                    <label>对齐</label>
+                    <select id="fpAlign" onchange="updateFieldProp('align', this.value)">
+                        <option value="left">左对齐</option>
+                        <option value="center">居中</option>
+                        <option value="right">右对齐</option>
+                    </select>
+                </div>
+            </div>
+            <div class="prop-group">
+                <label>
+                    <input type="checkbox" id="fpBold" onchange="updateFieldProp('bold', this.checked)">
+                    加粗
+                </label>
+            </div>
+            <div class="prop-2col">
+                <div class="prop-group">
+                    <label>字段边框</label>
+                    <select id="fpBorder" onchange="updateFieldProp('border', this.value)">
+                        <option value="underline">下划线</option>
+                        <option value="box">全框</option>
+                        <option value="none">无</option>
+                    </select>
+                </div>
+                <div class="prop-group" id="fpTableColsGroup" style="display:none;">
+                    <label>列数</label>
+                    <input type="number" id="fpTableCols" min="1" max="8" value="2" onchange="updateFieldProp('table_cols', parseInt(this.value))">
+                </div>
+            </div>
+            <button class="btn btn-danger btn-sm w-100 mt-2" onclick="deleteSelectedField()">🗑 删除此字段</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ==================== 状态 ====================
+var currentTplId = {{ current_tpl.id if current_tpl else (templates[0].id if templates else 'null') }};
+var canvasTitle = '{{ layout.title if layout and layout.title else '维修验收单' }}';
+var fields = {{ layout.fields | tojson | safe if layout and layout.fields else '[]' }};
+var cols = {{ layout.cols if layout else 12 }};
+var rows = {{ layout.rows if layout else 24 }};
+var gridSize = 40;
+var selectedIdx = -1;
+var dragState = null;
+var saveTimer = null;
+var isDirty = false;
+
+// ==================== 初始化 ====================
+function init() {
+    renderCanvas();
+    setupDragDrop();
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            if (selectedIdx >= 0) { deleteSelectedField(); e.preventDefault(); }
+        }
+        if (e.key === 'Escape') { deselectField(); }
+    });
+}
+init();
+
+// ==================== 画布渲染 ====================
+function renderCanvas() {
+    var grid = document.getElementById('canvasGrid');
+    var container = document.getElementById('canvasContainer');
+    var cw = cols * gridSize + 20;
+    var ch = rows * gridSize + 20;
+    grid.style.width = cw + 'px';
+    grid.style.height = ch + 'px';
+    grid.style.backgroundSize = gridSize + 'px ' + gridSize + 'px';
+    grid.innerHTML = '';
+    for (var i = 0; i < fields.length; i++) {
+        renderField(grid, i);
+    }
+}
+
+function renderField(grid, idx) {
+    var f = fields[idx];
+    var div = document.createElement('div');
+    div.className = 'grid-field';
+    if (f.type === 'separator') div.classList.add('type-separator');
+    else if (f.type === 'sign') div.classList.add('type-sign');
+    else div.classList.add('type-data');
+    if (idx === selectedIdx) div.classList.add('selected');
+
+    var leftPct = (f.x / cols) * 100;
+    var widthPct = (f.w / cols) * 100;
+    var topPct = (f.y / rows) * 100;
+    var heightPct = (f.h / rows) * 100;
+
+    div.style.left = leftPct + '%';
+    div.style.width = widthPct + '%';
+    div.style.top = topPct + '%';
+    div.style.height = heightPct + '%';
+    div.style.fontSize = (f.font_size || 9) + 'pt';
+    if (f.bold) div.style.fontWeight = '700';
+    div.style.textAlign = f.align || 'left';
+
+    if (f.type === 'separator') {
+        div.innerHTML = '————————————————————';
+    } else if (f.type === 'table_row') {
+        div.style.background = '#f0f9ff';
+        div.style.border = '2px dashed #60a5fa';
+        var cols = f.table_cols || 2;
+        var cells = '';
+        for (var ci = 0; ci < cols; ci++) {
+            var cl = (f.cells && f.cells[ci]) ? f.cells[ci].label : '列' + (ci+1);
+            var cv = (f.cells && f.cells[ci]) ? f.cells[ci].mock : '';
+            cells += '<span style="flex:1;padding:2px 4px;border-right:' + (ci<cols-1?'1px dashed #93c5fd':'none') + ';font-size:10px;"><b>' + cl + '</b> ' + cv + '</span>';
+        }
+        div.innerHTML = '<div style="display:flex;width:100%;height:100%;align-items:center;">' + cells + '</div>' +
+            '<span class="gf-del" onclick="event.stopPropagation();deleteField(' + idx + ')">✕</span>';
+    } else if (f.type === 'table') {
+        div.style.background = '#fffbeb';
+        div.style.border = '2px dashed #f59e0b';
+        var rowsT = f.table_rows || 3;
+        var colsT = f.table_cols || 4;
+        var html = '<table style="width:100%;height:100%;border-collapse:collapse;font-size:9px;">';
+        for (var ri = 0; ri < rowsT; ri++) {
+            html += '<tr>';
+            for (var ci = 0; ci < colsT; ci++) {
+                html += '<td style="border:1px dashed #fbbf24;padding:2px;text-align:center;color:#92400e;">' + '行' + (ri+1) + '列' + (ci+1) + '</td>';
+            }
+            html += '</tr>';
+        }
+        html += '</table>' +
+            '<span class="gf-del" onclick="event.stopPropagation();deleteField(' + idx + ')">✕</span>';
+        div.innerHTML = html;
+    } else {
+        var borderStyle = f.border || 'underline';
+        var valStyle = '';
+        if (borderStyle === 'box') valStyle = 'border:0.5px solid #999;padding:0 2px;border-radius:2px;';
+        else if (borderStyle === 'none') valStyle = '';
+        else valStyle = 'border-bottom:0.5px solid #999;';
+        div.innerHTML = '<span class="gf-label">' + f.label + '</span>' +
+            '<span class="gf-mock" style="' + valStyle + '">' + (f.default || '') + '</span>' +
+            '<span class="gf-del" onclick="event.stopPropagation();deleteField(' + idx + ')">✕</span>' +
+            '<span class="gf-resize" id="resize_' + idx + '"></span>';
+    }
+
+    div.onmousedown = function(e) {
+        if (e.target.classList.contains('gf-del') || e.target.classList.contains('gf-resize')) return;
+        selectField(idx);
+        startDrag(e, idx);
+    };
+
+    // 双击编辑标签
+    div.ondblclick = function() {
+        selectField(idx);
+        var label = prompt('修改标签文字：', f.label);
+        if (label && label.trim()) {
+            f.label = label.trim();
+            markDirty();
+            renderCanvas();
+            selectField(idx);
+            updatePropPanel(idx);
+        }
+    };
+
+    // 调整大小
+    var resizeHandle = div.querySelector('.gf-resize');
+    if (resizeHandle) {
+        resizeHandle.onmousedown = function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            startResize(e, idx);
+        };
+    }
+
+    grid.appendChild(div);
+}
+
+// ==================== 网格坐标换算 ====================
+function getGridPos(clientX, clientY) {
+    var rect = document.getElementById('canvasGrid').getBoundingClientRect();
+    var gx = Math.round((clientX - rect.left) / rect.width * cols);
+    var gy = Math.round((clientY - rect.top) / rect.height * rows);
+    return { x: Math.max(0, Math.min(cols - 1, gx)), y: Math.max(0, Math.min(rows - 1, gy)) };
+}
+
+// ==================== 拖拽 ====================
+function startDrag(e, idx) {
+    if (e.button !== 0) return;
+    var pos = getGridPos(e.clientX, e.clientY);
+    dragState = { type: 'move', idx: idx, startX: pos.x, startY: pos.y, origX: fields[idx].x, origY: fields[idx].y };
+    e.preventDefault();
+}
+
+function startResize(e, idx) {
+    dragState = { type: 'resize', idx: idx };
+    e.preventDefault();
+}
+
+document.addEventListener('mousemove', function(e) {
+    if (!dragState) return;
+    if (dragState.type === 'move') {
+        var pos = getGridPos(e.clientX, e.clientY);
+        var dx = pos.x - dragState.startX;
+        var dy = pos.y - dragState.startY;
+        var newX = Math.max(0, Math.min(cols - fields[dragState.idx].w, dragState.origX + dx));
+        var newY = Math.max(0, Math.min(rows - fields[dragState.idx].h, dragState.origY + dy));
+        fields[dragState.idx].x = newX;
+        fields[dragState.idx].y = newY;
+        markDirty();
+        renderCanvas();
+        selectField(dragState.idx);
+    } else if (dragState.type === 'resize') {
+        var rect = document.getElementById('canvasGrid').getBoundingClientRect();
+        var idx = dragState.idx;
+        var nw = Math.max(1, Math.round((e.clientX - rect.left) / rect.width * cols) - fields[idx].x);
+        var nh = Math.max(1, Math.round((e.clientY - rect.top) / rect.height * rows) - fields[idx].y);
+        fields[idx].w = Math.min(nw, cols - fields[idx].x);
+        fields[idx].h = Math.min(nh, rows - fields[idx].y);
+        markDirty();
+        renderCanvas();
+        selectField(idx);
+    }
+});
+
+document.addEventListener('mouseup', function() {
+    if (dragState) {
+        if (dragState.type === 'move' && selectedIdx >= 0) updatePropPanel(selectedIdx);
+        dragState = null;
+        markDirty();
+    }
+});
+
+// ==================== 从左侧面板拖入 ====================
+function setupDragDrop() {
+    var palette = document.getElementById('fieldPalette');
+    palette.querySelectorAll('.field-item').forEach(function(item) {
+        item.addEventListener('dragstart', function(e) {
+            e.dataTransfer.setData('text/plain', JSON.stringify({
+                key: item.dataset.key,
+                label: item.dataset.label,
+                type: item.dataset.type,
+                default: item.dataset.default
+            }));
+        });
+    });
+
+    var grid = document.getElementById('canvasGrid');
+    grid.addEventListener('dragover', function(e) { e.preventDefault(); });
+    grid.addEventListener('drop', function(e) {
+        e.preventDefault();
+        try {
+            var data = JSON.parse(e.dataTransfer.getData('text/plain'));
+            var pos = getGridPos(e.clientX, e.clientY);
+            var w = (data.type === 'repair_content') ? 12 : 4;
+            var h = (data.type === 'repair_content') ? 4 : (data.type === 'separator' ? 1 : 1);
+            pos.x = Math.min(pos.x, cols - w);
+            pos.y = Math.min(pos.y, rows - h);
+            fields.push({
+                key: data.key,
+                label: data.label,
+                type: data.type || 'text',
+                default: data.default || '',
+                x: pos.x,
+                y: pos.y,
+                w: w,
+                h: h,
+                align: 'left',
+                font_size: 9,
+                bold: false
+            });
+            markDirty();
+            renderCanvas();
+        } catch(err) { console.error(err); }
+    });
+}
+
+// ==================== 选中 / 属性面板 ====================
+function selectField(idx) {
+    selectedIdx = idx;
+    renderCanvas();
+    updatePropPanel(idx);
+}
+
+function deselectField() {
+    selectedIdx = -1;
+    renderCanvas();
+    document.getElementById('fieldProps').style.display = 'block';
+    document.getElementById('fieldPropEditor').style.display = 'none';
+}
+
+function updatePropPanel(idx) {
+    if (idx < 0 || idx >= fields.length) { deselectField(); return; }
+    var f = fields[idx];
+    document.getElementById('fieldProps').style.display = 'none';
+    document.getElementById('fieldPropEditor').style.display = 'block';
+    document.getElementById('fpLabel').value = f.label;
+    document.getElementById('fpKey').value = f.key;
+    document.getElementById('fpX').value = f.x;
+    document.getElementById('fpY').value = f.y;
+    document.getElementById('fpW').value = f.w;
+    document.getElementById('fpH').value = f.h;
+    document.getElementById('fpFontSize').value = f.font_size || 9;
+    document.getElementById('fpAlign').value = f.align || 'left';
+    document.getElementById('fpBold').checked = f.bold || false;
+    document.getElementById('fpBorder').value = f.border || 'underline';
+    // Show/hide table cols for table rows
+    var isTableRow = (f.type === 'table_row');
+    document.getElementById('fpTableColsGroup').style.display = isTableRow ? '' : 'none';
+    if (isTableRow) document.getElementById('fpTableCols').value = f.table_cols || 2;
+}
+
+// ==================== 字段属性修改 ====================
+function updateFieldProp(prop, value) {
+    if (selectedIdx < 0) return;
+    fields[selectedIdx][prop] = value;
+    markDirty();
+    renderCanvas();
+    selectField(selectedIdx);
+}
+
+function updateFieldPos() {
+    if (selectedIdx < 0) return;
+    var x = parseInt(document.getElementById('fpX').value);
+    var y = parseInt(document.getElementById('fpY').value);
+    if (!isNaN(x)) fields[selectedIdx].x = Math.max(0, Math.min(cols-1, x));
+    if (!isNaN(y)) fields[selectedIdx].y = Math.max(0, Math.min(rows-1, y));
+    markDirty();
+    renderCanvas();
+    selectField(selectedIdx);
+}
+
+function updateFieldSize() {
+    if (selectedIdx < 0) return;
+    var w = parseInt(document.getElementById('fpW').value);
+    var h = parseInt(document.getElementById('fpH').value);
+    if (!isNaN(w)) fields[selectedIdx].w = Math.max(1, Math.min(cols - fields[selectedIdx].x, w));
+    if (!isNaN(h)) fields[selectedIdx].h = Math.max(1, Math.min(rows - fields[selectedIdx].y, h));
+    markDirty();
+    renderCanvas();
+    selectField(selectedIdx);
+}
+
+function deleteSelectedField() {
+    if (selectedIdx < 0) return;
+    if (!confirm('删除此字段？')) return;
+    fields.splice(selectedIdx, 1);
+    selectedIdx = -1;
+    markDirty();
+    renderCanvas();
+    document.getElementById('fieldProps').style.display = 'block';
+    document.getElementById('fieldPropEditor').style.display = 'none';
+}
+
+function deleteField(idx) {
+    if (!confirm('删除此字段？')) return;
+    fields.splice(idx, 1);
+    if (selectedIdx === idx) selectedIdx = -1;
+    else if (selectedIdx > idx) selectedIdx--;
+    markDirty();
+    renderCanvas();
+}
+
+// ==================== 画布设置 ====================
+function updateCanvasSetting(key, value) {
+    if (key === 'title') {
+        canvasTitle = value;
+        document.getElementById('titleDisplay').textContent = value;
+    }
+    markDirty();
+}
+
+function resizeGrid() {
+    cols = parseInt(document.getElementById('propCols').value) || 12;
+    rows = parseInt(document.getElementById('propRows').value) || 24;
+    renderCanvas();
+    markDirty();
+}
+
+function editTitle() {
+    var title = prompt('修改验收单标题：', canvasTitle);
+    if (title && title.trim()) {
+        canvasTitle = title.trim();
+        document.getElementById('titleDisplay').textContent = canvasTitle;
+        document.getElementById('propTitle').value = canvasTitle;
+        markDirty();
+    }
+}
+
+// ==================== 操作 ====================
+// ==================== 纸张尺寸 ====================
+function onPaperChange() {
+    var paperSize = document.getElementById('propPaperSize').value;
+    document.getElementById('customPaperRow').style.display = (paperSize === '自定义') ? '' : 'none';
+    markDirty();
+}
+function onPaperSizeChange() {
+    markDirty();
+}
+
+function addTableRow() {
+    var y = 1;
+    if (fields.length > 0) {
+        var maxY = 0;
+        fields.forEach(function(f) { if (f.y + f.h > maxY) maxY = f.y + f.h; });
+        y = maxY;
+    }
+    fields.push({
+        type: 'table_row',
+        label: '表格行',
+        key: 'table_row',
+        table_cols: 2,
+        cells: [
+            {label:'列1', key:'date', mock:'2024-01-15'},
+            {label:'列2', key:'department', mock:'信息科'}
+        ],
+        x: 0, y: y, w: 12, h: 2,
+        border: 'none',
+        font_size: 9, bold: false, align: 'left'
+    });
+    markDirty();
+    renderCanvas();
+}
+
+function addTable() {
+    var y = 1;
+    if (fields.length > 0) {
+        var maxY = 0;
+        fields.forEach(function(f) { if (f.y + f.h > maxY) maxY = f.y + f.h; });
+        y = maxY;
+    }
+    fields.push({
+        type: 'table',
+        label: '表格',
+        key: 'table',
+        table_rows: 3,
+        table_cols: 4,
+        x: 0, y: y, w: 12, h: 6,
+        border: 'none',
+        font_size: 9, bold: false, align: 'left'
+    });
+    markDirty();
+    renderCanvas();
+}
+
+function addSeparator() {
+    var y = 1;
+    if (fields.length > 0) {
+        var maxY = 0;
+        fields.forEach(function(f) { if (f.y + f.h > maxY) maxY = f.y + f.h; });
+        y = maxY;
+    }
+    fields.push({
+        key: 'separator',
+        label: '分隔线',
+        type: 'separator',
+        default: '',
+        x: 0, y: y, w: 12, h: 1,
+        align: 'center', font_size: 8, bold: false
+    });
+    markDirty();
+    renderCanvas();
+}
+
+function clearAllFields() {
+    if (!confirm('清空画布上所有字段？')) return;
+    fields = [];
+    selectedIdx = -1;
+    markDirty();
+    renderCanvas();
+    document.getElementById('fieldProps').style.display = 'block';
+    document.getElementById('fieldPropEditor').style.display = 'none';
+}
+
+// ==================== 保存 / 加载 ====================
+function getLayout() {
+    var paperSize = document.getElementById('propPaperSize').value;
+    var papers = {'A4':[210,297],'A3':[297,420],'B5':[176,250],'信函':[216,279]};
+    var pw, ph;
+    if (paperSize === '自定义') {
+        pw = parseInt(document.getElementById('propPaperW').value) || 210;
+        ph = parseInt(document.getElementById('propPaperH').value) || 297;
+    } else {
+        pw = papers[paperSize][0];
+        ph = papers[paperSize][1];
+    }
+    var orient = document.getElementById('propOrientation').value;
+    if (orient === 'landscape') { var t = pw; pw = ph; ph = t; }
+    return {
+        cols: cols,
+        rows: rows,
+        page_width: pw,
+        page_height: ph,
+        paper_size: paperSize,
+        paper_w: pw,
+        paper_h: ph,
+        orientation: orient,
+        fields: fields,
+        title: canvasTitle,
+        title_font_size: 12,
+        border_style: document.getElementById('propBorder').value,
+        border_width: parseFloat(document.getElementById('propBorderWidth').value)
+    };
+}
+
+function saveLayout() {
+    var layout = getLayout();
+    var name = document.getElementById('tplNameInput') ? document.getElementById('tplNameInput').value :
+                document.getElementById('tplNameDisplay').textContent;
+    fetch('{{ url_for('finance.acceptance_designer_save', tpl_id=0) }}'.replace('/0/', '/' + currentTplId + '/'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ layout: layout, name: name })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.ok) {
+            showSaveStatus('已保存 ✓', 'green');
+            isDirty = false;
+        } else {
+            showSaveStatus('保存失败', 'red');
+        }
+    }).catch(function(err) {
+        showSaveStatus('保存失败: ' + err, 'red');
+    });
+}
+
+function createTemplate() {
+    var name = document.getElementById('newTplName').value.trim();
+    if (!name) { alert('请输入模板名称'); return; }
+    var form = new FormData();
+    form.append('name', name);
+    fetch('{{ url_for('finance.acceptance_designer_create') }}', {
+        method: 'POST', body: form
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.ok) {
+            location.href = '{{ url_for('finance.acceptance_designer_edit', tpl_id=0) }}'.replace('/0/', '/' + data.id + '/');
+        }
+    });
+}
+
+function saveTplName() {
+    var name = document.getElementById('tplNameInput').value.trim();
+    if (!name) return;
+    document.getElementById('tplNameDisplay').textContent = name;
+    document.getElementById('tplNameDisplay').style.display = 'inline';
+    document.getElementById('tplNameEdit').style.display = 'none';
+    markDirty();
+}
+
+function cancelTplName() {
+    document.getElementById('tplNameDisplay').style.display = 'inline';
+    document.getElementById('tplNameEdit').style.display = 'none';
+}
+
+// 双击标题编辑
+document.getElementById('tplNameDisplay').ondblclick = function() {
+    this.style.display = 'none';
+    var edit = document.getElementById('tplNameEdit');
+    edit.style.display = 'inline';
+    document.getElementById('tplNameInput').focus();
+};
+
+function markDirty() {
+    isDirty = true;
+    showSaveStatus('未保存的更改', 'orange');
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveLayout, 30000);
+}
+
+function showSaveStatus(msg, color) {
+    var el = document.getElementById('saveStatus');
+    el.textContent = msg;
+    el.style.color = color;
+}
+
+// ==================== 预览 ====================
+function previewTemplate() {
+    saveLayout();
+    window.open('{{ url_for('finance.acceptance_designer_preview', tpl_id=0) }}'.replace('/0/', '/' + currentTplId + '/'), '_blank');
+}
+
+// ==================== 导入 ====================
+function importFile(type) {
+    var input = document.getElementById(type === 'excel' ? 'excelInput' : 'wordInput');
+    if (!input.files || !input.files[0]) return;
+    var file = input.files[0];
+    var form = new FormData();
+    form.append('file', file);
+    var url = type === 'excel'
+        ? '{{ url_for('finance.acceptance_designer_import_excel') }}'
+        : '{{ url_for('finance.acceptance_designer_import_word') }}';
+    showSaveStatus('导入中...', 'blue');
+    fetch(url, { method: 'POST', body: form })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok && data.layout) {
+            cols = data.layout.cols || 12;
+            rows = data.layout.rows || 24;
+            fields = data.layout.fields || [];
+            document.getElementById('propCols').value = cols;
+            document.getElementById('propRows').value = rows;
+            document.getElementById('titleDisplay').textContent = data.layout.title || canvasTitle;
+            markDirty();
+            renderCanvas();
+            deselectField();
+            showSaveStatus('导入成功 ✓', 'green');
+        } else {
+            showSaveStatus('导入失败: ' + (data.error || 'unknown'), 'red');
+            alert('导入失败: ' + (data.error || 'unknown'));
+        }
+    })
+    .catch(function(err) {
+        showSaveStatus('导入错误', 'red');
+        alert('导入错误: ' + err);
+    });
+    input.value = '';
+}
+
+// ==================== 窗口失去焦点时保存 ====================
+window.addEventListener('beforeunload', function(e) {
+    if (isDirty) {
+        saveLayout();
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
+</script>
+{% endblock %}

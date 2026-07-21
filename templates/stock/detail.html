@@ -1,0 +1,143 @@
+<!-- 备件详情 + 出入库记录 -->
+{% extends "base.html" %}
+{% block content %}
+<a href="{{ url_for('stock.index') }}" class="btn btn-sm btn-outline-secondary mb-3"><i class="fas fa-arrow-left"></i> 返回库存</a>
+
+{% set is_low = part.is_low %}
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="card" style="border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.06); border:1px solid #e5e7eb;">
+            <div class="card-body p-4 text-center">
+                <div style="font-size:48px; color:{% if is_low %}#ef4444{% else %}#8b5cf6{% endif %}; margin-bottom:8px;">
+                    <i class="fas fa-box"></i>
+                </div>
+                <h5 class="fw-bold">{{ part.name }}</h5>
+                <div style="font-size:12px; color:#6b7280; margin-bottom:12px;">{{ part.category }} · {{ part.brand }} {{ part.model_no }}</div>
+                <div style="font-size:36px; font-weight:700; color:{% if is_low %}#ef4444{% else %}var(--primary){% endif %};">{{ part.stock }}</div>
+                <div style="font-size:12px; color:#6b7280;">{{ part.unit }}{% if is_low %} ⚠️ 低于预警线({{ part.min_stock }}){% endif %}</div>
+                {% if part.location %}<div style="font-size:12px; color:#6b7280; margin-top:8px;"><i class="fas fa-map-marker-alt"></i> {{ part.location }}</div>{% endif %}
+                {% if part.notes %}<div style="background:#f9fafb; border-radius:6px; padding:8px; font-size:12px; color:#6b7280; margin-top:12px;">{{ part.notes }}</div>{% endif %}
+            </div>
+            {% if current_user.is_admin %}
+            <div class="card-footer bg-white p-3" style="border-top:1px solid #f3f4f6;">
+                <div class="d-flex gap-2">
+                    <button onclick="showInout({{ part.id }},'{{ part.name }}','in')" class="btn btn-sm btn-success flex-fill"><i class="fas fa-plus-circle"></i> 入库</button>
+                    <button onclick="showInout({{ part.id }},'{{ part.name }}','out')" class="btn btn-sm btn-warning flex-fill"><i class="fas fa-minus-circle"></i> 出库</button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card" style="border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.06); border:1px solid #e5e7eb;">
+            <div class="card-header bg-white" style="border-bottom:1px solid #f3f4f6; padding:14px 20px;">
+                <h6 class="mb-0 fw-bold" style="font-size:14px;"><i class="fas fa-history" style="color:#8b5cf6;"></i> 出入库记录</h6>
+            </div>
+            <div class="card-body p-0">
+                {% if records %}
+                <div style="max-height:500px; overflow-y:auto;">
+                    <table class="table table-hover mb-0" style="font-size:12px;">
+                        <thead style="position:sticky; top:0; background:#f9fafb;">
+                            <tr><th>时间</th><th>类型</th><th>数量</th><th>结存</th><th>操作人</th><th>科室</th><th>备注</th><th style="width:60px;">签名</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for r in records %}
+                            <tr>
+                                <td style="white-space:nowrap;">{{ r.created_at.strftime('%m-%d %H:%M') }}</td>
+                                <td>
+                                    {% if r.type == 'in' %}<span class="badge bg-success">入库</span>
+                                    {% else %}<span class="badge bg-warning text-dark">出库</span>{% endif %}
+                                </td>
+                                <td style="font-weight:600;">{{ r.type == 'in' and '+' or '-' }}{{ r.quantity }}</td>
+                                <td>{{ r.balance }}</td>
+                                <td>{{ r.operator }}</td>
+                                <td>{{ r.department or '-' }}</td>
+                                <td>{{ r.note or '-' }}</td>
+                                <td class="text-center">
+                                    {% if r.signature %}
+                                    <img src="{{ r.signature }}" style="width:36px;height:24px;border-radius:3px;border:1px solid #e5e7eb;cursor:pointer;object-fit:contain;background:#f9fafb;"
+                                         onclick="showSig(this.src)" title="点击查看签名">
+                                    {% else %}
+                                    <span class="text-muted" style="font-size:11px;">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5" style="color:#9ca3af;">
+                    <i class="fas fa-inbox" style="font-size:36px; display:block; margin-bottom:8px;"></i>
+                    暂无出入库记录
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 出入库弹窗 -->
+<div class="modal fade" id="inoutModal2" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content" style="border-radius:12px;">
+            <div class="modal-header border-0 pb-0"><h6 class="modal-title fw-bold" id="inoutTitle2"></h6></div>
+            <div class="modal-body">
+                <form id="inoutForm2">
+                    <input type="hidden" name="part_id" id="inoutPartId2">
+                    <input type="hidden" name="action" id="inoutAction2">
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:13px;">数量</label>
+                        <input type="number" name="quantity" class="form-control" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:13px;">备注</label>
+                        <input type="text" name="note" class="form-control" placeholder="如 更换硒鼓/采购入库">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-sm btn-primary" onclick="submitInout2()">确认</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 签名预览弹窗 -->
+<div class="modal fade" id="sigPreviewModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content" style="border-radius:12px;">
+            <div class="modal-body text-center p-4">
+                <img id="sigPreviewImg" src="" style="max-width:100%; max-height:300px; border-radius:6px; border:1px solid #e5e7eb; background:#f9fafb;">
+                <p class="mt-2 mb-0 text-muted" style="font-size:12px;">出库签名</p>
+            </div>
+            <div class="modal-footer border-0 pt-0 justify-content-center">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showSig(src) {
+    document.getElementById('sigPreviewImg').src = src;
+    new bootstrap.Modal(document.getElementById('sigPreviewModal')).show();
+}
+function showInout(id, name, action) {
+    document.getElementById('inoutPartId2').value = id;
+    document.getElementById('inoutAction2').value = action;
+    document.getElementById('inoutTitle2').textContent = (action=='in'?'入库':'出库') + ' - ' + name;
+    document.querySelector('#inoutForm2 input[name="quantity"]').value = '';
+    document.querySelector('#inoutForm2 input[name="note"]').value = '';
+    new bootstrap.Modal(document.getElementById('inoutModal2')).show();
+}
+function submitInout2() {
+    var fd = new FormData(document.getElementById('inoutForm2'));
+    fetch('/stock/inout', {method:'POST', body:fd}).then(r=>r.json()).then(d=>{
+        if(d.ok) location.reload();
+        else alert(d.msg||'操作失败');
+    }).catch(function(){alert('操作失败');});
+}
+</script>
+{% endblock %}

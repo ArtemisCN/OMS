@@ -1,0 +1,118 @@
+<!-- 资产详情 -->
+{% extends "base.html" %}
+{% block content %}
+{% set wstatus = asset.warranty_status %}
+{% set days = asset.warranty_days_left %}
+
+<div class="row g-4">
+    <!-- 左：资产信息 -->
+    <div class="col-md-5">
+        <div class="card" style="border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.06); border:1px solid #e5e7eb;">
+            <div class="card-header bg-white" style="border-bottom:1px solid #f3f4f6; padding:14px 20px;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold" style="font-size:15px;"><i class="fas fa-info-circle" style="color:var(--primary)"></i>
+                        {% if asset.category == 'software' %}软件详情{% else %}设备详情{% endif %}</h5>
+                    {% if current_user.is_admin %}
+                    <a href="{{ url_for('asset.edit', asset_id=asset.id) }}" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-edit"></i> 编辑
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body p-4">
+                <table class="table table-borderless" style="font-size:13px;">
+                    <tr><td style="width:80px; color:#6b7280;">编号</td><td><strong>{{ asset.asset_no }}</strong></td></tr>
+                    <tr><td style="color:#6b7280;">类型</td><td>{{ '打印机' if asset.device_type == 'PR' else '硬件' if asset.device_type in ('PC','NB','一体机') else asset.device_type }}</td></tr>
+                    <tr><td style="color:#6b7280;">品牌</td><td>{{ asset.brand }} {{ asset.model_no }}</td></tr>
+                    {% if asset.category == 'software' %}
+                    {% if asset.vendor %}<tr><td style="color:#6b7280;">供应商</td><td>{{ asset.vendor }}</td></tr>{% endif %}
+                    {% if asset.license_key %}<tr><td style="color:#6b7280;">授权码</td><td><code>{{ asset.license_key }}</code></td></tr>{% endif %}
+                    {% if asset.license_seats %}<tr><td style="color:#6b7280;">授权数</td><td>{{ asset.license_seats }}</td></tr>{% endif %}
+                    {% else %}
+                    {% if asset.sn %}<tr><td style="color:#6b7280;">SN</td><td><code>{{ asset.sn }}</code></td></tr>{% endif %}
+                    <tr><td style="color:#6b7280;">位置</td><td>{{ asset.building }} {{ asset.floor }} {{ asset.location }}</td></tr>
+                    {% if asset.ip_address %}<tr><td style="color:#6b7280;">IP</td><td>{{ asset.ip_address }}</td></tr>{% endif %}
+                    {% if asset.mac_address %}<tr><td style="color:#6b7280;">MAC</td><td><code>{{ asset.mac_address }}</code></td></tr>{% endif %}
+                    {% if asset.cpu %}<tr><td style="color:#6b7280;">CPU</td><td>{{ asset.cpu }}</td></tr>{% endif %}
+                    {% if asset.memory %}<tr><td style="color:#6b7280;">内存</td><td>{{ asset.memory }}</td></tr>{% endif %}
+                    {% if asset.disk_size %}<tr><td style="color:#6b7280;">硬盘</td><td>{{ asset.disk_size }}</td></tr>{% endif %}
+                    {% if asset.operating_system %}<tr><td style="color:#6b7280;">系统</td><td>{{ asset.operating_system }}</td></tr>{% endif %}
+                    {% if asset.financial_code %}<tr><td style="color:#6b7280;">财务编码</td><td>{{ asset.financial_code }}</td></tr>{% endif %}
+                    {% if asset.financial_name %}<tr><td style="color:#6b7280;">财务名称</td><td>{{ asset.financial_name }}</td></tr>{% endif %}
+                    {% endif %}
+                    <tr><td style="color:#6b7280;">科室</td><td>{{ asset.department }}</td></tr>
+                    <tr><td style="color:#6b7280;">购入</td><td>{{ asset.purchase_date.strftime('%Y-%m-%d') if asset.purchase_date else '-' }}</td></tr>
+                    {% if asset.price %}<tr><td style="color:#6b7280;">价格</td><td>¥{{ '%.2f'|format(asset.price) }}</td></tr>{% endif %}
+                    <tr><td style="color:#6b7280;">状态</td>
+                        <td>
+                            {% if asset.status == 'in_use' %}<span class="badge bg-success">在用</span>
+                            {% elif asset.status == 'idle' %}<span class="badge bg-warning text-dark">闲置</span>
+                            {% elif asset.status == 'repair' %}<span class="badge bg-danger">维修中</span>
+                            {% elif asset.status == 'scrapped' %}<span class="badge bg-secondary">报废</span>
+                            {% else %}<span class="badge bg-light text-dark">{{ asset.status }}</span>{% endif %}
+                        </td>
+                    </tr>
+                    <tr><td style="color:#6b7280;">{% if asset.category == 'software' %}授权{% else %}保修{% endif %}</td><td>
+                        {% if asset.warranty_start %}{{ asset.warranty_start.strftime('%Y-%m-%d') }} 至 {% endif %}
+                        {% if asset.warranty_end %}{{ asset.warranty_end.strftime('%Y-%m-%d') }}{% else %}-{% endif %}
+                    </td></tr>
+                    <tr><td style="color:#6b7280;">剩余天数</td>
+                        <td style="font-weight:700; {% if wstatus=='expiring' %}color:#d97706{% elif wstatus=='expired' %}color:#dc2626{% else %}color:#059669{% endif %};">
+                            {% if days is not none %}
+                                {% if days >= 0 %}{{ days }} 天{% else %}已过保 {{ days|abs }} 天{% endif %}
+                            {% else %}-{% endif %}
+                        </td>
+                    </tr>
+                </table>
+                {% if asset.notes %}
+                <div style="background:#f9fafb; border-radius:6px; padding:10px; font-size:12px; color:#6b7280; margin-top:8px;">
+                    <i class="fas fa-sticky-note"></i> {{ asset.notes }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 右：关联工单历史 -->
+    <div class="col-md-7">
+        <div class="card" style="border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.06); border:1px solid #e5e7eb;">
+            <div class="card-header bg-white" style="border-bottom:1px solid #f3f4f6; padding:14px 20px;">
+                <h5 class="mb-0 fw-bold" style="font-size:15px;"><i class="fas fa-tools" style="color:#f59e0b;"></i> 维修工单历史（近1年）</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if orders %}
+                <div style="max-height:500px; overflow-y:auto;">
+                    <table class="table table-hover mb-0" style="font-size:12px;">
+                        <thead style="position:sticky; top:0; background:#f9fafb;">
+                            <tr><th>#</th><th>标题</th><th>故障</th><th>处理人</th><th>状态</th><th>时间</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for o in orders %}
+                            <tr>
+                                <td>{{ o.id }}</td>
+                                <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ o.title }}</td>
+                                <td>{{ o.fault_type }}</td>
+                                <td>{{ o.person or '-' }}</td>
+                                <td>
+                                    {% if o.status == 'pending' %}<span class="badge bg-warning text-dark">待接单</span>
+                                    {% elif o.status == 'in_progress' %}<span class="badge bg-primary">处理中</span>
+                                    {% elif o.status == 'completed' %}<span class="badge bg-success">已完成</span>
+                                    {% else %}{{ o.status }}{% endif %}
+                                </td>
+                                <td style="white-space:nowrap;">{{ o.created_at.strftime('%m-%d %H:%M') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5" style="color:#9ca3af;">
+                    <i class="fas fa-check-circle" style="font-size:36px; display:block; margin-bottom:8px;"></i>
+                    近1年无维修记录
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

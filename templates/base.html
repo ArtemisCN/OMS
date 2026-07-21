@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}智维工控 · 医院智慧工单系统{% endblock %}</title>
+    <link href="/static/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/vendor/fontawesome/all.min.css" rel="stylesheet">
+    <link href="/static/css/base.css?v=4" rel="stylesheet">
+    <style>:root{--primary-color:{{ primary_color or '#4f46e5' }};}</style>
+    <link href="/static/css/chat.v2.css?v=2" rel="stylesheet">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- 顶部加载进度条 -->
+    <div id="loading-bar"><div class="bar"><div class="peg"></div></div></div>
+
+    <!-- Toast 通知容器 -->
+    <div id="toast-container"></div>
+
+    <!-- 粒子背景 canvas -->
+    <canvas id="particle-canvas" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
+    
+    <!-- 返回顶部按钮 -->
+    <button id="back-to-top" onclick="scrollToTop()" title="回到顶部">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <div class="app-layout" style="display:flex;min-height:100vh;">
+            {% if current_user.is_authenticated %}
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="brand" id="brandTrigger">
+                    <div class="brand-icon"><i class="fas fa-hospital"></i></div>
+                    <span class="brand-text">{{ system_name }}</span>
+                </div>
+                <nav class="nav flex-column">
+                    <!-- ===== 工单中心 ===== -->
+                    <div class="nav-section-label">工单中心</div>
+                    {% if can_access('仪表盘') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('main.') %}active{% endif %}"
+                       href="{{ url_for('main.dashboard') }}">
+                        <i class="fas fa-chart-pie"></i> 仪表盘
+                    </a>
+                    {% endif %}
+                    {% if can_access('工单列表') %}
+                    <a class="nav-link {% if request.endpoint == 'orders.list_orders' %}active{% endif %}"
+                       href="{{ url_for('orders.list_orders') }}">
+                        <i class="fas fa-list"></i> 工单列表
+                    </a>
+                    <a class="nav-link {% if request.endpoint == 'orders.calendar_view' %}active{% endif %}"
+                       href="{{ url_for('orders.calendar_view') }}">
+                        <i class="fas fa-calendar-alt"></i> 工单日历
+                    </a>
+                    {% endif %}
+
+                    <!-- ===== 工单操作 ===== -->
+                    <div class="nav-section-label">工单操作</div>
+                    {% if can_access('发布工单') %}
+                    <a class="nav-link {% if request.endpoint == 'orders.publish_order' %}active{% endif %}"
+                       href="{{ url_for('orders.publish_order') }}">
+                        <i class="fas fa-paper-plane"></i> 发布工单
+                    </a>
+                    {% endif %}
+                    {% if can_access('新建工单') %}
+                    <a class="nav-link {% if request.endpoint == 'orders.create_order' %}active{% endif %}"
+                       href="{{ url_for('orders.create_order') }}">
+                        <i class="fas fa-plus-circle"></i> 新建工单
+                    </a>
+                    {% endif %}
+                    {% if can_access('批量生成') %}
+                    <a class="nav-link {% if request.endpoint == 'orders.batch_create' %}active{% endif %}"
+                       href="{{ url_for('orders.batch_create') }}">
+                        <i class="fas fa-wand-magic-sparkles"></i> 批量生成
+                    </a>
+                    {% endif %}
+
+                    <!-- ===== 业务管理 ===== -->
+                    <div class="nav-section-label">业务管理</div>
+                    {% if can_access('巡检管理') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('inspection.') %}active{% endif %}"
+                       href="{{ url_for('inspection.list_templates') }}">
+                        <i class="fas fa-clipboard-check"></i> 巡检管理
+                    </a>
+                    {% endif %}
+                    {% if can_access('维修管理') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('repair.') %}active{% endif %}"
+                       href="{{ url_for('repair.order_list') }}">
+                        <i class="fas fa-tools"></i> 维修管理
+                    </a>
+                    {% endif %}
+                    {% if can_access('电子表单') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('forms.') %}active{% endif %}"
+                       href="{{ url_for('forms.form_list') }}">
+                        <i class="fas fa-file-alt"></i> 电子表单
+                    </a>
+                    {% endif %}
+                    {% if can_access('知识库') %}
+                    <a class="nav-link {% if request.endpoint == 'data.list_knowledge' %}active{% endif %}"
+                       href="{{ url_for('data.list_knowledge') }}">
+                        <i class="fas fa-book"></i> 知识库
+                    </a>
+                    {% endif %}
+                    {% if can_access('值班排班') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('data.') and request.endpoint == 'data.list_duty_schedules' %}active{% endif %}"
+                       href="{{ url_for('data.list_duty_schedules') }}">
+                        <i class="fas fa-calendar-day"></i> 值班排班
+                    </a>
+                    {% endif %}
+
+                    <!-- ===== 数据中心 ===== -->
+                    <div class="nav-section-label">数据中心</div>
+                    {% if can_access('数据管理') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('data.') and not request.endpoint.startswith('data.list_knowledge') %}active{% endif %}"
+                       href="{{ url_for('data.index') }}">
+                        <i class="fas fa-database"></i> 数据管理
+                    </a>
+                    {% endif %}
+                    {% if can_access('资产台账') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('asset.') %}active{% endif %}"
+                       href="{{ url_for('asset.list_view') }}">
+                        <i class="fas fa-server"></i> 资产台账
+                    </a>
+                    {% endif %}
+                    {% if can_access('资产二维码') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('feature.asset') %}active{% endif %}"
+                       href="{{ url_for('feature.asset_qr') }}">
+                        <i class="fas fa-qrcode"></i> 资产二维码
+                    </a>
+                    {% endif %}
+                    {% if can_access('供应商管理') %}
+                    <a class="nav-link {% if request.endpoint == 'feature.supplier_list' %}active{% endif %}"
+                       href="{{ url_for('feature.suppliers') }}">
+                        <i class="fas fa-handshake"></i> 供应商管理
+                    </a>
+                    {% endif %}
+                    {% if can_access('合同维保') %}
+                    <a class="nav-link {% if request.endpoint == 'feature.contract_list' %}active{% endif %}"
+                       href="{{ url_for('feature.contracts') }}">
+                        <i class="fas fa-file-contract"></i> 合同维保
+                    </a>
+                    {% endif %}
+                    {% if can_access('设备折旧') %}
+                    <a class="nav-link {% if request.endpoint == 'feature.asset_depreciation' %}active{% endif %}"
+                       href="{{ url_for('feature.asset_depreciation') }}">
+                        <i class="fas fa-chart-line"></i> 设备折旧
+                    </a>
+                    {% endif %}
+                    {% if can_access('备件库存') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('stock.') %}active{% endif %}"
+                       href="{{ url_for('stock.index') }}">
+                        <i class="fas fa-boxes"></i> 备件库存
+                    </a>
+                    {# 出库总记录已移到备件库存页面内 #}
+                    {% endif %}
+                    {% if can_access('固定资产入库') or can_access('固定资产出库') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('finance_asset.') %}active{% endif %}"
+                       href="{{ url_for('finance_asset.index') }}">
+                        <i class="fas fa-boxes"></i> 固定资产管理
+                    </a>
+                    {% endif %}
+                    {% if can_access('耗材管理') %}
+                    <a class="nav-link {% if request.endpoint == 'data.list_consumables' %}active{% endif %}"
+                       href="{{ url_for('data.list_consumables') }}">
+                        <i class="fas fa-tint"></i> 耗材管理
+                    </a>
+                    <a class="nav-link {% if request.endpoint == 'feature.consumable_forecast' %}active{% endif %}"
+                       href="{{ url_for('feature.consumable_forecast') }}">
+                        <i class="fas fa-chart-bar"></i> 耗材预测
+                    </a>
+                    {% endif %}
+                    <!-- ===== 财务做账 ===== -->
+                    {% if can_access('维修做账') %}
+                    <div class="nav-section-label">财务做账</div>
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('finance.') %}active{% endif %}"
+                       href="{{ url_for('finance.index') }}">
+                        <i class="fas fa-file-invoice-dollar"></i> 维修做账
+                    </a>
+                    {% endif %}
+
+                    <!-- ===== 系统管理 ===== -->
+                    <div class="nav-section-label">系统管理</div>
+                    {% if can_access('审计日志') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('audit.') %}active{% endif %}"
+                       href="{{ url_for('audit.audit_logs') }}">
+                        <i class="fas fa-history"></i> 审计日志
+                    </a>
+                    {% endif %}
+                    {% if can_access('月度报表') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('report.') %}active{% endif %}"
+                       href="{{ url_for('report.report_page') }}">
+                        <i class="fas fa-file-excel"></i> 月度报表
+                    </a>
+                    {% endif %}
+                    {% if can_access('权限管理') %}
+                    <a class="nav-link {% if request.endpoint == 'data.permissions' %}active{% endif %}"
+                       href="{{ url_for('data.permissions') }}">
+                        <i class="fas fa-shield-alt"></i> 权限管理
+                    </a>
+                    {% endif %}
+                    {% if current_user.is_admin %}
+                    <a class="nav-link {% if request.endpoint == 'data.list_hospitals' %}active{% endif %}"
+                       href="{{ url_for('data.list_hospitals') }}">
+                        <i class="fas fa-hospital"></i> 医院管理
+                    </a>
+                    {% endif %}
+                    {% if can_access('服务器监控') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('monitor.') %}active{% endif %}"
+                       href="{{ url_for('monitor.index') }}">
+                        <i class="fas fa-server"></i> 服务器监控
+                    </a>
+                    {% endif %}
+                    {% if can_access('重复单分析') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('analysis.') %}active{% endif %}"
+                       href="{{ url_for('analysis.repeats') }}">
+                        <i class="fas fa-clone"></i> 重复单分析
+                    </a>
+                    {% endif %}
+
+                    <!-- ===== 工单管理 ===== -->
+                    <div class="nav-section-label">工单管理</div>
+                    {% if can_access('SLA监控') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('feature.sla') %}active{% endif %}"
+                       href="{{ url_for('feature.sla_dashboard') }}">
+                        <i class="fas fa-clock"></i> SLA监控
+                    </a>
+                    {% endif %}
+
+                    <!-- ===== 运维分析 ===== -->
+                    <div class="nav-section-label" style="margin-top:4px;">运维分析</div>
+                    {% if can_access('效能看板') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('feature.personnel') %}active{% endif %}"
+                       href="{{ url_for('feature.personnel_dashboard') }}">
+                        <i class="fas fa-users-cog"></i> 效能看板
+                    </a>
+                    {% endif %}
+                    {% if can_access('运维大屏') %}
+                    <a class="nav-link {% if request.endpoint == 'feature.ops_screen' %}active{% endif %}"
+                       href="{{ url_for('feature.ops_screen') }}" target="_blank">
+                        <i class="fas fa-tv"></i> 运维大屏
+                    </a>
+                    {% endif %}
+                    {% if can_access('领导驾驶舱') %}
+                    <a class="nav-link {% if request.endpoint == 'feature.leadership_dashboard' %}active{% endif %}"
+                       href="{{ url_for('feature.leadership_dashboard') }}">
+                        <i class="fas fa-tachometer-alt"></i> 领导驾驶舱
+                    </a>
+                    {% endif %}
+                    {% if can_access('故障热力图') %}
+                    <a class="nav-link {% if request.endpoint == 'analysis.heatmap' %}active{% endif %}"
+                       href="{{ url_for('analysis.heatmap') }}">
+                        <i class="fas fa-fire"></i> 故障热力图
+                    </a>
+                    {% endif %}
+                    {% if can_access('数字孪生') %}
+                    <a class="nav-link {% if request.endpoint == 'feature.digital_twin' %}active{% endif %}"
+                       href="{{ url_for('feature.digital_twin') }}">
+                        <i class="fas fa-cube"></i> 数字孪生
+                    </a>
+                    {% endif %}
+                    {% if can_access('自定义报表') %}
+                    <a class="nav-link {% if request.endpoint == 'feature.report_builder' %}active{% endif %}"
+                       href="{{ url_for('feature.report_builder') }}">
+                        <i class="fas fa-chart-simple"></i> 自定义报表
+                    </a>
+                    {% endif %}
+                    {% if can_access('短信通知') %}
+                    <a class="nav-link {% if request.endpoint == 'feature.sms_settings' %}active{% endif %}"
+                       href="{{ url_for('feature.sms_settings') }}">
+                        <i class="fas fa-sms"></i> 短信通知
+                    </a>
+                    {% endif %}
+
+                    <!-- ===== 教育培训 ===== -->
+                    {% if can_access('考试系统') %}
+                    <div class="nav-section-label">教育培训</div>
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('exam.') %}active{% endif %}"
+                       href="{{ url_for('exam.exam_list') }}">
+                        <i class="fas fa-graduation-cap"></i> 考试系统
+                    </a>
+                    {% endif %}
+
+                    <!-- ===== 底部 ===== -->
+                    <div class="nav-section-label" style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.06);padding-top:8px;"></div>
+                    <a class="nav-link" href="{{ url_for('auth.logout') }}">
+                        <i class="fas fa-sign-out-alt"></i> 退出登录
+                    </a>
+                </nav>
+                {% if current_user.is_admin or user_assigned_hospitals %}
+                {% set has_switcher = current_user.is_admin or user_assigned_hospitals|length > 1 %}
+                <div class="hospital-switcher" style="padding:10px 16px;border-top:1px solid rgba(255,255,255,0.08);">
+                    <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:4px;">当前院区</div>
+                    <div class="d-flex align-items-center gap-2" style="cursor:{{ 'pointer' if has_switcher else 'default' }};" {{ 'onclick="toggleHospitalDropdown()"' if has_switcher else '' }}>
+                        <i class="fas fa-hospital" style="color:var(--primary-light);font-size:13px;"></i>
+                        <span style="color:var(--sidebar-text);font-size:13px;font-weight:500;">
+                            {{ current_hospital.name if current_hospital else '未选择' }}
+                        </span>
+                        {% if has_switcher %}
+                        <i class="fas fa-chevron-down" style="color:rgba(255,255,255,0.3);font-size:10px;margin-left:auto;"></i>
+                        {% endif %}
+                    </div>
+                    {% if has_switcher %}
+                    <div id="hospitalDropdown" style="display:none;margin-top:6px;">
+                        {% set switch_list = all_hospitals if current_user.is_admin else user_assigned_hospitals %}
+                        {% for h in switch_list %}
+                        <a href="{{ url_for('data.switch_hospital', hid=h.id) }}"
+                           style="display:block;padding:5px 10px;border-radius:6px;font-size:12px;color:var(--sidebar-text);text-decoration:none;
+                                  {% if current_hospital and current_hospital.id == h.id %}background:rgba(99,102,241,0.2);color:#fff;{% else %}background:transparent;{% endif %}
+                                  transition:background .15s;"
+                           onmouseover="this.style.background='rgba(99,102,241,0.15)'"
+                           onmouseout="this.style.background={% if current_hospital and current_hospital.id == h.id %}'rgba(99,102,241,0.2)'{% else %}'transparent'{% endif %}">
+                            <i class="fas fa-{% if current_hospital and current_hospital.id == h.id %}dot-circle{% else %}circle{% endif %}" style="font-size:10px;margin-right:6px;{% if current_hospital and current_hospital.id == h.id %}color:var(--primary-light);{% endif %}"></i>
+                            {{ h.name }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                <div class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="切换主题">
+                    <i class="fas fa-sun" id="themeIcon"></i>
+                    <div class="toggle-track"></div>
+                    <i class="fas fa-moon" id="themeIconMoon"></i>
+                </div>
+                <div class="user-info">
+                    <div class="avatar">{{ (current_user.display_name or current_user.username)[:1] }}</div>
+                    <div>
+                        <div class="user-name">{{ current_user.display_name or current_user.username }}</div>
+                        <div class="user-role">
+                            {% if current_user.is_admin %}管理员
+                            {% else %}{{ current_user.group or '普通用户' }}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- 侧边栏收起/展开按钮 -->
+            {% if current_user.is_authenticated %}
+            <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="收起侧边栏">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            {% endif %}
+
+            {% if current_user.is_authenticated %}
+            <div class="main-content">
+                <!-- Mobile navbar -->
+                <nav class="navbar navbar-dark bg-dark d-md-none p-2">
+                    <span class="navbar-brand mb-0 h6"><i class="fas fa-hospital text-primary"></i> 智维工控</span>
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mobileNav">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div class="collapse navbar-collapse" id="mobileNav">
+                        <ul class="navbar-nav">
+                            {% if can_access('仪表盘') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('main.dashboard') }}">仪表盘</a></li>{% endif %}
+                            {% if can_access('工单列表') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('orders.list_orders') }}">工单列表</a></li>{% endif %}
+                            {% if can_access('工单列表') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('orders.calendar_view') }}">工单日历</a></li>{% endif %}
+                            {% if can_access('批量生成') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('orders.batch_create') }}">批量生成</a></li>{% endif %}
+                            {% if can_access('发布工单') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('orders.publish_order') }}">发布工单</a></li>{% endif %}
+                            {% if can_access('新建工单') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('orders.create_order') }}">新建工单</a></li>{% endif %}
+                            {% if can_access('数据管理') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('data.index') }}">数据管理</a></li>{% endif %}
+                            {% if can_access('资产台账') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('asset.list_view') }}">资产台账</a></li>{% endif %}
+                            {% if can_access('备件库存') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('stock.index') }}">备件库存</a></li>{% endif %}
+                            {% if can_access('耗材管理') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('data.list_consumables') }}">耗材管理</a></li>{% endif %}
+                            {% if can_access('值班排班') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('data.list_duty_schedules') }}">值班排班</a></li>{% endif %}
+                            {% if can_access('知识库') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('data.list_knowledge') }}">知识库</a></li>{% endif %}
+                            {% if can_access('巡检管理') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('inspection.list_templates') }}">巡检管理</a></li>{% endif %}
+                            {% if can_access('维修管理') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('repair.order_list') }}">维修管理</a></li>{% endif %}
+                            {% if can_access('电子表单') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('forms.form_list') }}">电子表单</a></li>{% endif %}
+                            {% if can_access('审计日志') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('audit.audit_logs') }}">审计日志</a></li>{% endif %}
+                            {% if can_access('月度报表') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('report.report_page') }}">月度报表</a></li>{% endif %}
+                            {% if can_access('权限管理') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('data.permissions') }}">权限管理</a></li>{% endif %}
+                            {% if can_access('服务器监控') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('monitor.index') }}">服务器监控</a></li>{% endif %}
+                            <li class="nav-item"><a class="nav-link" href="{{ url_for('auth.logout') }}">退出登录</a></li>
+                        </ul>
+                    </div>
+                </nav>
+
+                <div class="content">
+            {% else %}
+            <div class="main-content-centered" style="max-width:480px;">
+                <div class="content" style="padding-top:40px;">
+            {% endif %}
+
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                    {% endwith %}
+                    {% block content %}{% endblock %}
+                </div>
+            </div>
+    </div>
+
+    <script defer src="/static/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script>
+    // ===== 侧边栏收起/展开 =====
+    function toggleSidebar() {
+        var body = document.body;
+        var btn = document.getElementById('sidebarToggle');
+        body.classList.toggle('sidebar-collapsed');
+        var collapsed = body.classList.contains('sidebar-collapsed');
+        btn.title = collapsed ? '展开侧边栏' : '收起侧边栏';
+        try { localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0'); } catch(e) {}
+    }
+    try {
+        if (localStorage.getItem('sidebarCollapsed') === '1') {
+            var tb = document.getElementById('sidebarToggle');
+            if (tb) {
+                document.body.classList.add('sidebar-collapsed');
+                tb.title = '展开侧边栏';
+            }
+        }
+    } catch(e) {}
+
+    // ===== 侧边栏自动隐藏 =====
+    (function() {
+        var seconds = parseInt('{{ sidebar_auto_hide_seconds }}') || 0;
+        if (seconds <= 0) return;
+        var timer = null;
+        var body = document.body;
+        var sidebar = document.querySelector('.sidebar');
+        if (!sidebar) return;
+        function resetTimer() {
+            if (timer) clearTimeout(timer);
+            if (body.classList.contains('sidebar-collapsed')) return;
+            timer = setTimeout(function() {
+                body.classList.add('sidebar-collapsed');
+                var btn = document.getElementById('sidebarToggle');
+                if (btn) btn.title = '展开侧边栏';
+            }, seconds * 1000);
+        }
+        document.addEventListener('mousemove', resetTimer);
+        document.addEventListener('click', resetTimer);
+        document.addEventListener('keydown', resetTimer);
+        resetTimer();
+    })();
+
+    // ===== 返回顶部（基于内容区滚动容器） =====
+    function getScrollContainer() {
+        return document.querySelector('.col[style*="overflow-y:auto"]') || window;
+    }
+    function scrollToTop() {
+        var container = getScrollContainer();
+        if (container === window) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            container.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }
+    var scrollContainer = getScrollContainer();
+    scrollContainer.addEventListener('scroll', function() {
+        var btn = document.getElementById('back-to-top');
+        if (btn) {
+            var scrollY = scrollContainer === window ? window.scrollY : scrollContainer.scrollTop;
+            btn.classList.toggle('visible', scrollY > 300);
+        }
+    });
+
+    // ===== 页面加载进度条 =====
+    (function() {
+        var bar = document.getElementById('loading-bar');
+        if (!bar) return;
+        // 显示
+        bar.classList.add('active');
+        var inner = bar.querySelector('.bar');
+        inner.style.width = '30%';
+
+        function finishLoad() {
+            inner.style.width = '100%';
+            setTimeout(function() {
+                bar.classList.remove('active');
+                inner.style.width = '0';
+            }, 400);
+        }
+
+        if (document.readyState === 'complete') {
+            finishLoad();
+        } else {
+            window.addEventListener('load', finishLoad);
+            // 加载中缓慢推进
+            setTimeout(function() { if (inner.style.width !== '100%') inner.style.width = '60%'; }, 500);
+            setTimeout(function() { if (inner.style.width !== '100%') inner.style.width = '80%'; }, 1500);
+        }
+
+        // 拦截链接点击，先显示进度条
+        document.addEventListener('click', function(e) {
+            var a = e.target.closest('a');
+            if (!a) return;
+            var href = a.getAttribute('href');
+            if (!href || href === '#' || href.startsWith('javascript:') || href.startsWith('#') || a.getAttribute('data-bs-toggle')) return;
+            bar.classList.add('active');
+            inner.style.width = '10%';
+            setTimeout(function() { inner.style.width = '50%'; }, 100);
+        });
+    })();
+
+    // ===== Toast 通知系统 =====
+    window.showToast = function(message, type) {
+        type = type || 'info';
+        var container = document.getElementById('toast-container');
+        if (!container) return;
+
+        var icons = {
+            success: '<i class="fas fa-check-circle"></i>',
+            error: '<i class="fas fa-exclamation-circle"></i>',
+            warning: '<i class="fas fa-exclamation-triangle"></i>',
+            info: '<i class="fas fa-info-circle"></i>'
+        };
+
+        var toast = document.createElement('div');
+        toast.className = 'toast-notification toast-' + type;
+        toast.innerHTML = '<div class="toast-icon">' + (icons[type] || icons.info) + '</div>'
+            + '<div class="toast-body">' + message + '</div>'
+            + '<button class="toast-close" onclick="dismissToast(this.parentElement)">&times;</button>';
+        container.appendChild(toast);
+
+        // 自动移除
+        setTimeout(function() {
+            dismissToast(toast);
+        }, 5000);
+    };
+
+    window.dismissToast = function(toast) {
+        if (toast.classList.contains('removing')) return;
+        toast.classList.add('removing');
+        setTimeout(function() {
+            if (toast.parentElement) toast.parentElement.removeChild(toast);
+        }, 300);
+    };
+
+    // ===== 将 flash 消息转为 Toast（可选） =====
+    (function() {
+        var alerts = document.querySelectorAll('.alert');
+        alerts.forEach(function(alert) {
+            var msg = alert.textContent.trim();
+            if (!msg) return;
+            var cls = 'info';
+            if (alert.classList.contains('alert-success')) cls = 'success';
+            else if (alert.classList.contains('alert-danger')) cls = 'error';
+            else if (alert.classList.contains('alert-warning')) cls = 'warning';
+            showToast(msg, cls);
+            alert.style.display = 'none';
+        });
+    })();
+
+    // ===== Live Clock =====
+    document.addEventListener('DOMContentLoaded', function() {
+        // 状态栏已有独立时钟，跳过
+        if (document.querySelector('.live-clock-text')) return;
+        // Add clock to header if exists
+        var clockTarget = document.querySelector('h5.mb-0.fw-bold');
+        if (clockTarget && !document.querySelector('.live-clock')) {
+            var clock = document.createElement('span');
+            clock.className = 'live-clock ms-2';
+            clock.innerHTML = '<span class="clock-dot"></span><span class="clock-text"></span>';
+            clockTarget.parentElement.appendChild(clock);
+            updateClock();
+            setInterval(updateClock, 1000);
+        }
+    });
+
+    function updateClock() {
+        var el = document.querySelector('.live-clock .clock-text');
+        if (!el) return;
+        var now = new Date();
+        var h = String(now.getHours()).padStart(2, '0');
+        var m = String(now.getMinutes()).padStart(2, '0');
+        var s = String(now.getSeconds()).padStart(2, '0');
+        el.textContent = h + ':' + m + ':' + s;
+    }
+
+    // ====== 主题切换 ======
+    (function() {
+        var theme = localStorage.getItem('theme');
+        if (!theme) {
+            // 服务端默认深色模式
+            theme = '{{ default_dark_mode or "light" }}';
+        }
+        if (theme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+        function toggleTheme() {
+            var html = document.documentElement;
+            if (html.getAttribute('data-theme') === 'dark') {
+                html.removeAttribute('data-theme');
+                localStorage.setItem('theme', 'light');
+            } else {
+                html.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+        window.toggleTheme = toggleTheme;
+        window.toggleHospitalDropdown = function() {
+            var dd = document.getElementById('hospitalDropdown');
+            if (dd) dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+        }
+        // 点击其他地方自动关闭下拉
+        document.addEventListener('click', function(e) {
+            var dd = document.getElementById('hospitalDropdown');
+            if (dd && !e.target.closest('.hospital-switcher')) {
+                dd.style.display = 'none';
+            }
+        });
+    })();
+</script>
+    {% block extra_scripts %}{% endblock %}
+    {% include 'chat/chat_component.html' %}
+    <script src="/static/js/chat_compiled.js"></script>
+    <script src="/static/js/lottery.js?v=2"></script>
+</body>
+</html>

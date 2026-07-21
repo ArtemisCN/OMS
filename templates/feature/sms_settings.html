@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}短信通知配置{% endblock %}
+{% block extra_head %}
+<style>
+    .sms-card { background:#fff; border-radius:16px; border:1px solid #e2e8f0; padding:20px; margin-bottom:16px; }
+    body[data-theme="dark"] .sms-card { background:#1e293b; border-color:#334155; }
+    .sms-card .card-title { font-size:15px; font-weight:600; color:#1e293b; margin-bottom:12px; }
+    body[data-theme="dark"] .sms-card .card-title { color:#e2e8f0; }
+    .log-item { padding:10px 0; border-bottom:1px solid #e2e8f0; }
+    body[data-theme="dark"] .log-item { border-color:#334155; }
+    .log-item:last-child { border-bottom:none; }
+    .log-status { font-size:11px; padding:2px 8px; border-radius:8px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+    <h4 class="fw-bold mb-3"><i class="fas fa-sms me-2 text-primary"></i>短信通知配置</h4>
+
+    <div class="row g-3">
+        <!-- 配置 -->
+        <div class="col-lg-5">
+            <div class="sms-card">
+                <div class="card-title"><i class="fas fa-cog me-1 text-primary"></i> 短信 API 配置</div>
+                <form id="smsConfigForm">
+                    <div class="mb-3">
+                        <label class="form-label small fw-medium">启用短信</label>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="smsEnabled"
+                                   {% if settings.get('sms_enabled') == '1' %}checked{% endif %}>
+                            <label class="form-check-label small">启用短信通知功能</label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-medium">API 地址</label>
+                        <input type="url" class="form-control" id="smsApiUrl"
+                               placeholder="https://api.sms-provider.com/send"
+                               value="{{ settings.get('sms_api_url', '') }}">
+                        <div class="form-text">短信服务商提供的 API 接口地址</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-medium">API Key</label>
+                        <input type="password" class="form-control" id="smsApiKey"
+                               placeholder="API 密钥"
+                               value="{{ settings.get('sms_api_key', '') }}">
+                    </div>
+                    <button type="button" class="btn btn-primary w-100" onclick="saveSettings()">
+                        <i class="fas fa-save me-1"></i> 保存配置
+                    </button>
+                </form>
+            </div>
+
+            <div class="sms-card">
+                <div class="card-title"><i class="fas fa-paper-plane me-1 text-primary"></i> 测试发送</div>
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="testPhone" placeholder="输入测试手机号">
+                    <button class="btn btn-outline-primary" onclick="testSms()">
+                        <i class="fas fa-paper-plane me-1"></i> 发送测试
+                    </button>
+                </div>
+                <div class="small text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    测试短信将发送到指定手机号，内容为固定测试模板。
+                </div>
+            </div>
+        </div>
+
+        <!-- 发送记录 -->
+        <div class="col-lg-7">
+            <div class="sms-card">
+                <div class="card-title d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-history me-1 text-primary"></i> 发送记录</span>
+                    <small class="text-muted">最近50条</small>
+                </div>
+                {% if logs %}
+                    {% for log in logs %}
+                    <div class="log-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-medium">{{ log.to_phone }}</div>
+                            <div class="small text-muted">{{ log.content[:50] }}{% if log.content|length > 50 %}...{% endif %}</div>
+                            <div class="small text-muted">{{ log.created_at.strftime('%Y-%m-%d %H:%M') if log.created_at else '' }}</div>
+                        </div>
+                        <div>
+                            {% if log.status == 'sent' %}
+                                <span class="log-status" style="background:#dcfce7;color:#166534;">已发送</span>
+                            {% elif log.status == 'failed' %}
+                                <span class="log-status" style="background:#fef2f2;color:#991b1b;" title="{{ log.error_msg }}">失败</span>
+                            {% else %}
+                                <span class="log-status" style="background:#fef9c3;color:#854d0e;">等待中</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="fas fa-inbox fa-2x mb-2" style="opacity:0.3;"></i>
+                        <div>暂无发送记录</div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function saveSettings() {
+    const data = {
+        sms_enabled: document.getElementById('smsEnabled').checked ? '1' : '0',
+        sms_api_url: document.getElementById('smsApiUrl').value.trim(),
+        sms_api_key: document.getElementById('smsApiKey').value.trim(),
+    };
+    fetch('/feature/sms/settings/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) showToast('✅ ' + res.message, 'success');
+        else showToast('❌ ' + (res.error || '保存失败'), 'error');
+    })
+    .catch(() => showToast('❌ 网络错误', 'error'));
+}
+
+function testSms() {
+    const phone = document.getElementById('testPhone').value.trim();
+    if (!phone) {
+        showToast('⚠️ 请输入测试手机号', 'warning');
+        return;
+    }
+    fetch('/feature/sms/test', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({to_phone: phone})
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            showToast('✅ ' + res.message, 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('❌ ' + (res.message || '发送失败'), 'error');
+        }
+    })
+    .catch(() => showToast('❌ 网络错误', 'error'));
+}
+</script>
+{% endblock %}

@@ -1,0 +1,646 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.duty-grid { border-collapse: collapse; width:100%; font-size:12px; }
+.duty-grid th { background:#f1f5f9; font-size:11px; font-weight:600; color:#475569; padding:6px 4px; text-align:center; border:1px solid #e2e8f0; position:sticky; top:0; z-index:2; }
+.duty-grid td { text-align:center; padding:0; border:1px solid #e2e8f0; width:32px; height:32px; cursor:pointer; transition:all .1s; }
+.duty-grid td:hover { transform:scale(1.12); z-index:1; position:relative; }
+.duty-grid .name-cell { font-weight:600; font-size:12px; padding:4px 10px; text-align:left; white-space:nowrap; min-width:70px; background:#f8fafc; position:sticky; left:0; z-index:1; border:1px solid #e2e8f0; }
+.duty-grid .weekend { background:#fafafa; }
+.duty-grid .today { outline:2px solid #0891b2; outline-offset:-2px; }
+.weekday-header { background:#e6f7e6 !important; }
+.weekend-header { background:#fff8e1 !important; }
+.today-header { outline:2px solid #0891b2; outline-offset:-2px; }
+
+.shift-cell { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:6px; font-size:11px; font-weight:600; line-height:1; }
+.shift-日班 { background:#dbeafe; color:#1e40af; }
+.shift-夜班 { background:#ede9fe; color:#5b21b6; }
+.shift-24H { background:#fecaca; color:#991b1b; }
+.shift-支援 { background:#d1fae5; color:#065f46; }
+.shift-病假 { background:#e5e7eb; color:#6b7280; }
+.shift-事假 { background:#fef3c7; color:#92400e; }
+.shift-年假 { background:#fce7f3; color:#9d174d; }
+.shift-× { background:#f1f5f9; color:#cbd5e1; }
+
+.toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+.toolbar select { font-size:13px; border-radius:8px; border:1px solid #d0d5dd; padding:6px 12px; }
+.toolbar .btn-sm { font-size:12px; }
+.legend { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+.legend-item { display:flex; align-items:center; gap:4px; font-size:11px; color:#64748b; }
+.legend-dot { width:14px; height:14px; border-radius:4px; }
+
+.picker-overlay { position:fixed; inset:0; z-index:1050; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.3); }
+.picker-box { background:#fff; border-radius:12px; padding:16px; box-shadow:0 10px 40px rgba(0,0,0,.15); width:280px; }
+.picker-box h6 { font-size:14px; font-weight:700; margin-bottom:10px; }
+.picker-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+.picker-btn { padding:8px 4px; border:1px solid #e2e8f0; border-radius:8px; text-align:center; font-size:12px; font-weight:600; cursor:pointer; transition:all .1s; background:#fff; }
+.picker-btn:hover { transform:scale(1.05); border-color:#0891b2; }
+.picker-btn.selected { border-color:#0891b2; background:#e0f2fe; }
+.picker-btn.clear { color:#94a3b8; border-style:dashed; }
+
+/* 预设弹窗 */
+.preset-box { width:380px; max-height:80vh; overflow-y:auto; }
+.preset-box label { font-size:12px; font-weight:600; color:#475569; margin-bottom:2px; }
+.preset-section { background:#f8fafc; border-radius:8px; padding:10px 12px; margin-bottom:8px; }
+.preset-section h6 { font-size:12px; font-weight:700; margin-bottom:6px; }
+.preset-person-list { max-height:120px; overflow-y:auto; display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px; }
+.preset-person-item { font-size:11px; padding:2px 8px; border-radius:12px; border:1px solid #d0d5dd; cursor:pointer; user-select:none; transition:all .1s; }
+.preset-person-item:hover { border-color:#0891b2; }
+.preset-person-item.selected { background:#0891b2; color:#fff; border-color:#0891b2; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+    <h5 class="mb-0 fw-bold" style="font-size:15px;">
+        <i class="fas fa-calendar-alt" style="color:#0891b2;"></i> 值班排班
+        <span style="font-size:11px;color:#94a3b8;font-weight:400;margin-left:6px;">左键轮转 · 双击选班</span>
+    </h5>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('data.list_persons') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-users"></i> 人员管理</a>
+        <a href="{{ url_for('data.index') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> 返回</a>
+    </div>
+</div>
+
+<!-- 图例 -->
+<div class="legend">
+    <span class="legend-item"><span class="legend-dot shift-日班"></span> 日班</span>
+    <span class="legend-item"><span class="legend-dot shift-夜班"></span> 夜班</span>
+    <span class="legend-item"><span class="legend-dot shift-24H"></span> 24H</span>
+    <span class="legend-item"><span class="legend-dot shift-支援"></span> 支援</span>
+    <span class="legend-item"><span class="legend-dot shift-病假"></span> 病假</span>
+    <span class="legend-item"><span class="legend-dot shift-事假"></span> 事假</span>
+    <span class="legend-item"><span class="legend-dot shift-年假"></span> 年假</span>
+    <span class="legend-item"><span class="legend-dot shift-×"></span> 休息</span>
+</div>
+
+<!-- 工具栏 -->
+<div class="toolbar">
+    <form method="get" action="{{ url_for('data.list_duty_schedules') }}" id="monthForm" class="d-flex gap-2 align-items-center">
+        <select name="year" onchange="this.form.submit()" style="width:90px;">
+            {% for y in range(now.year, now.year-3, -1) %}
+            <option value="{{ y }}" {{ 'selected' if y==year }}>{{ y }}年</option>
+            {% endfor %}
+        </select>
+        <select name="month" onchange="this.form.submit()" style="width:80px;">
+            {% for m in range(1, 13) %}
+            <option value="{{ m }}" {{ 'selected' if m==month }}>{{ m }}月</option>
+            {% endfor %}
+        </select>
+    </form>
+    <button class="btn btn-sm btn-outline-secondary" onclick="prevMonth()"><i class="fas fa-chevron-left"></i></button>
+    <button class="btn btn-sm btn-outline-secondary" onclick="nextMonth()"><i class="fas fa-chevron-right"></i></button>
+    <select name="team" onchange="filterTeam(this.value)" style="width:auto;min-width:100px;font-size:13px;border-radius:8px;border:1px solid #d0d5dd;padding:4px 10px;margin-left:4px;">
+        <option value="">全部组</option>
+        {% for t in team_list %}
+        <option value="{{ t }}" {% if team_sel==t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+    </select>
+    <div style="flex:1;"></div>
+    <button class="btn btn-sm btn-outline-info" onclick="showPreset()" title="一键生成常见排班模式"><i class="fas fa-magic"></i> 排班预设</button>
+    <button class="btn btn-sm btn-outline-warning" onclick="batchClear()"><i class="fas fa-eraser"></i> 清空整月</button>
+    <button class="btn btn-sm btn-outline-info" onclick="batchCopy()"><i class="fas fa-copy"></i> 复制上月</button>
+    <button class="btn btn-sm btn-outline-success" onclick="showImport()"><i class="fas fa-upload"></i> 导入</button>
+</div>
+
+<!-- 日历网格 -->
+<div style="overflow-x:auto;">
+    <table class="duty-grid" id="dutyGrid">
+        <thead>
+            <tr>
+                <th style="min-width:70px;position:sticky;left:0;z-index:3;">人员</th>
+                {% for day in range(1, total_days+1) %}
+                {% set wd = (first_weekday + day - 1) % 7 %}
+                {% set is_today = now.year==year and now.month==month and now.day==day %}
+                {% set is_holiday = day in holidays %}
+                <th class="{% if wd >= 5 or is_holiday %}weekend-header{% else %}weekday-header{% endif %} {% if is_today %}today-header{% endif %}">
+                    <div class="day-header" style="font-size:10px;line-height:1.2;">
+                        <div>{{ day }}</div>
+                        <div class="weekday" style="color:#94a3b8;">{{ ('一','二','三','四','五','六','日')[wd] }}</div>
+                    </div>
+                </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in staff %}
+            <tr>
+                <td class="name-cell">
+                    <span onclick="openNamePicker('{{ s.name|e }}')" title="点击选择班次填充工作日" style="cursor:pointer;font-weight:600;">{{ s.name }}</span>
+                </td>
+                {% for day in range(1, total_days+1) %}
+                {% set wd = (first_weekday + day - 1) % 7 %}
+                {% set is_today = now.year==year and now.month==month and now.day==day %}
+                <td class="{% if wd >= 5 %}weekend{% endif %} {% if is_today %}today{% endif %}"
+                    data-person="{{ s.name|e }}" data-day="{{ day }}"
+                    ondblclick="openPicker(this, '{{ s.name|e }}', {{ day }}, {{ year }}, {{ month }})">
+                    <span class="shift-cell shift-×" data-shift="×">×</span>
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- 快捷选择器弹窗（双击触发） -->
+<div class="picker-overlay" id="pickerOverlay" onclick="closePicker(event)">
+    <div class="picker-box" onclick="event.stopPropagation()">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0" id="pickerTitle">选择班次</h6>
+            <button class="btn-close btn-sm" onclick="closePicker()"></button>
+        </div>
+        <div class="picker-grid" id="pickerGrid">
+            <div class="picker-btn shift-日班" data-shift="日班">日班</div>
+            <div class="picker-btn shift-夜班" data-shift="夜班">夜班</div>
+            <div class="picker-btn shift-24H" data-shift="24H">24H</div>
+            <div class="picker-btn shift-支援" data-shift="支援">支援</div>
+            <div class="picker-btn shift-病假" data-shift="病假">病假</div>
+            <div class="picker-btn shift-事假" data-shift="事假">事假</div>
+            <div class="picker-btn shift-年假" data-shift="年假">年假</div>
+            <div class="picker-btn clear" data-shift="×">× 休息</div>
+        </div>
+        <div style="margin-top:10px; display:flex; gap:6px;">
+            <button class="btn btn-sm btn-outline-success flex-fill" onclick="fillDown()"><i class="fas fa-arrow-down"></i> 向下填充</button>
+            <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="closePicker()">取消</button>
+        </div>
+    </div>
+</div>
+
+<!-- 填充工作日弹窗 -->
+<div class="picker-overlay" id="namePickerOverlay" onclick="document.getElementById('namePickerOverlay').style.display='none'">
+    <div class="picker-box" onclick="event.stopPropagation()">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0" id="namePickerTitle">填充工作日</h6>
+            <button class="btn-close btn-sm" onclick="document.getElementById('namePickerOverlay').style.display='none'"></button>
+        </div>
+        <div style="font-size:12px;color:#64748b;margin-bottom:8px;">选择班次，一键填充该人员所有工作日</div>
+        <div class="picker-grid" id="namePickerGrid">
+            <div class="picker-btn shift-日班" onclick="fillWorkdays('日班')">日班</div>
+            <div class="picker-btn shift-夜班" onclick="fillWorkdays('夜班')">夜班</div>
+            <div class="picker-btn shift-24H" onclick="fillWorkdays('24H')">24H</div>
+            <div class="picker-btn shift-支援" onclick="fillWorkdays('支援')">支援</div>
+            <div class="picker-btn shift-病假" onclick="fillWorkdays('病假')">病假</div>
+            <div class="picker-btn shift-事假" onclick="fillWorkdays('事假')">事假</div>
+            <div class="picker-btn shift-年假" onclick="fillWorkdays('年假')">年假</div>
+            <div class="picker-btn clear" onclick="fillWorkdays('×')">× 休息</div>
+        </div>
+        <div style="margin-top:10px; display:flex; gap:6px;">
+            <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="this.closest('.picker-overlay').style.display='none'">取消</button>
+        </div>
+    </div>
+</div>
+
+<!-- 导入弹窗 -->
+<div class="picker-overlay" id="importOverlay" onclick="if(event.target===this)this.style.display='none'">
+    <div class="picker-box" onclick="event.stopPropagation()" style="width:340px;">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0"><i class="fas fa-upload"></i> 导入排班</h6>
+            <button class="btn-close btn-sm" onclick="closeImport()"></button>
+        </div>
+        <form id="importForm" enctype="multipart/form-data">
+            <div class="mb-2">
+                <label style="font-size:12px;color:#64748b;font-weight:600;">选择年月</label>
+                <div class="d-flex gap-2 mt-1">
+                    <select name="year" class="form-select form-select-sm" id="importYear" style="width:100px;">
+                        {% for y in range(now.year, now.year-3, -1) %}
+                        <option value="{{ y }}" {{ 'selected' if y==year }}>{{ y }}年</option>
+                        {% endfor %}
+                    </select>
+                    <select name="month" class="form-select form-select-sm" id="importMonth" style="width:80px;">
+                        {% for m in range(1, 13) %}
+                        <option value="{{ m }}" {{ 'selected' if m==month }}>{{ m }}月</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="mb-2">
+                <label style="font-size:12px;color:#64748b;font-weight:600;">上传Excel排班表</label>
+                <input type="file" name="file" accept=".xlsx,.xls" class="form-control form-control-sm mt-1" id="importFile" required>
+            </div>
+            <div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">
+                <i class="fas fa-info-circle"></i> 格式：第一列姓名，后续列为1-30/31日的班次（日班/夜班/24H/支援/×等）
+            </div>
+            <div id="importResult" style="font-size:12px;min-height:20px;margin-bottom:8px;"></div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-sm btn-success flex-fill" id="importBtn"><i class="fas fa-upload"></i> 开始导入</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="closeImport()">取消</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 排班预设弹窗 -->
+<div class="picker-overlay" id="presetOverlay" onclick="if(event.target===this)this.style.display='none'">
+    <div class="picker-box preset-box" onclick="event.stopPropagation()">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0"><i class="fas fa-magic" style="color:#0891b2;"></i> 排班预设</h6>
+            <button class="btn-close btn-sm" onclick="document.getElementById('presetOverlay').style.display='none'"></button>
+        </div>
+
+        <!-- 夜班轮值 -->
+        <div class="preset-section">
+            <h6>🌙 夜班轮值</h6>
+            <div style="font-size:11px;color:#64748b;margin-bottom:4px;">选人员，系统按顺序轮流分配夜班</div>
+            <div class="preset-person-list" id="rotatePersonList">
+                {% for s in staff %}
+                <span class="preset-person-item" data-person="{{ s.name|e }}" onclick="toggleRotatePerson(this)">{{ s.name }}</span>
+                {% endfor %}
+            </div>
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+                <select class="form-select form-select-sm" id="rotateShift" style="width:90px;">
+                    <option value="24H">24H</option>
+                    <option value="夜班">夜班</option>
+                    <option value="日班">日班</option>
+                </select>
+                <select class="form-select form-select-sm" id="rotateTarget" style="width:100px;">
+                    <option value="all">全部日期</option>
+                    <option value="workday">仅工作日</option>
+                    <option value="weekend">仅周末</option>
+                </select>
+                <button class="btn btn-sm btn-info" onclick="applyRotate()" style="font-size:11px;">✅ 应用轮值</button>
+            </div>
+            <div id="rotatePreview" style="font-size:11px;color:#64748b;margin-top:4px;"></div>
+            <div id="rotateVisualPreview" style="font-size:10px;margin-top:4px;line-height:1.6;display:none;"></div>
+        </div>
+
+        <!-- 填充工作日 -->
+        <div class="preset-section">
+            <h6>📅 填充工作日</h6>
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+                <select class="form-select form-select-sm" id="presetPerson" style="width:100px;">
+                    {% for s in staff %}
+                    <option value="{{ s.name|e }}">{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+                <select class="form-select form-select-sm" id="presetShift" style="width:80px;">
+                    <option value="日班">日班</option>
+                    <option value="夜班">夜班</option>
+                    <option value="24H">24H</option>
+                    <option value="支援">支援</option>
+                    <option value="×">休息</option>
+                </select>
+                <button class="btn btn-sm btn-success" onclick="presetFillWorkdays()" style="font-size:11px;">✅ 填充工作日</button>
+                <button class="btn btn-sm btn-outline-info" onclick="presetFillAll()" style="font-size:11px;">📌 填充全部</button>
+            </div>
+        </div>
+
+        <!-- 周末排班 -->
+        <div class="preset-section">
+            <h6>🎯 周末/节假日排班</h6>
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+                <select class="form-select form-select-sm" id="weekendPerson" style="width:100px;">
+                    {% for s in staff %}
+                    <option value="{{ s.name|e }}">{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+                <select class="form-select form-select-sm" id="weekendShift" style="width:80px;">
+                    <option value="日班">日班</option>
+                    <option value="夜班">夜班</option>
+                    <option value="24H">24H</option>
+                    <option value="支援">支援</option>
+                    <option value="×">休息</option>
+                </select>
+                <button class="btn btn-sm btn-warning" onclick="presetFillWeekends()" style="font-size:11px;">✅ 填充周末</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let _picker = { el:null, person:'', day:0, year:0, month:0 };
+let _namePickerPerson = '';
+let _rotatePeople = [];
+
+// ===== 左键单击轮转 =====
+var _clickTimer = null;
+document.getElementById('dutyGrid').addEventListener('click', function(e) {
+    var td = e.target.closest('td');
+    if (!td || td.classList.contains('name-cell')) return;
+    if (!td.dataset.person) return;
+    if (_clickTimer) {
+        clearTimeout(_clickTimer);
+        _clickTimer = null;
+        return; // 双击交给 ondblclick
+    }
+    _clickTimer = setTimeout(function() {
+        _clickTimer = null;
+        cycleShift(td);
+    }, 200);
+});
+
+function cycleShift(td) {
+    var cell = td.querySelector('.shift-cell');
+    var cur = cell.dataset.shift || '×';
+    var order = ['×', '日班', '夜班', '24H', '支援', '×'];
+    var idx = order.indexOf(cur);
+    var next = idx >= 0 && idx < order.length - 1 ? order[idx + 1] : order[0];
+    updateCell(td.dataset.person, td.dataset.day, next, {{ year }}, {{ month }});
+}
+
+// ===== 双击打开完整选择器 =====
+function openPicker(td, person, day, year, month) {
+    _picker = { el:td, person, day, year, month };
+    document.getElementById('pickerTitle').textContent = person + ' - ' + year + '年' + month + '月' + day + '日';
+    document.getElementById('pickerOverlay').style.display = 'flex';
+    var curShift = td.querySelector('.shift-cell').dataset.shift || '×';
+    document.querySelectorAll('#pickerGrid .picker-btn').forEach(function(b) {
+        b.classList.toggle('selected', b.dataset.shift === curShift);
+    });
+}
+
+function closePicker(e) {
+    if (e && e.target !== document.getElementById('pickerOverlay')) return;
+    document.getElementById('pickerOverlay').style.display = 'none';
+}
+
+// 选择班次
+document.querySelectorAll('#pickerGrid .picker-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var shift = this.dataset.shift;
+        updateCell(_picker.person, _picker.day, shift, _picker.year, _picker.month);
+        closePicker();
+    });
+});
+
+function updateCell(person, day, shift, year, month) {
+    var fd = new FormData();
+    fd.append('person', person);
+    fd.append('day', day);
+    fd.append('shift', shift);
+    fd.append('year', year);
+    fd.append('month', month);
+    fetch('/data/duty-schedules/api/update', {method:'POST', body:fd})
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if(d.ok) {
+                var tds = document.querySelectorAll('td[data-person="'+person+'"][data-day="'+day+'"]');
+                tds.forEach(function(td) {
+                    var cell = td.querySelector('.shift-cell');
+                    cell.className = 'shift-cell shift-' + (d.shift === '×' ? '×' : d.shift);
+                    cell.textContent = d.shift;
+                    cell.dataset.shift = d.shift;
+                });
+            } else {
+                alert(d.msg || '更新失败');
+            }
+        });
+}
+
+// 向下填充
+function fillDown() {
+    var p = _picker.person, d = _picker.day;
+    var allPeople = [];
+    document.querySelectorAll('#dutyGrid tbody .name-cell span').forEach(function(sp) {
+        allPeople.push(sp.textContent.trim());
+    });
+    var idx = allPeople.indexOf(p);
+    if (idx < 0 || idx >= allPeople.length - 1) return;
+    var shift = _picker.el.querySelector('.shift-cell').dataset.shift || '×';
+    for (var i = idx + 1; i < allPeople.length; i++) {
+        updateCell(allPeople[i], d, shift, _picker.year, _picker.month);
+    }
+    closePicker();
+}
+
+// 姓名点击 - 填充工作日弹窗
+function openNamePicker(person) {
+    document.getElementById('namePickerTitle').textContent = person + ' - 填充工作日';
+    document.getElementById('namePickerOverlay').style.display = 'flex';
+    _namePickerPerson = person;
+}
+
+function fillWorkdays(shift) {
+    var person = _namePickerPerson;
+    if (!person) return;
+    var fd = new FormData();
+    fd.append('action', 'fill_workdays');
+    fd.append('person', person);
+    fd.append('shift', shift);
+    fd.append('year', {{ year }});
+    fd.append('month', {{ month }});
+    fetch('/data/duty-schedules/api/batch', {method:'POST', body:fd})
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if(d.ok) location.reload();
+            else alert(d.msg || '操作失败');
+        });
+}
+
+function batchClear() {
+    if (!confirm('确定清空 {{ year }}年{{ month }}月 所有排班？')) return;
+    var fd = new FormData();
+    fd.append('action', 'clear');
+    fd.append('year', {{ year }});
+    fd.append('month', {{ month }});
+    fetch('/data/duty-schedules/api/batch', {method:'POST', body:fd})
+        .then(function(r) { return r.json(); })
+        .then(function(d) { if(d.ok) location.reload(); });
+}
+
+function batchCopy() {
+    if (!confirm('从上个月复制排班到 {{ year }}年{{ month }}月？已有数据会保留不覆盖。')) return;
+    var fd = new FormData();
+    fd.append('action', 'copy');
+    fd.append('year', {{ year }});
+    fd.append('month', {{ month }});
+    fetch('/data/duty-schedules/api/batch', {method:'POST', body:fd})
+        .then(function(r) { return r.json(); })
+        .then(function(d) { if(d.ok) location.reload(); });
+}
+
+function prevMonth() {
+    var y = {{ year }}, m = {{ month }};
+    m--; if (m < 1) { m = 12; y--; }
+    window.location.href = '?year=' + y + '&month=' + m;
+}
+
+function nextMonth() {
+    var y = {{ year }}, m = {{ month }};
+    m++; if (m > 12) { m = 1; y++; }
+    window.location.href = '?year=' + y + '&month=' + m;
+}
+
+function filterTeam(team) {
+    var y = {{ year }}, m = {{ month }};
+    var url = '?year=' + y + '&month=' + m;
+    if (team) url += '&team=' + encodeURIComponent(team);
+    window.location.href = url;
+}
+
+// ===== 导入 =====
+function showImport() {
+    document.getElementById('importOverlay').style.display = 'flex';
+    document.getElementById('importResult').textContent = '';
+    document.getElementById('importFile').value = '';
+}
+function closeImport() {
+    document.getElementById('importOverlay').style.display = 'none';
+}
+document.getElementById('importForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var btn = document.getElementById('importBtn');
+    var result = document.getElementById('importResult');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 导入中...';
+    result.innerHTML = '<span style="color:#64748b;">正在导入，请稍候...</span>';
+    var fd = new FormData(this);
+    fetch('/data/duty-schedules/api/import', {method:'POST', body:fd})
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.ok) {
+                result.innerHTML = '<span style="color:#16a34a;"><i class="fas fa-check-circle"></i> ' + d.msg + '</span>';
+                setTimeout(function() { location.reload(); }, 1500);
+            } else {
+                result.innerHTML = '<span style="color:#dc2626;"><i class="fas fa-exclamation-circle"></i> ' + d.msg + '</span>';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-upload"></i> 开始导入';
+            }
+        })
+        .catch(function(err) {
+            result.innerHTML = '<span style="color:#dc2626;"><i class="fas fa-exclamation-circle"></i> 导入失败：网络错误</span>';
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-upload"></i> 开始导入';
+        });
+});
+
+// ===== 排班预设 =====
+function showPreset() {
+    _rotatePeople = [];
+    document.querySelectorAll('#rotatePersonList .preset-person-item').forEach(function(el) {
+        el.classList.remove('selected');
+    });
+    document.getElementById('rotatePreview').textContent = '';
+    document.getElementById('presetOverlay').style.display = 'flex';
+}
+
+function toggleRotatePerson(el) {
+    el.classList.toggle('selected');
+    updateRotatePreview();
+}
+
+function updateRotatePreview() {
+    var people = [];
+    document.querySelectorAll('#rotatePersonList .preset-person-item.selected').forEach(function(el) {
+        people.push(el.dataset.person);
+    });
+    _rotatePeople = people;
+    if (people.length < 2) {
+        document.getElementById('rotatePreview').textContent = '至少选2人才能轮值';
+        document.getElementById('rotateVisualPreview').style.display = 'none';
+        return;
+    }
+    document.getElementById('rotatePreview').textContent = '轮值顺序：' + people.join(' → ') + ' → ' + people[0] + '...';
+    // 可视化预览前15天
+    var html = '<div style="font-weight:600;color:#475569;margin-bottom:2px;">前15天预览：</div>';
+    for (var i = 0; i < people.length; i++) {
+        var name = people[i];
+        html += '<span style="display:inline-block;width:40px;">' + name + '</span>';
+        for (var d = 1; d <= 15; d++) {
+            var pIdx = (d - 1) % people.length;
+            var isOn = (pIdx === i);
+            html += '<span style="display:inline-block;width:14px;text-align:center;border-radius:3px;' +
+                    (isOn ? 'background:#ede9fe;color:#5b21b6;font-weight:600;' : 'color:#cbd5e1;') + '">' +
+                    (isOn ? '夜' : '·') + '</span>';
+        }
+        html += '<br>';
+    }
+    var vis = document.getElementById('rotateVisualPreview');
+    vis.innerHTML = html;
+    vis.style.display = 'block';
+}
+
+function applyRotate() {
+    var people = _rotatePeople;
+    if (people.length < 2) { alert('请至少选择2人参与轮值'); return; }
+    var shift = document.getElementById('rotateShift').value;
+    var target = document.getElementById('rotateTarget').value;
+
+    var fd = new FormData();
+    fd.append('action', 'rotate');
+    fd.append('people', JSON.stringify(people));
+    fd.append('shift', shift);
+    fd.append('target', target);
+    fd.append('year', {{ year }});
+    fd.append('month', {{ month }});
+    var btn = document.querySelector('#presetOverlay .btn-info');
+    btn.disabled = true;
+    btn.textContent = '处理中...';
+    fetch('/data/duty-schedules/api/batch', {method:'POST', body:fd})
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if(d.ok) {
+                document.getElementById('presetOverlay').style.display = 'none';
+                location.reload();
+            } else {
+                alert(d.msg || '操作失败');
+                btn.disabled = false;
+                btn.textContent = '✅ 应用轮值';
+            }
+        });
+}
+
+function presetFillWorkdays() {
+    var person = document.getElementById('presetPerson').value;
+    var shift = document.getElementById('presetShift').value;
+    var fd = new FormData();
+    fd.append('action', 'fill_workdays');
+    fd.append('person', person);
+    fd.append('shift', shift);
+    fd.append('year', {{ year }});
+    fd.append('month', {{ month }});
+    fetch('/data/duty-schedules/api/batch', {method:'POST', body:fd})
+        .then(function(r) { return r.json(); })
+        .then(function(d) { if(d.ok) location.reload(); else alert(d.msg); });
+}
+
+function presetFillAll() {
+    var person = document.getElementById('presetPerson').value;
+    var shift = document.getElementById('presetShift').value;
+    var fd = new FormData();
+    fd.append('action', 'fill_row');
+    fd.append('person', person);
+    fd.append('shift', shift);
+    fd.append('year', {{ year }});
+    fd.append('month', {{ month }});
+    fetch('/data/duty-schedules/api/batch', {method:'POST', body:fd})
+        .then(function(r) { return r.json(); })
+        .then(function(d) { if(d.ok) location.reload(); else alert(d.msg); });
+}
+
+function presetFillWeekends() {
+    var person = document.getElementById('weekendPerson').value;
+    var shift = document.getElementById('weekendShift').value;
+    var fd = new FormData();
+    fd.append('action', 'fill_weekends');
+    fd.append('person', person);
+    fd.append('shift', shift);
+    fd.append('year', {{ year }});
+    fd.append('month', {{ month }});
+    fetch('/data/duty-schedules/api/batch', {method:'POST', body:fd})
+        .then(function(r) { return r.json(); })
+        .then(function(d) { if(d.ok) location.reload(); else alert(d.msg); });
+}
+
+// 页面加载后加载排班数据
+window.addEventListener('DOMContentLoaded', function() {
+    fetch('/data/duty-schedules/api?year={{ year }}&month={{ month }}')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var records = data.records || {};
+            Object.keys(records).forEach(function(key) {
+                var shift = records[key];
+                var parts = key.split('_');
+                var person = parts[0], day = parts[1];
+                var tds = document.querySelectorAll('td[data-person="'+person+'"][data-day="'+day+'"]');
+                tds.forEach(function(td) {
+                    var cell = td.querySelector('.shift-cell');
+                    if (cell) {
+                        cell.className = 'shift-cell shift-' + shift;
+                        cell.textContent = shift;
+                        cell.dataset.shift = shift;
+                    }
+                });
+            });
+        });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,22 @@
+{
+  "pages": [
+    "pages/orders/orders",
+    "pages/order/order",
+    "pages/publish/publish",
+    "pages/form/form",
+    "pages/login/login",
+    "pages/inventory/inventory",
+    "pages/inventory/scan",
+    "pages/exam/exam",
+    "pages/exam/take"
+  ],
+  "window": {
+    "navigationBarTitleText": "工单助手",
+    "navigationBarBackgroundColor": "#4f46e5",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f5f6fa",
+    "pageOrientation": "auto"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

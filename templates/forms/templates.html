@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}模板管理{% endblock %}
+{% block content %}
+<style>
+.status-badge { font-size:12px; padding:3px 10px; border-radius:20px; font-weight:500; }
+.status-active { background:#dbeafe; color:#1e40af; }
+.status-draft { background:#fef3c7; color:#92400e; }
+</style>
+<div class="container-fluid px-4 py-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0"><i class="fas fa-layer-group me-2"></i>模板管理</h4>
+        <div>
+            <a href="{{ url_for('forms.template_create') }}" class="btn btn-sm btn-primary">
+                <i class="fas fa-plus"></i> 新建模板
+            </a>
+            <a href="{{ url_for('forms.form_list') }}" class="btn btn-sm btn-outline-secondary ms-1">
+                <i class="fas fa-arrow-left"></i> 返回表单
+            </a>
+        </div>
+    </div>
+
+    {% if templates %}
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>模板名称</th>
+                            <th>描述</th>
+                            <th>字段数</th>
+                            <th>更新时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in templates %}
+                        <tr>
+                            <td>{{ t.id }}</td>
+                            <td>
+                                <strong>{{ t.name }}</strong>
+                            </td>
+                            <td style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#64748b;">
+                                {{ t.description or '<span class="text-muted">无描述</span>'|safe }}
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ (t.fields_json or [])|length }}</span>
+                            </td>
+                            <td>{{ t.updated_at.strftime('%Y-%m-%d %H:%M') if t.updated_at else '' }}</td>
+                            <td style="white-space:nowrap">
+                                <a href="{{ url_for('forms.template_edit', tid=t.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-edit"></i> 编辑
+                                </a>
+                                <form method="POST" action="{{ url_for('forms.template_delete', tid=t.id) }}" style="display:inline" onsubmit="return confirm('确认删除模板「{{ t.name }}」？此操作不可撤销。')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+        <i class="fas fa-layer-group fa-3x mb-3"></i>
+        <p class="mb-3">暂无模板，点击上方按钮创建第一个模板</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

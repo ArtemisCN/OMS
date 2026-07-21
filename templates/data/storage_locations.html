@@ -1,0 +1,141 @@
+<!-- 存放位置字典 -->
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="mb-0 fw-bold" style="font-size:15px;">
+        <i class="fas fa-warehouse" style="color:#0891b2;"></i> 存放位置管理
+        <span class="text-muted ms-2" style="font-size:12px;font-weight:400;">{{ locations|length }} 个位置</span>
+    </h5>
+    <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-primary" onclick="showAddModal()">
+            <i class="fas fa-plus"></i> 添加位置
+        </button>
+        <a href="{{ url_for('data.index') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> 返回</a>
+    </div>
+</div>
+
+{% if locations %}
+<div class="row g-3">
+    {% for sl in locations %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100" style="border-radius:10px;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06);{{ 'border-color:#0891b2;background:#f0fdff;' if sl.is_default }}">
+            <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <strong style="font-size:15px;">
+                            {% if sl.is_default %}<span class="badge bg-info me-1" style="font-size:10px;">默认</span>{% endif %}
+                            {{ sl.name }}
+                        </strong>
+                        {% if not sl.is_active %}<span class="badge bg-secondary ms-1">已禁用</span>{% endif %}
+                    </div>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm btn-outline-primary" onclick="editLocation({{ sl.id }}, '{{ sl.name|e }}', '{{ sl.building or '' }}', '{{ sl.floor or '' }}', '{{ sl.area or '' }}', '{{ sl.contact or '' }}', '{{ sl.phone or '' }}', {{ 'true' if sl.is_default else 'false' }})">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <form method="post" action="{{ url_for('data.toggle_storage_location', lid=sl.id) }}" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-outline-{{ 'warning' if sl.is_active else 'success' }}" title="{{ '停用' if sl.is_active else '启用' }}">
+                                <i class="fas fa-{{ 'pause' if sl.is_active else 'play' }}"></i>
+                            </button>
+                        </form>
+                        <form method="post" action="{{ url_for('data.delete_storage_location', lid=sl.id) }}" style="display:inline;"
+                              onsubmit="return confirm('确定删除存放位置「{{ sl.name }}」？')">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="删除"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </div>
+                </div>
+                <div style="font-size:12px;color:#64748b;line-height:1.8;border-top:1px solid #f1f5f9;padding-top:8px;margin-top:4px;">
+                    {% if sl.building %}<div><i class="fas fa-building me-1"></i> {{ sl.building }}{% if sl.floor %} / {{ sl.floor }}{% endif %}</div>{% endif %}
+                    {% if sl.area %}<div><i class="fas fa-map-pin me-1"></i> {{ sl.area }}</div>{% endif %}
+                    {% if sl.contact %}<div><i class="fas fa-user me-1"></i> {{ sl.contact }}{% if sl.phone %} · {{ sl.phone }}{% endif %}</div>{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="fas fa-warehouse fa-3x mb-3 d-block"></i>
+    暂无存放位置，点击右上角「添加位置」新增
+</div>
+{% endif %}
+
+<!-- 添加/编辑弹窗 -->
+<div class="modal fade" id="locationModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:12px;">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title fw-bold" id="modalTitle">添加存放位置</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" id="locationForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-medium" style="font-size:13px;">位置名称 <span class="text-danger">*</span></label>
+                        <input type="text" name="name" id="locName" class="form-control" required placeholder="如：信息科机房">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-4">
+                            <label class="form-label" style="font-size:12px;">楼区</label>
+                            <input type="text" name="building" id="locBuilding" class="form-control form-control-sm" placeholder="如15号楼">
+                        </div>
+                        <div class="col-3">
+                            <label class="form-label" style="font-size:12px;">楼层</label>
+                            <input type="text" name="floor" id="locFloor" class="form-control form-control-sm" placeholder="如3F">
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label" style="font-size:12px;">区域</label>
+                            <input type="text" name="area" id="locArea" class="form-control form-control-sm" placeholder="如机房A区">
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label" style="font-size:12px;">联系人</label>
+                            <input type="text" name="contact" id="locContact" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label" style="font-size:12px;">联系电话</label>
+                            <input type="text" name="phone" id="locPhone" class="form-control form-control-sm">
+                        </div>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" name="is_default" id="locDefault" class="form-check-input">
+                        <label class="form-check-label" for="locDefault">设为默认存放位置</label>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-save"></i> 保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function showAddModal() {
+    document.getElementById('modalTitle').textContent = '添加存放位置';
+    document.getElementById('locationForm').action = '{{ url_for("data.add_storage_location") }}';
+    document.getElementById('locName').value = '';
+    document.getElementById('locBuilding').value = '';
+    document.getElementById('locFloor').value = '';
+    document.getElementById('locArea').value = '';
+    document.getElementById('locContact').value = '';
+    document.getElementById('locPhone').value = '';
+    document.getElementById('locDefault').checked = false;
+    new bootstrap.Modal(document.getElementById('locationModal')).show();
+}
+function editLocation(id, name, building, floor, area, contact, phone, isDefault) {
+    document.getElementById('modalTitle').textContent = '编辑存放位置';
+    document.getElementById('locationForm').action = '/data/storage-locations/' + id + '/edit';
+    document.getElementById('locName').value = name;
+    document.getElementById('locBuilding').value = building;
+    document.getElementById('locFloor').value = floor;
+    document.getElementById('locArea').value = area;
+    document.getElementById('locContact').value = contact;
+    document.getElementById('locPhone').value = phone;
+    document.getElementById('locDefault').checked = isDefault;
+    new bootstrap.Modal(document.getElementById('locationModal')).show();
+}
+</script>
+{% endblock %}

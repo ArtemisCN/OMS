@@ -1,0 +1,818 @@
+{% extends "base.html" %}
+
+<!-- 操作记录 Modal -->
+<div class="modal fade" id="logsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fas fa-history"></i> 最近操作记录</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-2">
+                <div class="mb-2">
+                    <select id="logFilter" class="form-select form-select-sm" style="width:auto;display:inline-block;" onchange="showRecentLogs()">
+                        <option value="">全部操作</option>
+                        <option value="import">导入</option>
+                        <option value="edit">编辑</option>
+                        <option value="transfer">调拨</option>
+                        <option value="relocate">移位</option>
+                        <option value="recover">回收</option>
+                        <option value="swap">互换</option>
+                        <option value="borrow">借用</option>
+                        <option value="return">归还</option>
+                    </select>
+                </div>
+                <div id="logsContent" style="font-size:12px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+ase.html" %}
+{% block content %}
+<style>
+.asset-status { padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; display: inline-block; }
+.status-in_use { background: #d1fae5; color: #065f46; }
+.status-idle { background: #fef3c7; color: #92400e; }
+.status-scrapped { background: #fee2e2; color: #991b1b; }
+.status-repair { background: #e0e7ff; color: #4338ca; }
+.search-box { border-radius: 8px; border: 1px solid #e5e7eb; padding: 8px 14px; font-size: 13px; }
+.search-box:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,.1); outline: none; }
+.filter-select { border-radius: 8px; border: 1px solid #e5e7eb; padding: 8px 12px; font-size: 13px; }
+.table-clickable tbody tr { cursor: pointer; }
+.table-clickable tbody tr:hover { background: #f0f4ff !important; }
+.sticky-header { position: sticky; top: 0; z-index: 10; }
+/* 紧凑行间距 */
+.asset-table td, .asset-table th { padding: 3px 4px !important; vertical-align: middle; font-size: 12px; white-space: nowrap; }
+.asset-table tr td:first-child { padding-left: 4px !important; }
+.asset-table tr td:last-child { padding-right: 4px !important; }
+.asset-table th { font-size: 11px; font-weight: 600; letter-spacing: 0.3px; white-space: nowrap; }
+.asset-table .btn-group .btn { padding: 1px 4px; font-size: 10px; }
+.asset-table .badge { font-size: 10px; }
+.asset-table code { font-size: 10px !important; }
+.asset-table .asset-status { font-size: 10px; padding: 1px 6px; }
+.warranty-badge { font-size: 9px !important; padding: 1px 4px !important; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="mb-0 fw-bold" style="font-size:15px;">
+        <i class="fas fa-server" style="color:#059669;"></i> 资产台账
+        <span class="text-muted ms-2" style="font-size:12px; font-weight:400;">
+            共 {{ pagination.total }} 条
+        </span>
+    </h5>
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+        <a href="{{ url_for('asset.calendar') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-calendar-check"></i> 保修日历
+        </a>
+        <a href="{{ url_for('asset.logs') }}" class="btn btn-sm btn-outline-info">
+            <i class="fas fa-history"></i> 操作日志
+        </a>
+        {% if current_user.is_admin %}
+        <a href="{{ url_for('asset.add') }}" class="btn btn-sm btn-primary">
+            <i class="fas fa-plus"></i> 添加资产
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 搜索/筛选栏 -->
+<form class="row g-2 mb-3 align-items-end" method="GET" action="{{ url_for('asset.list_view') }}">
+    <div class="col-12 col-md-3">
+        <input type="text" class="form-control search-box" name="search" placeholder="搜索资产编码/品牌/型号/SN/IP/科室..." value="{{ search }}">
+    </div>
+    <div class="col-6 col-md-2">
+        <select class="form-select filter-select" name="status">
+            <option value="">全部状态</option>
+            <option value="in_use" {{ 'selected' if status_filter=='in_use' }}>使用中</option>
+            <option value="idle" {{ 'selected' if status_filter=='idle' }}>闲置</option>
+            <option value="scrapped" {{ 'selected' if status_filter=='scrapped' }}>已报废</option>
+            <option value="repair" {{ 'selected' if status_filter=='repair' }}>维修中</option>
+        </select>
+    </div>
+    <div class="col-6 col-md-2">
+        <select class="form-select filter-select" name="cat">
+            <option value="">全部类别</option>
+            <option value="hardware" {{ 'selected' if cat_filter=='hardware' }}>硬件</option>
+            <option value="software" {{ 'selected' if cat_filter=='software' }}>软件</option>
+        </select>
+    </div>
+    <div class="col-6 col-md-2">
+        <select class="form-select filter-select" name="department">
+            <option value="">全部科室</option>
+            {% for d in departments %}
+            <option value="{{ d }}" {{ 'selected' if dept_filter==d }}>{{ d }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-6 col-md-2 d-flex gap-1">
+        <button type="submit" class="btn btn-primary btn-sm flex-fill"><i class="fas fa-search"></i> 搜索</button>
+        <a href="{{ url_for('asset.list_view') }}" class="btn btn-outline-secondary btn-sm"><i class="fas fa-undo"></i></a>
+    </div>
+    <div class="col-12 col-md-1 d-flex gap-1">
+        <a href="{{ url_for('asset.export_excel', search=search, status=status_filter, cat=cat_filter, department=dept_filter) }}" class="btn btn-success btn-sm">
+            <i class="fas fa-file-excel"></i> 导出
+        </a>
+    </div>
+</form>
+
+<!-- 导入 & 批量操作区域 -->
+{% if current_user.is_admin %}
+<div class="card mb-3 border-0" style="box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+    <div class="card-body p-3">
+        <div class="row g-2 align-items-center">
+            <div class="col-auto">
+                <a href="{{ url_for('asset.export_template') }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="fas fa-download"></i> 下载模板
+                </a>
+                <form method="POST" action="{{ url_for('asset.import_excel') }}" enctype="multipart/form-data" id="importFormAsset" style="display:inline">
+                    <label for="importFileAsset" class="btn btn-sm btn-primary" style="cursor:pointer;">
+                        <i class="fas fa-upload"></i> 选择文件导入
+                    </label>
+                    <input type="file" name="file" id="importFileAsset" accept=".xlsx,.xls"
+                           onchange="document.getElementById('importFormAsset').submit()"
+                           style="display:none">
+                </form>
+            </div>
+            <div class="col-auto ms-auto" id="batchActions" style="display:none;">
+                <span class="text-muted me-2" style="font-size:13px;"><span id="selectedCount">0</span> 项已选</span>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-warning" onclick="batchEdit()"><i class="fas fa-edit"></i> 编辑</button>
+                    <button class="btn btn-outline-info" onclick="batchTransfer()"><i class="fas fa-exchange-alt"></i> 调拨</button>
+                    <button class="btn btn-outline-secondary" onclick="batchRelocate()"><i class="fas fa-map-marker-alt"></i> 移位</button>
+                    <button class="btn btn-outline-danger" onclick="batchRecover()"><i class="fas fa-recycle"></i> 回收</button>
+                    <button class="btn btn-outline-primary" onclick="showSwapModal()"><i class="fas fa-arrows-alt-h"></i> 互换</button>
+                    <button class="btn btn-outline-success" onclick="showBorrowModal()" id="borrowBtn"><i class="fas fa-hand-holding"></i> 借用</button>
+                    <button class="btn btn-outline-success" onclick="showReturnModal()" id="returnBtn" style="display:none"><i class="fas fa-undo-alt"></i> 归还</button>
+                </div>
+                <button class="btn btn-outline-light btn-sm ms-2" onclick="showInventory()" title="库存概览"><i class="fas fa-cubes"></i></button>
+                <button class="btn btn-outline-light btn-sm ms-1" onclick="showRecentLogs()" title="操作记录"><i class="fas fa-history"></i></button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 数据表格 -->
+<div class="card border-0" style="box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-clickable asset-table mb-0">
+                <thead class="sticky-header" style="background:#f8fafc;">
+                    <tr>
+                        <th style="width:36px;">
+                            {% if current_user.is_admin %}
+                            <input type="checkbox" id="selectAll" onchange="toggleAll(this)">
+                            {% endif %}
+                        </th>
+                        <th>资产编码</th>
+                        <th style="width:44px;">类型</th>
+                        <th>品牌/型号</th>
+                        <th>序列号</th>
+                        <th>配置</th>
+                        <th>IP</th>
+                        <th>科室</th>
+                        <th>位置</th>
+                        <th style="width:40px;">状态</th>
+                        <th class="d-none d-lg-table-cell">财务信息</th>
+                        <th style="width:60px;">保修</th>
+                        <th style="width:80px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in assets %}
+                    <tr onclick="viewDetail({{ a.id }})" data-id="{{ a.id }}">
+                        <td onclick="event.stopPropagation();">
+                            <input type="checkbox" class="asset-check" value="{{ a.id }}" onchange="updateBatchActions()">
+                        </td>
+                        <td><strong>{{ a.asset_no }}</strong></td>
+                        <td>
+                            <span class="badge bg-{{ 'primary' if a.category=='hardware' else 'pink' if a.category=='software' else 'secondary' }}" style="font-size:9px;">
+                                {{ '打印机' if a.device_type == 'PR' else '硬件' if a.device_type in ('PC','NB','一体机') else a.device_type or a.category }}
+                            </span>
+                        </td>
+                        <td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">{{ a.brand }}<span class="text-muted"> {{ a.model_no or '' }}</span></td>
+                        <td><code style="font-size:10px;">{{ a.sn or '-' }}</code></td>
+                        <td style="font-size:11px; max-width:100px;overflow:hidden;text-overflow:ellipsis;">
+                            {% if a.cpu or a.memory or a.disk_size %}
+                                {{ a.cpu or '-' }}, {{ a.memory or '-' }} / {{ a.disk_size or '-' }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td style="font-size:11px; max-width:100px;overflow:hidden;text-overflow:ellipsis;">
+                            {% if a.ip_address %}<span>{{ a.ip_address }}</span>{% endif %}
+                            {% if a.mac_address %} / <code style="font-size:9px;">{{ a.mac_address }}</code>{% endif %}
+                            {% if not a.ip_address and not a.mac_address %}<span class="text-muted">-</span>{% endif %}
+                        </td>
+                        <td>{{ a.department }}</td>
+                        <td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;">
+                            {{ a.building or '' }}{{ ' ' if a.building and a.floor else '' }}{{ a.floor or '' }}{{ ' ' if (a.building or a.floor) and a.location else '' }}<span class="text-muted">{{ a.location or '' }}</span>
+                        </td>
+                        <td>
+                            <span class="asset-status status-{{ a.status }}">
+                                {% if a.status == 'in_use' %}使用中
+                                {% elif a.status == 'idle' %}闲置
+                                {% elif a.status == 'scrapped' %}报废
+                                {% elif a.status == 'repair' %}维修
+                                {% else %}{{ a.status }}{% endif %}
+                            </span>
+                        </td>
+                        <td class="d-none d-lg-table-cell" style="font-size:11px; max-width:100px;overflow:hidden;text-overflow:ellipsis;">
+                            {% if a.financial_code %}{{ a.financial_code }}{% endif %}
+                            {% if a.financial_name %}{% if a.financial_code %} / {% endif %}<span class="text-muted">{{ a.financial_name }}</span>{% endif %}
+                            {% if not a.financial_code and not a.financial_name %}<span class="text-muted">-</span>{% endif %}
+                        </td>
+                        <td style="font-size:11px; white-space:nowrap;">
+                            {% if a.warranty_end %}
+                                <span class="warranty-badge warranty-{{ a.warranty_status }}">
+                                    {% if a.warranty_status == 'valid' %}有效
+                                    {% elif a.warranty_status == 'expiring' %}{{ a.warranty_days_left }}天
+                                    {% elif a.warranty_status == 'expired' %}过期
+                                    {% else %}未知
+                                    {% endif %}
+                                </span>
+                                {{ a.warranty_end.strftime('%m-%d') }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td onclick="event.stopPropagation();">
+                            <div class="btn-group btn-group-sm">
+                                <a href="{{ url_for('asset.edit', asset_id=a.id) }}" class="btn btn-outline-primary" title="编辑"><i class="fas fa-edit"></i></a>
+                                <a href="{{ url_for('asset.detail', asset_id=a.id) }}" class="btn btn-outline-info" title="详情"><i class="fas fa-info-circle"></i></a>
+                                {% if current_user.is_admin %}
+                                <button onclick="deleteAsset({{ a.id }},'{{ a.asset_no }}')" class="btn btn-outline-danger" title="删除"><i class="fas fa-trash"></i></button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not assets %}
+                    <tr>
+                        <td colspan="13" class="text-center py-5 text-muted">
+                            <i class="fas fa-box-open" style="font-size:32px; display:block; margin-bottom:8px;"></i>
+                            暂无数据
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 分页 -->
+{% if pagination.pages > 1 %}
+<nav class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center">
+        <li class="page-item {{ 'disabled' if not pagination.has_prev }}">
+            <a class="page-link" href="{{ url_for('asset.list_view', page=pagination.prev_num, search=search, status=status_filter, cat=cat_filter, department=dept_filter) if pagination.has_prev else '#' }}">&laquo;</a>
+        </li>
+        {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if p %}
+            <li class="page-item {{ 'active' if p == pagination.page }}">
+                <a class="page-link" href="{{ url_for('asset.list_view', page=p, search=search, status=status_filter, cat=cat_filter, department=dept_filter) }}">{{ p }}</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+        <li class="page-item {{ 'disabled' if not pagination.has_next }}">
+            <a class="page-link" href="{{ url_for('asset.list_view', page=pagination.next_num, search=search, status=status_filter, cat=cat_filter, department=dept_filter) if pagination.has_next else '#' }}">&raquo;</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+
+<!-- 批量修改 Modal -->
+<div class="modal fade" id="batchEditModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fas fa-edit"></i> 批量修改</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2 text-muted" style="font-size:12px;">已选 <span id="modalSelectedCount">0</span> 项。填入需要修改的字段（留空不修改）</div>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label">科室</label>
+                        <input class="form-control form-control-sm" id="bf_department" placeholder="新科室">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">状态</label>
+                        <select class="form-select form-select-sm" id="bf_status">
+                            <option value="">--- 不修改 ---</option>
+                            <option value="in_use">使用中</option>
+                            <option value="idle">闲置</option>
+                            <option value="scrapped">已报废</option>
+                            <option value="repair">维修中</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">楼栋</label>
+                        <input class="form-control form-control-sm" id="bf_building" placeholder="新楼栋">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">楼层</label>
+                        <input class="form-control form-control-sm" id="bf_floor" placeholder="新楼层">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">位置</label>
+                        <input class="form-control form-control-sm" id="bf_location" placeholder="新位置">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">设备类型</label>
+                        <input class="form-control form-control-sm" id="bf_device_type" placeholder="PC/NB/PR">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">品牌</label>
+                        <input class="form-control form-control-sm" id="bf_brand" placeholder="品牌">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">型号</label>
+                        <input class="form-control form-control-sm" id="bf_model_no" placeholder="型号">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">IP地址</label>
+                        <input class="form-control form-control-sm" id="bf_ip_address" placeholder="IP">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">MAC地址</label>
+                        <input class="form-control form-control-sm" id="bf_mac_address" placeholder="MAC">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">CPU</label>
+                        <input class="form-control form-control-sm" id="bf_cpu" placeholder="CPU">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">内存</label>
+                        <input class="form-control form-control-sm" id="bf_memory" placeholder="内存">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">硬盘</label>
+                        <input class="form-control form-control-sm" id="bf_disk_size" placeholder="硬盘">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">操作系统</label>
+                        <input class="form-control form-control-sm" id="bf_operating_system" placeholder="OS">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">财务编号</label>
+                        <input class="form-control form-control-sm" id="bf_financial_code" placeholder="财务编号">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">财务名称</label>
+                        <input class="form-control form-control-sm" id="bf_financial_name" placeholder="财务名称">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">备注</label>
+                        <textarea class="form-control form-control-sm" id="bf_notes" rows="2" placeholder="备注"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button class="btn btn-sm btn-primary" onclick="doBatchEdit()"><i class="fas fa-check"></i> 确认修改</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 批量调拨 Modal -->
+<div class="modal fade" id="transferModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fas fa-exchange-alt"></i> 批量调拨</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2 text-muted" style="font-size:12px;">将 <span id="transferCount">0</span> 项资产调拨至目标科室</div>
+                <div class="mb-3">
+                    <label class="form-label">目标科室</label>
+                    <input class="form-control" id="tr_department" placeholder="输入科室名称" list="deptList">
+                    <datalist id="deptList">
+                        {% for d in departments %}<option value="{{ d }}">{% endfor %}
+                    </datalist>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button class="btn btn-sm btn-primary" onclick="doBatchTransfer()"><i class="fas fa-check"></i> 确认调拨</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 批量移位 Modal -->
+<div class="modal fade" id="relocateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fas fa-map-marker-alt"></i> 批量移位</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2 text-muted" style="font-size:12px;">将 <span id="relocateCount">0</span> 项资产移至新位置（留空不修改）</div>
+                <div class="mb-2">
+                    <label class="form-label">新楼栋</label>
+                    <input class="form-control" id="rl_building" placeholder="楼栋">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">新楼层</label>
+                    <input class="form-control" id="rl_floor" placeholder="楼层">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">新位置</label>
+                    <input class="form-control" id="rl_location" placeholder="具体位置">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button class="btn btn-sm btn-primary" onclick="doBatchRelocate()"><i class="fas fa-check"></i> 确认移位</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- 位置互换 Modal -->
+<div class="modal fade" id="swapModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fas fa-arrows-alt-h"></i> 位置互换</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2 text-muted" style="font-size:12px;">
+                    选中 <strong>2</strong> 项资产后，互换它们的 <strong>楼栋/楼层/位置/科室</strong> 信息
+                </div>
+                <p>当前选中 <span id="swapCount">0</span> 项（需要恰好2项）</p>
+                <div id="swapPreview" class="mb-2" style="font-size:13px;"></div>
+                <div class="alert alert-warning py-2 px-3" style="font-size:12px;">
+                    <i class="fas fa-info-circle"></i> 选中2项后可互换位置
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="doSwapLocation()"><i class="fas fa-exchange-alt"></i> 确认互换</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 借用 Modal -->
+<div class="modal fade" id="borrowModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fas fa-hand-holding"></i> 资产借用</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2 text-muted" style="font-size:12px;">将 <span id="borrowCount">0</span> 项资产借出</div>
+                <div class="mb-3">
+                    <label class="form-label">借用人 <span class="text-danger">*</span></label>
+                    <input class="form-control form-control-sm" id="bf_borrowed_to" placeholder="姓名">
+                </div>
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <label class="form-label">借出日期</label>
+                        <input type="date" class="form-control form-control-sm" id="bf_borrow_date">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">预计归还日期</label>
+                        <input type="date" class="form-control form-control-sm" id="bf_return_date">
+                    </div>
+                </div>
+                <div class="mb-1">
+                    <label class="form-label">备注</label>
+                    <input class="form-control form-control-sm" id="bf_borrow_note" placeholder="借用原因">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-success" onclick="doBatchBorrow()"><i class="fas fa-check"></i> 确认借出</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 归还 Modal -->
+<div class="modal fade" id="returnModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fas fa-undo-alt"></i> 资产归还</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2 text-muted" style="font-size:12px;">将 <span id="returnCount">0</span> 项资产标记为已归还</div>
+                <p>选中借出的资产后，确认归还即可清除借用信息。</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-success" onclick="doBatchReturn()"><i class="fas fa-check"></i> 确认归还</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 库存概览 Modal -->
+<div class="modal fade" id="inventoryModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fas fa-cubes"></i> 资产库存概览</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2 mb-3" id="invStats"></div>
+                <h6 style="font-size:13px;">按分类统计</h6>
+                <div id="invCategories" class="mb-3"></div>
+                <h6 style="font-size:13px;">按科室统计（前10）</h6>
+                <div id="invDepartments"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<style>
+.warranty-badge { display:inline-block; padding:1px 6px; border-radius:999px; font-size:10px; font-weight:600; }
+.warranty-valid { background:#d1fae5; color:#065f46; }
+.warranty-expiring { background:#fef3c7; color:#92400e; }
+.warranty-expired { background:#fee2e2; color:#991b1b; }
+.warranty-unknown { background:#f3f4f6; color:#6b7280; }
+</style>
+<script>
+function toggleAll(cb) {
+    document.querySelectorAll('.asset-check').forEach(c => c.checked = cb.checked);
+    updateBatchActions();
+}
+
+function updateBatchActions() {
+    var checked = document.querySelectorAll('.asset-check:checked');
+    var count = checked.length;
+    document.getElementById('selectedCount').textContent = count;
+    document.getElementById('batchActions').style.display = count > 0 ? 'inline-flex' : 'none';
+}
+
+function getSelectedIds() {
+    return Array.from(document.querySelectorAll('.asset-check:checked')).map(c => c.value);
+}
+
+function viewDetail(id) {
+    window.location.href = '/asset/detail/' + id;
+}
+
+function deleteAsset(id, no) {
+    event.stopPropagation();
+    if (!confirm('确定删除 ' + no + ' 吗？')) return;
+    fetch('/asset/delete/' + id, { method:'POST' }).then(r=>r.json()).then(d=>{
+        if(d.ok) location.reload();
+        else alert(d.msg||'删除失败');
+    });
+}
+
+// 批量修改
+function batchEdit() {
+    document.getElementById('modalSelectedCount').textContent = getSelectedIds().length;
+    // Clear fields
+    document.querySelectorAll('#batchEditModal input, #batchEditModal select, #batchEditModal textarea').forEach(el => {
+        if (el.tagName === 'SELECT') el.value = '';
+        else el.value = '';
+    });
+    new bootstrap.Modal(document.getElementById('batchEditModal')).show();
+}
+
+function doBatchEdit() {
+    var ids = getSelectedIds();
+    if (!ids.length) { alert('请先选择资产'); return; }
+    var fields = {};
+    var map = {
+        'bf_department':'department', 'bf_status':'status', 'bf_building':'building',
+        'bf_floor':'floor', 'bf_location':'location', 'bf_device_type':'device_type',
+        'bf_brand':'brand', 'bf_model_no':'model_no', 'bf_ip_address':'ip_address',
+        'bf_mac_address':'mac_address', 'bf_cpu':'cpu', 'bf_memory':'memory',
+        'bf_disk_size':'disk_size', 'bf_operating_system':'operating_system',
+        'bf_financial_code':'financial_code', 'bf_financial_name':'financial_name', 'bf_notes':'notes',
+    };
+    for (var [elId, field] of Object.entries(map)) {
+        var el = document.getElementById(elId);
+        if (el && el.value.trim()) {
+            fields[field] = el.value.trim();
+        }
+    }
+    if (!Object.keys(fields).length) { alert('请至少填写一个字段'); return; }
+    var formData = new FormData();
+    ids.forEach(id => formData.append('ids[]', id));
+    formData.append('fields', JSON.stringify(fields));
+    fetch('/asset/batch-edit', { method:'POST', body:formData })
+        .then(r=>r.json()).then(d=>{
+            alert(d.msg || (d.ok ? '修改成功' : '修改失败'));
+            if(d.ok) location.reload();
+        }).catch(e=>alert('请求失败: '+e));
+}
+
+// 批量调拨
+function batchTransfer() {
+    document.getElementById('transferCount').textContent = getSelectedIds().length;
+    document.getElementById('tr_department').value = '';
+    new bootstrap.Modal(document.getElementById('transferModal')).show();
+}
+
+function doBatchTransfer() {
+    var ids = getSelectedIds();
+    var dept = document.getElementById('tr_department').value.trim();
+    if (!dept) { alert('请输入目标科室'); return; }
+    var formData = new FormData();
+    ids.forEach(id => formData.append('ids[]', id));
+    formData.append('department', dept);
+    fetch('/asset/batch-transfer', { method:'POST', body:formData })
+        .then(r=>r.json()).then(d=>{
+            alert(d.msg || (d.ok ? '调拨成功' : '调拨失败'));
+            if(d.ok) location.reload();
+        }).catch(e=>alert('请求失败: '+e));
+}
+
+// 批量移位
+function batchRelocate() {
+    document.getElementById('relocateCount').textContent = getSelectedIds().length;
+    document.getElementById('rl_building').value = '';
+    document.getElementById('rl_floor').value = '';
+    document.getElementById('rl_location').value = '';
+    new bootstrap.Modal(document.getElementById('relocateModal')).show();
+}
+
+function doBatchRelocate() {
+    var ids = getSelectedIds();
+    var building = document.getElementById('rl_building').value.trim();
+    var floor = document.getElementById('rl_floor').value.trim();
+    var location = document.getElementById('rl_location').value.trim();
+    if (!building && !floor && !location) { alert('请至少填写一项'); return; }
+    var formData = new FormData();
+    ids.forEach(id => formData.append('ids[]', id));
+    formData.append('building', building);
+    formData.append('floor', floor);
+    formData.append('location', location);
+    fetch('/asset/batch-relocate', { method:'POST', body:formData })
+        .then(r=>r.json()).then(d=>{
+            alert(d.msg || (d.ok ? '移位成功' : '移位失败'));
+            if(d.ok) location.reload();
+        }).catch(e=>alert('请求失败: '+e));
+}
+
+// 批量回收
+function batchRecover() {
+    var ids = getSelectedIds();
+    if (!ids.length) { alert('请先选择资产'); return; }
+    if (!confirm('确定将选中的 ' + ids.length + ' 项资产标记为【已报废】吗？')) return;
+    var formData = new FormData();
+    ids.forEach(id => formData.append('ids[]', id));
+    fetch('/asset/batch-recover', { method:'POST', body:formData })
+        .then(r=>r.json()).then(d=>{
+            alert(d.msg || (d.ok ? '回收成功' : '回收失败'));
+            if(d.ok) location.reload();
+        }).catch(e=>alert('请求失败: '+e));
+}
+
+// 位置互换
+function showSwapModal() {
+    var ids = getSelectedIds();
+    document.getElementById('swapCount').textContent = ids.length;
+    document.getElementById('swapPreview').innerHTML = ids.length === 2 ? '✅ 已选中2项，可以互换' : '⚠️ 请恰好选中2项资产';
+    new bootstrap.Modal(document.getElementById('swapModal')).show();
+}
+
+function doSwapLocation() {
+    var ids = getSelectedIds();
+    if (ids.length !== 2) { alert('请选中恰好2项资产'); return; }
+    var formData = new FormData();
+    ids.forEach(id => formData.append('ids[]', id));
+    fetch('/asset/swap-location', { method:'POST', body:formData })
+        .then(r=>r.json()).then(d=>{
+            alert(d.msg || (d.ok ? '互换成功' : '互换失败'));
+            if(d.ok) location.reload();
+        }).catch(e=>alert('请求失败: '+e));
+}
+
+// 资产借用
+function showBorrowModal() {
+    var ids = getSelectedIds();
+    document.getElementById('borrowCount').textContent = ids.length;
+    document.getElementById('bf_borrow_date').value = new Date().toISOString().split('T')[0];
+    new bootstrap.Modal(document.getElementById('borrowModal')).show();
+}
+
+function doBatchBorrow() {
+    var ids = getSelectedIds();
+    var borrower = document.getElementById('bf_borrowed_to').value.trim();
+    if (!borrower) { alert('请输入借用人'); return; }
+    var formData = new FormData();
+    ids.forEach(id => formData.append('ids[]', id));
+    formData.append('borrowed_to', borrower);
+    formData.append('borrow_date', document.getElementById('bf_borrow_date').value);
+    formData.append('return_date', document.getElementById('bf_return_date').value);
+    formData.append('borrow_note', document.getElementById('bf_borrow_note').value);
+    fetch('/asset/batch-borrow', { method:'POST', body:formData })
+        .then(r=>r.json()).then(d=>{
+            alert(d.msg || (d.ok ? '借出成功' : '借出失败'));
+            if(d.ok) location.reload();
+        }).catch(e=>alert('请求失败: '+e));
+}
+
+// 资产归还
+function showReturnModal() {
+    var ids = getSelectedIds();
+    document.getElementById('returnCount').textContent = ids.length;
+    new bootstrap.Modal(document.getElementById('returnModal')).show();
+}
+
+function doBatchReturn() {
+    var ids = getSelectedIds();
+    var formData = new FormData();
+    ids.forEach(id => formData.append('ids[]', id));
+    fetch('/asset/batch-return', { method:'POST', body:formData })
+        .then(r=>r.json()).then(d=>{
+            alert(d.msg || (d.ok ? '归还成功' : '归还失败'));
+            if(d.ok) location.reload();
+        }).catch(e=>alert('请求失败: '+e));
+}
+
+// 库存概览
+function showInventory() {
+    fetch('/asset/inventory-stats')
+        .then(r=>r.json()).then(d=>{
+            if (!d.ok) { alert(d.msg); return; }
+            var s = d.stats;
+            var html = '';
+            var cards = [
+                {label:'总资产', count:s.total, color:'#6366f1'},
+                {label:'使用中', count:s.in_use, color:'#10b981'},
+                {label:'闲置', count:s.spare, color:'#f59e0b'},
+                {label:'已报废', count:s.scrapped, color:'#ef4444'},
+                {label:'已丢失', count:s.lost, color:'#64748b'},
+                {label:'已借出', count:s.borrowed, color:'#8b5cf6'},
+            ];
+            cards.forEach(function(c) {
+                html += '<div class="col-4 col-md-2"><div class="card text-center py-2" style="border:1px solid #e5e7eb;border-radius:8px;">' +
+                    '<div style="font-size:24px;font-weight:700;color:'+c.color+';">'+c.count+'</div>' +
+                    '<div style="font-size:11px;color:#64748b;">'+c.label+'</div></div></div>';
+            });
+            document.getElementById('invStats').innerHTML = html;
+
+            var catHtml = '';
+            for (var cat in s.categories) {
+                catHtml += '<span class="badge bg-light text-dark me-1 mb-1" style="font-size:12px;">'+cat+': '+s.categories[cat]+'</span>';
+            }
+            document.getElementById('invCategories').innerHTML = catHtml || '<span class="text-muted">暂无数据</span>';
+
+            var deptHtml = '<table class="table table-sm" style="font-size:12px;"><thead><tr><th>科室</th><th>数量</th></tr></thead><tbody>';
+            var depts = Object.entries(s.departments).sort(function(a,b){return b[1]-a[1]}).slice(0,10);
+            depts.forEach(function(d) {
+                deptHtml += '<tr><td>'+d[0]+'</td><td><strong>'+d[1]+'</strong></td></tr>';
+            });
+            deptHtml += '</tbody></table>';
+            document.getElementById('invDepartments').innerHTML = deptHtml;
+            new bootstrap.Modal(document.getElementById('inventoryModal')).show();
+        }).catch(e=>alert('请求失败: '+e));
+}
+
+// 操作记录
+function showRecentLogs() {
+    var action = document.getElementById('logFilter') ? document.getElementById('logFilter').value : '';
+    fetch('/asset/recent-logs?action=' + action)
+        .then(r=>r.json()).then(d=>{
+            if (!d.ok) { alert(d.msg); return; }
+            var html = '<table class="table table-sm table-hover" style="font-size:12px;"><thead><tr><th>时间</th><th>资产</th><th>操作</th><th>操作人</th></tr></thead><tbody>';
+            d.logs.forEach(function(log) {
+                var actionLabels = {
+                    'import':'导入', 'edit':'编辑', 'transfer':'调拨', 'relocate':'移位',
+                    'recover':'回收', 'swap':'互换', 'borrow':'借用', 'return':'归还'
+                };
+                var label = actionLabels[log.action] || log.action;
+                html += '<tr><td style="white-space:nowrap;">'+log.created_at+'</td>' +
+                    '<td><a href="/asset/detail/'+log.asset_id+'" target="_blank" class="text-decoration-none">'+log.asset_no+'</a></td>' +
+                    '<td><span class="badge bg-secondary">'+label+'</span></td>' +
+                    '<td>'+log.operator+'</td></tr>';
+            });
+            html += '</tbody></table>';
+            if (d.logs.length === 0) html = '<div class="text-center text-muted py-4">暂无操作记录</div>';
+            document.getElementById('logsContent').innerHTML = html;
+            new bootstrap.Modal(document.getElementById('logsModal')).show();
+        }).catch(e=>alert('请求失败: '+e));
+}
+
+
+</script>
+{% endblock %}

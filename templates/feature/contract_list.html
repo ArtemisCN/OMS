@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}合同维保管理{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-file-contract text-primary"></i> 合同维保管理</h5>
+    <div>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#contractModal" onclick="resetContractForm()">
+            <i class="fas fa-plus"></i> 新增合同
+        </button>
+        <a href="{{ url_for('feature.contracts') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-sync"></i> 刷新
+        </a>
+    </div>
+</div>
+
+<!-- 到期预警 -->
+{% if expiring_contracts %}
+<div class="alert alert-danger d-flex align-items-center gap-2 mb-3">
+    <i class="fas fa-exclamation-circle fs-5"></i>
+    <span>
+        ⚠️ 以下 <strong>{{ expiring_contracts | length }}</strong> 份合同即将到期（30天内）：
+        {% for c in expiring_contracts %}
+        <a href="#" class="alert-link" onclick="scrollToContract({{ c.id }})">{{ c.contract_name }}</a>{% if not loop.last %}、{% endif %}
+        {% endfor %}
+    </span>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="contractTable">
+                <thead class="table-light">
+                    <tr>
+                        <th>合同编号</th>
+                        <th>合同名称</th>
+                        <th>供应商</th>
+                        <th>关联资产</th>
+                        <th>起止日期</th>
+                        <th>金额(元)</th>
+                        <th>支付方式</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in contracts %}
+                    <tr id="contract-row-{{ c.id }}">
+                        <td>{{ c.contract_no or '-' }}</td>
+                        <td><strong>{{ c.contract_name }}</strong></td>
+                        <td>{{ c.supplier.name if c.supplier else '-' }}</td>
+                        <td>{{ c.asset.asset_no if c.asset else '-' }}</td>
+                        <td>
+                            {% if c.start_date %}{{ c.start_date.strftime('%Y-%m-%d') }}{% else %}-{% endif %}
+                            ~
+                            {% if c.end_date %}{{ c.end_date.strftime('%Y-%m-%d') }}{% else %}-{% endif %}
+                        </td>
+                        <td>{{ '%.2f' | format(c.contract_amount or 0) }}</td>
+                        <td>{{ c.payment_type }}</td>
+                        <td>
+                            {% set _status, _label = c.status_display %}
+                            {% if _status == 'expired' %}
+                            <span class="badge bg-danger">已过期</span>
+                            {% elif _status == 'terminated' %}
+                            <span class="badge bg-secondary">已终止</span>
+                            {% else %}
+                                {% if c.expiring_soon %}
+                                <span class="badge bg-warning text-dark">即将到期</span>
+                                {% else %}
+                                <span class="badge bg-success">有效</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="editContract({{ c.id }})">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <form method="post" action="{{ url_for('feature.contract_delete', id=c.id) }}" class="d-inline"
+                                  onsubmit="return confirm('确定删除合同「{{ c.contract_name }}」？')">
+                                <button class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="9" class="text-center text-muted py-4">暂无合同</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 合同编辑弹窗 -->
+<div class="modal fade" id="contractModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fas fa-edit text-primary"></i> <span id="contractModalTitle">新增合同</span></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('feature.contract_save') }}" id="contractForm">
+                <input type="hidden" name="id" id="contractId" value="">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">合同编号</label>
+                            <input type="text" name="contract_no" class="form-control" id="c_no">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">合同名称 <span class="text-danger">*</span></label>
+                            <input type="text" name="contract_name" class="form-control" id="c_name" required>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">供应商</label>
+                            <select name="supplier_id" class="form-select" id="c_supplier_id">
+                                <option value="">-- 请选择 --</option>
+                                {% for s in suppliers %}
+                                <option value="{{ s.id }}">{{ s.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">关联资产</label>
+                            <select name="asset_id" class="form-select" id="c_asset_id">
+                                <option value="">-- 可选 --</option>
+                                {% for a in assets %}
+                                <option value="{{ a.id }}">{{ a.asset_no }} - {{ a.device_type }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">开始日期</label>
+                            <input type="date" name="start_date" class="form-control" id="c_start_date">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">结束日期</label>
+                            <input type="date" name="end_date" class="form-control" id="c_end_date">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">合同金额</label>
+                            <input type="number" name="contract_amount" class="form-control" id="c_amount" step="0.01" min="0">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">支付方式</label>
+                            <select name="payment_type" class="form-select" id="c_payment_type">
+                                <option value="一次性">一次性</option>
+                                <option value="分期">分期</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">状态</label>
+                            <select name="status" class="form-select" id="c_status">
+                                <option value="active">有效</option>
+                                <option value="terminated">已终止</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">联系人</label>
+                            <input type="text" name="contact_person" class="form-control" id="c_contact_person">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">联系电话</label>
+                            <input type="text" name="contact_phone" class="form-control" id="c_contact_phone">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">备注</label>
+                        <textarea name="remark" class="form-control" rows="2" id="c_remark"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-save"></i> 保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+var contractsData = {{ contracts_json | safe }};
+
+function resetContractForm() {
+    document.getElementById('contractModalTitle').textContent = '新增合同';
+    document.getElementById('contractId').value = '';
+    document.getElementById('c_no').value = '';
+    document.getElementById('c_name').value = '';
+    document.getElementById('c_supplier_id').value = '';
+    document.getElementById('c_asset_id').value = '';
+    document.getElementById('c_start_date').value = '';
+    document.getElementById('c_end_date').value = '';
+    document.getElementById('c_amount').value = '';
+    document.getElementById('c_payment_type').value = '一次性';
+    document.getElementById('c_status').value = 'active';
+    document.getElementById('c_contact_person').value = '';
+    document.getElementById('c_contact_phone').value = '';
+    document.getElementById('c_remark').value = '';
+}
+
+function editContract(id) {
+    var c = contractsData.find(function(x){ return x.id == id; });
+    if (!c) return;
+    document.getElementById('contractModalTitle').textContent = '编辑合同';
+    document.getElementById('contractId').value = c.id;
+    document.getElementById('c_no').value = c.contract_no || '';
+    document.getElementById('c_name').value = c.contract_name || '';
+    document.getElementById('c_supplier_id').value = c.supplier_id || '';
+    document.getElementById('c_asset_id').value = c.asset_id || '';
+    document.getElementById('c_start_date').value = c.start_date || '';
+    document.getElementById('c_end_date').value = c.end_date || '';
+    document.getElementById('c_amount').value = c.contract_amount || '';
+    document.getElementById('c_payment_type').value = c.payment_type || '一次性';
+    document.getElementById('c_status').value = c.status || 'active';
+    document.getElementById('c_contact_person').value = c.contact_person || '';
+    document.getElementById('c_contact_phone').value = c.contact_phone || '';
+    document.getElementById('c_remark').value = c.remark || '';
+    new bootstrap.Modal(document.getElementById('contractModal')).show();
+}
+
+function scrollToContract(id) {
+    var el = document.getElementById('contract-row-' + id);
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.transition = 'background 0.5s';
+        el.style.background = '#fff3cd';
+        setTimeout(function(){ el.style.background = ''; }, 2000);
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}新建领用申请{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-plus-circle text-primary"></i> 新建领用申请</h5>
+    <a href="{{ url_for('stock.request_list') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-left"></i> 返回
+    </a>
+</div>
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <form method="post">
+                    <div class="mb-3">
+                        <label class="form-label">选择备件 <span class="text-danger">*</span></label>
+                        <select name="part_id" class="form-select" required>
+                            <option value="">-- 请选择 --</option>
+                            {% for p in parts %}
+                            <option value="{{ p.id }}">{{ p.name }}（库存：{{ p.stock }}{{ p.unit or '个' }}）</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">数量 <span class="text-danger">*</span></label>
+                        <input type="number" name="quantity" class="form-control" value="1" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">关联工单（可选）</label>
+                        <select name="work_order_id" class="form-select">
+                            <option value="">不关联</option>
+                            {% for wo in work_orders %}
+                            <option value="{{ wo.id }}">#{{ wo.id }} {{ wo.title[:30] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">领用原因</label>
+                        <textarea name="reason" class="form-control" rows="3" placeholder="说明用途..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-paper-plane"></i> 提交申请
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card bg-light">
+            <div class="card-body">
+                <h6><i class="fas fa-info-circle"></i> 说明</h6>
+                <ul class="small text-muted">
+                    <li>提交后需要管理员审批才能出库</li>
+                    <li>审批通过后自动扣减库存并记录出库流水</li>
+                    <li>支持关联到当前工单，方便追溯</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

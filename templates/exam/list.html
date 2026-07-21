@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}考试管理 - {{ system_name }}{% endblock %}
+{% block extra_head %}
+<link href="/static/css/exam.css?v=3" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<!-- ===== 汇总统计条 ===== -->
+<div class="exam-summary-bar">
+  <div class="summary-item" style="--accent:#6366f1;">
+    <div class="summary-icon"><i class="fas fa-graduation-cap"></i></div>
+    <div class="summary-info">
+      <div class="summary-num">{{ total_exams }}</div>
+      <div class="summary-lbl">考试总数</div>
+    </div>
+  </div>
+  <div class="summary-item" style="--accent:#22c55e;">
+    <div class="summary-icon"><i class="fas fa-play-circle"></i></div>
+    <div class="summary-info">
+      <div class="summary-num">{{ published_count }}</div>
+      <div class="summary-lbl">进行中</div>
+    </div>
+  </div>
+  <div class="summary-item" style="--accent:#f59e0b;">
+    <div class="summary-icon"><i class="fas fa-users"></i></div>
+    <div class="summary-info">
+      <div class="summary-num">{{ total_participants }}</div>
+      <div class="summary-lbl">参与人次</div>
+    </div>
+  </div>
+  <div class="summary-item" style="--accent:#a78bfa;">
+    <div class="summary-icon"><i class="fas fa-question-circle"></i></div>
+    <div class="summary-info">
+      <div class="summary-num">{{ total_questions_all }}</div>
+      <div class="summary-lbl">总题数</div>
+    </div>
+  </div>
+  <div class="summary-item" style="--accent:#ec4899;">
+    <div class="summary-icon"><i class="fas fa-tachometer-alt"></i></div>
+    <div class="summary-info">
+      <div class="summary-num">{{ draft_count }}</div>
+      <div class="summary-lbl">草稿</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 标题栏 ===== -->
+<div class="exam-list-header">
+  <div>
+    <h2><i class="fas fa-graduation-cap" style="color:var(--exam-primary);"></i> 考试管理</h2>
+    <p class="header-sub">管理所有考试，查看成绩与排名</p>
+  </div>
+  <div class="header-actions">
+    <a href="{{ url_for('exam.exam_create') }}" class="btn btn-exam-primary">
+      <i class="fas fa-plus"></i> 新建考试
+    </a>
+  </div>
+</div>
+
+<!-- ===== 搜索/筛选 ===== -->
+<div class="exam-toolbar" style="margin-bottom:22px;">
+  <div class="search-box">
+    <i class="fas fa-search"></i>
+    <input type="text" id="examSearch" placeholder="搜索考试标题..." oninput="filterExams()">
+  </div>
+  <div class="filter-group">
+    <button class="btn-filter active" data-filter="all" onclick="setFilter(this,'all')">全部 <span class="filter-count" id="countAll">{{ total_exams }}</span></button>
+    <button class="btn-filter" data-filter="published" onclick="setFilter(this,'published')">进行中 <span class="filter-count" id="countPublished">{{ published_count }}</span></button>
+    <button class="btn-filter" data-filter="draft" onclick="setFilter(this,'draft')">草稿 <span class="filter-count" id="countDraft">{{ draft_count }}</span></button>
+    <button class="btn-filter" data-filter="closed" onclick="setFilter(this,'closed')">已结束 <span class="filter-count" id="countClosed">{{ closed_count }}</span></button>
+  </div>
+</div>
+
+<!-- ===== 考试卡片网格 ===== -->
+{% if exams %}
+<div class="exam-grid" id="examGrid">
+  {% for exam in exams %}
+  <div class="exam-card-new" data-status="{{ exam.status }}" data-title="{{ exam.title|lower }}">
+    <!-- 顶部渐变条 -->
+    <div class="card-accent {{ exam.status }}">
+      <div class="accent-glow"></div>
+    </div>
+
+    <div class="card-body-new">
+      <!-- 标题行 -->
+      <div class="card-title-row-new">
+        <div class="card-title-text">{{ exam.title }}</div>
+        <span class="status-badge-new {{ exam.status }}">
+          {% if exam.status == 'draft' %}<i class="fas fa-pencil-alt"></i> 草稿
+          {% elif exam.status == 'published' %}<i class="fas fa-play-circle"></i> 进行中
+          {% else %}<i class="fas fa-stop-circle"></i> 已结束{% endif %}
+        </span>
+      </div>
+
+      <!-- 描述 -->
+      <div class="card-desc-new">{{ exam.description or '暂无说明' }}</div>
+
+      <!-- 统计指标 -->
+      <div class="card-metrics">
+        <div class="metric-item">
+          <div class="metric-icon" style="color:var(--exam-primary);"><i class="fas fa-question-circle"></i></div>
+          <div class="metric-info">
+            <div class="metric-val">{{ exam._q_count }}</div>
+            <div class="metric-lbl">题目</div>
+          </div>
+        </div>
+        <div class="metric-item">
+          <div class="metric-icon" style="color:#f59e0b;"><i class="fas fa-clock"></i></div>
+          <div class="metric-info">
+            <div class="metric-val">{{ exam.duration_minutes }}</div>
+            <div class="metric-lbl">分钟</div>
+          </div>
+        </div>
+        <div class="metric-item">
+          <div class="metric-icon" style="color:#22c55e;"><i class="fas fa-check-circle"></i></div>
+          <div class="metric-info">
+            <div class="metric-val">{{ exam.pass_score|int }}%</div>
+            <div class="metric-lbl">及格</div>
+          </div>
+        </div>
+        <div class="metric-item">
+          <div class="metric-icon" style="color:#a78bfa;"><i class="fas fa-users"></i></div>
+          <div class="metric-info">
+            <div class="metric-val">{{ exam._s_count }}</div>
+            <div class="metric-lbl">参与</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 通过率进度条 -->
+      {% if exam._s_count > 0 %}
+      <div class="card-progress-section">
+        <div class="progress-row">
+          <span class="progress-lbl">通过率</span>
+          <span class="progress-pct {% if exam._pass_rate >= 80 %}high{% elif exam._pass_rate >= 50 %}mid{% else %}low{% endif %}">{{ exam._pass_rate }}%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" style="width:{{ exam._pass_rate }}%;{% if exam._pass_rate >= 80 %}background:linear-gradient(90deg,#22c55e,#4ade80){% elif exam._pass_rate >= 50 %}background:linear-gradient(90deg,#f59e0b,#fbbf24){% else %}background:linear-gradient(90deg,#ef4444,#f87171){% endif %}"></div>
+        </div>
+        <div class="progress-row secondary">
+          <span class="progress-lbl">平均分</span>
+          <span class="progress-val">{{ exam._avg_score }}</span>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- 元信息 -->
+      <div class="card-footer-new">
+        <div class="card-meta-row">
+          <span><i class="fas fa-user"></i> {{ exam.created_by or '系统' }}</span>
+          <span><i class="far fa-calendar-alt"></i> {{ exam.created_at.strftime('%m/%d') if exam.created_at else '' }}</span>
+        </div>
+        <div class="card-actions-new">
+          <a href="{{ url_for('exam.exam_detail', exam_id=exam.id) }}" class="action-btn" title="成绩管理">
+            <i class="fas fa-chart-bar"></i>
+            <span class="action-tip">成绩</span>
+          </a>
+          <a href="{{ url_for('exam.exam_ranking', exam_id=exam.id) }}" class="action-btn" title="排名">
+            <i class="fas fa-trophy"></i>
+            <span class="action-tip">排名</span>
+          </a>
+          <a href="{{ url_for('exam.exam_edit', exam_id=exam.id) }}" class="action-btn" title="编辑">
+            <i class="fas fa-edit"></i>
+            <span class="action-tip">编辑</span>
+          </a>
+          <button class="action-btn" onclick="toggleStatus({{ exam.id }})" title="切换状态">
+            <i class="fas fa-sync-alt"></i>
+            <span class="action-tip">切换</span>
+          </button>
+          {% if exam.status == 'published' %}
+          <a href="{{ url_for('exam.exam_take', id=exam.id) }}" class="action-btn primary" title="参加考试">
+            <i class="fas fa-pencil-alt"></i>
+            <span class="action-tip">参加</span>
+          </a>
+          {% endif %}
+          <button class="action-btn danger" onclick="deleteExam({{ exam.id }})" title="删除">
+            <i class="fas fa-trash-alt"></i>
+            <span class="action-tip">删除</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<!-- ===== 空状态 ===== -->
+<div class="exam-empty-state">
+  <div class="empty-illustration">
+    <i class="fas fa-graduation-cap"></i>
+    <div class="empty-ring"></div>
+  </div>
+  <h3>还没有考试</h3>
+  <p>创建你的第一场考试，开始评估团队技能</p>
+  <a href="{{ url_for('exam.exam_create') }}" class="btn btn-exam-primary" style="padding:12px 32px;border-radius:12px;font-size:15px;">
+    <i class="fas fa-plus"></i> 新建考试
+  </a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function setFilter(btn, status) {
+    document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    filterExams();
+}
+
+function filterExams() {
+    const search = document.getElementById('examSearch').value.toLowerCase().trim();
+    const active = document.querySelector('.btn-filter.active');
+    const filter = active ? active.dataset.filter : 'all';
+    document.querySelectorAll('.exam-card-new').forEach(card => {
+        const status = card.dataset.status;
+        const title = card.dataset.title || '';
+        const matchStatus = filter === 'all' || status === filter;
+        const matchSearch = !search || title.includes(search);
+        card.style.display = matchStatus && matchSearch ? '' : 'none';
+    });
+}
+
+function toggleStatus(examId) {
+    fetch(`/exam/${examId}/toggle_status`, { method: 'POST' })
+    .then(r => r.json()).then(d => { if(d.success) location.reload(); })
+    .catch(() => {});
+}
+
+function deleteExam(examId) {
+    if(!confirm('确定删除此考试？所有答题记录将一并删除！')) return;
+    fetch(`/exam/${examId}/delete`, { method: 'POST' })
+    .then(r => r.json()).then(d => { if(d.success) location.reload(); })
+    .catch(() => {});
+}
+</script>
+{% endblock %}

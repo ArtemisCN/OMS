@@ -1,0 +1,84 @@
+<view class="page">
+
+  <!-- ===== 顶部大输入框 ===== -->
+  <view class="hero">
+    <view class="hero-icon">📝</view>
+    <view class="hero-input-wrap">
+      <input class="hero-input" type="text" placeholder="一句话描述故障，如：3楼交换机坏了" placeholder-class="hero-holder" value="{{query}}" bindinput="onQueryInput" focus="{{true}}" />
+    </view>
+  </view>
+
+  <!-- ===== 解析结果预览 ===== -->
+  <view class="preview" wx:if="{{parsedFault && hasParsed}}">
+    <view class="preview-row">
+      <text class="preview-label">故障</text>
+      <text class="preview-val">{{parsedFault}}</text>
+    </view>
+    <view class="preview-row" wx:if="{{parsedBuilding}}">
+      <text class="preview-label">位置</text>
+      <text class="preview-val">{{parsedBuilding}} {{parsedFloor}} {{parsedLocation}}</text>
+    </view>
+  </view>
+
+  <!-- ===== 楼区（横向滚动 chips） ===== -->
+  <view class="sec" wx:if="{{buildings.length > 0}}">
+    <view class="sec-hd">
+      <text class="sec-icon">🏢</text>
+      <text class="sec-t">楼区</text>
+    </view>
+    <scroll-view class="chip-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+      <view class="chip-row">
+        <view class="chip {{selBuilding === b ? 'chip-on' : ''}}" wx:for="{{buildings}}" wx:for-item="b" wx:key="*this" data-value="{{b}}" catchtap="onBuildingSelect">{{b}}</view>
+      </view>
+    </scroll-view>
+    <!-- 楼层 -->
+    <view class="sec-sub" wx:if="{{floors.length > 0}}">
+      <text class="sec-sub-t">楼层</text>
+      <scroll-view class="chip-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+        <view class="chip-row">
+          <view class="chip {{selFloor === f ? 'chip-on' : ''}}" wx:for="{{floors}}" wx:for-item="f" wx:key="*this" data-value="{{f}}" catchtap="onFloorSelect">{{f}}</view>
+        </view>
+      </scroll-view>
+    </view>
+    <!-- 已选科室 -->
+    <view class="sec-sub" wx:if="{{selLocation}}">
+      <text class="sec-sub-t">科室</text>
+      <view class="chip-row">
+        <view class="chip chip-on" bindtap="onOpenAddrPicker">{{selLocation}}</view>
+        <view class="chip chip-del" bindtap="onClearAddr">✕ 清除</view>
+      </view>
+    </view>
+    <!-- 未选科室时显示选科室入口 -->
+    <view class="sec-sub" wx:if="{{selFloor && !selLocation}}" bindtap="onOpenAddrPicker">
+      <view class="pick-loc">
+        <text>选择科室 ›</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- ===== 发布按钮 ===== -->
+  <view class="bar">
+    <button class="btn-primary" bindtap="onSubmit" disabled="{{submitting}}">
+      <text wx:if="{{!submitting}}">✚ 发布工单</text>
+      <text wx:else>发布中…</text>
+    </button>
+  </view>
+
+  <!-- ===== 科室选择弹窗 ===== -->
+  <view class="modal" wx:if="{{showAddrPicker}}">
+    <view class="modal-overlay" bindtap="onCloseAddrPicker"></view>
+    <view class="modal-sheet">
+      <view class="modal-hd">
+        <text class="modal-tt">{{addrTitle}}</text>
+        <text class="modal-close" bindtap="onCloseAddrPicker">✕</text>
+      </view>
+      <scroll-view class="modal-list" scroll-y>
+        <view class="modal-item" wx:for="{{addrItems}}" wx:key="location" data-item="{{item}}" bindtap="onLocationSelect">
+          <text class="modal-item-t">{{item.location}}</text>
+          <text class="modal-item-d" wx:if="{{item.department}}">{{item.department}}</text>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+
+</view>

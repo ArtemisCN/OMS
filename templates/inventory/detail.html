@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.section-card { background:#fff; border-radius:12px; padding:20px; margin-bottom:16px; box-shadow:0 1px 4px rgba(0,0,0,.06); }
+.group-header { font-size:14px; font-weight:600; color:#0f172a; padding:8px 12px; background:#f8fafc; border-radius:8px; margin-bottom:8px; cursor:pointer; }
+.group-header:hover { background:#eef2ff; }
+.group-stats { font-size:12px; color:#64748b; }
+.stat-chip { display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:600; }
+.stat-ok { background:#d1fae5; color:#065f46; }
+.stat-issue { background:#fef3c7; color:#92400e; }
+.stat-new { background:#e0e7ff; color:#4338ca; }
+.stat-miss { background:#fee2e2; color:#991b1b; }
+.item-row { display:flex; align-items:center; gap:12px; padding:10px 12px; border-bottom:1px solid #f1f5f9; font-size:13px; }
+.item-row:last-child { border-bottom:none; }
+.item-row .asset-no { font-weight:600; color:#0f172a; min-width:120px; }
+.item-row .asset-info { color:#64748b; flex:1; }
+.surplus-card { border-left:4px solid #4f46e5; }
+.loss-card { border-left:4px solid #ef4444; }
+.nav-tabs .nav-link.active { color:#4f46e5; font-weight:600; border-bottom:2px solid #4f46e5; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+        <a href="{{ url_for('inventory.list_view') }}" class="text-decoration-none text-muted" style="font-size:13px;">
+            <i class="fas fa-arrow-left"></i> 返回盘点列表
+        </a>
+        <h5 class="fw-bold mt-1 mb-0">{{ task.name }}</h5>
+        <small class="text-muted">{{ task.task_no }} · {{ task.operator }} · {{ task.created_at }}</small>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('inventory.review', task_id=task.id) }}" class="btn btn-sm btn-primary">
+            <i class="fas fa-clipboard-check"></i> 核对
+        </a>
+        <button class="btn btn-sm btn-outline-secondary" onclick="recalc({{ task.id }})">
+            <i class="fas fa-sync"></i> 重新统计
+        </button>
+        {% if task.status == 'pending' and current_user.is_admin %}
+        <button class="btn btn-sm btn-success" onclick="finishTask({{ task.id }})">
+            <i class="fas fa-check"></i> 结束盘点
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 概览统计 -->
+<div class="row g-2 mb-3">
+    <div class="col-6 col-md-2">
+        <div class="section-card text-center py-2">
+            <div class="fs-4 fw-bold">{{ task.total_count }}</div>
+            <small class="text-muted">应盘总数</small>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="section-card text-center py-2">
+            <div class="fs-4 fw-bold">{{ task.scanned_count }}</div>
+            <small class="text-muted">已盘数量</small>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="section-card text-center py-2">
+            <div class="fs-4 fw-bold" style="color:#059669;">{{ task.normal_count }}</div>
+            <small class="text-muted">无问题</small>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="section-card text-center py-2">
+            <div class="fs-4 fw-bold" style="color:#f59e0b;">{{ task.issue_count }}</div>
+            <small class="text-muted">有异常</small>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="section-card text-center py-2">
+            <div class="fs-4 fw-bold" style="color:#4f46e5;">{{ task.new_asset_count }}</div>
+            <small class="text-muted">新盘资产</small>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="section-card text-center py-2">
+            <div class="fs-4 fw-bold">{{ surplus_loss.summary.loss }}</div>
+            <small class="text-muted" style="color:#ef4444;">漏盘（盘亏）</small>
+        </div>
+    </div>
+</div>
+
+<!-- 选项卡：按区域 / 按科室 / 明细 / 盘盈盘亏 -->
+<ul class="nav nav-tabs mb-3" id="invTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="building-tab" data-bs-toggle="tab" data-bs-target="#building" type="button">
+            按楼区
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="dept-tab" data-bs-toggle="tab" data-bs-target="#dept" type="button">
+            按科室
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="detail-tab" data-bs-toggle="tab" data-bs-target="#detail" type="button">
+            明细
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="surplus-tab" data-bs-toggle="tab" data-bs-target="#surplus" type="button">
+            盘盈盘亏分析
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- 按楼区 -->
+    <div class="tab-pane fade show active" id="building">
+        {% for bname, bstats in buildings.items() %}
+        <div class="section-card">
+            <div class="group-header d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#b{{ loop.index }}">
+                <span><i class="fas fa-building"></i> {{ bname }}</span>
+                <span class="group-stats">
+                    已盘 {{ bstats.total }} 项 ·
+                    <span class="text-success">{{ bstats.normal }}正常</span> ·
+                    <span class="text-warning">{{ bstats.issue }}异常</span> ·
+                    <span class="text-primary">{{ bstats.new }}新盘</span>
+                </span>
+            </div>
+            <div class="collapse" id="b{{ loop.index }}">
+                {% for item in all_items if (item.building or '未知') == bname %}
+                <div class="item-row">
+                    <span class="asset-no">{{ item.asset_no or '--' }}</span>
+                    <span class="asset-info">
+                        {% if item.asset %}{{ item.asset.device_type }} · {{ item.asset.brand }}{% endif %}
+                        {% if item.asset.department %} · {{ item.asset.department }}{% endif %}
+                    </span>
+                    <span>
+                        {% if item.result == 'normal' %}<span class="stat-chip stat-ok">正常</span>
+                        {% elif item.result == 'issue' %}<span class="stat-chip stat-issue">异常</span>
+                        {% elif item.result == 'new' %}<span class="stat-chip stat-new">新盘</span>{% endif %}
+                    </span>
+                    {% if item.notes %}<small class="text-muted">{{ item.notes }}</small>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-4">暂无盘点数据</div>
+        {% endfor %}
+    </div>
+
+    <!-- 按科室 -->
+    <div class="tab-pane fade" id="dept">
+        {% for dname, dstats in departments.items() %}
+        <div class="section-card">
+            <div class="group-header d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#d{{ loop.index }}">
+                <span><i class="fas fa-door-open"></i> {{ dname }}</span>
+                <span class="group-stats">
+                    已盘 {{ dstats.total }} 项 ·
+                    <span class="text-success">{{ dstats.normal }}正常</span> ·
+                    <span class="text-warning">{{ dstats.issue }}异常</span> ·
+                    <span class="text-primary">{{ dstats.new }}新盘</span>
+                </span>
+            </div>
+            <div class="collapse" id="d{{ loop.index }}">
+                {% for item in all_items if (item.department or '未知') == dname %}
+                <div class="item-row">
+                    <span class="asset-no">{{ item.asset_no or '--' }}</span>
+                    <span class="asset-info">
+                        {% if item.asset %}{{ item.asset.device_type }} · {{ item.asset.brand }}{% endif %}
+                    </span>
+                    <span>
+                        {% if item.result == 'normal' %}<span class="stat-chip stat-ok">正常</span>
+                        {% elif item.result == 'issue' %}<span class="stat-chip stat-issue">异常</span>
+                        {% elif item.result == 'new' %}<span class="stat-chip stat-new">新盘</span>{% endif %}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-4">暂无盘点数据</div>
+        {% endfor %}
+    </div>
+
+    <!-- 明细列表 -->
+    <div class="tab-pane fade" id="detail">
+        <div class="section-card">
+            <form class="row g-2 mb-2" method="GET">
+                <input type="hidden" name="result" value="{{ result_filter }}">
+                <div class="col-auto">
+                    <input type="text" class="form-control form-control-sm" name="search" placeholder="搜索资产编码" value="{{ search }}">
+                </div>
+                <div class="col-auto">
+                    <select class="form-select form-select-sm" name="result" onchange="this.form.submit()">
+                        <option value="">全部结果</option>
+                        <option value="normal" {{ 'selected' if result_filter=='normal' }}>正常</option>
+                        <option value="issue" {{ 'selected' if result_filter=='issue' }}>异常</option>
+                        <option value="new" {{ 'selected' if result_filter=='new' }}>新盘</option>
+                    </select>
+                </div>
+            </form>
+            {% for item in items %}
+            <div class="item-row">
+                <span class="asset-no">{{ item.asset_no or '--' }}</span>
+                <span class="asset-info">
+                    {% if item.device_type %}{{ item.device_type }}{% endif %}
+                    {% if item.brand %} · {{ item.brand }}{% endif %}
+                    {% if item.department %} · {{ item.department }}{% endif %}
+                </span>
+                <small class="text-muted">{{ item.scanned_at.strftime('%m-%d %H:%M') if item.scanned_at else '' }}</small>
+                <span>
+                    {% if item.result == 'normal' %}<span class="stat-chip stat-ok">正常</span>
+                    {% elif item.result == 'issue' %}<span class="stat-chip stat-issue">异常</span>
+                    {% elif item.result == 'new' %}<span class="stat-chip stat-new">新盘</span>{% endif %}
+                </span>
+                {% if item.notes %}<small class="text-muted">{{ item.notes }}</small>{% endif %}
+                {% if current_user.is_admin %}
+                <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteItem({{ item.id }})">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="text-center text-muted py-4">暂无明细数据</div>
+            {% endfor %}
+        </div>
+        {% if pagination.pages > 1 %}
+        <nav>{% from 'macros/pagination.html' import render_pagination %}{{ render_pagination(pagination, 'inventory.detail', task_id=task.id) }}</nav>
+        {% endif %}
+    </div>
+
+    <!-- 盘盈盘亏分析 -->
+    <div class="tab-pane fade" id="surplus">
+        <div class="row g-2 mb-3">
+            <div class="col-md-6">
+                <div class="section-card surplus-card">
+                    <h6 class="fw-bold" style="color:#4f46e5;"><i class="fas fa-plus-circle"></i> 盘盈（新盘资产）</h6>
+                    <div class="fs-2 fw-bold">{{ surplus_loss.summary.new_assets }}</div>
+                    <small class="text-muted">系统中不存在的资产，扫码新增</small>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="section-card loss-card">
+                    <h6 class="fw-bold" style="color:#ef4444;"><i class="fas fa-minus-circle"></i> 盘亏（漏盘资产）</h6>
+                    <div class="fs-2 fw-bold">{{ surplus_loss.summary.loss }}</div>
+                    <small class="text-muted">系统有记录但未扫码到的资产</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- 按楼区盘盈盘亏 -->
+        <div class="section-card">
+            <h6 class="fw-bold mb-2"><i class="fas fa-building"></i> 按楼区</h6>
+            <table class="table table-sm">
+                <thead><tr><th>楼区</th><th>盘盈</th><th>盘亏</th><th>状态</th></tr></thead>
+                <tbody>
+                {% for bname, bsl in surplus_loss.by_building.items() %}
+                <tr>
+                    <td>{{ bname }}</td>
+                    <td><span class="text-primary fw-bold">{{ bsl.surplus }}</span></td>
+                    <td><span class="text-danger fw-bold">{{ bsl.lost }}</span></td>
+                    <td>
+                        {% if bsl.surplus > 0 and bsl.lost == 0 %}
+                        <span class="stat-chip stat-ok">盘盈</span>
+                        {% elif bsl.lost > 0 and bsl.surplus == 0 %}
+                        <span class="stat-chip stat-miss">盘亏</span>
+                        {% elif bsl.surplus > 0 and bsl.lost > 0 %}
+                        <span class="stat-chip stat-issue">有差异</span>
+                        {% else %}
+                        <span class="stat-chip stat-ok">正常</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 按科室盘盈盘亏 -->
+        <div class="section-card">
+            <h6 class="fw-bold mb-2"><i class="fas fa-door-open"></i> 按科室</h6>
+            <table class="table table-sm">
+                <thead><tr><th>科室</th><th>盘盈</th><th>盘亏</th><th>状态</th></tr></thead>
+                <tbody>
+                {% for dname, dsl in surplus_loss.by_department.items() %}
+                <tr>
+                    <td>{{ dname }}</td>
+                    <td><span class="text-primary fw-bold">{{ dsl.surplus }}</span></td>
+                    <td><span class="text-danger fw-bold">{{ dsl.lost }}</span></td>
+                    <td>
+                        {% if dsl.surplus > 0 and dsl.lost == 0 %}
+                        <span class="stat-chip stat-ok">盘盈</span>
+                        {% elif dsl.lost > 0 and dsl.surplus == 0 %}
+                        <span class="stat-chip stat-miss">盘亏</span>
+                        {% elif dsl.surplus > 0 and dsl.lost > 0 %}
+                        <span class="stat-chip stat-issue">有差异</span>
+                        {% else %}
+                        <span class="stat-chip stat-ok">正常</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function finishTask(id) {
+    if (!confirm('确认结束该盘点？')) return;
+    fetch('/inventory/' + id + '/finish', { method: 'POST' })
+    .then(r => r.json()).then(d => { if(d.ok) location.reload(); else alert(d.msg); });
+}
+function deleteItem(id) {
+    if (!confirm('确认删除此条记录？')) return;
+    fetch('/inventory/item/' + id + '/delete', { method: 'POST' })
+    .then(r => r.json()).then(d => { if(d.ok) location.reload(); else alert(d.msg); });
+}
+function recalc(id) {
+    fetch('/inventory/' + id + '/recalc', { method: 'POST' })
+    .then(r => r.json()).then(d => { if(d.ok) location.reload(); else alert(d.msg); });
+}
+</script>
+{% endblock %}

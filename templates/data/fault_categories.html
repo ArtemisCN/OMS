@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block extra_head %}
+<style>
+/* 统一数据管理子页面卡片头部样式 */
+.page-header {
+    background:#f8fafc;
+    border-bottom:1px solid #e8ecf1;
+    padding:12px 18px;
+    font-size:14px;
+    font-weight:600;
+    color:#1e293b;
+    border-radius:10px 10px 0 0;
+}
+.page-body { padding:14px 16px; }
+
+/* 手风琴箭头调浅 */
+.accordion-button::after {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%2394a3b8'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e") !important;
+}
+.accordion-button:not(.collapsed)::after {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%234f46e5'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e") !important;
+}
+
+/* 名字对齐：避免 badge 与箭头争右空间 */
+.accordion-button {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+.accordion-button .cat-badge {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #e0e7ff;
+    color: #4f46e5;
+    order: 2;
+}
+.accordion-button::after {
+    order: 3;
+    margin-left: 6px !important;
+}
+</style>
+{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="mb-0 fw-bold" style="font-size:15px;">
+        <i class="fas fa-sitemap text-primary"></i> 故障二级分类
+        <span class="text-muted ms-2" style="font-size:12px;font-weight:400;">{{ categories|length }} 个分类</span>
+    </h5>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('data.index') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> 返回</a>
+    </div>
+</div>
+
+{% if categories %}
+<div class="card" style="border-radius:10px;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+    <div class="page-header">
+        <i class="fas fa-folder-tree" style="color:#6366f1;"></i> 分类列表
+    </div>
+    <div class="page-body">
+        <div class="accordion" id="categoryAccordion">
+            {% for cat in categories %}
+            <div class="accordion-item mb-2 border rounded-3" style="overflow:hidden;border:1px solid #e2e8f0 !important;">
+                <h2 class="accordion-header" id="heading{{ cat.id }}">
+                    <button class="accordion-button fw-bold {% if not loop.first %}collapsed{% endif %}" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#collapse{{ cat.id }}"
+                            style="font-size:14px;background:#f8fafc;padding:12px 16px;">
+                        <i class="fas fa-folder-open" style="color:#6366f1;margin-right:8px;"></i> {{ cat.name }}
+                        <span class="cat-badge">{{ cat.subcategories.count() }} 个子分类</span>
+                    </button>
+                </h2>
+                <div id="collapse{{ cat.id }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+                     data-bs-parent="#categoryAccordion">
+                    <div class="accordion-body p-3">
+                        {% set subs = cat.subcategories.all() %}
+                        {% if subs %}
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover mb-0" style="font-size:13px;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width:50px;">#</th>
+                                        <th style="width:200px;">子分类名称</th>
+                                        <th>关键词</th>
+                                        <th style="width:100px;">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for sub in subs %}
+                                    <tr>
+                                        <td class="text-center text-muted">{{ sub.sort_order }}</td>
+                                        <td class="fw-medium">{{ sub.name }}</td>
+                                        <td>
+                                            {% set keywords = sub.keywords.all() %}
+                                            {% if keywords %}
+                                            <div class="d-flex flex-wrap gap-1 align-items-center">
+                                                {% for kw in keywords %}
+                                                <span class="badge bg-light text-dark d-inline-flex align-items-center gap-1 px-2 py-1" style="font-size:12px;border:1px solid #dee2e6;">
+                                                    {{ kw.keyword }}
+                                                    <form method="post" action="{{ url_for('data.delete_fault_keyword', kw_id=kw.id) }}"
+                                                          style="display:inline;" onsubmit="return confirm('确定删除关键词「{{ kw.keyword }}」？')">
+                                                        <button type="submit" class="btn btn-sm p-0 text-danger border-0 bg-transparent"
+                                                                style="font-size:14px;line-height:1;opacity:0.7;">&times;</button>
+                                                    </form>
+                                                </span>
+                                                {% endfor %}
+                                            </div>
+                                            {% else %}
+                                            <span class="text-muted small"><i class="far fa-circle text-warning me-1"></i>未设置关键词</span>
+                                            {% endif %}
+                                            <!-- 添加关键词表单 -->
+                                            <form method="post" action="{{ url_for('data.add_fault_keyword') }}"
+                                                  class="mt-2 d-flex align-items-center gap-2">
+                                                <input type="hidden" name="subcategory_id" value="{{ sub.id }}">
+                                                <input type="text" name="keywords" class="form-control form-control-sm"
+                                                       style="max-width:300px;font-size:12px;"
+                                                       placeholder="输入关键词，多个用逗号分隔" required>
+                                                <button type="submit" class="btn btn-sm btn-outline-success flex-shrink-0">
+                                                    <i class="fas fa-plus"></i> 添加
+                                                </button>
+                                            </form>
+                                        </td>
+                                        <td class="text-center">
+                                            <form method="post" action="{{ url_for('data.delete_fault_subcategory', sub_id=sub.id) }}"
+                                                  onsubmit="return confirm('确定删除子分类「{{ sub.name }}」及其所有关键词？')">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                    <i class="fas fa-trash"></i> 删除
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center text-muted py-3">
+                            <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                            暂无子分类
+                        </div>
+                        {% endif %}
+
+                        <!-- 添加子分类表单 -->
+                        <hr class="my-3">
+                        <form method="post" action="{{ url_for('data.add_fault_subcategory') }}" class="d-flex align-items-center gap-2">
+                            <input type="hidden" name="category_id" value="{{ cat.id }}">
+                            <input type="text" name="name" class="form-control form-control-sm"
+                                   style="max-width:300px;font-size:13px;" placeholder="输入新子分类名称" required>
+                            <button type="submit" class="btn btn-sm btn-primary">
+                                <i class="fas fa-plus"></i> 添加子分类
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card" style="border-radius:10px;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+    <div class="page-body text-center text-muted py-5">
+        <i class="fas fa-sitemap fa-3x mb-3 d-block"></i>
+        <p>暂无故障分类数据</p>
+        <p class="small">请先通过数据库初始化添加一级分类（软件/硬件/打印机/协助）</p>
+        <a href="{{ url_for('data.index') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> 返回
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const expand = urlParams.get('expand');
+    if (expand) {
+        const el = document.getElementById('collapse' + expand);
+        if (el) {
+            const bsCollapse = new bootstrap.Collapse(el, {toggle: true});
+        }
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,1120 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+/* 发布页专用样式 */
+.publish-header {
+    margin-bottom: 28px;
+}
+.publish-header h4 {
+    font-weight: 700;
+    font-size: 20px;
+    margin-bottom: 4px;
+}
+.publish-header .subtitle {
+    color: #94a3b8;
+    font-size: 13px;
+}
+[data-theme="dark"] .publish-header .subtitle { color: #64748b; }
+
+/* 智能预览面板 */
+.preview-panel {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    border: 1px solid #e2e8f0;
+    transition: all .2s;
+}
+[data-theme="dark"] .preview-panel {
+    background: #1a1f2e;
+    border-color: #2d3748;
+}
+.preview-panel:not(:empty) {
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+.preview-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 10px;
+}
+[data-theme="dark"] .preview-label { color: #94a3b8; }
+.preview-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+.preview-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 12px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    font-size: 12.5px;
+    color: #334155;
+    line-height: 1.4;
+    transition: all .2s;
+}
+[data-theme="dark"] .preview-tag {
+    background: #1e293b;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+.preview-tag .tag-icon { font-size: 14px; flex-shrink: 0; }
+.preview-tag .tag-label { color: #94a3b8; margin-right: 2px; }
+[data-theme="dark"] .preview-tag .tag-label { color: #64748b; }
+.preview-tag .tag-val { font-weight: 600; color: #3b82f6; }
+.preview-tag .tag-val.matched { color: #22c55e; }
+.preview-tag .tag-val.missing { color: #94a3b8; font-weight: 400; }
+
+/* 表单分区 */
+.form-section {
+    margin-bottom: 24px;
+}
+.form-section:last-of-type {
+    margin-bottom: 20px;
+}
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e2e8f0;
+}
+[data-theme="dark"] .section-header {
+    border-bottom-color: #2d3748;
+}
+.section-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #3b82f6;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+.section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+}
+[data-theme="dark"] .section-title { color: #e2e8f0; }
+.section-desc {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-left: auto;
+}
+[data-theme="dark"] .section-desc { color: #64748b; }
+
+/* 匹配结果内联显示 */
+.match-badge {
+    display: inline-block;
+    margin-top: 2px;
+    font-size: 12px;
+}
+.match-badge .text-success { color: #22c55e; }
+
+/* 故障建议下拉修正黑暗模式 */
+#faultSuggestions,
+#titleSuggestions,
+#locationSuggestions {
+    border-radius: 8px !important;
+    overflow: hidden;
+}
+[data-theme="dark"] #faultSuggestions,
+[data-theme="dark"] #titleSuggestions,
+[data-theme="dark"] #locationSuggestions {
+    background: #1e293b !important;
+    border: 1px solid #334155;
+}
+[data-theme="dark"] .list-group-item {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #2d3748;
+}
+[data-theme="dark"] .list-group-item:hover {
+    background: #263548;
+}
+[data-theme="dark"] .list-group-item.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+}
+
+/* 按钮区 */
+.publish-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding-top: 8px;
+}
+.btn-publish {
+    padding: 10px 44px;
+    font-weight: 600;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all .2s;
+}
+.btn-publish:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59,130,246,.35);
+}
+.btn-cancel {
+    color: #64748b;
+    font-size: 13px;
+}
+.btn-cancel:hover { color: #1e293b; }
+[data-theme="dark"] .btn-cancel { color: #94a3b8; }
+[data-theme="dark"] .btn-cancel:hover { color: #e2e8f0; }
+
+/* 表单字段增强 */
+.form-label { font-weight: 600; font-size: 13px; color: #475569; }
+[data-theme="dark"] .form-label { color: #cbd5e1; }
+.form-control, .form-select {
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border-color .2s, box-shadow .2s;
+}
+.form-control:focus, .form-select:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+}
+</style>
+
+<div class="publish-header">
+    <h4><i class="fas fa-paper-plane text-primary"></i> 发布工单</h4>
+    <div class="subtitle">发布后放入公共池，手机端可自行接单处理</div>
+</div>
+
+<!-- 智能识别预览 -->
+<div class="preview-panel" id="previewPanel">
+    <div class="preview-label">
+        <i class="fas fa-magic" style="margin-right:4px;"></i> 智能识别预览
+    </div>
+    <div class="preview-tags" id="previewTags">
+        <span class="preview-tag">
+            <span class="tag-icon">🖨️</span>
+            <span class="tag-label">故障:</span>
+            <span class="tag-val missing" id="faultDisplay">自动匹配</span>
+        </span>
+        <span class="preview-tag">
+            <span class="tag-icon">🏢</span>
+            <span class="tag-label">楼区:</span>
+            <span class="tag-val missing" id="addrBuilding">自动识别</span>
+        </span>
+        <span class="preview-tag">
+            <span class="tag-icon">📍</span>
+            <span class="tag-label">楼层:</span>
+            <span class="tag-val missing" id="addrFloor">自动识别</span>
+        </span>
+        <span class="preview-tag">
+            <span class="tag-icon">🚪</span>
+            <span class="tag-label">科室:</span>
+            <span class="tag-val missing" id="addrDept">自动识别</span>
+        </span>
+        <span class="preview-tag">
+            <span class="tag-icon">📌</span>
+            <span class="tag-label">位置:</span>
+            <span class="tag-val missing" id="addrLocation">自动识别</span>
+        </span>
+        <span class="preview-tag" style="border-style:dashed;">
+            <span class="tag-icon">📱</span>
+            <span style="color:#94a3b8;">手机端接单</span>
+        </span>
+    </div>
+</div>
+
+<form method="post">
+    <!-- 步骤1：标题 -->
+    <div class="form-section">
+        <div class="section-header">
+            <span class="section-step">1</span>
+            <span class="section-title">输入工单标题</span>
+            <span class="section-desc">系统自动识别故障与位置</span>
+        </div>
+        <div style="position:relative;">
+            <input type="text" class="form-control" name="title" id="title" required
+                   placeholder="例：15号楼2楼财务处电脑无法开机"
+                   autocomplete="off"
+                   oninput="autoDetect();filterTitleSuggestions();filterFaultSuggestions()"
+                   onblur="setTimeout(function(){document.getElementById('titleSuggestions').style.display='none';document.getElementById('faultSuggestions').style.display='none';_titleIndex=-1;_faultIndex=-1},300)"
+                   onkeydown="return handleTitleKeydown(event)">
+            <div class="match-badge" id="matchResult"></div>
+            <div id="titleSuggestions" class="list-group"
+                 style="display:none; position:absolute; z-index:999; top:100%; left:0; right:0;
+                        max-height:260px; overflow-y:auto; box-shadow:0 4px 16px rgba(0,0,0,.15);
+                        border-radius:8px;"></div>
+            <div id="faultSuggestions" class="list-group"
+                 style="display:none; position:absolute; z-index:999; top:100%; left:0; right:0;
+                        max-height:200px; overflow-y:auto; box-shadow:0 4px 16px rgba(0,0,0,.15);
+                        border-radius:8px; background:#fff;"></div>
+        </div>
+        <input type="hidden" name="fault_subcategory" id="faultSubcategory" value="">
+    </div>
+
+    <!-- 步骤2：位置 -->
+    <div class="form-section">
+        <div class="section-header">
+            <span class="section-step">2</span>
+            <span class="section-title">选择位置</span>
+            <span class="section-desc">三级级联，亦可搜索</span>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">楼区</label>
+                <select name="building" id="building" class="form-select" onchange="loadFloors()">
+                    <option value="">请选择楼区</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">楼层</label>
+                <select name="floor" id="floor" class="form-select" onchange="loadAddresses()">
+                    <option value="">请先选择楼区</option>
+                </select>
+            </div>
+            <div class="col-md-5">
+                <label class="form-label">科室 / 物理地址</label>
+                <div style="position:relative;">
+                    <input type="text" class="form-control" id="locationInput"
+                           placeholder="输入关键字搜索..."
+                           autocomplete="off"
+                           oninput="filterLocations()"
+                           onfocus="filterLocations()"
+                           onblur="setTimeout(function(){document.getElementById('locationSuggestions').style.display='none'; _suggestionIndex = -1; if (document.getElementById('locationInput').value && !document.getElementById('location').value) { document.getElementById('location').value = document.getElementById('locationInput').value; } },200)"
+                           onkeydown="return handleLocationKeydown(event)">
+                    <input type="hidden" name="location" id="location" value="">
+                    <input type="hidden" name="department" id="department">
+                    <div id="locationSuggestions" class="list-group"
+                         style="display:none; position:absolute; z-index:999; top:100%; left:0; right:0;
+                                max-height:260px; overflow-y:auto; box-shadow:0 4px 16px rgba(0,0,0,.15);
+                                border-radius:8px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="form-section" style="margin-bottom:0;">
+        <div class="publish-actions">
+            <button type="submit" class="btn btn-primary btn-publish" id="publishBtn">
+                <i class="fas fa-paper-plane"></i> 发布工单
+            </button>
+            <a href="{{ url_for('orders.list_orders') }}" class="btn-cancel">
+                <i class="fas fa-times"></i> 取消
+            </a>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// 所有地址数据缓存
+var allLocations = [];
+var currentBuilding = '';
+var currentFloor = '';
+
+// 页面加载时构建楼区列表 + 预加载地址数据
+document.addEventListener('DOMContentLoaded', function() {
+    fetch('/orders/api/address/options?building=all')
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            var sel = document.getElementById('building');
+            sel.innerHTML = '<option value="">请选择楼区</option>';
+            (data.buildings || []).forEach(function(b){
+                sel.innerHTML += '<option value="' + b + '">' + b + '</option>';
+            });
+        });
+    // 预加载所有地址
+    fetch('/orders/api/address/all')
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            allLocations = data.locations || [];
+        });
+});
+
+// 缓存最新的自动识别结果
+var lastDetected = { building: '', floor: '', department: '', location: '' };
+
+// 自动检测（故障 + 地址）
+function autoDetect() {
+    var title = document.getElementById('title').value;
+    var el = document.getElementById('matchResult');
+    if (!title) {
+        el.innerHTML = '';
+        resetDisplays();
+        lastDetected = { building: '', floor: '', department: '', location: '' };
+        return;
+    }
+    fetch('/orders/api/guess?title=' + encodeURIComponent(title))
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            lastDetected = { building: data.building||'', floor: data.floor||'', department: data.department||'', location: data.location||'' };
+            var icon = data.fault == '打印机' ? '🖨️' : data.fault == '软件' ? '💿' : '🔧';
+            el.innerHTML = '<span class="text-success"><i class="fas fa-check-circle"></i> 已识别: <strong>' + data.fault + '</strong></span>';
+            // 显示故障分类（含二级子分类）
+            if (data.fault_subcategory) {
+                document.getElementById('faultDisplay').innerHTML = data.fault + ' &gt; <strong>' + data.fault_subcategory + '</strong>';
+                document.getElementById('faultSubcategory').value = data.fault_subcategory;
+            } else {
+                document.getElementById('faultDisplay').textContent = data.fault;
+                document.getElementById('faultSubcategory').value = '';
+            }
+            updatePreviewTag('addrBuilding', data.building || '未识别', !!data.building);
+            updatePreviewTag('addrFloor', data.floor || '未识别', !!data.floor);
+            updatePreviewTag('addrDept', data.department || '未识别', !!data.department);
+            updatePreviewTag('addrLocation', data.location || '未识别', !!data.location);
+
+            // 自动填入（只在不冲突时填）
+            if (data.building) {
+                var bSel = document.getElementById('building');
+                setTimeout(function(){
+                    if (bSel.querySelector('option[value="' + data.building + '"]') && !bSel.dataset.userChanged) {
+                        bSel.value = data.building;
+                        loadFloors(function(){
+                            if (data.floor) {
+                                var fSel = document.getElementById('floor');
+                                if (fSel.querySelector('option[value="' + data.floor + '"]') && !fSel.dataset.userChanged) {
+                                    fSel.value = data.floor;
+                                    loadAddresses(function(){
+                                        var loc = data.location || data.department;
+                                        if (loc && document.getElementById('locationInput') && !document.getElementById('locationInput').dataset.userChanged) {
+                                            setLocationValue(loc);
+                                        }
+                                        // 恢复 API 识别的科室（setLocationValue 会覆盖掉）
+                                        if (data.department) {
+                                            document.getElementById('department').value = data.department;
+                                            updatePreviewTag('addrDept', data.department, true);
+                                        }
+                                        // 地址自动填入完成 → 触发故障联想
+                                        filterFaultSuggestions();
+                                    });
+                                } else {
+                                    filterFaultSuggestions();
+                                }
+                            } else {
+                                filterFaultSuggestions();
+                            }
+                        });
+                    } else {
+                        filterFaultSuggestions();
+                    }
+                }, 300);
+            }
+        })
+        .catch(function(){
+            el.innerHTML = '';
+        });
+}
+
+// 更新预览标签
+function updatePreviewTag(id, val, found) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = val;
+    el.className = 'tag-val' + (found ? ' matched' : ' missing');
+}
+
+// 设置位置输入框的值（显示文本 + 隐藏字段）
+function setLocationValue(val) {
+    document.getElementById('locationInput').value = val;
+    document.getElementById('location').value = val;
+    document.getElementById('locationSuggestions').style.display = 'none';
+    // 自动填科室
+    var dept = extractDept(val);
+    document.getElementById('department').value = dept;
+    updatePreviewTag('addrDept', dept || '未识别', !!dept);
+    updatePreviewTag('addrLocation', val, true);
+}
+
+// 从地址文本猜测科室
+function extractDept(locText) {
+    if (!locText) return '';
+    // 去掉楼区前缀和数字后缀
+    var clean = locText.replace(/^[\d]+号楼\s*/, '').replace(/[\d]+号.*$/, '').trim();
+    if (clean.length <= 8 && clean.length >= 2) return clean;
+    // 从全量数据匹配
+    for (var i = 0; i < allLocations.length; i++) {
+        if (allLocations[i].location === locText) return allLocations[i].department || '';
+    }
+    return '';
+}
+
+// 键盘导航：↑↓移动，Enter选中
+function handleLocationKeydown(e) {
+    var sug = document.getElementById('locationSuggestions');
+    if (sug.style.display !== 'block') return true;
+    var items = sug.querySelectorAll('.list-group-item');
+    if (items.length === 0) return true;
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        items.forEach(function(el){ el.classList.remove('active','bg-primary','text-white'); });
+        _suggestionIndex = (_suggestionIndex + 1) % items.length;
+        items[_suggestionIndex].classList.add('active', 'bg-primary', 'text-white');
+        items[_suggestionIndex].scrollIntoView({block: 'nearest'});
+        return false;
+    }
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        items.forEach(function(el){ el.classList.remove('active','bg-primary','text-white'); });
+        if (_suggestionIndex <= 0) _suggestionIndex = items.length;
+        _suggestionIndex = (_suggestionIndex - 1 + items.length) % items.length;
+        items[_suggestionIndex].classList.add('active', 'bg-primary', 'text-white');
+        items[_suggestionIndex].scrollIntoView({block: 'nearest'});
+        return false;
+    }
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        if (_suggestionIndex >= 0 && _suggestionIndex < items.length) {
+            var link = items[_suggestionIndex];
+            var key = link.dataset.addressKey;
+            if (key) { selectLocationByKey(key); }
+            else { selectLocationItem(link.textContent.trim().split(/\s+\(/)[0]); }
+        } else if (items.length > 0) {
+            var firstKey = items[0].dataset.addressKey;
+            if (firstKey) { selectLocationByKey(firstKey); }
+            else { selectLocationItem(items[0].textContent.trim().split(/\s+\(/)[0]); }
+        }
+        _suggestionIndex = -1;
+        return false;
+    }
+    return true;
+}
+
+// 过滤并显示建议列表
+function filterLocations() {
+    var input = document.getElementById('locationInput');
+    var q = input.value.trim();
+    var sug = document.getElementById('locationSuggestions');
+
+    if (!q && !currentBuilding) {
+        sug.style.display = 'none';
+        return;
+    }
+
+    // 根据当前楼区+楼层过滤池
+    var pool = allLocations;
+    // 有搜索关键字时不限制楼区楼层（搜索全库）
+    if (!q) {
+        if (currentBuilding) {
+            pool = pool.filter(function(a){ return a.building === currentBuilding; });
+        }
+        if (currentFloor) {
+            pool = pool.filter(function(a){ return a.floor === currentFloor; });
+        }
+    }
+
+    // 按关键字过滤
+    var matched = [];
+    if (q) {
+        var ql = q.toLowerCase();
+        pool.forEach(function(a){
+            if (a.location.toLowerCase().indexOf(ql) >= 0 ||
+                (a.department && a.department.toLowerCase().indexOf(ql) >= 0)) {
+                matched.push(a);
+            }
+        });
+    } else {
+        matched = pool;
+    }
+
+    // 去重（用 building+floor+location 做唯一键）
+    var seen = {};
+    matched = matched.filter(function(a){
+        var key = a.building + '|' + a.floor + '|' + a.location;
+        if (seen[key]) return false;
+        seen[key] = true;
+        return true;
+    });
+    // 精确匹配优先
+    if (q) {
+        matched.sort(function(a,b){
+            var scoreA = (a.location === q ? 0 : a.department === q ? 1 : 10);
+            var scoreB = (b.location === q ? 0 : b.department === q ? 1 : 10);
+            return scoreA - scoreB;
+        });
+    }
+
+    if (q && (matched.length === 0 || matched.length > 150)) {
+        if (matched.length === 0) {
+            var fallback = allLocations;
+            if (currentBuilding) fallback = fallback.filter(function(a){ return a.building === currentBuilding; });
+            if (currentFloor) fallback = fallback.filter(function(a){ return a.floor === currentFloor; });
+            matched = fallback;
+            var seen2 = {};
+            matched = matched.filter(function(a){
+                var key = a.location;
+                if (seen2[key]) return false;
+                seen2[key] = true;
+                return true;
+            });
+        } else {
+            sug.style.display = 'none';
+            return;
+        }
+    }
+
+    sug.innerHTML = matched.map(function(a){
+        var extra = a.department ? ' <small class="text-muted">(' + a.department + ')</small>' : '';
+        var bdg = ' <span class="badge bg-light text-secondary" style="font-size:10px;">' + a.building + ' ' + a.floor + '</span>';
+        var key = encodeURIComponent(a.building) + '|' + encodeURIComponent(a.floor) + '|' + encodeURIComponent(a.location);
+        return '<a href="#" class="list-group-item list-group-item-action" style="font-size:13px; padding:6px 12px; cursor:pointer;"'
+            + ' data-address-key="' + key + '"'
+            + ' onmousedown="selectLocationByKey(\'' + key + '\')">'
+            + a.location + extra + bdg + '</a>';
+    }).join('');
+    sug.style.display = 'block';
+}
+
+// 当前高亮项索引
+var _suggestionIndex = -1;
+var _titleIndex = -1;
+
+// 工单名称地址建议：按关键字过滤全量地址
+function filterTitleSuggestions() {
+    var input = document.getElementById('title');
+    var q = input.value.trim();
+    var sug = document.getElementById('titleSuggestions');
+    if (!q) { sug.style.display = 'none'; _titleIndex = -1; return; }
+
+    var ql = q.toLowerCase();
+    var matched = [];
+    for (var i = 0; i < allLocations.length; i++) {
+        var a = allLocations[i];
+        if (a.location.toLowerCase().indexOf(ql) >= 0 ||
+            (a.department && a.department.toLowerCase().indexOf(ql) >= 0)) {
+            var dup = false;
+            for (var j = 0; j < matched.length; j++) {
+                if (matched[j].building === a.building && matched[j].floor === a.floor && matched[j].location === a.location) { dup = true; break; }
+            }
+            if (!dup) matched.push(a);
+        }
+    }
+
+    if (matched.length === 0 || matched.length > 200) {
+        sug.style.display = 'none';
+        _titleIndex = -1;
+        return;
+    }
+
+    matched.sort(function(a,b){
+        var sa = a.location === q ? 0 : a.department === q ? 1 : 10;
+        var sb = b.location === q ? 0 : b.department === q ? 1 : 10;
+        return sa - sb;
+    });
+
+    sug.innerHTML = matched.map(function(a){
+        var extra = a.department ? ' <small class="text-muted">(' + a.department + ')</small>' : '';
+        var bdg = ' <span class="badge bg-light text-secondary" style="font-size:10px;">' + a.building + ' ' + a.floor + '</span>';
+        var key = encodeURIComponent(a.building) + '|' + encodeURIComponent(a.floor) + '|' + encodeURIComponent(a.location);
+        return '<a href="#" class="list-group-item list-group-item-action" style="font-size:13px; padding:6px 12px; cursor:pointer;"'
+            + ' data-address-key="' + key + '"'
+            + ' onmousedown="selectTitleItemByKey(\'' + key + '\')">'
+            + a.location + extra + bdg + '</a>';
+    }).join('');
+    sug.style.display = 'block';
+    _titleIndex = -1;
+}
+
+// 故障名称联想
+var _faultTimer = null;
+var _faultIndex = -1;
+
+function filterFaultSuggestions() {
+    var title = document.getElementById('title').value.trim();
+    var faultEl = document.getElementById('faultSuggestions');
+    var buildingHasVal = document.getElementById('building').value !== '';
+    var floorHasVal = document.getElementById('floor').value !== '';
+    if (!buildingHasVal || !floorHasVal) { faultEl.style.display = 'none'; _faultIndex = -1; return; }
+    if (!title) { faultEl.style.display = 'none'; _faultIndex = -1; return; }
+    var parts = title.split(/\s+/);
+    var kw = parts[parts.length - 1] || '';
+    if (kw.length < 1) { faultEl.style.display = 'none'; _faultIndex = -1; return; }
+
+    clearTimeout(_faultTimer);
+    _faultTimer = setTimeout(function(){
+        fetch('/orders/api/solution_suggest?q=' + encodeURIComponent(kw))
+            .then(function(r){ return r.json(); })
+            .then(function(data){
+                if (!data || data.length === 0) {
+                    faultEl.style.display = 'none';
+                    _faultIndex = -1;
+                    return;
+                }
+                faultEl.innerHTML = data.map(function(t, i){
+                    var active = i === _faultIndex ? ' active' : '';
+                    return '<a href="#" class="list-group-item list-group-item-action' + active + '" style="font-size:13px; padding:6px 12px; cursor:pointer;"'
+                        + ' onmousedown="selectFaultItem(\'' + t.replace(/'/g,"\\'") + '\')">'
+                        + t + '</a>';
+                }).join('');
+                faultEl.style.display = 'block';
+            })
+            .catch(function(){
+                faultEl.style.display = 'none';
+                _faultIndex = -1;
+            });
+    }, 200);
+}
+
+function selectFaultItem(val) {
+    var title = document.getElementById('title');
+    var t = title.value.trim();
+    var parts = t.split(/\s+/);
+    parts[parts.length - 1] = val;
+    title.value = parts.join(' ') + ' ';
+    document.getElementById('faultSuggestions').style.display = 'none';
+    _faultIndex = -1;
+    autoDetect();
+    title.focus();
+    var len = title.value.length;
+    title.setSelectionRange(len, len);
+}
+
+// 工单名称键盘导航
+function handleTitleKeydown(e) {
+    var sug = document.getElementById('titleSuggestions');
+    var faultEl = document.getElementById('faultSuggestions');
+
+    if (sug.style.display === 'block') {
+        var items = sug.querySelectorAll('.list-group-item');
+        if (items.length > 0) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                items.forEach(function(el){ el.classList.remove('active','bg-primary','text-white'); });
+                if (_titleIndex < 0) _titleIndex = 0;
+                else _titleIndex = (_titleIndex + 1) % items.length;
+                items[_titleIndex].classList.add('active','bg-primary','text-white');
+                items[_titleIndex].scrollIntoView({block:'nearest'});
+                return false;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                items.forEach(function(el){ el.classList.remove('active','bg-primary','text-white'); });
+                if (_titleIndex <= 0) _titleIndex = items.length;
+                _titleIndex = (_titleIndex - 1 + items.length) % items.length;
+                items[_titleIndex].classList.add('active','bg-primary','text-white');
+                items[_titleIndex].scrollIntoView({block:'nearest'});
+                return false;
+            }
+            if (e.key === 'Enter') {
+                if (_titleIndex >= 0 && _titleIndex < items.length) {
+                    e.preventDefault();
+                    var key = items[_titleIndex].dataset.addressKey;
+                    if (key) { selectTitleItemByKey(key); }
+                    else { selectTitleItem(items[_titleIndex].textContent.trim().split(/\s+\(/)[0]); }
+                    _titleIndex = -1;
+                    return false;
+                }
+                if (items.length > 0) {
+                    e.preventDefault();
+                    var firstKey = items[0].dataset.addressKey;
+                    if (firstKey) { selectTitleItemByKey(firstKey); }
+                    else { selectTitleItem(items[0].textContent.trim().split(/\s+\(/)[0]); }
+                    _titleIndex = -1;
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    if (faultEl.style.display === 'block') {
+        var fitems = faultEl.querySelectorAll('.list-group-item');
+        if (fitems.length > 0) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                fitems.forEach(function(el){ el.classList.remove('active','bg-primary','text-white'); });
+                if (_faultIndex < 0) _faultIndex = 0;
+                else _faultIndex = (_faultIndex + 1) % fitems.length;
+                fitems[_faultIndex].classList.add('active','bg-primary','text-white');
+                fitems[_faultIndex].scrollIntoView({block:'nearest'});
+                return false;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                fitems.forEach(function(el){ el.classList.remove('active','bg-primary','text-white'); });
+                if (_faultIndex <= 0) _faultIndex = fitems.length;
+                _faultIndex = (_faultIndex - 1 + fitems.length) % fitems.length;
+                fitems[_faultIndex].classList.add('active','bg-primary','text-white');
+                fitems[_faultIndex].scrollIntoView({block:'nearest'});
+                return false;
+            }
+            if (e.key === 'Enter') {
+                if (_faultIndex >= 0 && _faultIndex < fitems.length) {
+                    e.preventDefault();
+                    var t = fitems[_faultIndex].textContent.trim();
+                    selectFaultItem(t);
+                    _faultIndex = -1;
+                    return false;
+                }
+                if (fitems.length > 0) {
+                    e.preventDefault();
+                    selectFaultItem(fitems[0].textContent.trim());
+                    _faultIndex = -1;
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+// ===== 通过唯一键（building|floor|location）查找并选中地址 =====
+function findByKey(key) {
+    var parts = key.split('|');
+    if (parts.length !== 3) return null;
+    var building = decodeURIComponent(parts[0]);
+    var floor = decodeURIComponent(parts[1]);
+    var location = decodeURIComponent(parts[2]);
+    for (var i = 0; i < allLocations.length; i++) {
+        if (allLocations[i].building === building &&
+            allLocations[i].floor === floor &&
+            allLocations[i].location === location) {
+            return allLocations[i];
+        }
+    }
+    return null;
+}
+
+// 用唯一键选中工单名称候选地址
+function selectTitleItemByKey(key) {
+    var item = findByKey(key);
+    if (!item) {
+        var parts = key.split('|');
+        var fallbackLoc = decodeURIComponent(parts[2] || '');
+        if (fallbackLoc) selectTitleItem(fallbackLoc);
+        return;
+    }
+    applyTitleItem(item);
+}
+
+// 选中工单名称的候选地址 → 填入标题（老接口，保留兼容）
+function selectTitleItem(val) {
+    var item = null;
+    for (var i = 0; i < allLocations.length; i++) {
+        if (allLocations[i].location === val) { item = allLocations[i]; break; }
+    }
+    if (item && currentBuilding && currentFloor &&
+        (item.building !== currentBuilding || item.floor !== currentFloor)) {
+        var exact = null;
+        for (var j = 0; j < allLocations.length; j++) {
+            if (allLocations[j].location === val &&
+                allLocations[j].building === currentBuilding &&
+                allLocations[j].floor === currentFloor) {
+                exact = allLocations[j];
+                break;
+            }
+        }
+        if (exact) item = exact;
+    }
+    if (!item) { document.getElementById('title').value = val + ' '; autoDetect(); return; }
+    applyTitleItem(item);
+}
+
+function applyTitleItem(item) {
+    var fullAddr = item.building + item.floor.replace('F','楼') + item.location;
+    document.getElementById('title').value = fullAddr + ' ';
+
+    updatePreviewTag('addrBuilding', item.building, true);
+    updatePreviewTag('addrFloor', item.floor, true);
+    updatePreviewTag('addrDept', item.department || '未识别', !!item.department);
+    updatePreviewTag('addrLocation', item.location, true);
+
+    var bSel = document.getElementById('building');
+    if (bSel.querySelector('option[value="' + item.building + '"]')) {
+        delete bSel.dataset.userChanged;
+        delete document.getElementById('floor').dataset.userChanged;
+        delete document.getElementById('locationInput').dataset.userChanged;
+        bSel.value = item.building;
+        loadFloors(function(){
+            var fSel = document.getElementById('floor');
+            if (fSel.querySelector('option[value="' + item.floor + '"]')) {
+                fSel.value = item.floor;
+                fSel.dataset.userChanged = '1';
+                loadAddresses(function(){
+                    setLocationValue(item.location);
+                    document.getElementById('locationInput').dataset.userChanged = '1';
+                });
+            }
+            lastDetected.building = item.building;
+            lastDetected.floor = item.floor;
+            lastDetected.department = item.department || '';
+            lastDetected.location = item.location;
+            updatePreviewTag('addrBuilding', item.building, true);
+            updatePreviewTag('addrFloor', item.floor, true);
+            updatePreviewTag('addrDept', item.department || '', !!item.department);
+            updatePreviewTag('addrLocation', item.location, true);
+            document.getElementById('department').value = item.department || '';
+            updateTitleFromDropdowns();
+            ensureSpaceAfterAddress();
+        });
+    }
+    bSel.dataset.userChanged = '1';
+    document.getElementById('locationSuggestions').style.display = 'none';
+}
+
+// 用唯一键选中位置建议项
+function selectLocationByKey(key) {
+    var item = findByKey(key);
+    if (!item) {
+        var parts = key.split('|');
+        var fallbackLoc = decodeURIComponent(parts[2] || '');
+        if (fallbackLoc) { selectLocationItem(fallbackLoc); }
+        return;
+    }
+    selectLocationByItem(item);
+}
+
+// 直接用 item 对象选中位置（绕过字符串匹配的歧义）
+function selectLocationByItem(item) {
+    setLocationValue(item.location);
+    document.getElementById('locationInput').dataset.userChanged = '1';
+    document.getElementById('location').value = item.location;
+
+    var bSel = document.getElementById('building');
+    if (bSel.querySelector('option[value="' + item.building + '"]')) {
+        bSel.value = item.building;
+        bSel.dataset.userChanged = '1';
+        currentBuilding = item.building;
+    }
+
+    loadFloors(function() {
+        var fSel = document.getElementById('floor');
+        if (fSel.querySelector('option[value="' + item.floor + '"]')) {
+            fSel.value = item.floor;
+            fSel.dataset.userChanged = '1';
+            currentFloor = item.floor;
+        }
+
+        var titleEl = document.getElementById('title');
+        if (!titleEl.value.trim()) {
+            titleEl.value = item.building + item.floor.replace('F','楼') + item.location + ' ';
+        }
+
+        updateTitleFromDropdowns();
+        ensureSpaceAfterAddress();
+        lastDetected.building = item.building;
+        lastDetected.floor = item.floor;
+        lastDetected.department = item.department || '';
+        lastDetected.location = item.location;
+
+        updatePreviewTag('addrBuilding', item.building, true);
+        updatePreviewTag('addrFloor', item.floor, true);
+        updatePreviewTag('addrDept', item.department || '', !!item.department);
+        updatePreviewTag('addrLocation', item.location, true);
+        document.getElementById('department').value = item.department || '';
+    });
+}
+
+// 选择建议项（老接口，保留兼容）
+function selectLocationItem(val) {
+    var item = null;
+    for (var i = 0; i < allLocations.length; i++) {
+        if (allLocations[i].location === val) {
+            item = allLocations[i];
+            break;
+        }
+    }
+
+    if (item && currentBuilding && currentFloor &&
+        (item.building !== currentBuilding || item.floor !== currentFloor)) {
+        var exact = null;
+        for (var j = 0; j < allLocations.length; j++) {
+            if (allLocations[j].location === val &&
+                allLocations[j].building === currentBuilding &&
+                allLocations[j].floor === currentFloor) {
+                exact = allLocations[j];
+                break;
+            }
+        }
+        if (exact) item = exact;
+    }
+
+    setLocationValue(val);
+    document.getElementById('locationInput').dataset.userChanged = '1';
+    document.getElementById('location').value = val;
+
+    if (!item) {
+        var titleEl = document.getElementById('title');
+        if (!titleEl.value.trim()) {
+            var building = document.getElementById('building').value || '';
+            var floor = (document.getElementById('floor').value || '').replace('F','楼') || '';
+            titleEl.value = (building + floor + val + ' ').replace(/楼楼/g,'楼');
+        }
+        updateTitleFromDropdowns();
+        ensureSpaceAfterAddress();
+        return;
+    }
+
+    selectLocationByItem(item);
+}
+
+// 确保标题中地址后面有一个空格
+function ensureSpaceAfterAddress() {
+    var title = document.getElementById('title').value;
+    if (!title) return;
+    var loc = document.getElementById('location').value;
+    if (!loc) return;
+    var idx = title.indexOf(loc);
+    if (idx >= 0) {
+        var after = idx + loc.length;
+        if (after < title.length && title[after] != ' ' && title[after] != '\u3000') {
+            document.getElementById('title').value = title.substring(0, after) + ' ' + title.substring(after);
+        }
+    }
+}
+
+// 反向修正：用户改了下拉 → 自动更新工单名称里的地址
+function updateTitleFromDropdowns() {
+    var title = document.getElementById('title').value;
+    if (!title) return;
+
+    var bOld = lastDetected.building;
+    var fOld = lastDetected.floor;
+    var dOld = lastDetected.department;
+    var lOld = lastDetected.location;
+
+    var bNew = document.getElementById('building').value;
+    var fNew = document.getElementById('floor').value;
+    var lInput = document.getElementById('locationInput');
+    var lNew = lInput.value.trim();
+
+    if (!bNew || bNew.startsWith('请') || bNew.startsWith('加载')) bNew = '';
+    if (!fNew || fNew.startsWith('请') || fNew.startsWith('加载')) fNew = '';
+    if (!lNew || lNew.startsWith('请') || lNew.startsWith('加载')) lNew = '';
+
+    var newTitle = title;
+
+    if (bOld && bNew && bOld != bNew) {
+        newTitle = newTitle.replace(bOld, bNew);
+    }
+
+    if (fOld && fNew && fOld != fNew) {
+        var fOldTexts = [fOld];
+        if (fOld.endsWith('F')) fOldTexts.push(fOld.replace('F', '楼'));
+        var fNewTexts = [fNew];
+        if (fNew.endsWith('F')) fNewTexts.push(fNew.replace('F', '楼'));
+        for (var fi = 0; fi < fOldTexts.length; fi++) {
+            var found = newTitle.indexOf(fOldTexts[fi]);
+            if (found >= 0) {
+                var replaceWith = fi < fNewTexts.length ? fNewTexts[fi] : fNewTexts[0];
+                newTitle = newTitle.substring(0, found) + replaceWith + newTitle.substring(found + fOldTexts[fi].length);
+                break;
+            }
+        }
+    }
+
+    var replaced = false;
+    if (dOld && lNew && dOld != lNew && lNew.indexOf(dOld) === -1 && dOld.length >= 2) {
+        var idx = newTitle.indexOf(dOld);
+        if (idx >= 0) {
+            newTitle = newTitle.substring(0, idx) + lNew + newTitle.substring(idx + dOld.length);
+            replaced = true;
+        }
+    }
+    if (!replaced && lOld && lNew && lOld != lNew) {
+        newTitle = newTitle.replace(lOld, lNew);
+    }
+
+    if (newTitle != title) {
+        document.getElementById('title').value = newTitle;
+        setTimeout(autoDetect, 100);
+    }
+}
+
+function resetDisplays() {
+    updatePreviewTag('faultDisplay', '自动匹配', false);
+    document.getElementById('faultSubcategory').value = '';
+    updatePreviewTag('addrBuilding', '自动识别', false);
+    updatePreviewTag('addrFloor', '自动识别', false);
+    updatePreviewTag('addrDept', '自动识别', false);
+    updatePreviewTag('addrLocation', '自动识别', false);
+}
+
+// 级联加载楼层
+function loadFloors(callback) {
+    window._cascading = true;
+    var b = document.getElementById('building').value;
+    var floorSel = document.getElementById('floor');
+    floorSel.innerHTML = '<option value="">加载中...</option>';
+    if (!b) {
+        floorSel.innerHTML = '<option value="">请先选择楼区</option>';
+        currentBuilding = '';
+        currentFloor = '';
+        window._cascading = false;
+        if (callback) callback();
+        return;
+    }
+    currentBuilding = b;
+    fetch('/orders/api/address/options?building=' + encodeURIComponent(b))
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            floorSel.innerHTML = '<option value="">请选择楼层</option>';
+            (data.floors || []).forEach(function(f){
+                floorSel.innerHTML += '<option value="' + f + '">' + f + '</option>';
+            });
+            window._cascading = false;
+            if (callback) callback();
+        });
+}
+
+// 级联：更新当前楼层 → 刷新可搜索地址池
+function loadAddresses(callback) {
+    window._cascading = true;
+    var f = document.getElementById('floor').value;
+    if (!f) {
+        currentFloor = '';
+        window._cascading = false;
+        if (callback) callback();
+        return;
+    }
+    currentFloor = f;
+    window._cascading = false;
+    if (callback) callback();
+    if (!callback) {
+        var input = document.getElementById('locationInput');
+        if (document.activeElement === input || input.value) {
+            filterLocations();
+        }
+    }
+}
+
+document.getElementById('building').addEventListener('change', function(){
+    this.dataset.userChanged = '1';
+    updateTitleFromDropdowns();
+    loadFloors();
+});
+document.getElementById('floor').addEventListener('change', function(){
+    this.dataset.userChanged = '1';
+    updateTitleFromDropdowns();
+    loadAddresses();
+});
+
+// 提交前确保地址字段准确同步
+document.getElementById('publishBtn').addEventListener('click', function(e) {
+    var b = document.getElementById('building').value;
+    var f = document.getElementById('floor').value;
+    var lInput = document.getElementById('locationInput').value.trim();
+    var lHidden = document.getElementById('location').value.trim();
+    // 如果 locationInput 有值但 hidden 字段为空，同步写入
+    if (lInput && !lHidden) {
+        document.getElementById('location').value = lInput;
+    }
+    // 如果 building 和 floor 都已选但 location 为空，尝试补一个 fallback
+    if (b && f && !document.getElementById('location').value && !lInput) {
+        // 用户只选了楼区楼层没选地址 → 用 department 中的值（如果有）
+        // 否则留空，后端会用 extract_address_from_title 兜底
+    }
+});
+</script>
+{% endblock %}

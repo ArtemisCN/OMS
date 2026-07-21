@@ -1,0 +1,155 @@
+<!-- 供应商管理 -->
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="mb-0 fw-bold" style="font-size:15px;">
+        <i class="fas fa-handshake" style="color:#0891b2;"></i> 供应商管理
+        <span class="text-muted ms-2" style="font-size:12px;font-weight:400;">{{ suppliers|length }} 个供应商</span>
+    </h5>
+    <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-primary" onclick="showAddModal()">
+            <i class="fas fa-plus"></i> 新增供应商
+        </button>
+        <a href="{{ url_for('data.index') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> 返回</a>
+    </div>
+</div>
+
+{% if suppliers %}
+<div class="row g-3">
+    {% for s in suppliers %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100" style="border-radius:10px;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+            <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <strong style="font-size:15px;">{{ s.name }}</strong>
+                        {% if not s.is_active %}<span class="badge bg-secondary ms-1">已禁用</span>{% endif %}
+                    </div>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm btn-outline-primary"
+                                onclick="editSupplier({{ s.id }}, '{{ s.name|e }}', '{{ s.contact or ''|e }}', '{{ s.phone or ''|e }}', '{{ s.address or ''|e }}', '{{ s.service_scope or ''|e }}', '{{ s.contract_end or ''|e }}', '{{ s.notes or ''|e }}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <form method="post" action="{{ url_for('data.toggle_supplier', sid=s.id) }}" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-outline-{{ 'warning' if s.is_active else 'success' }}" title="{{ '停用' if s.is_active else '启用' }}">
+                                <i class="fas fa-{{ 'pause' if s.is_active else 'play' }}"></i>
+                            </button>
+                        </form>
+                        <form method="post" action="{{ url_for('data.delete_supplier', sid=s.id) }}" style="display:inline;"
+                              onsubmit="return confirm('确定删除供应商「{{ s.name }}」？')">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="删除"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </div>
+                </div>
+                <div style="font-size:12px;color:#64748b;line-height:1.8;border-top:1px solid #f1f5f9;padding-top:8px;margin-top:4px;">
+                    {% if s.contact %}<div><i class="fas fa-user me-1"></i> 联系人：{{ s.contact }}{% if s.phone %} · {{ s.phone }}{% endif %}</div>{% endif %}
+                    {% if s.phone and not s.contact %}<div><i class="fas fa-phone me-1"></i> {{ s.phone }}</div>{% endif %}
+                    {% if s.address %}<div><i class="fas fa-map-marker-alt me-1"></i> {{ s.address }}</div>{% endif %}
+                    {% if s.service_scope %}<div><i class="fas fa-tasks me-1"></i> 服务范围：{{ s.service_scope }}</div>{% endif %}
+                    {% if s.contract_end %}
+                    <div>
+                        <i class="fas fa-calendar-alt me-1"></i> 合同截止：
+                        <span class="{% if s.contract_end < now().date() %}text-danger{% else %}text-success{% endif %}">{{ s.contract_end }}</span>
+                    </div>
+                    {% endif %}
+                    {% if s.notes %}<div><i class="fas fa-sticky-note me-1"></i> {{ s.notes }}</div>{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+<div class="text-center mt-4">
+    <button class="btn btn-sm btn-primary" onclick="showAddModal()">
+        <i class="fas fa-plus"></i> 新增供应商
+    </button>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="fas fa-handshake fa-3x mb-3 d-block"></i>
+    暂无供应商，点击下方按钮新增
+</div>
+<div class="text-center mt-2">
+    <button class="btn btn-sm btn-primary" onclick="showAddModal()">
+        <i class="fas fa-plus"></i> 新增供应商
+    </button>
+</div>
+{% endif %}
+
+<!-- 新增/编辑弹窗 -->
+<div class="modal fade" id="supplierModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:12px;">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title fw-bold" id="modalTitle">新增供应商</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" id="supplierForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-medium" style="font-size:13px;">供应商名称 <span class="text-danger">*</span></label>
+                        <input type="text" name="name" id="supName" class="form-control" required placeholder="如：XX医疗设备有限公司">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label" style="font-size:12px;">联系人</label>
+                            <input type="text" name="contact" id="supContact" class="form-control form-control-sm" placeholder="如：张三">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label" style="font-size:12px;">联系电话</label>
+                            <input type="text" name="phone" id="supPhone" class="form-control form-control-sm" placeholder="如：13800138000">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:12px;">地址</label>
+                        <input type="text" name="address" id="supAddress" class="form-control form-control-sm" placeholder="如：北京市朝阳区XX路XX号">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:12px;">服务范围</label>
+                        <input type="text" name="service_scope" id="supScope" class="form-control form-control-sm" placeholder="如：医疗设备维修、配件供应">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:12px;">合同截止日期</label>
+                        <input type="date" name="contract_end" id="supContractEnd" class="form-control form-control-sm">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:12px;">备注</label>
+                        <textarea name="notes" id="supNotes" class="form-control form-control-sm" rows="2" placeholder="其他补充信息"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-save"></i> 保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function showAddModal() {
+    document.getElementById('modalTitle').textContent = '新增供应商';
+    document.getElementById('supplierForm').action = '{{ url_for("data.add_supplier") }}';
+    document.getElementById('supName').value = '';
+    document.getElementById('supContact').value = '';
+    document.getElementById('supPhone').value = '';
+    document.getElementById('supAddress').value = '';
+    document.getElementById('supScope').value = '';
+    document.getElementById('supContractEnd').value = '';
+    document.getElementById('supNotes').value = '';
+    new bootstrap.Modal(document.getElementById('supplierModal')).show();
+}
+function editSupplier(id, name, contact, phone, address, scope, contractEnd, notes) {
+    document.getElementById('modalTitle').textContent = '编辑供应商';
+    document.getElementById('supplierForm').action = '/data/suppliers/' + id + '/edit';
+    document.getElementById('supName').value = name;
+    document.getElementById('supContact').value = contact;
+    document.getElementById('supPhone').value = phone;
+    document.getElementById('supAddress').value = address;
+    document.getElementById('supScope').value = scope;
+    document.getElementById('supContractEnd').value = contractEnd;
+    document.getElementById('supNotes').value = notes;
+    new bootstrap.Modal(document.getElementById('supplierModal')).show();
+}
+</script>
+{% endblock %}

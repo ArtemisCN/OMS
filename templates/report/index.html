@@ -1,0 +1,659 @@
+<!-- ===== 月度报表 — 重设计：运维 · 库存 · 维修 · 资产 四大板块 ===== -->
+{% extends "base.html" %}
+{% block extra_head %}
+<style>
+/* === Global === */
+:root {
+  --rpt-primary: #4f46e5; --rpt-success: #10b981; --rpt-warning: #f59e0b;
+  --rpt-danger: #ef4444; --rpt-info: #0ea5e9; --rpt-purple: #8b5cf6;
+  --rpt-pink: #ec4899; --rpt-amber: #f97316;
+}
+.section-card { margin-bottom:24px; }
+.section-card:last-child { margin-bottom:0; }
+
+/* === Section Headers === */
+.rpt-section { border-radius:12px; overflow:hidden; margin-bottom:24px; }
+.rpt-section-header { padding:12px 18px; display:flex; align-items:center; gap:10px; font-size:14px; font-weight:700; color:#fff; }
+.rpt-section-header .sub { font-size:11px; font-weight:400; opacity:.8; margin-left:auto; }
+.rpt-section-body { padding:16px 18px; }
+.rpt-section-body.grid-body { padding:12px 14px; }
+
+/* Section colors */
+.rpt-ops .rpt-section-header { background:linear-gradient(135deg,#4f46e5,#6366f1); }
+.rpt-sla .rpt-section-header { background:linear-gradient(135deg,#d97706,#f59e0b); }
+.rpt-stock .rpt-section-header { background:linear-gradient(135deg,#059669,#10b981); }
+.rpt-repair .rpt-section-header { background:linear-gradient(135deg,#0891b2,#06b6d4); }
+.rpt-asset .rpt-section-header { background:linear-gradient(135deg,#7c3aed,#8b5cf6); }
+
+/* === KPI Bar === */
+.kpi-bar { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:8px; margin-bottom:0; }
+.kpi-card { text-align:center; padding:12px 6px; border-radius:8px; border:1px solid var(--card-border); background:var(--modal-bg); }
+.kpi-card .num { font-size:20px; font-weight:800; line-height:1.2; }
+.kpi-card .lbl { font-size:10px; color:#94a3b8; margin-top:2px; font-weight:500; letter-spacing:.3px; text-transform:uppercase; }
+
+/* === Grid Layouts === */
+.rpt-2col { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.rpt-3col { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+.rpt-4col { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:12px; }
+
+/* === Compact Table === */
+.rpt-table { width:100%; font-size:11px; border-collapse:collapse; }
+.rpt-table th { padding:5px 6px; font-weight:600; color:#64748b; text-align:left; border-bottom:2px solid #e2e8f0; white-space:nowrap; font-size:10px; letter-spacing:.2px; text-transform:uppercase; }
+.rpt-table td { padding:4px 6px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+.rpt-table tr:last-child td { border-bottom:none; }
+
+/* === Mini Bar === */
+.mini-bar { height:4px; border-radius:2px; background:#f1f5f9; overflow:hidden; min-width:40px; }
+.mini-bar .fill { height:100%; border-radius:2px; transition:width .4s; }
+
+/* === Rank === */
+.rnk { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; font-size:9px; font-weight:700; }
+.rnk-1 { background:#fef2f2; color:#dc2626; } .rnk-2 { background:#fff7ed; color:#ea580c; } .rnk-3 { background:#fefce8; color:#ca8a04; }
+.rnk-muted { background:#f1f5f9; color:#94a3b8; }
+
+/* === Badge === */
+.rpt-badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:600; }
+.rpt-badge.green { background:#d1fae5; color:#065f46; }
+.rpt-badge.red { background:#fee2e2; color:#991b1b; }
+.rpt-badge.amber { background:#fef3c7; color:#92400e; }
+.rpt-badge.blue { background:#e0e7ff; color:#4338ca; }
+.rpt-badge.gray { background:#f3f4f6; color:#6b7280; }
+
+/* === Sub-section Title === */
+.rpt-sub { font-size:12px; font-weight:600; color:#334155; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+.rpt-sub .more { font-size:10px; font-weight:400; color:#94a3b8; margin-left:auto; }
+
+/* === Charts === */
+.chart-box { height:160px; position:relative; }
+.chart-box-sm { height:100px; }
+
+/* === Dense Inline === */
+.dense-inline { display:flex; gap:4px; flex-wrap:wrap; }
+.dense-inline > * { flex:1; min-width:80px; }
+
+/* === Scroll Table === */
+.scroll-200 { max-height:200px; overflow-y:auto; }
+.scroll-160 { max-height:160px; overflow-y:auto; }
+
+/* === Empty === */
+.rpt-empty { text-align:center; padding:24px 0; color:#94a3b8; font-size:11px; }
+.rpt-empty i { font-size:20px; display:block; margin-bottom:4px; color:#e2e8f0; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set ov = data.overview %}
+
+
+<!-- ===== 顶部：标题 + 日期选择 + 下载 ===== -->
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="mb-0 fw-bold" style="font-size:15px;">
+        <i class="fas fa-file-excel" style="color:#059669;"></i> 月度报表
+        <span class="text-muted ms-2" style="font-size:12px;font-weight:400;">{{ ov.label }}</span>
+    </h5>
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        <form class="d-flex gap-1" method="get" action="{{ url_for('report.report_page') }}">
+            <select name="year" onchange="this.form.submit()" style="font-size:12px;border-radius:6px;border:1px solid #d0d5dd;padding:4px 10px;">
+                {% for y in range(now.year, now.year-3, -1) %}
+                <option value="{{ y }}" {{ 'selected' if y==selected_year }}>{{ y }}年</option>
+                {% endfor %}
+            </select>
+            <select name="month" onchange="this.form.submit()" style="font-size:12px;border-radius:6px;border:1px solid #d0d5dd;padding:4px 10px;">
+                <option value="0" {{ 'selected' if selected_month==0 }}>全年</option>
+                {% for m in range(1, 13) %}
+                <option value="{{ m }}" {{ 'selected' if m==selected_month }}>{{ m }}月</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:11px;"><i class="fas fa-sync-alt"></i></button>
+        </form>
+        <a href="{{ url_for('report.download_report', year=selected_year, month=selected_month) }}" class="btn btn-sm btn-success py-1 px-3" style="font-size:11px;">
+            <i class="fas fa-download"></i> 下载Excel
+        </a>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- 🛠️ 板块一：运维工单概况 -->
+<!-- ================================================================== -->
+<div class="rpt-section rpt-ops">
+    <div class="rpt-section-header">
+        <i class="fas fa-wrench"></i> 运维工单概况
+        <span class="sub">共 {{ ov.total }} 条 · 完成率 {{ ov.complete_rate }}% · 平均响应 {{ ov.avg_response }}h</span>
+    </div>
+    <div class="rpt-section-body">
+
+        <!-- KPI 指标条 -->
+        <div class="kpi-bar">
+            <div class="kpi-card"><div class="num" style="color:var(--rpt-primary);">{{ ov.total }}</div><div class="lbl">工单总数</div></div>
+            <div class="kpi-card"><div class="num" style="color:var(--rpt-success);">{{ ov.completed }}</div><div class="lbl">已完成</div></div>
+            <div class="kpi-card"><div class="num" style="color:var(--rpt-warning);">{{ ov.in_progress }}</div><div class="lbl">处理中</div></div>
+            <div class="kpi-card"><div class="num" style="color:var(--rpt-danger);">{{ ov.pending }}</div><div class="lbl">待接单</div></div>
+            <div class="kpi-card"><div class="num" style="color:var(--rpt-info);">{{ ov.avg_response }}h</div><div class="lbl">平均响应</div></div>
+            <div class="kpi-card"><div class="num" style="color:var(--rpt-purple);">{{ ov.avg_complete }}h</div><div class="lbl">平均完成</div></div>
+            <div class="kpi-card"><div class="num" style="color:var(--rpt-success);">{{ ov.complete_rate }}%</div><div class="lbl">完成率</div></div>
+        </div>
+    </div>
+
+    <!-- 双列：周趋势 + 故障类型 -->
+    <div class="rpt-section-body grid-body" style="padding-top:0;">
+        <div class="rpt-2col">
+            <!-- 左：各周/月趋势 -->
+            <div>
+                <div class="rpt-sub"><i class="fas fa-chart-bar" style="color:var(--rpt-primary);"></i> {{ '各月趋势' if selected_month == 0 else '各周趋势' }}</div>
+                <table class="rpt-table">
+                    <thead><tr><th>周次</th><th style="text-align:right;">工单</th><th style="text-align:right;">完成</th><th>进度</th></tr></thead>
+                    <tbody>
+                        {% for w in data.weekly %}
+                        {% set wpct = (w.completed/w.total*100)|int if w.total else 0 %}
+                        <tr>
+                            <td><strong>{{ w.week }}</strong></td>
+                            <td style="text-align:right;">{{ w.total }}</td>
+                            <td style="text-align:right;">{{ w.completed }}</td>
+                            <td><div class="mini-bar"><div class="fill" style="width:{{ wpct }}%;background:var(--rpt-primary);"></div></div></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <!-- 右：故障类型 TOP 10 -->
+            <div>
+                <div class="rpt-sub"><i class="fas fa-bug" style="color:var(--rpt-amber);"></i> 故障类型 TOP 10</div>
+                <table class="rpt-table">
+                    <thead><tr><th style="width:20px;">#</th><th>类型</th><th style="text-align:right;width:40px;">数</th><th style="width:50px;">占比</th></tr></thead>
+                    <tbody>
+                        {% for f in data.fault_stats[:10] %}
+                        <tr>
+                            <td><span class="rnk rnk-{{ f.rank if f.rank <= 3 else 'muted' }}">{{ f.rank }}</span></td>
+                            <td><strong style="font-size:11px;">{{ f.type }}</strong></td>
+                            <td style="text-align:right;">{{ f.count }}</td>
+                            <td><div class="mini-bar"><div class="fill" style="width:{{ f.pct }}%;background:var(--rpt-amber);"></div></div></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 三列：科室排行 + 人员排行 + 紧急程度 -->
+    <div class="rpt-section-body grid-body" style="padding-top:0;">
+        <div class="rpt-3col">
+            <!-- 科室排行 -->
+            <div>
+                <div class="rpt-sub"><i class="fas fa-building" style="color:var(--rpt-info);"></i> 报修科室 TOP 10</div>
+                <table class="rpt-table">
+                    <thead><tr><th style="width:18px;">#</th><th>科室</th><th style="text-align:right;width:32px;">单</th><th>占比</th></tr></thead>
+                    <tbody>
+                        {% for d in data.dept_stats[:10] %}
+                        <tr>
+                            <td><span class="rnk rnk-{{ d.rank if d.rank <= 3 else 'muted' }}">{{ d.rank }}</span></td>
+                            <td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ d.department }}">{{ d.department }}</td>
+                            <td style="text-align:right;">{{ d.count }}</td>
+                            <td><div class="mini-bar"><div class="fill" style="width:{{ d.pct }}%;background:var(--rpt-info);"></div></div></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <!-- 人员排行 -->
+            <div>
+                <div class="rpt-sub"><i class="fas fa-users" style="color:var(--rpt-success);"></i> 处理人员排行</div>
+                <table class="rpt-table">
+                    <thead><tr><th style="width:18px;">#</th><th>姓名</th><th style="text-align:right;width:32px;">完成</th><th>占比</th></tr></thead>
+                    <tbody>
+                        {% for p in data.person_stats[:10] %}
+                        <tr>
+                            <td><span class="rnk rnk-{{ p.rank if p.rank <= 3 else 'muted' }}">{{ p.rank }}</span></td>
+                            <td><strong style="font-size:11px;">{{ p.name }}</strong></td>
+                            <td style="text-align:right;">{{ p.count }}</td>
+                            <td><div class="mini-bar"><div class="fill" style="width:{{ p.pct }}%;background:var(--rpt-success);"></div></div></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <!-- 紧急程度 + 时段 -->
+            <div>
+                <div class="rpt-sub"><i class="fas fa-exclamation-triangle" style="color:var(--rpt-danger);"></i> 紧急程度</div>
+                <div style="display:flex;gap:6px;margin-bottom:10px;">
+                    {% for p in data.priority_stats %}
+                    {% set c = {'普通':'var(--rpt-success)','加急':'var(--rpt-warning)','紧急':'var(--rpt-danger)'}.get(p.priority, 'var(--rpt-primary)') %}
+                    <div style="flex:1;text-align:center;padding:8px 4px;border-radius:6px;border:1px solid var(--card-border);">
+                        <div style="font-size:16px;font-weight:700;color:{{ c }};">{{ p.count }}</div>
+                        <div style="font-size:9px;color:#94a3b8;">{{ p.priority }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="rpt-sub" style="margin-top:8px;"><i class="fas fa-calendar-week" style="color:var(--rpt-purple);"></i> 时段分布</div>
+                <div style="display:flex;gap:4px;">
+                    {% for h in data.dow_dist %}
+                    {% set dc = {'周一':'var(--rpt-primary)','周二':'var(--rpt-success)','周三':'var(--rpt-info)','周四':'var(--rpt-amber)','周五':'var(--rpt-warning)','周六':'var(--rpt-danger)','周日':'var(--rpt-purple)'} %}
+                    <div style="flex:1;text-align:center;">
+                        <div style="font-size:12px;font-weight:700;color:{{ dc.get(h.day,'#64748b') }};">{{ h.count }}</div>
+                        <div style="font-size:8px;color:#94a3b8;">{{ h.day[:1] }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 楼区分布 + 设备故障 + 非工作时间 -->
+    <div class="rpt-section-body grid-body" style="padding-top:0;">
+        <div class="rpt-3col">
+            <div>
+                <div class="rpt-sub"><i class="fas fa-map-marker-alt" style="color:#7c3aed;"></i> 楼区分布 TOP 8</div>
+                <table class="rpt-table">
+                    <thead><tr><th style="width:18px;">#</th><th>楼区</th><th style="text-align:right;width:32px;">单</th><th>占比</th></tr></thead>
+                    <tbody>
+                        {% for b in data.building_stats[:8] %}
+                        <tr>
+                            <td><span class="rnk rnk-muted">{{ b.rank }}</span></td>
+                            <td style="font-size:11px;">{{ b.building }}</td>
+                            <td style="text-align:right;">{{ b.count }}</td>
+                            <td><div class="mini-bar"><div class="fill" style="width:{{ b.pct }}%;background:#7c3aed;"></div></div></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div>
+                <div class="rpt-sub"><i class="fas fa-desktop" style="color:var(--rpt-info);"></i> 设备故障排行</div>
+                <table class="rpt-table">
+                    <thead><tr><th style="width:18px;">#</th><th>设备类型</th><th style="text-align:right;width:32px;">数</th></tr></thead>
+                    <tbody>
+                        {% for d in (data.device_fault_stats or [])[:8] %}
+                        <tr>
+                            <td><span class="rnk rnk-muted">{{ loop.index }}</span></td>
+                            <td style="font-size:11px;">{{ d.device_type }}</td>
+                            <td style="text-align:right;">{{ d.count }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div>
+                <div class="rpt-sub"><i class="fas fa-clock" style="color:#6366f1;"></i> 非工作时间工单</div>
+                <div style="display:flex;gap:6px;">
+                    <div style="flex:1;text-align:center;padding:8px 4px;border-radius:6px;background:#f0fdf4;">
+                        <div style="font-size:16px;font-weight:700;color:#059669;">{{ data.work_time_count or 0 }}</div>
+                        <div style="font-size:9px;color:#64748b;">工作时间</div>
+                    </div>
+                    <div style="flex:1;text-align:center;padding:8px 4px;border-radius:6px;background:#fef9c3;">
+                        <div style="font-size:16px;font-weight:700;color:#d97706;">{{ data.night_count }}</div>
+                        <div style="font-size:9px;color:#64748b;">夜间 {{ data.night_pct or 0 }}%</div>
+                    </div>
+                    <div style="flex:1;text-align:center;padding:8px 4px;border-radius:6px;background:#fef2f2;">
+                        <div style="font-size:16px;font-weight:700;color:#dc2626;">{{ data.weekend_count }}</div>
+                        <div style="font-size:9px;color:#64748b;">周末 {{ data.weekend_pct or 0 }}%</div>
+                    </div>
+                </div>
+                {% if data.after_hours_dist %}
+                <div style="margin-top:4px;">
+                    {% set max_night = data.after_hours_dist|max(attribute='count') %}{% set max_night_val = max_night.count if max_night and max_night.count > 0 else 1 %}
+                    {% for h in data.after_hours_dist[:6] %}
+                    <div style="display:flex;align-items:center;gap:4px;margin-top:2px;">
+                        <span style="font-size:9px;color:#94a3b8;width:28px;">{{ h.hour }}</span>
+                        <div class="mini-bar" style="flex:1;"><div class="fill" style="width:{{ (h.count/max_night_val*100)|int }}%;background:#6366f1;"></div></div>
+                        <span style="font-size:9px;color:#64748b;">{{ h.count }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- ⏱ 板块二：时效分析 -->
+<!-- ================================================================== -->
+<div class="rpt-section rpt-sla">
+    <div class="rpt-section-header">
+        <i class="fas fa-stopwatch"></i> 时效分析
+        <span class="sub">达标率 {{ data.resp_compliance_rate }}% · 达标 {{ data.resp_ok }}/{{ data.resp_total }} 单</span>
+    </div>
+    <div class="rpt-section-body">
+
+        <!-- 双列：SLA 排行 + 超时工单 -->
+        <div class="rpt-2col">
+            <!-- SLA 排行 -->
+            <div>
+                <div class="rpt-sub"><i class="fas fa-tachometer-alt" style="color:var(--rpt-warning);"></i> SLA 时效排行</div>
+                <div class="scroll-200">
+                <table class="rpt-table">
+                    <thead><tr><th style="width:18px;">#</th><th>姓名</th><th style="text-align:right;">单</th><th style="text-align:right;">响应</th><th style="text-align:right;">解决</th><th style="text-align:right;">超时</th><th>评级</th></tr></thead>
+                    <tbody>
+                        {% for p in (data.sla_analysis or [])[:15] %}
+                        {% set lbl = p.sla_label %}
+                        {% set pc = '#10b981' %}
+                        {% if '较慢' in lbl %}{% set pc = '#f97316' %}{% elif '慢' in lbl %}{% set pc = '#ef4444' %}{% endif %}
+                        <tr>
+                            <td><span class="rnk rnk-muted">{{ loop.index }}</span></td>
+                            <td><strong style="font-size:11px;">{{ p.name }}</strong></td>
+                            <td style="text-align:right;">{{ p.total }}</td>
+                            <td style="text-align:right;font-weight:600;color:{{ 'var(--rpt-success)' if p.avg_resp <= 30 else 'var(--rpt-warning)' if p.avg_resp <= 60 else 'var(--rpt-danger)' }};">{{ p.avg_resp }}分</td>
+                            <td style="text-align:right;">{{ '%.1f'|format(p.avg_resol/60) if p.avg_resol else '-' }}h</td>
+                            <td style="text-align:right;">{% if p.overdue > 0 %}<span style="color:#ef4444;font-weight:700;">{{ p.overdue }}</span>{% else %}0{% endif %}</td>
+                            <td><span class="rpt-badge" style="background:{{ pc }}15;color:{{ pc }};">{{ lbl }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+            </div>
+            <!-- 超时工单 + 耗时分析 -->
+            <div>
+                <div class="rpt-sub"><i class="fas fa-clock" style="color:var(--rpt-danger);"></i> 超时工单 TOP 5</div>
+                {% if data.overdue_list %}
+                <table class="rpt-table">
+                    <thead><tr><th>工单</th><th>处理人</th><th style="text-align:right;">耗时</th></tr></thead>
+                    <tbody>
+                        {% for o in data.overdue_list[:5] %}
+                        <tr>
+                            <td><a href="{{ url_for('orders.detail', order_id=o.id) }}" target="_blank" style="font-size:11px;">#{{ o.id }}</a></td>
+                            <td style="font-size:11px;">{{ o.person }}</td>
+                            <td style="text-align:right;"><span class="rpt-badge red">{{ o.hours }}h</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}<div class="rpt-empty"><i class="fas fa-check-circle" style="color:var(--rpt-success) !important;"></i>本月暂无超时工单</div>{% endif %}
+
+                <!-- 耗时详情 -->
+                <div class="rpt-sub" style="margin-top:8px;"><i class="fas fa-hourglass-half" style="color:var(--rpt-primary);"></i> 阶段耗时</div>
+                {% set st = data.stage_times %}
+                <div style="display:flex;gap:6px;">
+                    <div style="flex:1;padding:8px 6px;border-radius:6px;background:var(--table-bg);text-align:center;">
+                        <div style="font-size:14px;font-weight:700;color:var(--rpt-primary);">{{ st.to_accept }}min</div>
+                        <div style="font-size:9px;color:#94a3b8;">创建→接单</div>
+                    </div>
+                    <div style="flex:1;padding:8px 6px;border-radius:6px;background:var(--table-bg);text-align:center;">
+                        <div style="font-size:14px;font-weight:700;color:var(--rpt-warning);">{{ st.accept_to_complete }}min</div>
+                        <div style="font-size:9px;color:#94a3b8;">接单→完成</div>
+                    </div>
+                    <div style="flex:1;padding:8px 6px;border-radius:6px;background:#eef2ff;text-align:center;">
+                        <div style="font-size:14px;font-weight:700;color:var(--rpt-primary);">{{ st.total }}min</div>
+                        <div style="font-size:9px;color:#94a3b8;">总耗时</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 响应达标率（按人） + 重复报修 -->
+        <div class="rpt-2col" style="margin-top:12px;">
+            <div>
+                <div class="rpt-sub"><i class="fas fa-check-circle" style="color:var(--rpt-success);"></i> 响应达标率（≤30分钟）</div>
+                {% if data.person_compliance %}
+                <div class="scroll-160">
+                <table class="rpt-table">
+                    <thead><tr><th>人员</th><th style="text-align:right;">接单</th><th style="text-align:right;">达标</th><th style="text-align:right;">达标率</th></tr></thead>
+                    <tbody>
+                        {% for pc in data.person_compliance %}
+                        <tr>
+                            <td style="font-size:11px;">{{ pc.name }}</td>
+                            <td style="text-align:right;">{{ pc.count }}</td>
+                            <td style="text-align:right;">{{ pc.ok }}</td>
+                            <td style="text-align:right;"><span class="rpt-badge {{ 'green' if pc.rate >= 80 else 'amber' if pc.rate >= 50 else 'red' }}">{{ pc.rate }}%</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+                {% else %}<div class="rpt-empty">暂无接单数据</div>{% endif %}
+            </div>
+            <div>
+                <div class="rpt-sub"><i class="fas fa-redo" style="color:var(--rpt-purple);"></i> 重复报修分析（≥2次）</div>
+                {% if data.repeat_analysis %}
+                <div class="scroll-160">
+                <table class="rpt-table">
+                    <thead><tr><th>位置</th><th>故障</th><th style="text-align:right;">次数</th><th>最近</th></tr></thead>
+                    <tbody>
+                        {% for r in data.repeat_analysis[:10] %}
+                        <tr>
+                            <td style="font-size:10px;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.address }}</td>
+                            <td style="font-size:10px;">{{ r.fault_type }}</td>
+                            <td style="text-align:right;"><span class="rpt-badge red">{{ r.count }}次</span></td>
+                            <td style="font-size:10px;">{{ r.last_time }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+                {% else %}<div class="rpt-empty"><i class="fas fa-check-circle" style="color:var(--rpt-success) !important;"></i>本月暂无重复报修</div>{% endif %}
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- 📦 板块三：物资库存 -->
+<!-- ================================================================== -->
+<div class="rpt-section rpt-stock">
+    <div class="rpt-section-header">
+        <i class="fas fa-boxes"></i> 物资库存
+        <span class="sub">耗材入库 {{ data.con_in }}/{{ data.con_qty_in }} · 出库 {{ data.con_out }}/{{ data.con_qty_out }}  · 备件入库 {{ data.sp_in }}/{{ data.sp_qty_in }} · 出库 {{ data.sp_out }}/{{ data.sp_qty_out }}</span>
+    </div>
+    <div class="rpt-section-body">
+        <div class="rpt-2col">
+            <!-- 耗材 -->
+            <div>
+                <div class="rpt-sub"><i class="fas fa-tint" style="color:var(--rpt-pink);"></i> 耗材出入库记录</div>
+                {% if data.consumable_records %}
+                <div class="scroll-200">
+                <table class="rpt-table">
+                    <thead><tr><th>时间</th><th>名称</th><th>类型</th><th style="text-align:right;">数量</th><th>操作人</th></tr></thead>
+                    <tbody>
+                        {% for r in data.consumable_records[:20] %}
+                        <tr>
+                            <td style="white-space:nowrap;font-size:10px;">{{ r.time }}</td>
+                            <td style="font-size:10px;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.name }}</td>
+                            <td>{% if r.type == '入库' %}<span class="rpt-badge green">入</span>{% else %}<span class="rpt-badge amber">出</span>{% endif %}</td>
+                            <td style="text-align:right;font-weight:600;">{{ r.quantity }}</td>
+                            <td style="font-size:10px;">{{ r.operator }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+                {% else %}<div class="rpt-empty"><i class="fas fa-inbox"></i>本月暂无耗材出入库</div>{% endif %}
+            </div>
+            <!-- 备件 -->
+            <div>
+                <div class="rpt-sub"><i class="fas fa-cogs" style="color:var(--rpt-purple);"></i> 备件出入库记录</div>
+                {% if data.spare_records %}
+                <div class="scroll-200">
+                <table class="rpt-table">
+                    <thead><tr><th>时间</th><th>名称</th><th>类型</th><th style="text-align:right;">数量</th><th>操作人</th></tr></thead>
+                    <tbody>
+                        {% for r in data.spare_records[:20] %}
+                        <tr>
+                            <td style="white-space:nowrap;font-size:10px;">{{ r.time }}</td>
+                            <td style="font-size:10px;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.name }}</td>
+                            <td>{% if r.type == '入库' %}<span class="rpt-badge green">入</span>{% else %}<span class="rpt-badge amber">出</span>{% endif %}</td>
+                            <td style="text-align:right;font-weight:600;">{{ r.quantity }}</td>
+                            <td style="font-size:10px;">{{ r.operator }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+                {% else %}<div class="rpt-empty"><i class="fas fa-inbox"></i>本月暂无备件出入库</div>{% endif %}
+
+                <!-- 备件出库详情（按科室汇总） -->
+                {% set so = data.stock_outbound if data.stock_outbound is mapping else {} %}
+                {% if so and so.get('dept_stats') %}
+                <div class="rpt-sub" style="margin-top:8px;">
+                    <i class="fas fa-truck-loading" style="color:var(--rpt-success);"></i> 备件出库 · 按科室
+                    <span class="more">共 {{ so.get('total_items', 0) }} 件</span>
+                </div>
+                <table class="rpt-table">
+                    <thead><tr><th>科室</th><th style="text-align:right;">次数</th><th style="text-align:right;">数量</th></tr></thead>
+                    <tbody>
+                        {% for ds in so.get('dept_stats', [])[:8] %}
+                        <tr>
+                            <td style="font-size:10px;">{{ ds.get('department', '') }}</td>
+                            <td style="text-align:right;">{{ ds.get('count', 0) }}</td>
+                            <td style="text-align:right;font-weight:600;">{{ ds.get('items', 0) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- 🔧 板块四：维修管理 -->
+<!-- ================================================================== -->
+{% set rs = data.repair_stats %}
+{% if rs.total > 0 %}
+<div class="rpt-section rpt-repair">
+    <div class="rpt-section-header">
+        <i class="fas fa-wrench"></i> 维修管理
+        <span class="sub">共 {{ rs.total }} 单 · 通过率 {{ rs.approval_rate }}%</span>
+    </div>
+    <div class="rpt-section-body">
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+            <div style="flex:1;text-align:center;padding:10px 6px;border-radius:8px;background:var(--table-bg);">
+                <div style="font-size:18px;font-weight:700;color:var(--rpt-primary);">{{ rs.total }}</div>
+                <div style="font-size:10px;color:#94a3b8;">总数</div>
+            </div>
+            <div style="flex:1;text-align:center;padding:10px 6px;border-radius:8px;background:var(--table-bg);">
+                <div style="font-size:18px;font-weight:700;color:#94a3b8;">{{ rs.draft }}</div>
+                <div style="font-size:10px;color:#94a3b8;">草稿</div>
+            </div>
+            <div style="flex:1;text-align:center;padding:10px 6px;border-radius:8px;background:var(--table-bg);">
+                <div style="font-size:18px;font-weight:700;color:var(--rpt-warning);">{{ rs.pending }}</div>
+                <div style="font-size:10px;color:#94a3b8;">待审核</div>
+            </div>
+            <div style="flex:1;text-align:center;padding:10px 6px;border-radius:8px;background:var(--table-bg);">
+                <div style="font-size:18px;font-weight:700;color:var(--rpt-success);">{{ rs.approved }}</div>
+                <div style="font-size:10px;color:#94a3b8;">已通过</div>
+            </div>
+            <div style="flex:1;text-align:center;padding:10px 6px;border-radius:8px;background:var(--table-bg);">
+                <div style="font-size:18px;font-weight:700;color:var(--rpt-danger);">{{ rs.rejected }}</div>
+                <div style="font-size:10px;color:#94a3b8;">已驳回</div>
+            </div>
+        </div>
+        <div class="rpt-2col">
+            <div>
+                <div class="rpt-sub"><i class="fas fa-chart-bar"></i> 维修单趋势</div>
+                {% if rs.trend %}{% set r_max = rs.trend|max(attribute='count') %}{% set r_max_val = r_max.count if r_max.count > 0 else 1 %}{% else %}{% set r_max_val = 1 %}{% endif %}
+                {% for w in rs.trend %}
+                <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px;">
+                    <span style="font-size:9px;color:#94a3b8;width:30px;">{{ w.week }}</span>
+                    <div class="mini-bar" style="flex:1;"><div class="fill" style="width:{{ (w.count/r_max_val*100)|int }}%;background:var(--rpt-info);"></div></div>
+                    <span style="font-size:9px;color:#64748b;">{{ w.count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            <div>
+                <div class="rpt-sub"><i class="fas fa-file-invoice"></i> 维修模板分布</div>
+                {% if rs.template_stats %}{% set _rt = rs.template_stats|max(attribute='count') %}{% set rt_max_val = _rt.count if _rt and _rt.count > 0 else 1 %}{% else %}{% set rt_max_val = 1 %}{% endif %}
+                {% for t in (rs.template_stats or [])[:6] %}
+                <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px;">
+                    <span style="font-size:9px;color:#334155;width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ t.name }}</span>
+                    <div class="mini-bar" style="flex:1;"><div class="fill" style="width:{{ (t.count/rt_max_val*100)|int }}%;background:#0ea5e9;"></div></div>
+                    <span style="font-size:9px;color:#64748b;">{{ t.count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ================================================================== -->
+<!-- 🖥️ 板块五：资产管理 -->
+<!-- ================================================================== -->
+<div class="rpt-section rpt-asset">
+    <div class="rpt-section-header">
+        <i class="fas fa-server"></i> 资产管理
+        <span class="sub">资产 {{ data.asset_status|length if data.asset_status is iterable and data.asset_status is not string else '-' }} 类</span>
+    </div>
+    <div class="rpt-section-body">
+        <div class="rpt-2col">
+            <div>
+                <div class="rpt-sub"><i class="fas fa-shield-alt" style="color:var(--rpt-warning);"></i> 即将过保设备（30天内）</div>
+                {% if data.expiring_list %}
+                <div class="scroll-160">
+                {% for a in data.expiring_list[:15] %}
+                <div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #f1f5f9;font-size:10px;">
+                    <span style="font-weight:600;min-width:70px;">{{ a.asset_no }}</span>
+                    <span class="text-muted">{{ a.device_type }}</span>
+                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ a.department }}</span>
+                    <span style="color:{{ '#ef4444' if a.days_left <= 7 else '#f59e0b' }};font-weight:700;">{{ a.days_left }}天</span>
+                </div>
+                {% endfor %}
+                </div>
+                {% else %}<div class="rpt-empty"><i class="fas fa-check-circle" style="color:var(--rpt-success) !important;"></i>本月暂无临近过保设备</div>{% endif %}
+            </div>
+            <div>
+                <div class="rpt-sub"><i class="fas fa-history"></i> 本月资产变更记录</div>
+                {% if data.asset_log_list %}
+                <div class="scroll-160">
+                <table class="rpt-table">
+                    <thead><tr><th>时间</th><th>操作</th><th>资产编号</th><th>操作人</th></tr></thead>
+                    <tbody>
+                        {% for log in data.asset_log_list[:20] %}
+                        <tr>
+                            <td style="white-space:nowrap;font-size:10px;">{{ log.time }}</td>
+                            <td><span class="rpt-badge gray" style="font-size:9px;">{{ log.action }}</span></td>
+                            <td style="font-size:10px;font-weight:600;">{{ log.asset_no }}</td>
+                            <td style="font-size:10px;">{{ log.operator }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+                {% else %}<div class="rpt-empty"><i class="fas fa-inbox"></i>本月暂无资产变更记录</div>{% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/vendor/chartjs/chart.umd.min.js"></script>
+<script>
+// ===== 全年故障趋势图（仅全年模式显示） =====
+{% if selected_month == 0 and data.yearly_fault_chart and data.yearly_fault_chart.datasets and data.yearly_fault_chart.datasets|length %}
+(function(){
+    document.getElementById('yearlyChartWrap').style.display = 'block';
+    // Simple stacked bar
+    var ctx = document.getElementById('yearlyFaultChart');
+    if (!ctx) return;
+    var chartData = {{ data.yearly_fault_chart|tojson }};
+    var colors = ['#4f46e5','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#94a3b8'];
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: chartData.labels,
+            datasets: chartData.datasets.map(function(ds, i) {
+                return {
+                    label: ds.label,
+                    data: ds.data,
+                    backgroundColor: colors[i % colors.length],
+                    borderRadius: 2,
+                };
+            })
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'top', labels: { boxWidth: 10, padding: 8, font: { size: 10 } } } },
+            scales: {
+                x: { stacked: true, grid: { display: false }, ticks: { font: { size: 10 } } },
+                y: { stacked: true, beginAtZero: true, ticks: { font: { size: 10 } } }
+            }
+        }
+    });
+})();
+{% endif %}
+</script>
+{% endblock %}

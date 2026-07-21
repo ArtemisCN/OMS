@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% block extra_head %}
+<style>
+.report-header { background: linear-gradient(135deg,#4f46e5,#6366f1); border-radius:12px; padding:20px 24px; color:#fff; margin-bottom:20px; }
+.report-header h5 { color:#fff; font-size:16px; margin:0; }
+.report-header .sub { font-size:12px; opacity:.8; margin-top:4px; }
+.picker-bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+.picker-bar select { font-size:13px; border-radius:8px; border:1px solid #d0d5dd; padding:6px 12px; min-width:100px; }
+.overview-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+.overview-card { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px; text-align:center; }
+.overview-card .num { font-size:22px; font-weight:700; color:#1e293b; }
+.overview-card .label { font-size:11px; color:#94a3b8; margin-top:2px; }
+.overview-card.primary .num { color:#4f46e5; }
+.overview-card.success .num { color:#059669; }
+.overview-card.warning .num { color:#d97706; }
+.overview-card.danger .num { color:#dc2626; }
+.overview-card.info .num { color:#0891b2; }
+.table-report { width:100%; font-size:13px; }
+.table-report th { background:#f8fafc; font-size:11px; font-weight:600; color:#64748b; padding:8px 10px; border-bottom:2px solid #e2e8f0; }
+.table-report td { padding:7px 10px; border-bottom:1px solid #f1f5f9; color:#334155; }
+.table-report tr:hover td { background:#f8fafc; }
+.rank-badge { display:inline-block; width:22px; height:22px; line-height:22px; text-align:center; border-radius:50%; font-size:11px; font-weight:600; }
+.rank-1 { background:#fef2f2; color:#dc2626; }
+.rank-2 { background:#fff7ed; color:#ea580c; }
+.rank-3 { background:#fefce8; color:#ca8a04; }
+.bar-cell { display:flex; align-items:center; gap:8px; }
+.bar-bg { flex:1; height:6px; background:#f1f5f9; border-radius:3px; overflow:hidden; }
+.bar-fill { height:100%; border-radius:3px; transition:width .5s; }
+.pct-text { font-size:11px; color:#94a3b8; min-width:36px; text-align:right; }
+.trend-chart-wrap { height:200px; position:relative; }
+.tab-nav { display:flex; gap:0; overflow-x:auto; border-bottom:2px solid #e2e8f0; margin-bottom:16px; }
+.tab-btn { padding:8px 18px; font-size:12px; color:#64748b; cursor:pointer; border:none; background:none; white-space:nowrap; border-bottom:2px solid transparent; margin-bottom:-2px; transition:all .15s; }
+.tab-btn:hover { color:#334155; background:#f8fafc; border-radius:6px 6px 0 0; }
+.tab-btn.active { color:#4f46e5; border-bottom-color:#4f46e5; font-weight:600; }
+.tab-pane { display:none; }
+.tab-pane.active { display:block; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set s = data.summary %}
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h5 class="mb-0 fw-bold" style="font-size:15px;">
+        <i class="fas fa-chart-bar" style="color:#4f46e5;"></i> 维修单统计报表
+    </h5>
+</div>
+
+<!-- 周期选择器 -->
+<form class="picker-bar" method="get" action="{{ url_for('repair.order_stats') }}">
+    <select name="period" onchange="this.form.submit()">
+        <option value="week" {{ 'selected' if period=='week' }}>最近一周</option>
+        <option value="month" {{ 'selected' if period=='month' }}>最近一月</option>
+        <option value="quarter" {{ 'selected' if period=='quarter' }}>最近一季度</option>
+        <option value="year" {{ 'selected' if period=='year' }}>最近一年</option>
+    </select>
+    <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="fas fa-sync-alt"></i> 刷新</button>
+</form>
+
+<!-- 报表头部 -->
+<div class="report-header">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h5><i class="fas fa-file-invoice"></i> 维修单统计 · {{ {'week':'最近一周','month':'最近一月','quarter':'最近一季度','year':'最近一年'}[period] }}</h5>
+            <div class="sub">共 {{ s.total }} 条维修单 · 通过率 {{ s.approval_rate }}% · 平均审核 {{ data.avg_approval_hours }}h</div>
+        </div>
+        <div>
+            <span class="badge-stat" style="background:rgba(255,255,255,.2);border-radius:8px;padding:4px 12px;font-size:12px;">
+                <i class="fas fa-clock"></i> {{ data.trend|length }} 个时段
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- Tab 导航 -->
+<div class="tab-nav" id="tabNav">
+    <button class="tab-btn active" data-tab="overview">📊 概览</button>
+    <button class="tab-btn" data-tab="trend">📈 趋势</button>
+    <button class="tab-btn" data-tab="monthly">📅 月度统计</button>
+    <button class="tab-btn" data-tab="creator">👤 创建人排行</button>
+</div>
+
+<!-- Tab 1: 概览 -->
+<div class="tab-pane active" id="tab-overview">
+    <div class="overview-grid">
+        <div class="overview-card primary"><div class="num">{{ s.total }}</div><div class="label">维修单总数</div></div>
+        <div class="overview-card warning"><div class="num">{{ s.draft }}</div><div class="label">草稿</div></div>
+        <div class="overview-card info"><div class="num">{{ s.pending }}</div><div class="label">待审核</div></div>
+        <div class="overview-card success"><div class="num">{{ s.approved }}</div><div class="label">已通过</div></div>
+        <div class="overview-card danger"><div class="num">{{ s.rejected }}</div><div class="label">已驳回</div></div>
+        <div class="overview-card primary"><div class="num">{{ s.approval_rate }}%</div><div class="label">通过率</div></div>
+        <div class="overview-card info"><div class="num">{{ data.avg_approval_hours }}h</div><div class="label">平均审核时长</div></div>
+    </div>
+
+    <!-- 状态分布明细 -->
+    <div class="mt-3">
+        <h6 style="font-size:13px;font-weight:600;color:#334155;margin-bottom:8px;">状态分布</h6>
+        <table class="table-report">
+            <thead><tr><th>状态</th><th>数量</th><th>占比</th><th></th></tr></thead>
+            <tbody>
+                {% set dist = [('草稿','draft','#d97706'),('待审核','pending','#0891b2'),('已通过','approved','#059669'),('已驳回','rejected','#dc2626')] %}
+                {% for label, key, color in dist %}
+                <tr>
+                    <td><strong>{{ label }}</strong></td>
+                    <td>{{ data.status_distribution[key] }}</td>
+                    <td>{{ (data.status_distribution[key]/s.total*100)|int if s.total else 0 }}%</td>
+                    <td class="bar-cell">
+                        <div class="bar-bg"><div class="bar-fill" style="width:{{ (data.status_distribution[key]/s.total*100)|int if s.total else 0 }}%;background:{{ color }};"></div></div>
+                        <span class="pct-text">{{ data.status_distribution[key] }}/{{ s.total }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Tab 2: 趋势 -->
+<div class="tab-pane" id="tab-trend">
+    <div class="trend-chart-wrap">
+        <canvas id="trendChart"></canvas>
+    </div>
+    <div class="mt-2 text-muted" style="font-size:11px;">
+        <i class="fas fa-info-circle"></i> 蓝色柱 = 创建数，绿色柱 = 通过数。无数据日期不显示。
+    </div>
+</div>
+
+<!-- Tab 3: 月度统计 -->
+<div class="tab-pane" id="tab-monthly">
+    {% if data.monthly %}
+    <table class="table-report">
+        <thead><tr><th>月份</th><th>创建数</th><th>通过数</th><th>通过率</th><th></th></tr></thead>
+        <tbody>
+            {% for m in data.monthly %}
+            <tr>
+                <td><strong>{{ m.month }}</strong></td>
+                <td>{{ m.created }}</td>
+                <td>{{ m.approved }}</td>
+                <td>{{ (m.approved/m.created*100)|int if m.created else 0 }}%</td>
+                <td class="bar-cell">
+                    <div class="bar-bg"><div class="bar-fill" style="width:{{ (m.approved/m.created*100)|int if m.created else 0 }}%;background:#059669;"></div></div>
+                    <span class="pct-text">{{ m.approved }}/{{ m.created }}</span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="text-center text-muted py-4" style="background:#f8fafc;border-radius:8px;font-size:13px;">
+        <i class="fas fa-inbox fa-2x mb-2 d-block"></i>所选时段内暂无数据
+    </div>
+    {% endif %}
+</div>
+
+<!-- Tab 4: 创建人排行 -->
+<div class="tab-pane" id="tab-creator">
+    {% if data.top_creators %}
+    <table class="table-report">
+        <thead><tr><th>#</th><th>姓名</th><th>创建数</th><th>占比</th><th></th></tr></thead>
+        <tbody>
+            {% for c in data.top_creators %}
+            <tr>
+                <td><span class="rank-badge rank-{{ loop.index if loop.index <= 3 else '3' }}">{{ loop.index }}</span></td>
+                <td><strong>{{ c.name }}</strong></td>
+                <td>{{ c.count }}</td>
+                <td>{{ (c.count/s.total*100)|int if s.total else 0 }}%</td>
+                <td class="bar-cell">
+                    <div class="bar-bg"><div class="bar-fill" style="width:{{ (c.count/s.total*100)|int if s.total else 0 }}%;background:#4f46e5;"></div></div>
+                    <span class="pct-text">{{ (c.count/s.total*100)|int if s.total else 0 }}%</span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="text-center text-muted py-4" style="background:#f8fafc;border-radius:8px;font-size:13px;">
+        <i class="fas fa-users fa-2x mb-2 d-block"></i>暂无数据
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+// Tab 切换
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        this.classList.add('active');
+        document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+        if (this.dataset.tab === 'trend' && !window._trendChartDrawn) {
+            drawTrendChart();
+        }
+    });
+});
+
+// 趋势图表
+function drawTrendChart() {
+    window._trendChartDrawn = true;
+    const labels = [{% for t in data.trend %}'{{ t.date }}'{% if not loop.last %},{% endif %}{% endfor %}];
+    const created = [{% for t in data.trend %}{{ t.created }}{% if not loop.last %},{% endif %}{% endfor %}];
+    const approved = [{% for t in data.trend %}{{ t.approved }}{% if not loop.last %},{% endif %}{% endfor %}];
+
+    new Chart(document.getElementById('trendChart'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '创建数', data: created,
+                backgroundColor: 'rgba(79,70,229,0.3)',
+                borderColor: '#4f46e5', borderWidth: 1,
+                borderRadius: 2,
+            }, {
+                label: '通过数', data: approved,
+                backgroundColor: 'rgba(5,150,105,0.3)',
+                borderColor: '#059669', borderWidth: 1,
+                borderRadius: 2,
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top', labels: { boxWidth: 12, padding: 12, font: { size: 11 } } }
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0, font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.04)' } },
+                x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+            },
+            interaction: { intersect: false, mode: 'index' }
+        }
+    });
+}
+
+// Auto-draw if trend tab is default visible
+document.addEventListener('DOMContentLoaded', function() {
+    const activeTab = document.querySelector('.tab-btn.active');
+    if (activeTab && activeTab.dataset.tab === 'trend') {
+        drawTrendChart();
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,530 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+/* ====== 角色组权限矩阵 ====== */
+.perm-table { width:100%; border-collapse:collapse; font-size:13px; }
+.perm-table th {
+    background:#f8fafc; font-size:11px; font-weight:700; color:#334155;
+    padding:10px 6px; text-align:center; border:1px solid #e2e8f0;
+    position:sticky; top:0; z-index:2; white-space:nowrap;
+    vertical-align:middle;
+}
+.perm-table td {
+    padding:6px 4px; border:1px solid #e2e8f0; text-align:center;
+    vertical-align:middle;
+}
+.perm-table td.module-name {
+    text-align:left; font-weight:500; color:#1e293b;
+    padding-left:12px; white-space:nowrap; font-size:13px;
+}
+.perm-table tr:hover { background:#f8fafc; }
+.perm-section {
+    background:#f1f5f9 !important; font-weight:600; color:#475569 !important;
+    font-size:12px; text-align:left !important; padding-left:12px !important;
+}
+
+/* Toggle switch (smaller) */
+.toggle-wrap { display:inline-flex; align-items:center; justify-content:center; }
+.toggle-switch { position:relative; width:32px; height:18px; cursor:pointer; display:inline-block; }
+.toggle-switch input { opacity:0; width:0; height:0; }
+.toggle-slider { position:absolute; inset:0; background:#cbd5e1; border-radius:9px; transition:.2s; }
+.toggle-slider::before {
+    content:''; position:absolute; left:3px; top:3px;
+    width:12px; height:12px; background:#fff; border-radius:50%; transition:.2s;
+}
+.toggle-switch input:checked + .toggle-slider { background:#16a34a; }
+.toggle-switch input:checked + .toggle-slider::before { transform:translateX(14px); }
+
+/* Role group badge / pill */
+.group-badge {
+    display:inline-flex; align-items:center; gap:4px;
+    padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600;
+}
+.group-admin { background:#dbeafe; color:#1e40af; }
+.group-user { background:#f1f5f9; color:#64748b; }
+.group-custom { background:#ede9fe; color:#6d28d9; }
+
+/* Colorful group header dots */
+.grp-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:3px; }
+.grp-colors { background:linear-gradient(135deg,#4f46e5,#7c3aed); }
+
+/* Add group card */
+.add-group-card {
+    border:2px dashed #d1d5db; border-radius:12px;
+    padding:12px 10px; text-align:center; cursor:pointer;
+    transition:all .2s; min-width:90px;
+}
+.add-group-card:hover { border-color:#4f46e5; background:#f5f3ff; }
+
+/* Group header controls */
+.grp-header {
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    position:relative;
+}
+.grp-header .grp-name { font-size:12px; font-weight:700; white-space:nowrap; }
+.grp-header .grp-actions { display:flex; gap:2px; }
+.grp-header .grp-actions button {
+    border:none; background:none; font-size:10px; cursor:pointer;
+    padding:1px 4px; border-radius:3px; opacity:.5; transition:opacity .2s;
+}
+.grp-header .grp-actions button:hover { opacity:1; }
+.grp-del-btn:hover { color:#ef4444; background:#fee2e2; }
+
+/* Toggle edit mode */
+#permSaveBar {
+    position:sticky; bottom:0; z-index:10;
+    background:linear-gradient(transparent,#fff 30%);
+    padding-top:12px;
+}
+
+/* Module badge count */
+.mdl-count {
+    display:inline-block; padding:0 6px; border-radius:6px;
+    background:#e2e8f0; color:#475569; font-size:10px; font-weight:600;
+}
+
+/* Responsive: scrollable table on small screens */
+.perm-scroll { overflow-x:auto; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="mb-0 fw-bold" style="font-size:15px;">
+        <i class="fas fa-shield-alt" style="color:#0891b2;"></i> 权限管理
+        <span class="text-muted ms-2" style="font-size:12px;font-weight:400;">
+            <span id="grpCount">{{ module_perms.groups|length }}</span> 个角色组 · <span id="mdlCount">{{ all_module_names|length }}</span> 个模块
+        </span>
+    </h5>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('data.index') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> 返回</a>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, msg in messages %}
+<div class="alert alert-{{ category }} alert-dismissible fade show py-2" style="font-size:13px;">
+    {{ msg }}
+    <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="alert" aria-label="Close" style="font-size:12px;"></button>
+</div>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
+<!-- ================== 用户角色列表 ================== -->
+<div class="card mb-3" style="border-radius:10px;border:1px solid #e5e7eb;">
+    <div class="card-body p-3">
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <h6 class="fw-bold mb-0" style="font-size:13px;"><i class="fas fa-users-cog"></i> 用户角色</h6>
+            <div class="d-flex gap-2 flex-wrap">
+                <form method="post" action="{{ url_for('data.sync_users_from_persons') }}" style="display:inline;">
+                    <button type="submit" class="btn btn-sm btn-outline-success" title="从人员管理同步用户账号">
+                        <i class="fas fa-sync"></i> 从人员同步
+                    </button>
+                </form>
+            </div>
+        </div>
+        <div class="text-muted mb-2" style="font-size:11px;">
+            <i class="fas fa-info-circle"></i> 用户自动同步自「人员管理」。管理员不受角色组权限限制。
+        </div>
+        <div class="table-responsive">
+            {% set group_icons = {'管理员':'crown','普通用户':'user','维修组':'wrench','科室主任':'stethoscope'} %}
+            {% for gname, gdata in users_by_group.items() %}
+            {% if gdata.users %}
+            <div class="mb-3">
+                <div class="d-flex align-items-center gap-2 mb-2" style="font-size:13px;font-weight:600;color:#1e3a5f;border-bottom:2px solid #e2e8f0;padding-bottom:4px;">
+                    <i class="fas fa-users"></i> {{ gname }}
+                    <span class="text-muted" style="font-size:11px;font-weight:400;">{{ gdata.users|length }} 人</span>
+                    {% set dot_colors = {'管理员':'#2563eb','普通用户':'#94a3b8'} %}
+                    <span class="grp-dot" style="background:{{ dot_colors.get(gname, '#7c3aed') }};display:inline-block;"></span>
+                </div>
+                <table class="table table-sm mb-0" style="font-size:13px;">
+                <thead>
+                    <tr>
+                        <th>用户名</th>
+                        <th>显示名称</th>
+                        <th>电话</th>
+                        <th>角色组</th>
+                        <th>管理员</th>
+                        <th style="width:100px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in gdata.users %}
+                    <tr>
+                        <td><strong>{{ u.username }}</strong></td>
+                        <td>{{ u.display_name or '-' }}</td>
+                        <td>{{ u.phone or '-' }}</td>
+                        <td>
+                            {% if u.is_admin %}
+                            <span class="group-badge group-admin"><i class="fas fa-crown"></i> 管理员</span>
+                            {% else %}
+                            {% set ug = u.group or '普通用户' %}
+                            <span class="group-badge {{ 'group-custom' if ug not in ('普通用户','管理员') else 'group-user' }}" id="user-group-{{ u.id }}">
+                                <i class="fas fa-user-tag"></i> {{ ug }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if u.is_admin %}
+                            <span style="color:#16a34a;"><i class="fas fa-check-circle"></i> 是</span>
+                            {% else %}
+                            <span style="color:#94a3b8;"><i class="fas fa-minus-circle"></i> 否</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="d-flex gap-1 flex-wrap">
+                                {% if u.id != current_user.id %}
+                                <form method="post" action="{{ url_for('data.toggle_admin', uid=u.id) }}" style="display:inline;">
+                                    {% if u.is_admin %}
+                                    <button type="submit" class="btn btn-sm btn-outline-warning py-0 px-1" title="降级为普通用户"><i class="fas fa-user"></i></button>
+                                    {% else %}
+                                    <button type="submit" class="btn btn-sm btn-outline-info py-0 px-1" title="升级为管理员"><i class="fas fa-crown"></i></button>
+                                    {% endif %}
+                                </form>
+                                {% endif %}
+                                {% if not u.is_admin %}
+                                <form method="post" action="{{ url_for('data.set_user_group') }}" style="display:inline;">
+                                    <input type="hidden" name="uid" value="{{ u.id }}">
+                                    <select name="group_id" class="form-select form-select-sm" style="width:auto;display:inline-block;font-size:11px;padding:1px 18px 1px 6px;" onchange="this.form.submit()">
+                                        {% for rg in role_groups %}
+                                        <option value="{{ rg.id }}" {% if u.group_id == rg.id %}selected{% endif %}>{{ rg.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                </table>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% if persons %}
+        <div class="text-muted mt-2" style="font-size:11px;border-top:1px solid #f1f5f9;padding-top:6px;">
+            <i class="fas fa-address-book"></i> 维保人员：{{ persons|map(attribute='name')|join('、') }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ================== 权限矩阵编辑 ================== -->
+<div class="card" style="border-radius:10px;border:1px solid #e5e7eb;">
+    <div class="card-body p-3">
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <h6 class="fw-bold mb-0" style="font-size:13px;">
+                <i class="fas fa-th"></i> 角色组权限矩阵
+                <span class="text-muted ms-1" style="font-size:11px;font-weight:400;">
+                    点击开关编辑，蓝色=允许，灰色=禁止
+                </span>
+            </h6>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-info" onclick="toggleEditMode()">
+                    <i class="fas fa-edit" id="editIcon"></i> <span id="editLabel">编辑权限</span>
+                </button>
+                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addGroupModal">
+                    <i class="fas fa-plus"></i> 添加角色组
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addModuleModal">
+                    <i class="fas fa-plus"></i> 添加模块
+                </button>
+            </div>
+        </div>
+
+        <div class="perm-scroll">
+            <table class="perm-table" id="permMatrix">
+                <thead>
+                    <tr>
+                        <th style="min-width:110px;text-align:left;padding-left:12px;position:sticky;left:0;z-index:3;background:#f8fafc;">
+                            模块/功能
+                        </th>
+                        {% for gname, gperms in module_perms.groups.items() %}
+                        <th style="min-width:90px;">
+                            <div class="grp-header">
+                                <span class="grp-name">
+                                    <span class="grp-dot" style="background:{{ 'linear-gradient(135deg,#4f46e5,#7c3aed)' if gname not in ('管理员','普通用户') else '#3b82f6' if gname=='管理员' else '#94a3b8' }};"></span>
+                                    {{ gname }}
+                                </span>
+                                {% if gname not in ('管理员', '普通用户') %}
+                                <span class="grp-actions">
+                                    <button type="button" class="grp-rename-btn" title="重命名"
+                                            onclick="renameGroup('{{ gname }}')"><i class="fas fa-edit"></i></button>
+                                    <form method="post" action="{{ url_for('data.delete_permission_group') }}" onsubmit="return confirm('确定删除角色组「{{ gname }}」？属于该组的用户将重置为普通用户。')">
+                                        <input type="hidden" name="name" value="{{ gname }}">
+                                        <button type="submit" class="grp-del-btn" title="删除角色组"><i class="fas fa-trash-alt"></i></button>
+                                    </form>
+                                </span>
+                                {% endif %}
+                            </div>
+                        </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cat_name, mods in module_perms.categories %}
+                    <tr><td colspan="{{ 1 + module_perms.groups|length }}" class="perm-section">{{ cat_name }}</td></tr>
+                    {% for mod in mods %}
+                    <tr>
+                        <td class="module-name" style="position:sticky;left:0;z-index:1;background:#fff;">
+                            {{ mod }}
+                            {% if mod not in all_module_names %}
+                            <span class="mdl-count ms-1">自定义</span>
+                            {% endif %}
+                        </td>
+                        {% for gname, gperms in module_perms.groups.items() %}
+                        <td>
+                            <div class="toggle-wrap">
+                                {% set checked = gperms.get(mod, False) %}
+                                <label class="toggle-switch perm-toggle" data-group="{{ gname }}" data-mod="{{ mod }}">
+                                    <input type="checkbox" {{ 'checked' if checked else '' }}>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div id="permSaveBar" class="mt-3 text-center" style="display:none;">
+            <button type="button" class="btn btn-sm btn-primary px-4" onclick="savePermissions()">
+                <i class="fas fa-save"></i> 保存全部权限
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="toggleEditMode()">
+                取消编辑
+            </button>
+            <span id="saveStatus" class="ms-2" style="font-size:12px;"></span>
+        </div>
+    </div>
+</div>
+
+<!-- ================== 添加角色组弹窗 ================== -->
+<div class="modal fade" id="addGroupModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <form method="post" action="{{ url_for('data.add_permission_group') }}">
+            <div class="modal-content">
+                <div class="modal-header"><h6 class="modal-title">添加角色组</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label" style="font-size:13px;">角色组名称</label>
+                        <input type="text" name="name" class="form-control form-control-sm" placeholder="如：维修人员、科室主任" required>
+                    </div>
+                    <div class="text-muted" style="font-size:11px;">
+                        <i class="fas fa-info-circle"></i> 新组将默认复制普通用户的权限，之后可在矩阵中单独调整。
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-sm btn-primary">添加</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ================== 添加模块弹窗 ================== -->
+<div class="modal fade" id="addModuleModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <form method="post" action="{{ url_for('data.add_permission_module') }}">
+            <div class="modal-content">
+                <div class="modal-header"><h6 class="modal-title">添加模块</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label" style="font-size:13px;">模块名称</label>
+                        <input type="text" name="module" class="form-control form-control-sm" placeholder="如：文件管理" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label" style="font-size:13px;">所属分组</label>
+                        <select name="category" class="form-select form-select-sm">
+                            {% for cat_name, _ in module_perms.categories %}
+                            <option value="{{ cat_name }}">{{ cat_name }}</option>
+                            {% endfor %}
+                            <option value="自定义">自定义</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-sm btn-primary">添加</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ================== 删除模块弹窗按钮 ================== -->
+<div class="mt-2 text-end">
+    <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#delModuleModal">
+        <i class="fas fa-trash-alt"></i> 删除模块
+    </button>
+</div>
+
+<div class="modal fade" id="delModuleModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <form method="post" action="{{ url_for('data.delete_permission_module') }}">
+            <div class="modal-content">
+                <div class="modal-header"><h6 class="modal-title">删除模块</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label" style="font-size:13px;">选择要删除的模块</label>
+                        <select name="module" class="form-select form-select-sm" required>
+                            <option value="">— 请选择 —</option>
+                            {% for cat_name, mods in module_perms.categories %}
+                            <optgroup label="{{ cat_name }}">
+                                {% for mod in mods %}
+                                <option value="{{ mod }}">{{ mod }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="text-danger" style="font-size:11px;">
+                        <i class="fas fa-exclamation-triangle"></i> 此操作不可撤销，将从所有角色组中移除该模块。
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-sm btn-danger">删除</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// ===== 编辑模式 =====
+var isEditing = false;
+
+function toggleEditMode() {
+    isEditing = !isEditing;
+    var toggles = document.querySelectorAll('.perm-toggle');
+    var saveBar = document.getElementById('permSaveBar');
+    var editIcon = document.getElementById('editIcon');
+    var editLabel = document.getElementById('editLabel');
+
+    if (isEditing) {
+        toggles.forEach(function(t) { t.style.opacity = '1'; t.style.pointerEvents = 'auto'; });
+        saveBar.style.display = 'block';
+        editIcon.className = 'fas fa-times';
+        editLabel.textContent = '取消编辑';
+    } else {
+        toggles.forEach(function(t) { t.style.opacity = '.4'; t.style.pointerEvents = 'none'; });
+        saveBar.style.display = 'none';
+        editIcon.className = 'fas fa-edit';
+        editLabel.textContent = '编辑权限';
+        document.getElementById('saveStatus').textContent = '';
+    }
+}
+
+// 初始：toggles 只读
+document.addEventListener('DOMContentLoaded', function() {
+    var toggles = document.querySelectorAll('.perm-toggle');
+    toggles.forEach(function(t) { t.style.opacity = '.4'; t.style.pointerEvents = 'none'; });
+
+    // 实时预览开关效果
+    document.addEventListener('change', function(e) {
+        if (e.target.closest('.perm-toggle')) {
+            var input = e.target;
+            var slider = input.nextElementSibling;
+            // visual only, data collected on save
+        }
+    });
+});
+
+// ===== 重命名角色组 =====
+function renameGroup(oldName) {
+    var newName = prompt('请输入新的角色组名称：', oldName);
+    if (!newName || newName === oldName) return;
+    var form = document.createElement('form');
+    form.method = 'post';
+    form.action = '{{ url_for("data.rename_permission_group") }}';
+    form.innerHTML = '<input type="hidden" name="old_name" value="' + oldName + '">' +
+        '<input type="hidden" name="new_name" value="' + newName + '">';
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// ===== AJAX 保存 =====
+function savePermissions() {
+    var groups = {};
+    var headers = document.querySelectorAll('#permMatrix thead tr th');
+    var groupCols = [];
+
+    // 从表头获取所有角色组名（跳过第一列「模块/功能」）
+    headers.forEach(function(th, idx) {
+        if (idx === 0) return;
+        var nameEl = th.querySelector('.grp-name');
+        if (nameEl) {
+            var txt = nameEl.textContent.trim();
+            // 取最后一个文本节点（跳过 grp-dot 图标）
+            groupCols.push({ idx: idx, name: txt });
+        }
+    });
+
+    // 收集每行的开关状态
+    var rows = document.querySelectorAll('#permMatrix tbody tr');
+    var lastCat = '';
+    rows.forEach(function(row) {
+        var sectionCell = row.querySelector('.perm-section');
+        if (sectionCell) return; // skip category headers
+
+        var modCell = row.querySelector('.module-name');
+        if (!modCell) return;
+        var modName = modCell.textContent.trim();
+
+        var toggles = row.querySelectorAll('.perm-toggle');
+        toggles.forEach(function(toggle, colIdx) {
+            var gname = toggle.dataset.group;
+            var checked = toggle.querySelector('input').checked;
+            if (!groups[gname]) groups[gname] = {};
+            groups[gname][modName] = checked;
+        });
+    });
+
+    // 保留分类结构
+    var categories = [];
+    rows.forEach(function(row) {
+        var sectionCell = row.querySelector('.perm-section');
+        if (sectionCell) {
+            var catName = sectionCell.textContent.trim();
+            categories.push([catName, []]);
+            return;
+        }
+        if (categories.length > 0) {
+            var modCell = row.querySelector('.module-name');
+            if (modCell) {
+                categories[categories.length - 1][1].push(modCell.textContent.trim());
+            }
+        }
+    });
+
+    var data = { groups: groups, categories: categories };
+
+    var statusEl = document.getElementById('saveStatus');
+    statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 保存中...';
+
+    fetch('{{ url_for("data.save_permissions") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(resp) {
+        if (resp.ok) {
+            statusEl.innerHTML = '<span style="color:#16a34a;"><i class="fas fa-check-circle"></i> ' + resp.msg + '</span>';
+            setTimeout(function() { location.reload(); }, 800);
+        } else {
+            statusEl.innerHTML = '<span style="color:#ef4444;"><i class="fas fa-times-circle"></i> ' + (resp.msg || '保存失败') + '</span>';
+        }
+    })
+    .catch(function(err) {
+        statusEl.innerHTML = '<span style="color:#ef4444;"><i class="fas fa-times-circle"></i> 网络错误</span>';
+    });
+}
+</script>
+{% endblock %}

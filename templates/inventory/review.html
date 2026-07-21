@@ -1,0 +1,889 @@
+{% extends "base.html" %}
+{% block title %}盘点核对 - {{ task.name }}{% endblock %}
+{% block content %}
+<style>
+/* =================== 容器 =================== */
+.review-wrap { max-width: 960px; margin: 0 auto; padding: 20px 20px 180px; }
+
+/* =================== 顶部栏 =================== */
+.r-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.r-header h4 { margin: 0; font-weight: 700; font-size: 18px; }
+.r-header small { color: #6b7280; font-size: 12px; }
+
+/* =================== 进度条 =================== */
+.progress-bar-wrap { margin-bottom: 16px; }
+.progress-bar-track { height: 6px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+.progress-bar-fill { height: 100%; background: linear-gradient(90deg, #4f46e5, #10b981); border-radius: 999px; transition: width 0.5s ease; width:0%; }
+.progress-label { display: flex; justify-content: space-between; font-size: 11px; color: #64748b; margin-top: 4px; }
+[data-theme="dark"] .progress-bar-track { background: #374151; }
+[data-theme="dark"] .progress-label { color: #9ca3af; }
+
+/* =================== 统计条 =================== */
+.r-stats { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.r-stat { padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; display: flex; align-items: center; gap: 6px; }
+.r-stat:hover { opacity: .8; transform: translateY(-1px); }
+.r-stat.ok { background: #ecfdf5; color: #065f46; }
+.r-stat.issue { background: #fef2f2; color: #dc2626; }
+.r-stat.new { background: #eef2ff; color: #4338ca; }
+.r-stat.active { box-shadow: 0 0 0 2px #4f46e5; }
+[data-theme="dark"] .r-stat.ok { background: #064e3b; color: #6ee7b7; }
+[data-theme="dark"] .r-stat.issue { background: #7f1d1d; color: #fca5a5; }
+[data-theme="dark"] .r-stat.new { background: #312e81; color: #a5b4fc; }
+
+/* =================== 加载 =================== */
+.loading-wrap { text-align: center; padding: 60px 0; color: #6b7280; font-size: 14px; }
+
+/* =================== 区域标题 =================== */
+.section-title { font-size: 15px; font-weight: 700; margin: 20px 0 10px; display: flex; align-items: center; gap: 8px; }
+.section-title .ms-auto { margin-left:auto; }
+.section-title .toggle-arrow { font-size: 11px; color: #94a3b8; transition: transform .15s; }
+.section-title small { font-weight: 400; color: #6b7280; font-size: 12px; }
+
+/* =================== 卡片 =================== */
+.item-card {
+  background: #fff; border-radius: 10px; margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: hidden;
+  border: 1px solid #f3f4f6; transition: box-shadow .2s;
+}
+.item-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+[data-theme="dark"] .item-card { background: #1f2937; border-color: #374151; }
+
+.card-hd {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 14px; border-bottom: 1px solid #f3f4f6;
+  font-size: 13px; font-weight: 600; gap: 8px;
+}
+[data-theme="dark"] .card-hd { border-color: #374151; }
+.card-hd .code { color: #4f46e5; font-family: monospace; font-size: 13px; }
+.card-hd .badge-result { font-size: 11px; padding: 2px 10px; border-radius: 999px; flex-shrink:0; }
+.badge-result.normal { background: #d1fae5; color: #065f46; }
+.badge-result.issue { background: #fee2e2; color: #dc2626; }
+.badge-result.new { background: #eef2ff; color: #4338ca; }
+[data-theme="dark"] .badge-result.normal { background: #064e3b; color: #6ee7b7; }
+[data-theme="dark"] .badge-result.issue { background: #7f1d1d; color: #fca5a5; }
+[data-theme="dark"] .badge-result.new { background: #312e81; color: #a5b4fc; }
+
+.card-hd .diff-summary { font-size: 10px; color: #dc2626; background: #fef2f2; padding: 1px 8px; border-radius: 999px; margin-left:4px; }
+[data-theme="dark"] .card-hd .diff-summary { background: #7f1d1d; color: #fca5a5; }
+
+.confirmed-badge { font-size: 11px; padding: 2px 10px; border-radius: 999px; background: #d1fae5; color: #065f46; }
+[data-theme="dark"] .confirmed-badge { background: #064e3b; color: #6ee7b7; }
+
+.card-bd { padding: 10px 14px; }
+
+/* =================== 正常卡片（精简折叠） =================== */
+.normal-card-body { font-size: 12px; color: #6b7280; }
+.normal-card-body .normal-summary { display: flex; align-items: center; gap: 6px; }
+.normal-card-body .fields-preview { font-size: 11px; color: #94a3b8; margin-top: 4px; display: flex; flex-wrap: wrap; gap: 2px 10px; }
+
+/* =================== 对比表格（异常项） =================== */
+.compare-table { width: 100%; font-size: 12px; border-collapse: separate; border-spacing: 0 3px; }
+.compare-table th {
+  text-align: left; font-size: 11px; color: #9ca3af; font-weight: 600;
+  padding: 2px 8px; white-space: nowrap;
+}
+.compare-table td { padding: 3px 8px; vertical-align: middle; }
+
+/* 匹配行——绿色 */
+.match-row td { color: #065f46; }
+.match-row .match-val { display: flex; align-items: center; gap: 6px; }
+.match-row .check { color: #10b981; font-weight: 700; font-size: 14px; }
+[data-theme="dark"] .match-row td { color: #6ee7b7; }
+
+/* 差异行 */
+.diff-row { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; margin-bottom: 4px; overflow:hidden; }
+[data-theme="dark"] .diff-row { background: #451a03; border-color: #78350f; }
+.diff-row .df-label { font-weight: 700; color: #92400e; padding: 5px 10px 2px; font-size: 12px; display:flex; align-items:center; gap:4px; }
+[data-theme="dark"] .diff-row .df-label { color: #fbbf24; }
+.diff-row .df-label .diff-badge { background:#dc2626; color:#fff; font-size:9px; padding:0 6px; border-radius:999px; }
+
+.diff-row .df-opts { display: flex; gap: 4px; padding: 2px 10px 4px; }
+.diff-row .df-opt {
+  flex: 1; padding: 5px 8px; border-radius: 6px; cursor: pointer;
+  border: 1.5px solid #e5e7eb; transition: all .12s;
+  font-size: 12px; display: flex; align-items: center; gap: 4px;
+  background: #f9fafb;
+}
+.diff-row .df-opt:hover { border-color: #4f46e5; }
+.diff-row .df-opt.arch-sel { border-color: #059669; background: #ecfdf5; font-weight: 600; }
+.diff-row .df-opt.scan-sel { border-color: #4f46e5; background: #eef2ff; font-weight: 600; }
+.diff-row .df-opt .src-tag { font-size: 10px; opacity: .6; }
+.diff-row .df-opt.arch-sel .src-tag, .diff-row .df-opt.scan-sel .src-tag { opacity: 1; }
+[data-theme="dark"] .diff-row .df-opt { background: #374151; border-color: #4b5563; color: #e5e7eb; }
+[data-theme="dark"] .diff-row .df-opt.arch-sel { background: #064e3b; border-color: #059669; }
+[data-theme="dark"] .diff-row .df-opt.scan-sel { background: #312e81; border-color: #6366f1; }
+
+.diff-row .df-adopt { display: flex; align-items: center; gap: 6px; padding: 0 10px 6px; }
+.diff-row .df-adopt .adopt-label { font-size: 11px; color: #6b7280; flex-shrink:0; }
+.diff-row .df-adopt input {
+  flex: 1; border: 1px solid #e5e7eb; border-radius: 4px; padding: 3px 8px;
+  font-size: 12px; outline: none; background: #fff; color: #111827;
+}
+.diff-row .df-adopt input:focus { border-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79,70,229,0.15); }
+[data-theme="dark"] .diff-row .df-adopt input { background: #1f2937; border-color: #4b5563; color: #e5e7eb; }
+
+/* =================== 新盘卡片 =================== */
+.new-form { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+.new-form .nf-item { display: flex; flex-direction: column; gap: 2px; }
+.new-form .nf-item.full { grid-column: 1 / -1; }
+.new-form .nf-item label { font-size: 11px; color: #9ca3af; font-weight: 600; }
+.new-form .nf-item input, .new-form .nf-item textarea {
+  border: 1px solid #e5e7eb; border-radius: 6px; padding: 5px 10px;
+  font-size: 13px; outline: none; transition: border-color .15s;
+  background: #fff; color: #111827;
+}
+.new-form .nf-item input:focus, .new-form .nf-item textarea:focus { border-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79,70,229,0.15); }
+[data-theme="dark"] .new-form .nf-item input, [data-theme="dark"] .new-form .nf-item textarea { background: #1f2937; border-color: #4b5563; color: #e5e7eb; }
+
+/* =================== 卡片操作按钮 =================== */
+.card-ft {
+  display: flex; gap: 6px; justify-content: flex-end; align-items: center;
+  padding: 8px 14px; border-top: 1px solid #f3f4f6; flex-wrap: wrap;
+}
+[data-theme="dark"] .card-ft { border-color: #374151; }
+.card-ft .btn { font-size: 12px; padding: 4px 12px; border-radius: 6px; }
+.card-ft .btn-batch { font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #f8fafc; border:1px solid #e5e7eb; cursor:pointer; }
+.card-ft .btn-batch:hover { background: #eef2ff; border-color:#4f46e5; }
+[data-theme="dark"] .card-ft .btn-batch { background:#374151; border-color:#4b5563; color:#e5e7eb; }
+[data-theme="dark"] .card-ft .btn-batch:hover { background:#312e81; border-color:#6366f1; }
+
+.info-line { font-size: 11px; color: #9ca3af; margin-top: 6px; }
+
+/* =================== 底部栏 =================== */
+.r-footer {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+  background: #fff; border-top: 1px solid #e5e7eb;
+  padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+}
+[data-theme="dark"] .r-footer { background: #1f2937; border-color: #374151; }
+.r-footer .pending-count { font-size: 12px; color: #dc2626; }
+.r-footer .btn { font-size: 13px; padding: 8px 24px; border-radius: 8px; font-weight: 600; }
+
+/* =================== 浮动"下一个"按钮 =================== */
+.next-btn {
+  position: fixed; right: 24px; bottom: 80px; z-index: 99;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: #4f46e5; color: #fff; border: none;
+  display: none; align-items: center; justify-content: center;
+  font-size: 18px; cursor: pointer; box-shadow: 0 3px 14px rgba(79,70,229,0.35);
+  transition: all .2s;
+}
+.next-btn:hover { transform: scale(1.1); box-shadow: 0 5px 20px rgba(79,70,229,0.45); }
+[data-theme="dark"] .next-btn { background: #6366f1; }
+
+/* =================== 详情弹窗 =================== */
+.detail-modal {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4); z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+}
+.detail-content {
+  background: #fff; border-radius: 12px; max-width: 600px; width: 90%;
+  max-height: 80vh; overflow-y: auto; padding: 24px;
+}
+[data-theme="dark"] .detail-content { background: #1f2937; }
+.detail-content h6 { font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+.detail-content .close-btn { float: right; cursor: pointer; font-size: 20px; color: #9ca3af; }
+.detail-field { display: flex; padding: 4px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+[data-theme="dark"] .detail-field { border-color: #374151; }
+.detail-field .fl { width: 64px; color: #9ca3af; flex-shrink: 0; }
+.detail-field .fv { flex: 1; color: #111827; }
+[data-theme="dark"] .detail-field .fv { color: #e5e7eb; }
+.detail-field .old { color: #dc2626; text-decoration: line-through; margin-right: 8px; }
+.detail-field .new { color: #059669; font-weight: 600; }
+
+/* =================== 筛选标签 =================== */
+.filter-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.filter-tab {
+  padding: 4px 12px; border-radius: 999px; font-size: 12px; cursor: pointer;
+  border: 1.5px solid #e5e7eb; background: #fff; color: #374151;
+  transition: all .15s; font-weight: 500;
+}
+.filter-tab:hover { border-color: #4f46e5; }
+.filter-tab.active { border-color: #4f46e5; background: #eef2ff; color: #4f46e5; font-weight: 700; }
+[data-theme="dark"] .filter-tab { background: #1f2937; border-color: #4b5563; color: #e5e7eb; }
+[data-theme="dark"] .filter-tab.active { background: #312e81; border-color: #6366f1; color: #a5b4fc; }
+
+.empty-state { text-align: center; padding: 40px 0; color: #9ca3af; font-size: 14px; }
+
+/* 未确认卡片发光提醒 */
+.item-card.pending-highlight { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245,158,11,0.2); }
+[data-theme="dark"] .item-card.pending-highlight { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245,158,11,0.3); }
+</style>
+
+<div class="review-wrap">
+  <!-- 顶部 -->
+  <div class="r-header">
+    <div>
+      <h4>📋 盘点核对：{{ task.name }}</h4>
+      <small>{{ task.task_no }} · 对比档案与扫码数据，逐条确认</small>
+    </div>
+    <a href="{{ url_for('inventory.detail', task_id=task.id) }}" class="btn btn-outline-secondary btn-sm">← 返回详情</a>
+  </div>
+
+  <!-- 进度条 -->
+  <div class="progress-bar-wrap" id="progressWrap" style="display:none;">
+    <div class="progress-bar-track"><div class="progress-bar-fill" id="progressFill"></div></div>
+    <div class="progress-label"><span id="progConfirmed">0</span> / <span id="progTotal">0</span> 已确认</div>
+  </div>
+
+  <!-- 统计条 -->
+  <div class="r-stats" id="statsBar">
+    <div class="r-stat ok" data-filter="all" onclick="setFilter('all')">📋 全部 <span id="totalCount">0</span></div>
+    <div class="r-stat ok" data-filter="normal" onclick="setFilter('normal')">✅ 正常 <span id="okCount">0</span></div>
+    <div class="r-stat issue" data-filter="issue" onclick="setFilter('issue')">⚠️ 异常 <span id="issueCount">0</span></div>
+    <div class="r-stat new" data-filter="new" onclick="setFilter('new')">🆕 新盘 <span id="newCount">0</span></div>
+  </div>
+
+  <!-- 加载 -->
+  <div class="loading-wrap" id="loading">加载中...</div>
+
+  <!-- 内容 -->
+  <div id="reviewContent" style="display:none;"></div>
+
+  <!-- 底部固定栏 -->
+  <div class="r-footer" id="footerBar" style="display:none;">
+    <span class="pending-count" id="pendingMsg"></span>
+    <button class="btn btn-success" id="finishBtn" onclick="finishTask()">✅ 确认本次盘点</button>
+  </div>
+</div>
+
+<!-- 下一个未确认浮动按钮 -->
+<button class="next-btn" id="nextBtn" onclick="scrollToNext()" title="下一个待确认">⬇</button>
+
+<!-- 详情弹窗 -->
+<div class="detail-modal" id="detailModal" style="display:none;" onclick="if(event.target===this)closeDetail()">
+  <div class="detail-content">
+    <span class="close-btn" onclick="closeDetail()">&times;</span>
+    <div id="detailBody"></div>
+  </div>
+</div>
+
+<script>
+// ==================== 全局状态 ====================
+var TASK_ID = {{ task.id }};
+var reviewData = null;
+var selectedValues = {};
+var activeFilter = 'all';
+var confirmedItemIds = {};
+
+// ==================== 加载数据 ====================
+function loadReview() {
+  fetch('/inventory/api/{{ task.id }}/review-data')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      reviewData = data;
+      data.issue.forEach(function(item) { initSelected(item); });
+      // 初始化已确认列表
+      [].concat(data.normal, data.issue, data.new).forEach(function(i) {
+        if (i.confirmed) confirmedItemIds[i.id] = true;
+      });
+      updateStats(data);
+      updateProgress(data);
+      renderAll(data);
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('reviewContent').style.display = 'block';
+      document.getElementById('footerBar').style.display = 'flex';
+      document.getElementById('progressWrap').style.display = 'block';
+    })
+    .catch(function(e) {
+      document.getElementById('loading').innerHTML = '加载失败: ' + e.message;
+    });
+}
+
+function initSelected(item) {
+  if (!selectedValues[item.id]) selectedValues[item.id] = {};
+  var fields = ['device_type','brand','model_no','sn','department','building','floor','location'];
+  fields.forEach(function(f) {
+    var scanVal = item.fields && item.fields[f] ? item.fields[f].value : '';
+    if (selectedValues[item.id][f] === undefined) selectedValues[item.id][f] = scanVal || '';
+  });
+}
+
+// ==================== 进度条 ====================
+function updateProgress(data) {
+  var issue = data.issue || [];
+  var newItems = data.new || [];
+  var total = issue.length + newItems.length;
+  var confirmed = 0;
+  issue.forEach(function(i) { if (i.confirmed || confirmedItemIds[i.id]) confirmed++; });
+  newItems.forEach(function(i) { if (i.confirmed || confirmedItemIds[i.id]) confirmed++; });
+  var pct = total > 0 ? Math.round(confirmed / total * 100) : 100;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progConfirmed').textContent = confirmed;
+  document.getElementById('progTotal').textContent = total;
+}
+
+// ==================== 更新统计 ====================
+function updateStats(data) {
+  document.getElementById('totalCount').textContent = data.total || 0;
+  document.getElementById('okCount').textContent = data.normal_count || 0;
+  document.getElementById('issueCount').textContent = data.issue_count || 0;
+  document.getElementById('newCount').textContent = data.new_count || 0;
+  updateFooter();
+  updateProgress(data);
+}
+
+// ==================== 渲染全部 ====================
+function renderAll(data) {
+  var html = '';
+
+  // 筛选标签
+  html += '<div class="filter-tabs" id="filterTabs">';
+  html += '<span class="filter-tab' + (activeFilter === 'all' ? ' active' : '') + '" onclick="setFilter(\'all\')">📋 全部 (' + (data.total || 0) + ')</span>';
+  html += '<span class="filter-tab' + (activeFilter === 'normal' ? ' active' : '') + '" onclick="setFilter(\'normal\')">✅ 正常 (' + (data.normal_count || 0) + ')</span>';
+  html += '<span class="filter-tab' + (activeFilter === 'issue' ? ' active' : '') + '" onclick="setFilter(\'issue\')">⚠️ 异常 (' + (data.issue_count || 0) + ')</span>';
+  html += '<span class="filter-tab' + (activeFilter === 'new' ? ' active' : '') + '" onclick="setFilter(\'new\')">🆕 新盘 (' + (data.new_count || 0) + ')</span>';
+  html += '</div>';
+
+  if ((activeFilter === 'all' || activeFilter === 'normal') && data.normal.length > 0) {
+    html += '<div class="item-section" data-section="normal">' +
+      '<div class="section-title" style="cursor:pointer;" onclick="var c=this.nextElementSibling;c.style.display=c.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.toggle-arrow\').textContent=c.style.display===\'none\'?\'▶\':\'▼\';">' +
+      '<span class="toggle-arrow">▶</span> ✅ 正常项 <small>已核对，无差异（' + data.normal.length + '项）</small><button class="btn btn-sm btn-outline-success ms-auto" style="font-size:11px;padding:1px 8px;" onclick="event.stopPropagation();batchConfirmNormal()">一键全部确认</button></div>' +
+      '<div style="display:none;">';
+    data.normal.forEach(function(item) { html += renderNormalCard(item); });
+    html += '</div></div>';
+  }
+
+  if ((activeFilter === 'all' || activeFilter === 'issue') && data.issue.length > 0) {
+    html += '<div class="item-section" data-section="issue"><div class="section-title">⚠️ 异常项 <small>需逐条选择正确值并确认</small></div>';
+    data.issue.forEach(function(item) { html += renderIssueCard(item); });
+    html += '</div>';
+  }
+
+  if ((activeFilter === 'all' || activeFilter === 'new') && data.new.length > 0) {
+    html += '<div class="item-section" data-section="new"><div class="section-title">🆕 新盘资产 <small>编辑后确认入库</small></div>';
+    data.new.forEach(function(item) { html += renderNewCard(item); });
+    html += '</div>';
+  }
+
+  if (activeFilter === 'unscanned') {
+    html += '<div class="item-section" data-section="unscanned"><div class="section-title">🟼 未盘资产 <small>本盘点未扫描到的资产</small></div><div id="unscannedContent"><div class="text-center py-4 text-muted" style="font-size:13px;">加载中...</div></div></div>';
+  }
+
+  if (!html || html.indexOf('item-card') === -1) {
+    html += '<div class="empty-state">暂无盘点记录</div>';
+  }
+
+  document.getElementById('reviewContent').innerHTML = html;
+  updateNextBtn();
+}
+
+// ==================== 渲染正常卡片（精简） ====================
+function renderNormalCard(item) {
+  var asset = item.asset;
+  var preview = '';
+  if (asset) {
+    var parts = [];
+    if (asset.device_type) parts.push(asset.device_type);
+    if (asset.brand) parts.push(asset.brand);
+    if (asset.department) parts.push(asset.department);
+    if (asset.location) parts.push(asset.location);
+    preview = parts.join(' · ');
+  }
+  return '<div class="item-card" id="card-' + item.id + '">' +
+    '<div class="card-hd"><span class="code">' + esc(item.asset_no) + '</span><span class="badge-result normal">✅ 正常</span></div>' +
+    '<div class="card-bd"><div class="normal-card-body">' +
+    '<div class="normal-summary"><span style="color:#10b981;font-weight:700;">✓</span> 数据一致</div>' +
+    (preview ? '<div class="fields-preview">' + esc(preview) + '</div>' : '') +
+    '</div></div></div>';
+}
+
+// ==================== 渲染异常卡片 ====================
+function renderIssueCard(item) {
+  var asset = item.asset;
+  var confirmed = confirmedItemIds[item.id] || item.confirmed;
+  var confirmedHtml = confirmed ? '<span class="confirmed-badge">✅ 已确认</span>' : '';
+
+  var diffCount = item.diff_fields ? item.diff_fields.length : 0;
+  var diffSummary = diffCount > 0 ? '<span class="diff-summary">' + diffCount + '项不一致</span>' : '';
+
+  var rows = '';
+  var fields = [['device_type','设备类型'],['brand','品牌'],['model_no','型号'],['sn','序列号'],
+                ['department','科室'],['building','楼区'],['floor','楼层'],['location','位置']];
+  var diffKeys = {};
+  if (item.diff_fields) {
+    item.diff_fields.forEach(function(d) { diffKeys[d.key] = true; });
+  }
+
+  fields.forEach(function(f) {
+    var key = f[0], label = f[1];
+    var scanVal = item.fields && item.fields[key] ? item.fields[key].value : '';
+    var archVal = asset ? (asset[key] || '') : '';
+    var isDiff = diffKeys[key] && true;
+
+    if (!isDiff && !scanVal && !archVal) return;
+
+    if (!isDiff) {
+      var val = scanVal || archVal;
+      rows += '<tr class="match-row">' +
+        '<td style="width:60px;color:#9ca3af;font-size:11px;">' + label + '</td>' +
+        '<td colspan="2"><span class="match-val"><span class="check">✓</span>' + esc(val) + '</span></td></tr>';
+    } else {
+      var selVal = (selectedValues[item.id] && selectedValues[item.id][key]) || scanVal || archVal || '';
+      var archSelected = (selVal === archVal) ? 'arch-sel' : '';
+      var scanSelected = (selVal === scanVal) ? 'scan-sel' : '';
+
+      rows += '<tr><td colspan="3" style="padding:0;">';
+      rows += '<div class="diff-row">';
+      rows += '<div class="df-label">⚠️ ' + label + ' 不一致' +
+        ' <span class="diff-badge">档案≠扫码</span></div>';
+      rows += '<div class="df-opts">';
+      rows += '<div class="df-opt ' + archSelected + '" onclick="pickValue(' + item.id + ',\'' + key + '\',\'' + escAttr(archVal) + '\')">' +
+        '<span class="src-tag">📁档案</span> ' + esc(archVal || '-') + '</div>';
+      rows += '<div class="df-opt ' + scanSelected + '" onclick="pickValue(' + item.id + ',\'' + key + '\',\'' + escAttr(scanVal) + '\')">' +
+        '<span class="src-tag">📱扫码</span> ' + esc(scanVal || '-') + '</div>';
+      rows += '</div>';
+      rows += '<div class="df-adopt"><span class="adopt-label">✅ 采纳</span>' +
+        '<input type="text" value="' + escAttr(selVal) + '" oninput="editValue(' + item.id + ',\'' + key + '\',this.value)" ' +
+        'onfocus="this.select()"></div>';
+      rows += '</div>';
+      rows += '</td></tr>';
+    }
+  });
+
+  var actionsHtml = '';
+  if (!confirmed) {
+    // 批量操作按钮
+    var hasBatch = diffCount > 0;
+    actionsHtml = '<div class="card-ft">' +
+      (hasBatch ? '<span style="font-size:11px;color:#9ca3af;margin-right:auto;">批量:</span>' +
+        '<button class="btn-batch" onclick="acceptAll(' + item.id + ',\'arch\')" title="全部采纳档案值">📁 全用档案</button>' +
+        '<button class="btn-batch" onclick="acceptAll(' + item.id + ',\'scan\')" title="全部采纳扫码值">📱 全用扫码</button>' : '') +
+      '<button class="btn btn-outline-secondary btn-sm" onclick="showDetail(' + item.id + ')">👁 详情</button>' +
+      '<button class="btn btn-success btn-sm confirm-btn" onclick="confirmItem(' + item.id + ',false)">✅ 确认</button></div>';
+  } else {
+    actionsHtml = '<div class="card-ft"><span class="confirmed-badge">✅ 已确认</span></div>';
+  }
+
+  return '<div class="item-card' + (confirmed ? '' : ' pending-highlight') + '" id="card-' + item.id + '">' +
+    '<div class="card-hd"><span class="code">' + esc(item.asset_no) + '</span>' +
+    '<span>' + diffSummary + '<span class="badge-result issue">异常 ✗</span> ' + confirmedHtml + '</span></div>' +
+    '<div class="card-bd"><table class="compare-table">' +
+    '<tr><th style="width:60px;">字段</th><th colspan="2">📁 档案值   vs   📱 扫码值  · 点击选择</th></tr>' +
+    rows + '</table>' +
+    '<div class="info-line">扫码: ' + esc(item.scanned_by || '-') + ' · ' + (item.scanned_at || '') + '</div>' +
+    '</div>' + actionsHtml + '</div>';
+}
+
+// ==================== 渲染新盘卡片 ====================
+function renderNewCard(item) {
+  var confirmed = confirmedItemIds[item.id] || item.confirmed;
+  var confirmedHtml = confirmed ? '<span class="confirmed-badge">✅ 已确认</span>' : '';
+
+  var fields = [['device_type','设备类型'],['brand','品牌'],['model_no','型号'],['sn','序列号'],
+                ['department','科室'],['building','楼区'],['floor','楼层'],['location','位置']];
+  var formHtml = '';
+  fields.forEach(function(f) {
+    var val = item.fields && item.fields[f[0]] ? item.fields[f[0]].value : '';
+    formHtml += '<div class="nf-item"><label>' + f[1] + '</label>' +
+      '<input type="text" value="' + escAttr(val) + '" id="nf-' + item.id + '-' + f[0] + '" placeholder="' + f[1] + '"></div>';
+  });
+
+  var actionsHtml = '';
+  if (!confirmed) {
+    actionsHtml = '<div class="card-ft">' +
+      '<span style="font-size:11px;color:#9ca3af;margin-right:auto;">编辑字段后确认，自动入库</span>' +
+      '<button class="btn btn-outline-secondary btn-sm" onclick="showDetail(' + item.id + ')">👁 详情</button>' +
+      '<button class="btn btn-success btn-sm confirm-btn" onclick="confirmItem(' + item.id + ',true)">✅ 确认并入库</button></div>';
+  } else {
+    actionsHtml = '<div class="card-ft"><span class="confirmed-badge">✅ 已确认</span></div>';
+  }
+
+  return '<div class="item-card' + (confirmed ? '' : ' pending-highlight') + '" id="card-' + item.id + '">' +
+    '<div class="card-hd"><span class="code">' + esc(item.asset_no) + '</span>' +
+    '<span><span class="badge-result new">🆕 新盘</span> ' + confirmedHtml + '</span></div>' +
+    '<div class="card-bd"><div class="new-form">' + formHtml +
+    '<div class="nf-item full" style="margin-top:4px;"><label>备注</label>' +
+    '<textarea rows="2" id="nf-' + item.id + '-notes" placeholder="备注信息">' + esc(item.notes || '') + '</textarea></div>' +
+    '</div><div class="info-line">扫码: ' + esc(item.scanned_by || '-') + ' · ' + (item.scanned_at || '') + '</div>' +
+    '</div>' + actionsHtml + '</div>';
+}
+
+// ==================== 批量采纳 ====================
+function acceptAll(itemId, source) {
+  var item = null;
+  var all = [].concat(reviewData.normal, reviewData.issue, reviewData.new);
+  for (var i = 0; i < all.length; i++) {
+    if (all[i].id === itemId) { item = all[i]; break; }
+  }
+  if (!item) return;
+
+  if (!selectedValues[itemId]) selectedValues[itemId] = {};
+  var fields = ['device_type','brand','model_no','sn','department','building','floor','location'];
+  fields.forEach(function(f) {
+    if (source === 'arch' && item.asset) {
+      selectedValues[itemId][f] = item.asset[f] || '';
+    } else {
+      var scanVal = item.fields && item.fields[f] ? item.fields[f].value : '';
+      selectedValues[itemId][f] = scanVal || '';
+    }
+  });
+  renderAll(reviewData);
+}
+
+// ==================== 交互：选值、编辑 ====================
+function pickValue(itemId, fieldKey, value) {
+  if (!selectedValues[itemId]) selectedValues[itemId] = {};
+  selectedValues[itemId][fieldKey] = value;
+  renderAll(reviewData);
+}
+
+function editValue(itemId, fieldKey, value) {
+  if (!selectedValues[itemId]) selectedValues[itemId] = {};
+  selectedValues[itemId][fieldKey] = value;
+}
+
+// ==================== 确认单条 ====================
+function confirmItem(itemId, isNew) {
+  var fieldValues = {};
+  if (isNew) {
+    var flds = ['device_type','brand','model_no','sn','department','building','floor','location','notes'];
+    flds.forEach(function(f) {
+      var el = document.getElementById('nf-' + itemId + '-' + f);
+      if (el) fieldValues[f] = el.value;
+    });
+  } else {
+    if (selectedValues[itemId]) {
+      ['device_type','brand','model_no','sn','department','building','floor','location'].forEach(function(k) {
+        if (selectedValues[itemId][k] !== undefined) fieldValues[k] = selectedValues[itemId][k];
+      });
+    }
+  }
+
+  var btn = document.querySelector('#card-' + itemId + ' .confirm-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '确认中...'; }
+
+  fetch('/inventory/api/item/' + itemId + '/confirm', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({confirmed: true, field_values: fieldValues})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(res) {
+    if (res.ok) {
+      confirmedItemIds[itemId] = true;
+      // 更新reviewData
+      if (reviewData) {
+        var allItems = [].concat(reviewData.normal, reviewData.issue, reviewData.new);
+        for (var i = 0; i < allItems.length; i++) {
+          if (allItems[i].id === itemId) { allItems[i].confirmed = true; break; }
+        }
+      }
+      renderAll(reviewData);
+      updateFooter();
+      updateProgress(reviewData);
+      showToast(isNew ? '✅ 已确认并入账' : '✅ 已确认，已更新资产台账');
+      addUndoBtn(itemId);
+      // 自动滚到下一个
+      scrollToNext();
+    } else {
+      alert('确认失败: ' + (res.msg || '未知错误'));
+      if (btn) { btn.disabled = false; btn.textContent = '✅ 确认'; }
+    }
+  })
+  .catch(function(e) {
+    alert('请求失败: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '✅ 确认'; }
+  });
+}
+
+// ==================== 跳转到下一个未确认 ====================
+function scrollToNext() {
+  var cards = document.querySelectorAll('.item-card.pending-highlight');
+  if (cards.length === 0) {
+    // 都确认了，滚到顶部
+    document.getElementById('reviewContent').scrollIntoView({behavior:'smooth'});
+    return;
+  }
+  // 找当前可视区域内第一个未确认
+  var viewTop = window.pageYOffset;
+  var viewBottom = viewTop + window.innerHeight;
+  var found = null;
+  cards.forEach(function(c) {
+    var rect = c.getBoundingClientRect();
+    var top = rect.top + window.pageYOffset;
+    // 找第一个在可视区域下方或部分可见的
+    if (!found && top > viewTop - 50) found = c;
+  });
+  if (!found) found = cards[0];
+  if (found) {
+    found.scrollIntoView({behavior:'smooth', block:'center'});
+    // 闪烁提醒
+    found.style.transition = 'box-shadow 0.3s';
+    found.style.boxShadow = '0 0 0 3px #4f46e5, 0 2px 8px rgba(0,0,0,0.1)';
+    setTimeout(function() {
+      found.style.boxShadow = '';
+    }, 1500);
+  }
+}
+
+function batchConfirmNormal() {
+  if (!confirm('确认全部 ' + (reviewData.normal ? reviewData.normal.length : 0) + ' 项正常资产？')) return;
+  var btn = document.querySelector('[onclick*="batchConfirmNormal"]');
+  if (btn) { btn.disabled = true; btn.textContent = '确认中...'; }
+  fetch('/inventory/api/' + TASK_ID + '/batch-confirm-normal', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      if (res.ok) {
+        reviewData.normal.forEach(function(item) { confirmedItemIds[item.id] = true; });
+        showToast('✅ 已确认 ' + res.count + ' 项正常资产');
+        renderAll(reviewData);
+        updateFooter();
+        updateProgress(reviewData);
+      } else {
+        alert(res.msg || '操作失败');
+      }
+    })
+    .catch(function(e) { alert('请求失败: ' + e.message); })
+    .finally(function() { if (btn) { btn.disabled = false; btn.textContent = '一键全部确认'; } });
+}
+
+function updateNextBtn() {
+  var btn = document.getElementById('nextBtn');
+  var cards = document.querySelectorAll('.item-card.pending-highlight');
+  btn.style.display = cards.length > 0 ? 'flex' : 'none';
+}
+
+// ==================== 筛选 ====================
+function setFilter(filter) {
+  activeFilter = filter;
+  document.querySelectorAll('.filter-tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.filter-tab').forEach(function(t) {
+    var txt = t.textContent;
+    if (filter === 'all' && txt.indexOf('全部') !== -1) t.classList.add('active');
+    else if (filter === 'normal' && txt.indexOf('正常') !== -1) t.classList.add('active');
+    else if (filter === 'issue' && txt.indexOf('异常') !== -1) t.classList.add('active');
+    else if (filter === 'new' && txt.indexOf('新盘') !== -1) t.classList.add('active');
+  });
+  document.querySelectorAll('#statsBar .r-stat').forEach(function(s) {
+    s.classList.toggle('active', s.getAttribute('data-filter') === filter);
+  });
+  renderAll(reviewData);
+  updateFooter();
+}
+
+// ==================== 底部栏 ====================
+function updateFooter() {
+  if (!reviewData) return;
+  var issueItems = reviewData.issue || [];
+  var newItems = reviewData.new || [];
+  var total = issueItems.length + newItems.length;
+  var confirmed = 0;
+  issueItems.forEach(function(item) { if (confirmedItemIds[item.id] || item.confirmed) confirmed++; });
+  newItems.forEach(function(item) { if (confirmedItemIds[item.id] || item.confirmed) confirmed++; });
+  var pending = total - confirmed;
+  var btn = document.getElementById('finishBtn');
+  var msg = document.getElementById('pendingMsg');
+  if (pending > 0) {
+    msg.textContent = '⚠️ 还有 ' + pending + ' 条待确认';
+    msg.style.color = '#dc2626';
+    btn.disabled = true;
+    btn.className = 'btn btn-secondary';
+  } else {
+    msg.textContent = '✅ 全部已确认，可以结束盘点';
+    msg.style.color = '#059669';
+    btn.disabled = false;
+    btn.className = 'btn btn-success';
+  }
+}
+
+// ==================== 结束盘点 ====================
+function finishTask() {
+  if (!confirm('确认本次盘点？所有数据将最终锁定。')) return;
+  var btn = document.getElementById('finishBtn');
+  btn.disabled = true;
+  btn.textContent = '处理中...';
+  fetch('/inventory/{{ task.id }}/finish', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      if (res.ok) {
+        alert('盘点已完成！');
+        window.location.href = '/inventory/';
+      } else {
+        alert(res.msg || '操作失败');
+        btn.disabled = false;
+        btn.textContent = '✅ 确认本次盘点';
+      }
+    })
+    .catch(function(e) {
+      alert('请求失败: ' + e.message);
+      btn.disabled = false;
+      btn.textContent = '✅ 确认本次盘点';
+    });
+}
+
+// ==================== 详情弹窗 ====================
+function showDetail(itemId) {
+  if (!reviewData) return;
+  var all = [].concat(reviewData.normal, reviewData.issue, reviewData.new);
+  var item = null;
+  for (var i = 0; i < all.length; i++) {
+    if (all[i].id === itemId) { item = all[i]; break; }
+  }
+  if (!item) return;
+
+  var asset = item.asset;
+  var html = '<h6>明细：' + esc(item.asset_no) + '</h6><div style="display:flex;gap:16px;">';
+
+  if (asset) {
+    html += '<div style="flex:1;"><div style="font-size:12px;font-weight:600;color:#6b7280;margin-bottom:6px;">📁 资产档案</div>';
+    var fields = [['device_type','设备类型'],['brand','品牌'],['model_no','型号'],['sn','序列号'],
+                  ['department','科室'],['building','楼区'],['floor','楼层'],['location','位置']];
+    fields.forEach(function(f) {
+      html += '<div class="detail-field"><span class="fl">' + f[1] + '</span><span class="fv">' + esc(asset[f[0]] || '-') + '</span></div>';
+    });
+    html += '</div>';
+  }
+
+  html += '<div style="flex:1;"><div style="font-size:12px;font-weight:600;color:#6b7280;margin-bottom:6px;">📱 扫码记录</div>';
+  var fields = [['device_type','设备类型'],['brand','品牌'],['model_no','型号'],['sn','序列号'],
+                ['department','科室'],['building','楼区'],['floor','楼层'],['location','位置']];
+  fields.forEach(function(f) {
+    var v = item.fields && item.fields[f[0]] ? item.fields[f[0]].value : '';
+    var isDiff = false;
+    var diffVal = null;
+    if (item.diff_fields) {
+      for (var di = 0; di < item.diff_fields.length; di++) {
+        if (item.diff_fields[di].key === f[0]) { isDiff = true; diffVal = item.diff_fields[di]; break; }
+      }
+    }
+    if (isDiff && diffVal) {
+      html += '<div class="detail-field"><span class="fl">' + f[1] + '</span>' +
+        '<span class="fv"><span class="old">' + esc(diffVal.old || '-') + '</span> → <span class="new">' + esc(diffVal.new) + '</span></span></div>';
+    } else {
+      html += '<div class="detail-field"><span class="fl">' + f[1] + '</span><span class="fv">' + esc(v || '-') + '</span></div>';
+    }
+  });
+  if (item.notes) {
+    html += '<div class="detail-field"><span class="fl">备注</span><span class="fv">' + esc(item.notes) + '</span></div>';
+  }
+  html += '</div></div>';
+  html += '<div style="margin-top:10px;font-size:12px;color:#9ca3af;">扫码: ' + esc(item.scanned_by || '-') + ' · ' + (item.scanned_at || '') + '</div>';
+
+  document.getElementById('detailBody').innerHTML = html;
+  document.getElementById('detailModal').style.display = 'flex';
+}
+
+function closeDetail() {
+  document.getElementById('detailModal').style.display = 'none';
+}
+
+// ==================== 工具函数 ====================
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ==================== 键盘快捷键 ====================
+document.addEventListener('keydown', function(e) {
+  // Enter/N 跳转下一个未确认
+  if (e.key === 'n' || e.key === 'N') {
+    e.preventDefault();
+    scrollToNext();
+  }
+  // Escape 关闭详情
+  if (e.key === 'Escape') {
+    closeDetail();
+  }
+});
+
+// ==================== Toast 反馈 + 撤销 ====================
+function showToast(msg) {
+  var el = document.getElementById('resultToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'resultToast';
+    el.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#065f46;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,0.2);display:none;transition:opacity .3s;white-space:nowrap;';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.display = 'block';
+  el.style.opacity = '1';
+  setTimeout(function() { el.style.opacity = '0'; }, 2500);
+  setTimeout(function() { el.style.display = 'none'; }, 3000);
+}
+
+function addUndoBtn(itemId) {
+  var card = document.getElementById('card-' + itemId);
+  if (!card) return;
+  var ft = card.querySelector('.card-ft');
+  if (ft && !ft.querySelector('.undo-btn')) {
+    var undo = document.createElement('button');
+    undo.className = 'btn btn-sm btn-outline-danger undo-btn';
+    undo.style.cssText = 'font-size:11px;padding:2px 8px;';
+    undo.textContent = '↩ 撤销';
+    undo.onclick = function(e) { e.stopPropagation(); undoConfirm(itemId); };
+    ft.appendChild(undo);
+  }
+}
+
+function undoConfirm(itemId) {
+  if (!confirm('确定撤销该确认？')) return;
+  fetch('/inventory/api/' + TASK_ID + '/undo-confirm', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({item_id: itemId})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(res) {
+    if (res.ok) {
+      delete confirmedItemIds[itemId];
+      if (reviewData) {
+        var allItems = [].concat(reviewData.normal, reviewData.issue, reviewData.new);
+        for (var i = 0; i < allItems.length; i++) {
+          if (allItems[i].id === itemId) { allItems[i].confirmed = false; break; }
+        }
+      }
+      renderAll(reviewData);
+      updateFooter();
+      updateProgress(reviewData);
+      showToast('↩ 已撤销确认');
+    } else {
+      alert(res.msg || '撤销失败');
+    }
+  })
+  .catch(function(e) { alert('请求失败: ' + e.message); });
+}
+
+// ==================== 未盘资产 ====================
+function loadUnscanned() {
+  activeFilter = 'unscanned';
+  document.querySelectorAll('.filter-tab').forEach(function(t) { t.classList.remove('active'); });
+  var tabs = document.querySelectorAll('.filter-tab');
+  tabs.forEach(function(t) {
+    if (t.textContent.indexOf('未盘') !== -1) t.classList.add('active');
+  });
+  renderAll(reviewData);
+  var el = document.getElementById('unscannedContent');
+  if (!el) return;
+  el.innerHTML = '<div class="text-center py-4"><div class="spinner-border spinner-border-sm" role="status"></div> 加载中...</div>';
+  fetch('/inventory/api/' + TASK_ID + '/unscanned')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { el.innerHTML = '<div class="text-danger text-center py-3">加载失败</div>'; return; }
+      if (d.count === 0) {
+        el.innerHTML = '<div class="text-center text-muted py-4">✔ 全部资产已扫描，无未盘项</div>';
+        return;
+      }
+      var h = '<div style="font-size:12px;color:#6b7280;margin-bottom:8px;">共 ' + d.total + ' 项资产，已扫 ' + d.scanned + ' 项，未扫 <strong style="color:#dc2626;">' + d.count + '</strong> 项</div>';
+      d.unscanned.forEach(function(a) {
+        h += '<div class="item-card" style="opacity:.85;" onclick="window.location.href='/asset/detail/' + a.id + ''">' +
+          '<div class="card-hd"><span class="code">' + a.asset_no + '</span><span style="font-size:11px;color:#9ca3af;">' + (a.device_type||'') + '</span></div>' +
+          '<div class="card-bd" style="font-size:12px;color:#6b7280;padding:6px 14px;">' +
+          (a.brand ? a.brand + ' ' : '') + (a.model_no||'') + ' · ' + (a.department||'') + ' · ' + (a.building||'') + ' ' + (a.location||'') +
+          '</div></div>';
+      });
+      el.innerHTML = h;
+    })
+    .catch(function() { el.innerHTML = '<div class="text-danger text-center py-3">加载失败</div>'; });
+}
+
+// ==================== 启动 ====================
+loadReview();
+</script>
+{% endblock %}

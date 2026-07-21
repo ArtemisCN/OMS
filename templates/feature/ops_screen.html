@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>运维大屏 · 医院工单系统</title>
+    <link href="/static/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/vendor/fontawesome/all.min.css" rel="stylesheet">
+    <script src="/static/vendor/chart.js/chart.umd.min.js"></script>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        html, body {
+            width:100%; height:100%; overflow:hidden;
+            font-family: 'Inter', sans-serif;
+            background: #0a0e27;
+            color: #e2e8f0;
+        }
+        .dashboard-container {
+            width:100vw; height:100vh; padding:20px 30px;
+            display:flex; flex-direction:column;
+            background: linear-gradient(135deg, #0a0e27 0%, #0d1b3e 50%, #0f2027 100%);
+            position:relative; overflow:hidden;
+        }
+        .dashboard-container::before {
+            content:''; position:absolute; top:0; left:0; right:0; height:2px;
+            background: linear-gradient(90deg, transparent, #4f46e5, #06b6d4, transparent);
+        }
+        /* 顶部 */
+        .screen-header {
+            display:flex; justify-content:space-between; align-items:center;
+            padding-bottom:15px; border-bottom:1px solid rgba(255,255,255,0.06);
+            flex-shrink:0;
+        }
+        .hospital-name {
+            font-size:28px; font-weight:700;
+            background: linear-gradient(135deg, #a78bfa, #60a5fa);
+            -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+            background-clip:text;
+        }
+        .live-time {
+            font-size:36px; font-weight:300; font-variant-numeric:tabular-nums;
+            color:#cbd5e1; letter-spacing:2px;
+        }
+        .live-time .seconds { color:#818cf8; font-weight:600; }
+        /* KPI 卡片行1 */
+        .kpi-grid {
+            display:grid; grid-template-columns:repeat(4,1fr); gap:16px;
+            flex-shrink:0; padding:16px 0 8px;
+        }
+        .kpi-card {
+            background: rgba(255,255,255,0.03); border-radius:16px; padding:20px 24px;
+            border:1px solid rgba(255,255,255,0.05);
+            backdrop-filter:blur(12px); position:relative; overflow:hidden;
+        }
+        .kpi-card::after {
+            content:''; position:absolute; top:0; left:0; width:100%; height:3px;
+            background: linear-gradient(90deg, var(--accent), transparent);
+        }
+        .kpi-card:nth-child(1) { --accent: #4f46e5; }
+        .kpi-card:nth-child(2) { --accent: #f59e0b; }
+        .kpi-card:nth-child(3) { --accent: #3b82f6; }
+        .kpi-card:nth-child(4) { --accent: #22c55e; }
+        .kpi-label { font-size:13px; color:#94a3b8; text-transform:uppercase; letter-spacing:1px; }
+        .kpi-value {
+            font-size:42px; font-weight:800; line-height:1.2; margin-top:4px;
+            background: linear-gradient(135deg, #f1f5f9, #94a3b8);
+            -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+            background-clip:text;
+        }
+        .kpi-sub { font-size:13px; color:#94a3b8; margin-top:4px; }
+        /* KPI 卡片行2 — 替换"系统运行正常" */
+        .kpi-grid2 {
+            display:grid; grid-template-columns:repeat(3,1fr); gap:16px;
+            flex-shrink:0; padding:0 0 16px;
+        }
+        .kpi-card-sm {
+            background: rgba(255,255,255,0.02); border-radius:12px; padding:14px 20px;
+            border:1px solid rgba(255,255,255,0.04);
+            display:flex; align-items:center; gap:16px;
+        }
+        .kpi-icon {
+            width:44px; height:44px; border-radius:12px;
+            display:flex; align-items:center; justify-content:center;
+            font-size:20px; flex-shrink:0;
+        }
+        .kpi-icon.purple { background:rgba(79,70,229,0.15); color:#818cf8; }
+        .kpi-icon.blue   { background:rgba(59,130,246,0.15); color:#60a5fa; }
+        .kpi-icon.green  { background:rgba(34,197,94,0.15); color:#4ade80; }
+        .kpi-sm-value {
+            font-size:28px; font-weight:700; line-height:1.1;
+            color:#f1f5f9;
+        }
+        .kpi-sm-label { font-size:12px; color:#94a3b8; margin-top:2px; }
+        /* 图表行 */
+        .charts-row {
+            display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;
+            flex:1; min-height:0; overflow:hidden;
+        }
+        .chart-panel {
+            background: rgba(255,255,255,0.02); border-radius:16px;
+            border:1px solid rgba(255,255,255,0.05);
+            backdrop-filter:blur(8px); padding:16px;
+            display:flex; flex-direction:column; overflow:hidden;
+            min-height:200px;
+        }
+        .chart-title {
+            font-size:13px; color:#94a3b8; text-transform:uppercase;
+            letter-spacing:1px; margin-bottom:8px; flex-shrink:0;
+        }
+        .chart-wrapper { flex:1; min-height:150px; position:relative; }
+        .chart-wrapper canvas { width:100% !important; height:100% !important; }
+        /* 底部：工单滚动 + 系统状态 */
+        .bottom-row {
+            display:grid; grid-template-columns:2fr 1fr; gap:16px;
+            flex:0 0 auto; padding-top:16px;
+            min-height:180px;
+        }
+        .orders-panel {
+            background: rgba(255,255,255,0.02); border-radius:16px;
+            border:1px solid rgba(255,255,255,0.05);
+            backdrop-filter:blur(8px); padding:16px;
+            display:flex; flex-direction:column; overflow:hidden;
+        }
+        .orders-scroll {
+            flex:1; overflow-y:auto; margin-top:8px;
+            scrollbar-width:thin; scrollbar-color:rgba(255,255,255,0.1) transparent;
+        }
+        .orders-scroll::-webkit-scrollbar { width:4px; }
+        .orders-scroll::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.1); border-radius:2px; }
+        .order-row {
+            display:flex; align-items:center; gap:12px; padding:8px 4px;
+            border-bottom:1px solid rgba(255,255,255,0.03);
+            font-size:13px; transition:background 0.2s;
+        }
+        .order-row:hover { background:rgba(255,255,255,0.03); border-radius:6px; }
+        .order-id { color:#94a3b8; min-width:40px; }
+        .order-title { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#e2e8f0; }
+        .order-status { padding:2px 10px; border-radius:10px; font-size:11px; font-weight:500; }
+        .status-pending { background:rgba(245,158,11,0.15); color:#fbbf24; }
+        .status-in_progress { background:rgba(59,130,246,0.15); color:#60a5fa; }
+        .status-completed { background:rgba(34,197,94,0.15); color:#4ade80; }
+        .order-priority { font-size:11px; padding:2px 8px; border-radius:8px; }
+        .pri-normal { color:#94a3b8; }
+        .pri-urgent { color:#fbbf24; }
+        .pri-emergency { color:#f87171; }
+        .order-dept { color:#94a3b8; min-width:60px; text-align:right; }
+
+        /* 系统状态面板 */
+        .status-panel {
+            background: rgba(255,255,255,0.02); border-radius:16px;
+            border:1px solid rgba(255,255,255,0.05);
+            backdrop-filter:blur(8px); padding:16px;
+            display:flex; flex-direction:column;
+            position:relative; overflow:hidden;
+        }
+        .status-grid {
+            display:grid; grid-template-columns:1fr 1fr; gap:10px;
+            flex:1; align-content:center;
+        }
+        .status-item {
+            background:rgba(255,255,255,0.03); border-radius:10px;
+            padding:12px; text-align:center;
+        }
+        .status-item .icon { font-size:20px; margin-bottom:4px; }
+        .status-item .label { font-size:11px; color:#94a3b8; }
+        .status-item .value { font-size:16px; font-weight:600; color:#e2e8f0; margin-top:2px; }
+        .status-item .value.online { color:#4ade80; }
+        .status-item .value.offline { color:#f87171; }
+        .status-footer {
+            text-align:center; padding-top:8px; margin-top:auto;
+            font-size:11px; color:#64748b;
+        }
+        /* 优先级色块 */
+        .pri-bar { display:flex; gap:6px; margin-top:6px; }
+        .pri-bar .pri-seg { flex:1; border-radius:4px; height:8px; position:relative; }
+        .pri-bar .pri-seg .pri-val {
+            position:absolute; top:-16px; left:50%; transform:translateX(-50%);
+            font-size:13px; font-weight:700; color:#f1f5f9;
+        }
+        .pri-label { font-size:10px; color:#64748b; text-align:center; margin-top:2px; }
+        .worker-item {
+            display:flex; align-items:center; gap:8px; padding:4px 0;
+            font-size:12px;
+        }
+        .worker-rank {
+            width:18px; height:18px; border-radius:50%;
+            display:flex; align-items:center; justify-content:center;
+            font-size:9px; font-weight:700; flex-shrink:0;
+        }
+        .worker-rank.gold { background:rgba(245,158,11,0.2); color:#fbbf24; }
+        .worker-rank.silver { background:rgba(148,163,184,0.2); color:#94a3b8; }
+        .worker-rank.bronze { background:rgba(180,83,9,0.2); color:#d97706; }
+        .worker-name { flex:1; }
+        .worker-count { color:#64748b; font-size:11px; }
+        .nearing-item {
+            display:flex; align-items:center; gap:6px; padding:3px 0;
+            font-size:11px;
+        }
+        .nearing-item .ni-id { color:#64748b; min-width:30px; }
+        .nearing-item .ni-title { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .nearing-item .ni-urgent { color:#f87171; font-weight:600; }
+        .nearing-item .ni-warn { color:#fbbf24; font-weight:600; }
+        .nearing-item .ni-person { color:#475569; font-size:10px; }
+
+/* ─── 高科技加载遮罩 ─── */
+#loader-overlay{
+  position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:#0a0e27;
+  transition:opacity .6s cubic-bezier(.4,0,.2,1), transform .6s cubic-bezier(.4,0,.2,1);
+}
+#loader-overlay.hidden{
+  opacity:0;transform:scale(1.05);pointer-events:none;
+}
+/* 背景粒子网格 */
+#loader-overlay::before{
+  content:'';position:absolute;top:0;left:0;right:0;bottom:0;
+  background-image:
+    radial-gradient(circle at 20% 50%, rgba(79,70,229,0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 50%, rgba(6,182,212,0.08) 0%, transparent 50%),
+    linear-gradient(rgba(79,70,229,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79,70,229,0.03) 1px, transparent 1px);
+  background-size:100% 100%, 100% 100%, 40px 40px, 40px 40px;
+}
+/* 扫描线 */
+#loader-overlay::after{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg, transparent, #4f46e5, #06b6d4, transparent);
+  animation:scanLine 2s ease-in-out infinite;
+}
+@keyframes scanLine{
+  0%{top:0;opacity:0}
+  10%{opacity:1}
+  90%{opacity:1}
+  100%{top:100%;opacity:0}
+}
+.loader-content{
+  position:relative;z-index:1;text-align:center;
+  display:flex;flex-direction:column;align-items:center;gap:28px;
+}
+/* 核心旋转环 */
+.loader-ring{
+  width:80px;height:80px;position:relative;
+}
+.loader-ring .ring{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  border-radius:50%;border:2px solid transparent;
+}
+.loader-ring .ring:nth-child(1){
+  border-top-color:#4f46e5;
+  animation:ringSpin 1.2s cubic-bezier(.5,0,.5,1) infinite;
+}
+.loader-ring .ring:nth-child(2){
+  width:64px;height:64px;top:8px;left:8px;
+  border-right-color:#06b6d4;
+  animation:ringSpin 1.6s cubic-bezier(.5,0,.5,1) infinite reverse;
+}
+.loader-ring .ring:nth-child(3){
+  width:48px;height:48px;top:16px;left:16px;
+  border-bottom-color:#818cf8;
+  animation:ringSpin 1s cubic-bezier(.5,0,.5,1) infinite;
+}
+@keyframes ringSpin{to{transform:rotate(360deg)}}
+/* 中心点 */
+.loader-dot{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:8px;height:8px;border-radius:50%;
+  background:#818cf8;box-shadow:0 0 16px rgba(79,70,229,0.6);
+  animation:pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse{
+  0%,100%{transform:translate(-50%,-50%) scale(1);opacity:1}
+  50%{transform:translate(-50%,-50%) scale(1.5);opacity:0.5}
+}
+/* 加载文字 */
+.loader-label{
+  font-size:14px;font-weight:500;color:#94a3b8;
+  letter-spacing:2px;text-transform:uppercase;
+}
+/* 进度条 */
+.loader-track{
+  width:280px;height:3px;border-radius:2px;
+  background:rgba(255,255,255,0.06);overflow:hidden;position:relative;
+}
+.loader-bar{
+  height:100%;width:0%;border-radius:2px;
+  background:linear-gradient(90deg,#4f46e5,#06b6d4,#818cf8);
+  transition:width .4s cubic-bezier(.4,0,.2,1);
+  box-shadow:0 0 12px rgba(79,70,229,0.4);
+  position:relative;
+}
+.loader-bar::after{
+  content:'';position:absolute;top:0;right:0;width:40px;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.4));
+}
+/* 阶段文字 */
+.loader-stage{
+  font-size:12px;color:#64748b;letter-spacing:1px;
+  min-height:18px;transition:all .3s;
+  font-variant-numeric:tabular-nums;
+}
+.loader-stage .highlight{color:#818cf8;font-weight:600}
+/* 百分比 */
+.loader-pct{
+  font-size:32px;font-weight:800;
+  background:linear-gradient(135deg,#c7d2fe,#818cf8,#06b6d4);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:-1px;
+}
+/* 底部状态条 */
+.loader-footer{
+  position:absolute;bottom:30px;left:0;right:0;text-align:center;z-index:1;
+  font-size:10px;color:#475569;letter-spacing:3px;text-transform:uppercase;
+}
+.loader-footer .blink{animation:blink 1.2s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* ─── 左侧终端数据流（终极炫酷版） ─── */
+.term-stream{
+  position:absolute;left:0;top:0;bottom:0;width:340px;z-index:2;
+  overflow:hidden;padding:60px 16px 20px;
+  font-family:'Courier New',monospace;font-size:11px;line-height:1.6;
+  pointer-events:none;opacity:0.9;
+  /* 发光边框 */
+  border-right:1px solid rgba(79,70,229,0.08);
+}
+/* 顶部/底部渐变遮罩 */
+.term-stream::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:60px;
+  background:linear-gradient(180deg,#0a0e27 0%,transparent 100%);
+  z-index:5;pointer-events:none;
+}
+.term-stream::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:40px;
+  background:linear-gradient(0deg,#0a0e27 0%,transparent 100%);
+  z-index:5;pointer-events:none;
+}
+/* CRT 扫描线层 */
+.term-stream .crt-overlay{
+  position:absolute;top:0;left:0;right:0;bottom:0;z-index:4;
+  pointer-events:none;
+  background:repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,255,0,0.015) 2px,
+    rgba(0,255,0,0.015) 4px
+  );
+}
+/* 终端内容容器（在扫描线上层） */
+.term-stream .term-content{
+  position:relative;z-index:3;
+}
+/* 侧边数据粒子层 */
+.term-stream .particle-layer{
+  position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;
+  pointer-events:none;overflow:hidden;
+}
+.particle-dot{
+  position:absolute;width:2px;height:2px;
+  background:#4ade80;border-radius:50%;
+  opacity:0;
+  animation:particleRise linear infinite;
+}
+@keyframes particleRise{
+  0%{transform:translateY(100vh);opacity:0}
+  10%{opacity:0.8}
+  90%{opacity:0.4}
+  100%{transform:translateY(-20px);opacity:0}
+}
+/* Matrix 数字雨背景 */
+.term-stream .matrix-rain{
+  position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;
+  pointer-events:none;opacity:0.12;
+}
+/* 终端行 */
+.term-line{
+  display:block;white-space:nowrap;overflow:hidden;
+  opacity:0;
+  position:relative;
+}
+.term-line.revealed{
+  animation:termReveal .25s ease-out forwards;
+}
+@keyframes termReveal{
+  0%{opacity:0;transform:translateX(-12px);filter:blur(2px)}
+  60%{filter:blur(0)}
+  100%{opacity:1;transform:translateX(0)}
+}
+/* 新行闪烁微光 */
+.term-line.fresh{
+  animation:termReveal .25s ease-out forwards, freshGlow .2s ease-out;
+}
+.term-line.fresh::before{
+  content:'▸';position:absolute;left:-10px;
+  color:#4ade80;font-size:8px;opacity:0.8;
+  animation:promptPulse 1.2s ease-in-out infinite;
+}
+@keyframes freshGlow{
+  0%{text-shadow:0 0 8px rgba(74,222,128,0.4)}
+  100%{text-shadow:none}
+}
+@keyframes promptPulse{
+  0%,100%{opacity:0.8}
+  50%{opacity:0.2}
+}
+/* 时间戳 */
+.term-line .ts{color:#475569;font-size:10px}
+/* 绿色信息 */
+.term-line .info{color:#4ade80}
+/* 青色系统 */
+.term-line .sys{color:#22d3ee;text-shadow:0 0 4px rgba(34,211,238,0.15)}
+/* 紫色状态 */
+.term-line .state{color:#a78bfa}
+/* 黄色警告 */
+.term-line .warn{color:#fbbf24;text-shadow:0 0 4px rgba(251,191,36,0.2)}
+/* 红色错误 */
+.term-line .err{color:#f87171;text-shadow:0 0 6px rgba(248,113,113,0.3)}
+/* 提示符 */
+.term-line .prompt{color:#818cf8}
+.term-line .dim{color:#334155}
+/* 光标闪烁 */
+.term-cursor{
+  display:inline-block;width:6px;height:13px;
+  background:#4ade80;margin-left:2px;vertical-align:middle;
+  animation:cursorBlink .6s step-end infinite;
+  box-shadow:0 0 6px rgba(74,222,128,0.4);
+}
+@keyframes cursorBlink{50%{opacity:0}}
+/* ─── 全屏Glitch震撼特效 ─── */
+.term-glitch{
+  position:fixed;top:0;left:0;right:0;bottom:0;z-index:50;
+  pointer-events:none;opacity:0;
+}
+.term-glitch.active{
+  animation:glitchFlash .15s ease-out forwards;
+}
+@keyframes glitchFlash{
+  0%{opacity:0.08;background:#0a0e27;transform:translateX(0)}
+  25%{opacity:0.12;background:linear-gradient(135deg,#4f46e5,#06b6d4)}
+  50%{opacity:0.1;transform:translateX(3px)}
+  75%{opacity:0.08;transform:translateX(-2px)}
+  100%{opacity:0}
+}
+/* 终端边框发光动画 */
+.term-stream .border-glow{
+  position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;
+  pointer-events:none;border-right:1px solid transparent;
+  animation:borderPulse 4s ease-in-out infinite;
+}
+@keyframes borderPulse{
+  0%,100%{border-color:rgba(79,70,229,0.08)}
+  50%{border-color:rgba(74,222,128,0.15)}
+}
+/* 网络活动指示器 */
+.term-net-indicator{
+  position:absolute;top:50px;right:12px;z-index:6;
+  display:flex;gap:3px;align-items:center;
+  pointer-events:none;
+}
+.term-net-indicator .bar{
+  width:2px;height:8px;
+  background:#4ade80;border-radius:1px;
+  animation:netBar 1.2s ease-in-out infinite;
+}
+.term-net-indicator .bar:nth-child(2){height:12px;animation-delay:.2s}
+.term-net-indicator .bar:nth-child(3){height:6px;animation-delay:.4s}
+.term-net-indicator .bar:nth-child(4){height:10px;animation-delay:.6s}
+@keyframes netBar{
+  0%,100%{opacity:0.3}
+  50%{opacity:1}
+}
+/* ─── 新增覆盖（行数扩展） ─── */
+.kpi-grid { grid-template-columns:repeat(6,1fr); }
+.kpi-card:nth-child(5) { --accent: #a78bfa; }
+.kpi-card:nth-child(6) { --accent: #f472b6; }
+.kpi-grid2 { grid-template-columns:repeat(4,1fr); }
+/* ─── 新增面板 ─── */
+.middle-row {
+  display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;
+  flex:0 0 auto; padding:16px 0 0; min-height:120px;
+}
+.middle-row .chart-panel { min-height:0; }
+.fault-top-item { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:12px; }
+.fault-top-item .ft-name { color:#94a3b8; min-width:50px; }
+.fault-top-item .ft-bar-wrap { flex:1; height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden; }
+.fault-top-item .ft-bar { height:100%; border-radius:3px; transition:width .6s; }
+.fault-top-item .ft-count { color:#64748b; min-width:30px; text-align:right; font-size:11px; }
+.sys-health-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; flex:1; align-content:center; }
+.sys-health-item { display:flex; align-items:center; gap:8px; padding:6px 10px; background:rgba(255,255,255,0.02); border-radius:8px; font-size:12px; }
+.sys-health-item .dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.sys-health-item .dot.online { background:#4ade80; box-shadow:0 0 6px rgba(74,222,128,0.4); }
+.sys-health-item .s-label { flex:1; color:#94a3b8; }
+.sys-health-item .s-status { color:#4ade80; font-size:10px; }
+    </style>
+</head>
+<body>
+<div class="dashboard-container">
+    <!-- 高科技加载遮罩 -->
+    <div id="loader-overlay">
+        <!-- 左侧终端数据流（终极炫酷版） -->
+        <div class="term-stream" id="termStream">
+            <div class="border-glow"></div>
+            <canvas class="matrix-rain" id="matrixRain"></canvas>
+            <div class="particle-layer" id="particleLayer"></div>
+            <div class="crt-overlay"></div>
+            <div class="term-content" id="termContent"></div>
+            <div class="term-net-indicator">
+                <div class="bar"></div><div class="bar"></div>
+                <div class="bar"></div><div class="bar"></div>
+            </div>
+        </div>
+        <!-- 全屏 Glitch 层 -->
+        <div class="term-glitch" id="termGlitch"></div>
+        <div class="loader-content">
+            <div class="loader-ring">
+                <div class="ring"></div>
+                <div class="ring"></div>
+                <div class="ring"></div>
+                <div class="loader-dot"></div>
+            </div>
+            <div class="loader-pct" id="loaderPct">0%</div>
+            <div class="loader-track"><div class="loader-bar" id="loaderBar"></div></div>
+            <div class="loader-stage" id="loaderStage">🔄 初始化连接...</div>
+            <div class="loader-label">— 智维工控 · 运维中枢 —</div>
+        </div>
+        <div class="loader-footer"><span class="blink">●</span> 系统就绪中 <span class="blink">●</span></div>
+    </div>
+
+    <!-- 顶部 -->
+    <div class="screen-header">
+        <div class="hospital-name"><i class="fas fa-hospital me-2" style="-webkit-text-fill-color:#4f46e5;"></i>智维工控 · 运维大屏</div>
+        <div class="live-time" id="liveTime">--:--:--</div>
+    </div>
+
+    <!-- KPI 行1：今日概况 -->
+    <div class="kpi-grid" id="kpiGrid">
+        <div class="kpi-card"><div class="kpi-label">工单总数</div><div class="kpi-value" id="kpiTotal">0</div><div class="kpi-sub">累计工单总量</div></div>
+        <div class="kpi-card"><div class="kpi-label">待处理</div><div class="kpi-value" id="kpiPending">0</div><div class="kpi-sub">等待分配处理</div></div>
+        <div class="kpi-card"><div class="kpi-label">处理中</div><div class="kpi-value" id="kpiInProgress">0</div><div class="kpi-sub">正在维修处理</div></div>
+        <div class="kpi-card"><div class="kpi-label">今日已完成</div><div class="kpi-value" id="kpiCompleted">0</div><div class="kpi-sub">今日已完成工单</div></div>
+        <div class="kpi-card"><div class="kpi-label">本月已完成</div><div class="kpi-value" id="kpiMonthDone">0</div><div class="kpi-sub">本月累计完成数</div></div>
+        <div class="kpi-card"><div class="kpi-label">日均工单</div><div class="kpi-value" id="kpiDailyAvg">0</div><div class="kpi-sub">本月日均处理量</div></div>
+    </div>
+
+    <!-- KPI 行2：核心指标（替代"系统运行正常"） -->
+    <div class="kpi-grid2" id="kpiGrid2">
+        <div class="kpi-card-sm">
+            <div class="kpi-icon purple"><i class="fas fa-percentage"></i></div>
+            <div>
+                <div class="kpi-sm-value"><span id="kpiCompletionRate">0</span>%</div>
+                <div class="kpi-sm-label">本月完成率</div>
+            </div>
+        </div>
+        <div class="kpi-card-sm">
+            <div class="kpi-icon blue"><i class="fas fa-clock"></i></div>
+            <div>
+                <div class="kpi-sm-value"><span id="kpiAvgHours">0</span>h</div>
+                <div class="kpi-sm-label">平均处理时长</div>
+            </div>
+        </div>
+        <div class="kpi-card-sm">
+            <div class="kpi-icon green"><i class="fas fa-check-circle"></i></div>
+            <div>
+                <div class="kpi-sm-value"><span id="kpiSlaRate">0</span>%</div>
+                <div class="kpi-sm-label">SLA 达标率</div>
+            </div>
+        </div>
+        <div class="kpi-card-sm">
+            <div class="kpi-icon" style="background:rgba(245,158,11,0.15);color:#fbbf24;"><i class="fas fa-clipboard-list"></i></div>
+            <div>
+                <div class="kpi-sm-value"><span id="kpiMonthTotal">0</span></div>
+                <div class="kpi-sm-label">本月总工单</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 中间图表行 -->
+    <div class="charts-row">
+        <div class="chart-panel">
+            <div class="chart-title"><i class="fas fa-chart-line me-1"></i> 当月工单趋势（近30天）</div>
+            <div class="chart-wrapper"><canvas id="trendChart"></canvas></div>
+        </div>
+        <div class="chart-panel">
+            <div class="chart-title"><i class="fas fa-chart-pie me-1"></i> 故障类型分布</div>
+            <div class="chart-wrapper"><canvas id="faultChart"></canvas></div>
+        </div>
+        <div class="chart-panel">
+            <div class="chart-title"><i class="fas fa-chart-bar me-1"></i> 科室工单排行</div>
+            <div class="chart-wrapper"><canvas id="deptChart"></canvas></div>
+        </div>
+    </div>
+
+    <!-- 中间行：处理人排行 + 故障TOP + 系统健康度 -->
+    <div class="middle-row">
+        <!-- 处理人排行 -->
+        <div class="chart-panel">
+            <div class="chart-title"><i class="fas fa-trophy me-1" style="color:#fbbf24;"></i> 处理人排行</div>
+            <div id="workerRankPanel" style="flex:1;overflow-y:auto;"></div>
+        </div>
+        <!-- 故障TOP分类 -->
+        <div class="chart-panel">
+            <div class="chart-title"><i class="fas fa-chart-simple me-1"></i> 故障TOP分类</div>
+            <div id="faultTopPanel" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;justify-content:center;"></div>
+        </div>
+        <!-- 系统组件健康度 -->
+        <div class="chart-panel">
+            <div class="chart-title"><i class="fas fa-heart-pulse me-1" style="color:#f43f5e;"></i> 系统组件健康度</div>
+            <div class="sys-health-grid">
+                <div class="sys-health-item"><span class="dot online"></span><span class="s-label">数据库</span><span class="s-status">正常</span></div>
+                <div class="sys-health-item"><span class="dot online"></span><span class="s-label">API服务</span><span class="s-status">正常</span></div>
+                <div class="sys-health-item"><span class="dot online"></span><span class="s-label">缓存服务</span><span class="s-status">正常</span></div>
+                <div class="sys-health-item"><span class="dot online"></span><span class="s-label">WebSocket</span><span class="s-status">正常</span></div>
+                <div class="sys-health-item"><span class="dot online"></span><span class="s-label">通知网关</span><span class="s-status">正常</span></div>
+                <div class="sys-health-item"><span class="dot online"></span><span class="s-label">文件服务</span><span class="s-status">正常</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部：3列布局 -->
+    <div class="bottom-row" style="grid-template-columns:1.5fr 1fr 1fr;">
+        <!-- 列1：最新工单 -->
+        <div class="orders-panel">
+            <div class="chart-title"><i class="fas fa-list me-1"></i> 最新工单</div>
+            <div class="orders-scroll" id="ordersScroll"></div>
+        </div>
+        <!-- 列2：今日报修概览 -->
+        <div class="status-panel">
+            <div class="chart-title"><i class="fas fa-chart-simple me-1"></i> 今日报修概览</div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:8px;padding-top:8px;">
+                <!-- 优先级分布 -->
+                <div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                        <span style="font-size:14px;color:#94a3b8;font-weight:500;">⚡ 优先级分布</span>
+                        <span style="font-size:12px;color:#64748b;">特急 <span id="priEmergVal" style="color:#ef4444;">0</span> · 紧急 <span id="priUrgVal" style="color:#f59e0b;">0</span> · 普通 <span id="priNormVal" style="color:#22c55e;">0</span></span>
+                    </div>
+                    <div class="pri-bar" id="priBar" style="height:10px;"></div>
+                </div>
+                <!-- 3×2 统计网格（完全不重复顶行10张卡片） -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                    <div style="background:rgba(79,70,229,0.04);border-radius:10px;padding:10px 14px;">
+                        <div style="font-size:12px;color:#94a3b8;">🏥 涉及科室</div>
+                        <div style="font-size:34px;font-weight:700;color:#818cf8;line-height:1.2;" id="todayDeptCount">0</div>
+                    </div>
+                    <div style="background:rgba(244,114,182,0.04);border-radius:10px;padding:10px 14px;">
+                        <div style="font-size:12px;color:#94a3b8;">👥 处理人员</div>
+                        <div style="font-size:34px;font-weight:700;color:#f472b6;line-height:1.2;" id="todayPersonCount">0</div>
+                    </div>
+                    <div style="background:rgba(34,197,94,0.05);border-radius:10px;padding:10px 14px;">
+                        <div style="font-size:12px;color:#94a3b8;">🔧 故障类型</div>
+                        <div style="font-size:34px;font-weight:700;color:#4ade80;line-height:1.2;" id="todayFaultTypeCount">0</div>
+                    </div>
+                    <div style="background:rgba(245,158,11,0.04);border-radius:10px;padding:10px 14px;">
+                        <div style="font-size:12px;color:#94a3b8;">🚀 人均效率</div>
+                        <div style="font-size:34px;font-weight:700;color:#fbbf24;line-height:1.2;" id="todayPerCapita">0单/人</div>
+                    </div>
+                    <div style="background:rgba(6,182,212,0.04);border-radius:10px;padding:10px 14px;">
+                        <div style="font-size:12px;color:#94a3b8;">⏰ 最早报修</div>
+                        <div style="font-size:34px;font-weight:700;color:#22d3ee;line-height:1.2;" id="todayFirstOrder">--:--</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.02);border-radius:10px;padding:10px 14px;">
+                        <div style="font-size:12px;color:#94a3b8;">🕐 最晚报修</div>
+                        <div style="font-size:34px;font-weight:700;color:#e2e8f0;line-height:1.2;" id="todayLastOrder">--:--</div>
+                    </div>
+                </div>
+                <!-- 今日处理人排行 -->
+                <div>
+                    <div style="font-size:13px;color:#94a3b8;margin-bottom:4px;font-weight:500;">👤 今日处理人</div>
+                    <div id="todayWorkerRank" style="display:flex;gap:8px;"></div>
+                </div>
+                <!-- 完成进度条 + 紧急工单 -->
+                <div style="display:flex;align-items:center;gap:10px;margin-top:auto;">
+                    <div style="flex:1;">
+                        <div style="display:flex;justify-content:space-between;font-size:12px;color:#94a3b8;margin-bottom:3px;">
+                            <span>SLA 达标率</span>
+                            <span id="todaySlaPct">0%</span>
+                        </div>
+                        <div style="height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;">
+                            <div id="todaySlaBar" style="height:100%;width:0%;border-radius:3px;background:linear-gradient(90deg,#4ade80,#22d3ee);transition:width .6s;"></div>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:rgba(239,68,68,0.08);border-radius:10px;flex-shrink:0;">
+                        <i class="fas fa-bell" style="color:#f87171;font-size:16px;"></i>
+                        <span style="font-size:24px;font-weight:700;color:#f87171;line-height:1;" id="todayUrgentCount">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- 列3：今日完成清单 + 更新时间 -->
+        <div class="status-panel">
+            <div class="chart-title"><i class="fas fa-check-circle me-1" style="color:#4ade80;"></i> 今日完成清单 · <span id="todayCompleteCount" style="color:#4ade80;font-weight:600;">0</span> 单</div>
+            <div id="todayCompletedList" style="flex:1;overflow-y:auto;margin-top:4px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.1) transparent;"></div>
+            <div class="status-footer" id="lastUpdate">更新: --:--:--</div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ===== 实时时钟 =====
+function updateClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    const s = String(now.getSeconds()).padStart(2,'0');
+    document.getElementById('liveTime').innerHTML = h + ':' + m + ':<span class="seconds">' + s + '</span>';
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ===== 高科技加载动画 =====
+const LO = document.getElementById('loader-overlay');
+const LB = document.getElementById('loaderBar');
+const LP = document.getElementById('loaderPct');
+const LS = document.getElementById('loaderStage');
+const stages = [
+  { pct: 15, text: '🔄 初始化连接...' },
+  { pct: 35, text: '📡 请求数据中...' },
+  { pct: 55, text: '📊 解析指标数据...' },
+  { pct: 75, text: '📈 渲染可视化图表...' },
+  { pct: 90, text: '⚡ 优化显示效果...' },
+  { pct: 100, text: '✅ 系统就绪' },
+];
+
+function hideLoader() {
+  LO.classList.add('hidden');
+  if (termTimer) { clearInterval(termTimer); termTimer = null; }
+  if (glitchTimer) { clearTimeout(glitchTimer); glitchTimer = null; }
+}
+
+function advanceLoader(idx) {
+  if (idx >= stages.length) return;
+  const s = stages[idx];
+  LB.style.width = s.pct + '%';
+  LP.textContent = s.pct + '%';
+  LS.innerHTML = s.text;
+}
+
+// ===== 终端数据流生成器（终极炫酷版） =====
+const termLogs = [
+  { cls:'sys',  tpl:'[KERNEL] init hospital.ops v3.1.4_release' },
+  { cls:'sys',  tpl:'[KERNEL] loading modules: monitor, chart, sla, notify' },
+  { cls:'sys',  tpl:'[KERNEL] loading modules: realtime, export, audit' },
+  { cls:'info', tpl:'[OK]  database connection pool established (8 conn)' },
+  { cls:'info', tpl:'[OK]  connection: postgres://ops@primary:5432/hospital_ops' },
+  { cls:'state',tpl:'[SYS]  server uptime: {t} | load avg: 0.{n} 0.{n2} 0.{n3}' },
+  { cls:'info', tpl:'[OK]  cache warming: {n} records hydrated in {n2}ms' },
+  { cls:'info', tpl:'[OK]  hot cache: {n} repair templates loaded' },
+  { cls:'sys',  tpl:'[NET]  binding 0.0.0.0:443 -> TLS 1.3' },
+  { cls:'sys',  tpl:'[NET]  cipher suite: TLS_AES_256_GCM_SHA384' },
+  { cls:'info', tpl:'[OK]  realtime sync channel established (latency {n}ms)' },
+  { cls:'info', tpl:'[OK]  SLA engine initialized (thresholds loaded)' },
+  { cls:'sys',  tpl:'[AUTH] token validation layer ready | JWT RS256' },
+  { cls:'info', tpl:'[OK]  dashboard widget registry: {n} modules registered' },
+  { cls:'state',tpl:'[SYS]  memory: {n}MB used / {n2}MB total ({n3}%)' },
+  { cls:'warn', tpl:'[WARN] data pipeline latency: {n}ms (threshold 200ms)' },
+  { cls:'info', tpl:'[OK]  chart renderer: Canvas2D + WebGL fallback' },
+  { cls:'info', tpl:'[OK]  order stream: {n} active subscribers' },
+  { cls:'sys',  tpl:'[KERNEL] mounting /proc/ops virtual filesystem' },
+  { cls:'info', tpl:'[OK]  realtime clock synchronized: {t} | drift ±{n}ms' },
+  { cls:'info', tpl:'[OK]  priority queue engine started | {n} items queued' },
+  { cls:'state',tpl:'[SYS]  worker pool: {n} idle / {n2} active / {n3} pending' },
+  { cls:'sys',  tpl:'[KERNEL] init complete. entering operational mode' },
+  { cls:'info', tpl:'[OK]  audit log: session #{h} established' },
+  { cls:'info', tpl:'[OK]  notification gateway: webhook + wecom + sms' },
+  { cls:'state',tpl:'[SYS]  uptime: {t} | tasks processed: {n} | throughput: {n2}/m' },
+  { cls:'warn', tpl:'[WARN] SLA threshold 80% approaching for {n} orders' },
+  { cls:'info', tpl:'[OK]  export module: PDF / CSV / Excel ready' },
+  { cls:'info', tpl:'[OK]  user activity tracker initialized ({n} active users)' },
+  { cls:'sys',  tpl:'[NET]  latency to primary db: {n}ms | replica: {n2}ms' },
+  { cls:'info', tpl:'[OK]  backup cycle: auto-snapshot every 6h | last: {t}' },
+  { cls:'state',tpl:'[SYS]  file descriptor limit: {n} open / {n2} max' },
+  { cls:'info', tpl:'[OK]  websocket heartbeat: interval 30s | status: alive' },
+  { cls:'info', tpl:'[OK]  anomaly detection engine armed' },
+  { cls:'sys',  tpl:'[GEO]  hospital zone: {h} | active buildings: {n}' },
+  { cls:'info', tpl:'[OK]  predictive maintenance model loaded (v3.1.4)' },
+  { cls:'info', tpl:'[OK]  system ready — awaiting user commands' },
+];
+
+let termTimer = null;
+
+// ─── Matrix 数字雨 ───
+function startMatrixRain(canvas) {
+  const ctx = canvas.getContext('2d');
+  canvas.width = 340;
+  canvas.height = window.innerHeight;
+
+  const chars = '0123456789ABCDEF0123456789ABCDEF';
+  const fontSize = 10;
+  const columns = Math.floor(canvas.width / fontSize);
+  const drops = Array(columns).fill(1);
+
+  function draw() {
+    ctx.fillStyle = 'rgba(10,14,39,0.05)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#4ade80';
+    ctx.font = fontSize + 'px monospace';
+
+    for (let i = 0; i < drops.length; i++) {
+      const char = chars[Math.floor(Math.random() * chars.length)];
+      ctx.fillStyle = Math.random() > 0.95 ? '#22d3ee' : '#4ade80';
+      ctx.fillText(char, i * fontSize, drops[i] * fontSize);
+      if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+      drops[i]++;
+    }
+  }
+
+  return setInterval(draw, 50);
+}
+
+// ─── 数据粒子 ───
+function spawnParticles(layer) {
+  for (let i = 0; i < 20; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'particle-dot';
+    dot.style.left = (Math.random() * 320) + 'px';
+    dot.style.animationDuration = (3 + Math.random() * 5) + 's';
+    dot.style.animationDelay = (Math.random() * 5) + 's';
+    dot.style.width = dot.style.height = (1 + Math.random() * 2) + 'px';
+    layer.appendChild(dot);
+  }
+}
+
+// ─── 全屏 Glitch 触发 ───
+function triggerGlitch() {
+  const glitch = document.getElementById('termGlitch');
+  if (!glitch) return;
+  glitch.classList.remove('active');
+  void glitch.offsetWidth;
+  glitch.classList.add('active');
+}
+
+let glitchTimer = null;
+
+// ─── 带打字机效果的添加行 ───
+function addTerminalLine(container, entry, idx, maxVisible, typewriter) {
+  const now = new Date();
+  const ts = String(now.getHours()).padStart(2,'0') + ':' +
+             String(now.getMinutes()).padStart(2,'0') + ':' +
+             String(now.getSeconds()).padStart(2,'0');
+  const n = Math.floor(Math.random() * 999) + 1;
+  const n2 = Math.floor(Math.random() * 99) + 1;
+  const n3 = (Math.random() * 9 + 1).toFixed(1);
+  const t = ts;
+  const h = Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6,'0');
+  let text = entry.tpl
+    .replace(/\{t\}/g, t)
+    .replace(/\{n\}/g, n)
+    .replace(/\{n2\}/g, n2)
+    .replace(/\{n3\}/g, n3)
+    .replace(/\{h\}/g, h);
+
+  const line = document.createElement('span');
+  line.className = 'term-line';
+
+  if (typewriter) {
+    // 打字机效果：逐字出现
+    line.className = 'term-line';
+    container.appendChild(line);
+
+    let charIdx = 0;
+    const fullHtml = '<span class="ts">[' + ts + ']</span> ' +
+                     '<span class="' + entry.cls + '">' + text + '</span> <span class="term-cursor"></span>';
+
+    function typeChar() {
+      charIdx++;
+      if (charIdx >= fullHtml.length) {
+        line.innerHTML = fullHtml.replace(' <span class="term-cursor"></span>', '');
+        line.classList.add('revealed', 'fresh');
+        // 控制可见行数
+        while (container.children.length > maxVisible) {
+          container.removeChild(container.firstChild);
+        }
+        return;
+      }
+      line.innerHTML = fullHtml.substring(0, charIdx);
+      requestAnimationFrame(typeChar);
+    }
+    typeChar();
+  } else {
+    line.innerHTML = '<span class="ts">[' + ts + ']</span> ' +
+                     '<span class="' + entry.cls + '">' + text + '</span>';
+    line.classList.add('revealed', 'fresh');
+    container.appendChild(line);
+    // 控制可见行数
+    while (container.children.length > maxVisible) {
+      container.removeChild(container.firstChild);
+    }
+  }
+}
+
+function startTerminalStream() {
+  const container = document.getElementById('termContent');
+  if (!container) return;
+  const maxVisible = Math.floor((window.innerHeight - 100) / 18) || 30;
+
+  // 启动 Matrix 数字雨
+  const matrixCanvas = document.getElementById('matrixRain');
+  let matrixTimer = null;
+  if (matrixCanvas) matrixTimer = startMatrixRain(matrixCanvas);
+
+  // 生成数据粒子
+  const particleLayer = document.getElementById('particleLayer');
+  if (particleLayer) spawnParticles(particleLayer);
+
+  if (termTimer) { clearInterval(termTimer); termTimer = null; }
+
+  let idx = 0;
+  let written = 0;
+  const totalLogs = termLogs.length;
+
+  // 逐行输出，速度从快到慢模拟终端启动
+  function scheduleNext() {
+    if (LO.classList.contains('hidden')) {
+      if (matrixTimer) clearInterval(matrixTimer);
+      termTimer = null;
+      return;
+    }
+
+    const entry = termLogs[idx % totalLogs];
+    idx++;
+    written++;
+
+    // 前25行直接滑入（快），后面带打字机效果（慢速阶段才有体验价值）
+    const useTypewriter = written >= 25;
+    addTerminalLine(container, entry, idx, maxVisible, useTypewriter);
+
+    // 动态计算下一个间隔：从快到慢
+    // 1-10行: 40-80ms (咻咻咻)
+    // 11-20行: 150-250ms (哒哒哒)
+    // 21-35行: 400-600ms (稍慢)
+    // 35+: 1000-1800ms (悠闲)
+    var delay;
+    if (written < 10) {
+      delay = 40 + Math.random() * 40;
+    } else if (written < 20) {
+      delay = 150 + Math.random() * 100;
+    } else if (written < 35) {
+      delay = 400 + Math.random() * 200;
+    } else {
+      delay = 1000 + Math.random() * 800;
+    }
+
+    termTimer = setTimeout(scheduleNext, delay);
+  }
+
+  // 立即开始，第一行直接崩出来
+  termTimer = setTimeout(scheduleNext, 50);
+}
+
+// ─── 定时 Glitch ───
+function startGlitchTimer() {
+  if (glitchTimer) clearInterval(glitchTimer);
+  function scheduleGlitch() {
+    if (LO.classList.contains('hidden')) { return; }
+    triggerGlitch();
+    glitchTimer = setTimeout(scheduleGlitch, 4000 + Math.random() * 8000);
+  }
+  glitchTimer = setTimeout(scheduleGlitch, 3000);
+}
+
+// ===== 加载数据 =====
+let trendChart, faultChart, deptChart;
+
+function loadData(refresh) {
+    // 首次加载：显示遮罩 + 启动终端流
+    if (!LO.classList.contains('loading-started')) {
+        LO.classList.remove('hidden');
+        LO.classList.add('loading-started');
+        // 启动终端数据流（终极炫酷版）
+        startTerminalStream();
+        startGlitchTimer();
+        // 分阶段推进进度
+        stages.forEach((_, i) => setTimeout(() => advanceLoader(i), i * 180));
+        // 最迟 5 秒后强制隐藏（防卡死）
+        setTimeout(hideLoader, 5000);
+    }
+    // 刷新时不弹遮罩，不重启终端，静默更新数据
+    // 默认显示本院数据（可传 ?hospital_id=N 指定）
+    const params = new URLSearchParams(window.location.search);
+    const hid = params.get('hospital_id') || '1';
+
+    fetch('/feature/ops-screen/data?hospital_id=' + hid)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) { hideLoader(); return; }
+            const s = data.stats;
+            document.getElementById('kpiTotal').textContent = s.total_orders;
+            document.getElementById('kpiPending').textContent = s.pending;
+            document.getElementById('kpiInProgress').textContent = s.in_progress;
+            document.getElementById('kpiCompleted').textContent = s.completed_today;
+
+            // KPI 行2
+            document.getElementById('kpiCompletionRate').textContent = s.completion_rate;
+            document.getElementById('kpiAvgHours').textContent = s.avg_hours;
+            document.getElementById('kpiSlaRate').textContent = s.sla_rate;
+
+            // 系统状态（部分模板可能没有这些元素）
+            const elToday = document.getElementById('statusTodayNew');
+            if (elToday) elToday.textContent = s.completed_today || 0;
+            const elMonth = document.getElementById('statusMonthDone');
+            if (elMonth) elMonth.textContent = s.total_orders - s.pending - s.in_progress || 0;
+
+            // 今日优先级分布
+            var pri = data.today_priority || {};
+            var priTotal = (pri.emergency || 0) + (pri.urgent || 0) + (pri.normal || 0) || 1;
+            var priColors = {emergency:'#ef4444', urgent:'#f59e0b', normal:'#22c55e'};
+            var priLabels = {emergency:'特急', urgent:'紧急', normal:'普通'};
+            var priHtml = '';
+            ['emergency','urgent','normal'].forEach(function(p) {
+                var pct = ((pri[p] || 0) / priTotal * 100).toFixed(0);
+                priHtml += '<div class="pri-seg" style="background:' + priColors[p] + ';flex:' + pct + ';">' +
+                    '<div class="pri-val">' + (pri[p] || 0) + '</div>' +
+                    '</div>';
+            });
+            document.getElementById('priBar').innerHTML = priHtml;
+            document.getElementById('priEmergVal').textContent = pri.emergency || 0;
+            document.getElementById('priUrgVal').textContent = pri.urgent || 0;
+            document.getElementById('priNormVal').textContent = pri.normal || 0;
+
+            // 今日报修概览 — 3×2 网格（不重复顶行）
+            document.getElementById('todayDeptCount').textContent = data.today_dept_count || 0;
+            document.getElementById('todayPersonCount').textContent = data.today_person_count || 0;
+            document.getElementById('todayFaultTypeCount').textContent = data.today_fault_type_count || 0;
+            document.getElementById('todayFirstOrder').textContent = data.today_first_order || '--:--';
+            document.getElementById('todayLastOrder').textContent = data.today_last_order || '--:--';
+            var pc = (s.completed_today || 0) / (data.today_person_count || 1);
+            document.getElementById('todayPerCapita').textContent = (pc % 1 === 0 ? pc : pc.toFixed(1)) + '单/人';
+
+            // 底部SLA进度条
+            document.getElementById('todaySlaPct').textContent = (s.sla_rate || 0) + '%';
+            document.getElementById('todaySlaBar').style.width = (s.sla_rate || 0) + '%';
+
+            // 今日处理人排行（紧凑标签）
+            var tWorkers = data.top_workers || [];
+            var tWHtml = '';
+            var medals = ['🥇','🥈','🥉'];
+            tWorkers.slice(0,3).forEach(function(w, i) {
+                tWHtml += '<span style="background:rgba(255,255,255,0.03);border-radius:12px;padding:4px 12px;font-size:13px;color:#94a3b8;white-space:nowrap;">' + medals[i] + ' ' + escHtml(w.name) + ' <span style="color:#64748b;">' + w.count + '</span></span>';
+            });
+            document.getElementById('todayWorkerRank').innerHTML = tWHtml || '<span style="font-size:9px;color:#475569;">暂无</span>';
+
+            // 处理人排行
+            var workers = data.top_workers || [];
+            var ranks = ['gold','silver','bronze','',''];
+            var wHtml = '';
+            workers.forEach(function(w, i) {
+                var medal = ['🥇','🥈','🥉','',''][i] || '';
+                wHtml += '<div class="worker-item">' +
+                    '<span class="worker-rank ' + (ranks[i] || '') + '">' + (i+1) + '</span>' +
+                    '<span class="worker-name">' + medal + escHtml(w.name) + '</span>' +
+                    '<span class="worker-count">' + w.count + '单</span></div>';
+            });
+            var elWorkerList = document.getElementById('workerList');
+            if (elWorkerList) elWorkerList.innerHTML = wHtml || '<div style="color:#475569;font-size:11px;text-align:center;padding:4px;">暂无数据</div>';
+
+            // 今日完成清单
+            var todayDone = data.today_completed || [];
+            document.getElementById('todayCompleteCount').textContent = todayDone.length;
+            var dHtml = '';
+            todayDone.forEach(function(d) {
+                dHtml += '<div class="order-row">' +
+                    '<span class="order-id" style="min-width:36px;font-size:12px;">#' + d.id + '</span>' +
+                    '<span class="order-title" style="font-size:12px;">' + escHtml(d.title) + '</span>' +
+                    '<span style="color:#4ade80;font-size:10px;font-weight:500;flex-shrink:0;">' + d.completed_at + '</span>' +
+                    '<span style="color:#64748b;font-size:10px;min-width:36px;text-align:right;">' + escHtml(d.person || '') + '</span></div>';
+            });
+            document.getElementById('todayCompletedList').innerHTML = dHtml || '<div style="color:#475569;font-size:12px;text-align:center;padding:20px;">今日暂无完成工单</div>';
+
+            // 趋势图
+            try {
+                const ctx1 = document.getElementById('trendChart').getContext('2d');
+                if (trendChart) trendChart.destroy();
+                trendChart = new Chart(ctx1, {
+                    type: 'line',
+                    data: {
+                        labels: data.trend.labels,
+                        datasets: [{
+                            label: '工单数',
+                            data: data.trend.values,
+                            borderColor: '#818cf8',
+                            backgroundColor: 'rgba(79,70,229,0.1)',
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 2,
+                            pointHoverRadius: 5,
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { ticks: { color:'#94a3b8', maxTicksLimit:10 }, grid: { color:'rgba(255,255,255,0.03)' } },
+                            y: { ticks: { color:'#94a3b8' }, grid: { color:'rgba(255,255,255,0.03)' }, beginAtZero: true }
+                        }
+                    }
+                });
+            } catch(e) { console.warn('趋势图渲染失败:', e); }
+
+            // 故障饼图
+            try {
+                const ctx2 = document.getElementById('faultChart').getContext('2d');
+                if (faultChart) faultChart.destroy();
+                faultChart = new Chart(ctx2, {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.fault_chart.labels,
+                        datasets: [{
+                            data: data.fault_chart.values,
+                            backgroundColor: ['#818cf8','#fbbf24','#4ade80','#f87171','#60a5fa','#c084fc'],
+                            borderWidth: 0,
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position:'bottom', labels: { color:'#cbd5e1', boxWidth:10, padding:8, font:{size:10} } }
+                        }
+                    }
+                });
+            } catch(e) { console.warn('故障饼图渲染失败:', e); }
+
+            // 科室柱状图
+            try {
+                const ctx3 = document.getElementById('deptChart').getContext('2d');
+                if (deptChart) deptChart.destroy();
+                deptChart = new Chart(ctx3, {
+                    type: 'bar',
+                    data: {
+                        labels: data.dept_chart.labels,
+                        datasets: [{
+                            label: '工单数',
+                            data: data.dept_chart.values,
+                            backgroundColor: 'rgba(79,70,229,0.6)',
+                            borderColor: '#818cf8',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { ticks: { color:'#94a3b8' }, grid: { color:'rgba(255,255,255,0.03)' }, beginAtZero: true },
+                            y: { ticks: { color:'#94a3b8', font:{size:9} }, grid: { display:false } }
+                        }
+                    }
+                });
+            } catch(e) { console.warn('科室柱状图渲染失败:', e); }
+
+            // 最新工单
+            const container = document.getElementById('ordersScroll');
+            const statusMap = {'待处理':'pending','处理中':'in_progress','已完成':'completed'};
+            container.innerHTML = data.recent_orders.map(o => `
+                <div class="order-row">
+                    <span class="order-id">#${o.id}</span>
+                    <span class="order-title">${o.title}</span>
+                    <span class="order-status status-${statusMap[o.status] || o.status}">${o.status}</span>
+                    <span class="order-priority pri-${o.priority}">${o.priority}</span>
+                    <span class="order-dept">${o.department || ''}</span>
+                </div>
+            `).join('');
+
+            document.getElementById('lastUpdate').textContent = '更新: ' + new Date().toLocaleTimeString();
+
+            // 新增 KPI
+            var elMonthDone = document.getElementById('kpiMonthDone');
+            if (elMonthDone) elMonthDone.textContent = s.completed_month || 0;
+            var elDailyAvg = document.getElementById('kpiDailyAvg');
+            if (elDailyAvg) elDailyAvg.textContent = s.daily_avg || 0;
+            var elMonthTotal = document.getElementById('kpiMonthTotal');
+            if (elMonthTotal) elMonthTotal.textContent = s.month_total || 0;
+
+            // 底部紧急工单
+            var urgCount = (pri.emergency || 0) + (pri.urgent || 0);
+            var elUrgentCount = document.getElementById('todayUrgentCount');
+            if (elUrgentCount) elUrgentCount.textContent = urgCount;
+
+            // 按角色组分组的组员排行
+            var grouped = data.grouped_workers || [];
+            var opsCfg = data.ops_display || {};
+            var defaultFilter = opsCfg.default || '全部';
+            var mergedRules = opsCfg.merged || [];
+
+            // 处理合并规则
+            var mergedGroupNames = {};
+            mergedRules.forEach(function(rule) {
+                rule.groups.forEach(function(g) { mergedGroupNames[g] = true; });
+            });
+
+            // 筛选组
+            var displayGroups = grouped;
+            if (defaultFilter !== '全部') {
+                displayGroups = grouped.filter(function(g) { return g.group === defaultFilter; });
+            }
+            // 合并处理
+            var mergedSections = [];
+            mergedRules.forEach(function(rule) {
+                var allWorkers = [];
+                rule.groups.forEach(function(gName) {
+                    var found = grouped.filter(function(g){ return g.group === gName; });
+                    if (found.length) {
+                        found[0].workers.forEach(function(w) {
+                            var existing = null;
+                            for (var i = 0; i < allWorkers.length; i++) {
+                                if (allWorkers[i].name === w.name) { existing = allWorkers[i]; break; }
+                            }
+                            if (existing) { existing.count += w.count; }
+                            else { allWorkers.push({name: w.name, count: w.count}); }
+                        });
+                    }
+                });
+                allWorkers.sort(function(a,b){return b.count - a.count});
+                mergedSections.push({group: rule.label, workers: allWorkers, merged: true});
+            });
+            var remainingGroups = displayGroups.filter(function(g) { return !mergedGroupNames[g.group]; });
+            var finalSections = mergedSections.concat(remainingGroups);
+
+            var grpColors = ['#818cf8','#fbbf24','#4ade80','#f87171','#60a5fa','#c084fc'];
+            var secHtml = '';
+            finalSections.forEach(function(sec, si) {
+                var secClass = sec.merged ? 'style="color:#22d3ee;border-bottom:1px solid rgba(34,211,238,0.15);"' :
+                    'style="color:#94a3b8;border-bottom:1px solid rgba(255,255,255,0.06);"';
+                secHtml += '<div style="font-size:11px;font-weight:600;padding:4px 0 2px;margin-bottom:2px;text-transform:uppercase;letter-spacing:0.5px;" ' + secClass + '>▎' + escHtml(sec.group) + '</div>';
+                sec.workers.slice(0, 5).forEach(function(w, wi) {
+                    var pctAll = 0;
+                    var totalInSec = 0;
+                    sec.workers.forEach(function(ww){ totalInSec += ww.count; });
+                    pctAll = totalInSec > 0 ? (w.count / totalInSec * 100).toFixed(0) : 0;
+                    var medal = wi === 0 ? '🥇' : wi === 1 ? '🥈' : wi === 2 ? '🥉' : (wi+1);
+                    secHtml += '<div class="worker-item" style="padding:2px 0;">' +
+                        '<span class="worker-rank" style="width:20px;height:18px;font-size:9px;background:' + (wi < 3 ? 'rgba(255,255,255,0.06)' : 'transparent') + ';color:' + (wi === 0 ? '#fbbf24' : wi === 1 ? '#94a3b8' : wi === 2 ? '#d97706' : '#475569') + ';">' + medal + '</span>' +
+                        '<span class="worker-name" style="font-size:11px;">' + escHtml(w.name) + '</span>' +
+                        '<div style="flex:0 0 60px;height:4px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;margin:0 4px;"><div style="width:' + pctAll + '%;height:100%;background:' + (grpColors[si % grpColors.length]) + ';border-radius:2px;"></div></div>' +
+                        '<span class="worker-count" style="font-size:10px;min-width:30px;text-align:right;">' + w.count + '</span></div>';
+                });
+            });
+            var elGroupRank = document.getElementById('workerRankPanel');
+            if (elGroupRank) elGroupRank.innerHTML = secHtml || '<div style="color:#475569;font-size:11px;text-align:center;padding:8px;">暂无数据</div>';
+
+            // 故障TOP分类（horizontal bars）
+            var faultTypes = data.fault_chart || {};
+            var ftLabels = faultTypes.labels || [];
+            var ftValues = faultTypes.values || [];
+            var ftTotal = ftValues.reduce(function(a,b){return a+b}, 0) || 1;
+            var ftColors = ['#818cf8','#fbbf24','#4ade80','#f87171','#60a5fa','#c084fc'];
+            var ftHtml = ftLabels.slice(0,5).map(function(l,i){
+                var pct = (ftValues[i]/ftTotal*100).toFixed(1);
+                return '<div class="fault-top-item"><span class="ft-name">'+escHtml(l)+'</span>'+
+                    '<div class="ft-bar-wrap"><div class="ft-bar" style="width:'+pct+'%;background:'+(ftColors[i]||'#818cf8')+'"></div></div>'+
+                    '<span class="ft-count">'+ftValues[i]+'</span></div>';
+            }).join('');
+            var elFaultTop = document.getElementById('faultTopPanel');
+            if (elFaultTop) elFaultTop.innerHTML = ftHtml || '<div style="color:#475569;font-size:11px;text-align:center;padding:8px;">暂无数据</div>';
+
+            // 首次加载成功后隐藏遮罩（刷新时不操作）
+            if (LO && !LO.classList.contains('hidden')) hideLoader();
+        })
+        .catch(err => { console.error(err); hideLoader(); });
+}
+
+function escHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, function(m) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+    });
+}
+
+loadData();
+setInterval(loadData, 30000);
+</script>
+</body>
+</html>

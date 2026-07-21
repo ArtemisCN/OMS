@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}选择模板创建表单{% endblock %}
+{% block content %}
+<style>
+.template-card {
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    box-shadow: var(--card-shadow);
+    transition: all .2s;
+    cursor: pointer;
+    background: #fff;
+    height: 100%;
+}
+.template-card:hover {
+    box-shadow: var(--card-hover-shadow);
+    border-color: var(--primary);
+    transform: translateY(-2px);
+}
+.template-card.selected {
+    border-color: var(--primary);
+    background: #eef2ff;
+    box-shadow: 0 0 0 3px rgba(79,70,229,.15);
+}
+.template-card .card-body { padding: 20px; }
+.template-card .template-icon {
+    width: 48px; height: 48px; border-radius: 12px;
+    background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; color: var(--primary); margin-bottom: 12px;
+}
+.template-card .template-name { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+.template-card .template-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+.template-card .template-meta { font-size: 11px; color: var(--text-muted); }
+.template-card .badge-field {
+    display: inline-block; background: #f1f5f9; color: #475569;
+    font-size: 11px; padding: 2px 8px; border-radius: 10px; margin: 2px 4px 2px 0;
+}
+.create-panel {
+    background: #fff;
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    box-shadow: var(--card-shadow);
+    padding: 24px;
+    margin-top: 24px;
+}
+.create-panel h5 { font-weight: 600; margin-bottom: 16px; }
+.create-panel h5 i { color: var(--primary); margin-right: 8px; }
+.selected-template-info {
+    background: #f8fafc;
+    border: 1px dashed var(--card-border);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.selected-template-info .st-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: #eef2ff; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; color: var(--primary); flex-shrink: 0;
+}
+.selected-template-info .st-name { font-weight: 600; font-size: 14px; }
+.selected-template-info .st-fields { font-size: 12px; color: var(--text-muted); }
+.selected-template-info .btn-change { font-size: 12px; }
+</style>
+
+<div class="container-fluid px-4 py-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0"><i class="fas fa-file-alt me-2"></i>创建表单</h4>
+        <a href="{{ url_for('forms.form_list') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i>返回列表
+        </a>
+    </div>
+
+    {% if templates %}
+    {% if wo %}
+    <div class="alert alert-info d-flex align-items-center gap-2 mb-3" style="font-size:13px;">
+        <i class="fas fa-link"></i> 关联工单 #{{ wo.id }}：<strong>{{ wo.title }}</strong>
+        <input type="hidden" name="work_order_id" value="{{ wo.id }}" form="createForm">
+    </div>
+    {% endif %}
+    <!-- Pick a Template -->
+    <div class="mb-4">
+        <h5 class="mb-3" style="font-weight:600;"><i class="fas fa-palette me-2" style="color:var(--primary);"></i>选择模板</h5>
+        <div class="row g-3">
+            {% for t in templates %}
+            <div class="col-md-4 col-lg-3">
+                <div class="template-card" data-template-id="{{ t.id }}" onclick="selectTemplate(this, {{ t.id }}, '{{ t.name|e }}', {{ (t.fields_json or [])|length }})">
+                    <div class="card-body">
+                        <div class="template-icon"><i class="fas fa-file-signature"></i></div>
+                        <div class="template-name">{{ t.name }}</div>
+                        {% if t.description %}
+                        <div class="template-desc">{{ t.description }}</div>
+                        {% endif %}
+                        <div class="template-meta mb-2">
+                            <i class="fas fa-list-ul me-1"></i>{{ (t.fields_json or [])|length }} 个字段
+                        </div>
+                        <div>
+                            {% for f in (t.fields_json or [])[:5] %}
+                            <span class="badge-field">{{ f.get('label', f.get('id', '')) }}</span>
+                            {% endfor %}
+                            {% if (t.fields_json or [])|length > 5 %}
+                            <span class="badge-field">+{{ (t.fields_json|length) - 5 }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Name & Create -->
+    <div class="create-panel" id="createPanel" style="display:none;">
+        <h5><i class="fas fa-pen"></i>填写表单信息</h5>
+        <div class="selected-template-info" id="selectedTemplateInfo">
+            <div class="st-icon"><i class="fas fa-file-signature"></i></div>
+            <div class="flex-fill">
+                <div class="st-name" id="selectedName"></div>
+                <div class="st-fields" id="selectedFields"></div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary btn-change" onclick="resetSelection()">
+                <i class="fas fa-undo me-1"></i>重新选择
+            </button>
+        </div>
+        <form method="POST" id="createForm" onsubmit="return validateForm()">
+            <input type="hidden" name="template_id" id="templateIdInput" value="">
+            <div class="mb-3">
+                <label class="form-label">表单名称 <span class="text-danger">*</span></label>
+                <input type="text" name="name" id="formNameInput" class="form-control" placeholder="输入表单名称，如「信息科设备变更 - 2025年3月」" required>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary px-4">
+                    <i class="fas fa-plus-circle me-1"></i>创建表单
+                </button>
+                <button type="button" class="btn btn-outline-secondary px-3" onclick="resetSelection()">
+                    <i class="fas fa-times me-1"></i>取消
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% block extra_scripts %}
+<script>
+var selectedTemplateId = null;
+
+function genFormName(prefix) {
+    var d = new Date();
+    var pad = function(n){ return n < 10 ? '0' + n : '' + n; };
+    var ds = '' + d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate());
+    var ts = pad(d.getHours()) + pad(d.getMinutes());
+    return prefix + ' ' + ds + '-' + ts;
+}
+
+function selectTemplate(el, tid, name, fieldCount) {
+    document.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+
+    selectedTemplateId = tid;
+    document.getElementById('templateIdInput').value = tid;
+    document.getElementById('selectedName').textContent = name;
+    document.getElementById('selectedFields').textContent = fieldCount + ' 个字段';
+    document.getElementById('formNameInput').value = genFormName(name);
+    document.getElementById('createPanel').style.display = 'block';
+    document.getElementById('createPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById('formNameInput').focus();
+}
+
+function resetSelection() {
+    selectedTemplateId = null;
+    document.getElementById('templateIdInput').value = '';
+    document.getElementById('createPanel').style.display = 'none';
+    document.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
+}
+
+function validateForm() {
+    if (!selectedTemplateId) {
+        alert('请选择一个模板');
+        return false;
+    }
+    var name = document.getElementById('formNameInput').value.trim();
+    if (!name) {
+        alert('请输入表单名称');
+        document.getElementById('formNameInput').focus();
+        return false;
+    }
+    return true;
+}
+</script>
+{% endblock %}
+{% endblock %}

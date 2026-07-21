@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.finance-card { border: 1px solid #e5e7eb; border-radius: 10px; transition: box-shadow .2s, border-color .2s; }
+.finance-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); border-color: #c7d2fe; }
+.status-draft { background: #fef3c7; color: #92400e; }
+.status-generated { background: #d1fae5; color: #065f46; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0 fw-bold" style="font-size:15px;">
+        <i class="fas fa-file-invoice-dollar" style="color:#f59e0b;"></i> 维修做账
+    </h5>
+    <a href="{{ url_for('finance.create') }}" class="btn btn-warning btn-sm"><i class="fas fa-plus"></i> 新建批次</a>
+</div>
+
+{% if not batches %}
+<div class="text-center text-muted py-5">
+    <i class="fas fa-file-invoice" style="font-size:48px;color:#d1d5db;margin-bottom:16px;"></i>
+    <p>暂无维修做账记录</p>
+    <a href="{{ url_for('finance.create') }}" class="btn btn-warning btn-sm">新建第一个批次</a>
+</div>
+{% else %}
+<div class="row g-3">
+    {% for b in batches %}
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('finance.detail', batch_id=b.id) }}" class="text-decoration-none">
+            <div class="card finance-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h6 class="mb-0 fw-bold" style="font-size:14px;">{{ b.company_name or '未填公司' }}</h6>
+                        <span class="badge status-{{ b.status }}">{% if b.status=='draft' %}草稿{% else %}已生成{% endif %}</span>
+                    </div>
+                    <div style="font-size:12px;color:#6b7280;">
+                        <div>收款单位: {{ b.payee or '-' }}</div>
+                        <div>发票总额: <strong style="color:#f59e0b;">¥{{ '%.2f'|format(b.total_amount) }}</strong></div>
+                        <div>清单数: {{ b.drafts.count() }} 条</div>
+                        <div class="mt-1 text-muted">{{ b.created_at.strftime('%m/%d %H:%M') }} by {{ b.created_by }}</div>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

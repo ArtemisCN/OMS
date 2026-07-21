@@ -1,0 +1,684 @@
+{% extends "base.html" %}
+{% block title %}维修单 #{{ order.order_no }}{% endblock %}
+{% block extra_head %}
+<style>
+/* ===== Screen layout ===== */
+.order-page {
+  width: 794px; max-width: 100%; margin: 0; background: #fff;
+  box-shadow: 0 2px 12px rgba(0,0,0,.12); padding: 0; border:1px solid #d0d5dd;
+  position: relative;
+  {% if order.template and order.template.orientation == 'landscape' %}
+  aspect-ratio: 297 / 210;
+  {% else %}
+  aspect-ratio: 210 / 297;
+  {% endif %}
+}
+.form-header {
+  position: absolute; left:0; top:0; width:100%; height:auto;
+  text-align:center; font-size:18pt; font-weight:700; padding:8px 0;
+  border-bottom:1px solid #e5e7eb; color:#1d2939;
+  pointer-events:none; z-index:1;
+}
+.form-footer {
+  position: absolute; left:0; bottom:0; width:100%; height:auto;
+  border-top:1px solid #d0d5dd; padding:6px 0; font-size:9pt;
+  text-align:center; color:#98a2b3;
+  pointer-events:none; z-index:1;
+}
+.order-field { border:1px solid #e5e7eb;
+  position: absolute; box-sizing: border-box;
+  padding:4px 6px; border-radius:2px; background:#fff;
+}
+.order-field .fld-label {
+  font-weight: 600; font-size: 11px; color: #374151;
+  padding: 0; margin-bottom:2px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* a4-field: reuse form_view 样式，覆盖 order-field */
+.a4-field {
+    position:absolute; box-sizing:border-box; padding:4px 6px;
+    border:1px solid #e5e7eb; border-radius:2px; background:#fff;
+    overflow:hidden;
+}
+.a4-field .fld-label {
+    font-size:11px; font-weight:600; color:#374151; margin-bottom:2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.a4-field .value-display {
+    font-size:12px; color:#1e293b; line-height:1.4;
+    word-break:break-word; overflow:hidden;
+}
+.a4-field .checkbox-group, .a4-field .radio-group {
+    display:flex; flex-wrap:wrap; gap:4px 8px; padding:2px 0;
+}
+.a4-field .checkbox-group label, .a4-field .radio-group label {
+    font-size:12px; display:inline-flex; align-items:center; gap:2px; cursor:pointer;
+}
+.a4-field .checkbox-group input, .a4-field .radio-group input { width:auto; }
+/* Edit mode for value-display */
+.a4-field .value-display.edit-mode { border-color:#4f46e5; background:#fff; }
+.order-field .editable-value {
+  font-size: 11px; color: #333; line-height: 1.4;
+  padding: 0 2px; border-radius: 3px; cursor: pointer;
+  word-break: break-word; min-height: 16px;
+  border: 1px solid transparent; transition: border-color .15s;
+}
+.order-field .editable-value:hover { border-color: #a5b4fc; background: #f5f7ff; }
+.order-field .editable-value.edit-mode { border-color: #4f46e5; background: #fff; outline: none; }
+.order-field .editable-value-placeholder { color: #98a2b3; font-style: italic; }
+.field-signature {
+  border: 1px dashed #d0d5dd; min-height: 30px; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; overflow: hidden; padding:2px; width:100%; height:100%;
+}
+.field-signature:hover { border-color:#4f46e5; background:#f5f7ff; }
+.field-signature img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.field-signature .placeholder { color: #98a2b3; font-size: 13px; }
+.status-bar {
+  display: flex; gap: 12px; align-items: center; margin-bottom: 16px;
+  padding: 8px 16px; background: #f9fafb; border-radius: 8px;
+}
+
+/* ===== Print-version table (hidden on screen) ===== */
+.print-version { display: none; }
+
+/* ===== Printing mode (set by JS) ===== */
+body.printing .order-page { display: none !important; }
+body.printing .print-version { display: block !important; }
+body.printing .status-bar { display: none !important; }
+body.printing nav, body.printing .sidebar,
+body.printing .navbar, body.printing footer { display: none !important; }
+
+/* ===== 打印排版样式 ===== */
+@media print {
+  @page { margin: 15mm; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .print-version table { width: 100%; border-collapse: collapse; }
+  .print-version td { border: 1px solid #1d2939; padding: 4px 6px; vertical-align: top; line-height: 1.5; }
+  .print-version td.label { font-weight: 600; background: #f5f5f5; width: 25%; white-space: nowrap; }
+  .print-version td.value { width: 75%; word-break: break-all; }
+  .print-version .sig-row td { height: 60px; vertical-align: middle; text-align: center; }
+  .print-version .sig-row img { max-height: 50px; max-width: 200px; object-fit: contain; }
+  .print-version .footer { text-align: center; font-size: 9pt; color: #667085; margin-top: 8px; padding-top: 4px; border-top: 1px solid #1d2939; }
+}
+
+/* ===== Workflow Step Visualizer ===== */
+.workflow-steps {
+  display: flex; align-items: flex-start; justify-content: center;
+  margin-bottom: 24px; padding: 20px 24px;
+  background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;
+}
+.workflow-step {
+  display: flex; flex-direction: column; align-items: center; flex: 0 0 auto;
+}
+.step-circle {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 700;
+  border: 3px solid #d1d5db; background: #f9fafb; color: #9ca3af;
+  transition: all .3s ease; position: relative;
+}
+.step-circle.completed {
+  border-color: #10b981; background: #10b981; color: #fff;
+}
+.step-circle.active {
+  border-color: #4f46e5; background: #4f46e5; color: #fff;
+  box-shadow: 0 0 0 4px rgba(79,70,229,.2);
+}
+.step-circle.future {
+  border-color: #d1d5db; background: #f9fafb; color: #9ca3af;
+}
+.step-label {
+  margin-top: 8px; font-size: 13px; font-weight: 600; white-space: nowrap;
+}
+.step-label.completed { color: #10b981; }
+.step-label.active { color: #4f46e5; }
+.step-label.future { color: #9ca3af; }
+.step-time {
+  font-size: 11px; color: #94a3b8; margin-top: 2px; white-space: nowrap;
+}
+.step-check { display: none; }
+.step-circle.completed .step-check { display: inline; }
+.step-circle.completed .step-num { display: none; }
+.step-circle.active .step-num { display: inline; }
+.step-circle.future .step-num { display: inline; }
+.workflow-connector {
+  flex: 1; height: 4px; margin: 18px 12px 0 12px; position: relative;
+  min-width: 24px; border-radius: 3px; overflow: hidden;
+  background: #e2e8f0;
+}
+.connector-fill {
+  position: absolute; top: 0; left: 0; height: 100%; border-radius: 3px;
+  transition: width .6s ease;
+}
+.connector-fill.completed { background: #10b981; width: 100%; }
+.connector-fill.animated {
+  background: linear-gradient(90deg, #4f46e5, #10b981, #4f46e5);
+  background-size: 200% 100%; width: 100%;
+  animation: flowLine 1.8s linear infinite;
+}
+.connector-fill.rejected { background: #ef4444; width: 50%; }
+@keyframes flowLine {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ===== Timeline Card ===== */
+.timeline-card {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+  padding: 20px 24px; margin-top: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+.timeline-card h5 {
+  font-size: 15px; font-weight: 700; color: #1e293b;
+  margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+}
+.timeline-list { position: relative; padding-left: 28px; }
+.timeline-list::before {
+  content: ''; position: absolute; left: 10px; top: 8px; bottom: 8px;
+  width: 2px; background: #e2e8f0;
+}
+.timeline-item {
+  position: relative; margin-bottom: 20px; padding-left: 16px;
+}
+.timeline-item:last-child { margin-bottom: 0; }
+.timeline-dot {
+  position: absolute; left: -22px; top: 4px;
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid #fff; z-index: 1;
+}
+.timeline-dot.created { background: #4f46e5; }
+.timeline-dot.submitted { background: #f59e0b; }
+.timeline-dot.approved { background: #10b981; }
+.timeline-dot.rejected { background: #ef4444; }
+.timeline-item-title { font-size: 14px; font-weight: 600; color: #1e293b; }
+.timeline-item-desc { font-size: 12px; color: #64748b; margin-top: 2px; }
+
+/* ===== Stats Mini-card ===== */
+.stats-card {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+  padding: 20px 24px; margin-top: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+.stats-card h5 {
+  font-size: 15px; font-weight: 700; color: #1e293b;
+  margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+}
+.stats-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 0; border-bottom: 1px solid #f1f5f9;
+}
+.stats-row:last-child { border-bottom: none; }
+.stats-label { font-size: 13px; color: #64748b; }
+.stats-value { font-size: 14px; font-weight: 600; color: #1e293b; }
+</style>
+<script>
+function doPrint() {
+  document.body.classList.add('printing');
+  window.print();
+  window.addEventListener('afterprint', function(){ location.reload(); }, {once:true});
+}
+</script>
+{% endblock %}
+{% block content %}
+{% set tpl = order.template %}
+{% set fields = (tpl.fields_json or []) if tpl else [] %}
+{% set fv = order.field_values or {} %}
+{% set sigs = order.signatures or {} %}
+{% set status_map = {'draft':'草稿', 'pending':'待审核', 'approved':'已审核', 'rejected':'已驳回'} %}
+{% set badge_map = {'draft':'secondary', 'pending':'warning', 'approved':'success', 'rejected':'danger'} %}
+
+<div class="container-fluid px-3 py-3">
+  <!-- Status Bar -->
+  <div class="status-bar"
+       data-save-fields-url="{{ url_for('repair.order_save_fields', oid=order.id) }}"
+       data-sign-url="{{ url_for('repair.order_sign', oid=order.id) }}"
+       data-submit-url="{{ url_for('repair.order_submit', oid=order.id) }}"
+       data-approve-url="{{ url_for('repair.order_approve', oid=order.id) }}"
+       data-reject-url="{{ url_for('repair.order_reject', oid=order.id) }}"
+       data-delete-url="{{ url_for('repair.order_delete', oid=order.id) }}">
+    <strong>{{ order.order_no }}</strong>
+    <span class="badge bg-{{ badge_map[order.status] }}">{{ status_map[order.status] }}</span>
+    <span style="color:#667085;font-size:13px">{{ tpl.name if tpl else '（模板已删除）' }}</span>
+    <div class="ms-auto"></div>
+    {% if order.status == 'draft' %}
+    <button class="btn btn-sm btn-primary" onclick="submitOrder()">提交审核</button>
+    <button class="btn btn-sm btn-outline-danger" onclick="deleteOrder()">删除</button>
+    {% endif %}
+    {% if order.status == 'pending' %}
+    <button class="btn btn-sm btn-success" onclick="approveOrder()">审核通过</button>
+    <button class="btn btn-sm btn-danger" onclick="rejectOrder()">驳回→草稿</button>
+    {% endif %}
+    <button class="btn btn-sm btn-success" onclick="doPrint()">🖨️ 打印</button>
+    <a href="{{ url_for('repair.order_list') }}" class="btn btn-sm btn-outline-secondary">返回</a>
+  </div>
+
+  <!-- Workflow Step Visualizer -->
+  {% set step_data = [
+    {'label':'已创建', 'timeline_icon':'🆕'},
+    {'label':'已提交', 'timeline_icon':'📤'},
+    {'label':'已审核', 'timeline_icon':'✅'},
+    {'label':'已完成', 'timeline_icon':'🏁'}
+  ] %}
+  {% set status_idx = {'draft':0, 'pending':1, 'approved':3, 'rejected':2} %}
+  {% set cur = status_idx.get(order.status, 0) %}
+  <div class="workflow-steps">
+    {% for s in step_data %}
+    {% set i = loop.index0 %}
+    {% set is_done = i < cur %}
+    {% set is_active = i == cur %}
+    {% set is_future = i > cur %}
+    <div class="workflow-step">
+      <div class="step-circle {% if is_done %}completed{% elif is_active %}active{% else %}future{% endif %}">
+        {% if is_done %}
+        <span class="step-check">✓</span>
+        {% else %}
+        <span class="step-num">{{ loop.index }}</span>
+        {% endif %}
+      </div>
+      <div class="step-label {% if is_done %}completed{% elif is_active %}active{% else %}future{% endif %}">{{ s.label }}</div>
+      <div class="step-time">
+        {% if i == 0 and order.created_at %}
+        {{ order.created_at.strftime('%m-%d %H:%M') }}
+        {% elif i == 1 and order.status != 'draft' and order.updated_at %}
+        {{ order.updated_at.strftime('%m-%d %H:%M') }}
+        {% elif i == 2 and order.approved_at %}
+        {{ order.approved_at.strftime('%m-%d %H:%M') }}
+        {% elif i == 3 and order.status == 'approved' and order.approved_at %}
+        {{ order.approved_at.strftime('%m-%d %H:%M') }}
+        {% endif %}
+      </div>
+    </div>
+    {% if not loop.last %}
+    {% set ci = i %}
+    <div class="workflow-connector">
+      {% if ci < cur - 1 %}
+      <div class="connector-fill completed"></div>
+      {% elif ci == cur - 1 and order.status != 'rejected' and cur < 3 %}
+      <div class="connector-fill animated"></div>
+      {% elif ci == cur - 1 and order.status == 'rejected' %}
+      <div class="connector-fill rejected"></div>
+      {% elif ci < cur %}
+      <div class="connector-fill completed"></div>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+
+  <!-- Rendered Order (A4 absolute layout) -->
+  <div style="display:flex;justify-content:center;padding:20px 0;">
+  <div class="order-page" id="order-page">
+    {% if tpl %}
+    <div class="form-header">{{ tpl.name }}</div>
+    {% endif %}
+    {% for f in fields %}
+    {% set val = fv.get(f.id, '') %}
+    {% set ftype = f.type or 'text' %}
+    {% set flabel = f.label or f.id %}
+    {% set foptions = f.options or [] %}
+    {% set fw = f.w or 40 %}
+    {% set fh = f.h or 5 %}
+    {% set fx = f.x or 0 %}
+    {% set fy = f.y or 0 %}
+    {% set fs = f.fontSize or None %}
+    {% set ta = f.textAlign or '' %}
+    {% set is_signature = (ftype == 'signature') %}
+    <div class="a4-field type-{{ ftype }}" style="left:{{ fx }}%; top:{{ fy }}%; width:{{ fw }}%;{% if is_signature %}min-height:{{ fh }}%;{% else %}height:{{ fh }}%;{% endif %}{% if fs %}font-size:{{ fs }}pt;{% endif %}{% if ta %}text-align:{{ ta }};{% endif %}"
+         data-field-id="{{ f.id }}" data-field-type="{{ ftype }}" data-data-source="{{ f.dataSource or f.data_source or '' }}"
+         onclick="{% if ftype in ('text','number','email','tel','url','date','datetime','textarea','select') %}editField('{{ f.id }}'){% elif is_signature %}signField('{{ f.id }}'){% endif %}">
+
+      {# ===== Title ===== #}
+      {% if ftype == 'title' %}
+        <div style="font-size:{{ fs or 18 }}pt;font-weight:700;text-align:{{ ta or 'center' }};padding:2px;">{{ flabel }}</div>
+
+      {# ===== Divider ===== #}
+      {% elif ftype == 'divider' %}
+        <div style="background:#1d2939;height:100%;border-radius:1px;"></div>
+
+      {# ===== Richtext ===== #}
+      {% elif ftype == 'richtext' %}
+        <div style="font-size:{{ fs or 11 }}pt;{% if ta %}text-align:{{ ta }};{% endif %}padding:2px;line-height:1.5;">{{ flabel | safe }}</div>
+
+      {# ===== Signature ===== #}
+      {% elif is_signature %}
+        <div class="fld-label">{{ flabel }}</div>
+        <div class="field-signature" id="sig-{{ f.id }}" onclick="signField('{{ f.id }}')">
+          {% set sig_data = sigs.get(f.id, '') %}
+          {% if sig_data %}
+            <img src="{{ sig_data }}" alt="签名" style="max-height:{{ (fh * 10)|int }}px;">
+          {% else %}
+            <span class="placeholder" style="font-size:12px;color:#9ca3af;">点击签名</span>
+          {% endif %}
+        </div>
+
+      {# ===== Select ===== #}
+      {% elif ftype == 'select' %}
+        <div class="fld-label">{{ flabel }}</div>
+        <div class="value-display" id="val-{{ f.id }}" style="font-size:{{ fs or 12 }}pt;padding:2px 4px;border-bottom:1px solid #e5e7eb;min-height:22px;">{{ val if val else ('— ' + (f.placeholder or '请选择...') + ' —') }}</div>
+
+      {# ===== Radio ===== #}
+      {% elif ftype == 'radio' %}
+        <div class="fld-label">{{ flabel }}</div>
+        <div class="radio-group" id="val-{{ f.id }}" style="display:flex;flex-wrap:wrap;gap:4px 8px;padding:2px 0;">
+          {% for opt in foptions %}
+          <label style="font-size:{{ fs or 12 }}pt;display:inline-flex;align-items:center;gap:2px;cursor:pointer;">
+            <input type="radio" name="{{ f.id }}" value="{{ opt }}" {% if val == opt %}checked{% endif %} disabled>
+            {{ opt }}
+          </label>
+          {% endfor %}
+        </div>
+
+      {# ===== Checkbox ===== #}
+      {% elif ftype == 'checkbox' %}
+        <div class="fld-label">{{ flabel }}</div>
+        <div class="checkbox-group" id="val-{{ f.id }}" style="display:flex;flex-wrap:wrap;gap:4px 8px;padding:2px 0;">
+          {% for opt in foptions %}
+          {% set checked = (val == opt) %}
+          <label style="font-size:{{ fs or 12 }}pt;display:inline-flex;align-items:center;gap:2px;cursor:pointer;">
+            <input type="checkbox" value="{{ opt }}" {% if checked %}checked{% endif %} disabled>
+            {{ opt }}
+          </label>
+          {% endfor %}
+        </div>
+
+      {# ===== Textarea ===== #}
+      {% elif ftype == 'textarea' %}
+        <div class="fld-label">{{ flabel }}</div>
+        <div class="value-display" id="val-{{ f.id }}" style="font-size:{{ fs or 12 }}pt;padding:2px 4px;white-space:pre-wrap;line-height:1.4;min-height:22px;">{{ val if val else '' }}</div>
+
+      {# ===== Text / Number / Email / Tel / URL / Date / Datetime ===== #}
+      {% else %}
+        <div class="fld-label">{{ flabel }}</div>
+        <div class="value-display" id="val-{{ f.id }}" style="font-size:{{ fs or 12 }}pt;padding:2px 4px;border-bottom:1px solid #e5e7eb;min-height:22px;">{{ val if val else ('— ' + (f.placeholder or '______') + ' —') }}</div>{# 去掉 onclick，editField 改为点击整块区域触发 #}
+      {% endif %}
+
+    </div>
+    {% endfor %}
+  </div>
+  </div>
+
+  <!-- Print Version -->
+  <div class="print-version">
+    <h1>上海市第七人民医院维修单</h1>
+    <p style="text-align:right;font-size:10pt;margin-bottom:8px;color:#555">{{ order.order_no }} | {{ now.strftime('%Y-%m-%d') }}</p>
+    <table>
+    {% for f in fields %}
+      {% set val = fv.get(f.id, '') %}
+      {% if f.type == 'signature' %}
+      <tr class="sig-row">
+        <td class="label">{{ f.label }}</td>
+        <td class="value">
+          {% set sig_data = sigs.get(f.id, '') %}
+          {% if sig_data %}<img src="{{ sig_data }}" alt="签名">{% else %}<span style="color:#98a2b3">（签名）</span>{% endif %}
+        </td>
+      </tr>
+      {% elif f.type == 'richtext' %}
+      <tr><td class="label" colspan="2" style="font-size:{{ f.fontSize or 11 }}pt;{% if f.textAlign %}text-align:{{ f.textAlign }};{% endif %}padding:6px;line-height:1.6;">{{ f.label | safe }}</td></tr>
+      {% elif f.type not in ('label', 'divider', 'header', 'title') %}
+      <tr><td class="label">{{ f.label }}</td><td class="value">{{ val if val else '______' }}</td></tr>
+      {% endif %}
+    {% endfor %}
+    </table>
+    <div class="footer">上海市第七人民医院信息科</div>
+  </div>
+
+  <!-- Timeline Card -->
+  <div class="timeline-card">
+    <h5>📋 处理时间线</h5>
+    <div class="timeline-list">
+      <div class="timeline-item">
+        <div class="timeline-dot created"></div>
+        <div class="timeline-item-title">🆕 创建维修单</div>
+        <div class="timeline-item-desc">
+          {{ order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else '—' }}
+          {% if order.created_by %} · {{ order.created_by }}{% endif %}
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-dot {% if order.status == 'draft' %}submitted{% else %}submitted{% endif %}"></div>
+        <div class="timeline-item-title">📤 提交审核</div>
+        <div class="timeline-item-desc">
+          {% if order.status != 'draft' %}
+            {{ order.updated_at.strftime('%Y-%m-%d %H:%M') if order.updated_at else '—' }}
+            {% if order.created_by %} · {{ order.created_by }}{% endif %}
+          {% else %}
+            <span style="color:#94a3b8">等待提交</span>
+          {% endif %}
+        </div>
+      </div>
+      {% if order.status == 'approved' %}
+      <div class="timeline-item">
+        <div class="timeline-dot approved"></div>
+        <div class="timeline-item-title">✅ 审核通过</div>
+        <div class="timeline-item-desc">
+          {{ order.approved_at.strftime('%Y-%m-%d %H:%M') if order.approved_at else '—' }}
+          {% if order.approved_by %} · {{ order.approved_by }}{% endif %}
+        </div>
+      </div>
+      {% elif order.status == 'rejected' %}
+      <div class="timeline-item">
+        <div class="timeline-dot" style="background:#d97706"></div>
+        <div class="timeline-item-title">🔄 已驳回·返回草稿</div>
+        <div class="timeline-item-desc">
+          {{ order.updated_at.strftime('%Y-%m-%d %H:%M') if order.updated_at else '—' }}
+        </div>
+      </div>
+      {% elif order.status == 'pending' %}
+      <div class="timeline-item">
+        <div class="timeline-dot" style="background:#94a3b8"></div>
+        <div class="timeline-item-title" style="color:#94a3b8">⏳ 待审核</div>
+        <div class="timeline-item-desc">等待审核中</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Stats Mini-card -->
+  <div class="stats-card">
+    <h5>📊 工单统计</h5>
+    <div class="stats-row">
+      <span class="stats-label">⏱ 处理时长</span>
+      <span class="stats-value">
+        {% set end_time = order.approved_at if order.approved_at else now %}
+        {% set delta = end_time - order.created_at %}
+        {% set hours = (delta.total_seconds() / 3600)|round(1) %}
+        {{ hours }}小时
+      </span>
+    </div>
+    <div class="stats-row">
+      <span class="stats-label">📄 模板</span>
+      <span class="stats-value">{{ tpl.name if tpl else '（已删除）' }}</span>
+    </div>
+    <div class="stats-row">
+      <span class="stats-label">🔗 关联工单</span>
+      <span class="stats-value">
+        {% if order.work_order %}
+        <a href="{{ url_for('orders.detail', order_id=order.work_order.id) }}">{{ order.work_order.title }}</a>
+        {% else %}
+        <span style="color:#94a3b8">无</span>
+        {% endif %}
+      </span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== Field editing =====
+var saveUrl = document.querySelector('.status-bar').dataset.saveFieldsUrl;
+var signUrl = document.querySelector('.status-bar').dataset.signUrl;
+var submitUrl = document.querySelector('.status-bar').dataset.submitUrl;
+var approveUrl = document.querySelector('.status-bar').dataset.approveUrl;
+var rejectUrl = document.querySelector('.status-bar').dataset.rejectUrl;
+var deleteUrl = document.querySelector('.status-bar').dataset.deleteUrl;
+
+function editField(fid) {
+  var el = document.getElementById('val-' + fid);
+  if (!el) return;
+  var cur = el.innerText.trim();
+  // 去掉占位符前缀后缀「—」
+  if (cur.startsWith('—') && cur.endsWith('—')) cur = '';
+  if (cur === '______') cur = '';
+  // Check if field has data source
+  var fieldDiv = el.closest('.a4-field');
+  var ds = fieldDiv ? fieldDiv.getAttribute('data-data-source') : '';
+  if (ds && dsCache[ds] && Array.isArray(dsCache[ds])) {
+    // Render as select dropdown
+    var sel = document.createElement('select');
+    sel.className = 'form-select form-select-sm';
+    sel.style.cssText = 'border:1px solid #4f46e5;border-radius:4px;padding:2px 4px;font-size:14px;width:100%';
+    var blankOpt = document.createElement('option');
+    blankOpt.value = ''; blankOpt.textContent = '-- 请选择 --';
+    sel.appendChild(blankOpt);
+    dsCache[ds].forEach(function(opt) {
+      var o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label || opt.value;
+      if (opt.value === cur) o.selected = true;
+      sel.appendChild(o);
+    });
+    el.innerHTML = '';
+    el.appendChild(sel);
+    el.classList.add('edit-mode');
+    sel.focus();
+    sel.onchange = function() { saveField(fid, sel.value, el); };
+    sel.onblur = function() { setTimeout(function(){ if (!sel.matches(':focus')) saveField(fid, sel.value, el); }, 200); };
+    return;
+  }
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.value = cur;
+  input.className = 'form-control form-control-sm';
+  input.style.cssText = 'border:1px solid #4f46e5;border-radius:4px;padding:2px 4px;font-size:14px;width:100%';
+  el.innerHTML = '';
+  el.appendChild(input);
+  el.classList.add('edit-mode');
+  input.focus();
+  input.select();
+  input.onblur = function() { saveField(fid, input.value, el); };
+  input.onkeydown = function(e) {
+    if (e.key === 'Enter') { input.blur(); }
+    if (e.key === 'Escape') { el.innerHTML = cur || ('— ______ —'); el.classList.remove('edit-mode'); }
+  };
+}
+
+function saveField(fid, val, el) {
+  if (!el) el = document.getElementById('val-' + fid);
+  if (!el) return;
+  el.innerHTML = val || ('— ______ —');
+  el.classList.remove('edit-mode');
+  if (val) el.dataset.hasValue = '1'; else delete el.dataset.hasValue;
+  var fd = {}; fd[fid] = val;
+  fetch(saveUrl, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({field_values: fd})
+  }).catch(function(){});
+}
+
+// ---- Data source support ----
+var dsCache = {};
+function loadDataSources() {
+  var dsFields = document.querySelectorAll('.a4-field[data-data-source]:not([data-data-source=""])');
+  if (!dsFields.length) return;
+  fetch('/forms/api/data-sources').then(function(r){return r.json()}).then(function(data){
+    dsCache = data;
+    dsFields.forEach(function(div){
+      var src = div.getAttribute('data-data-source');
+      if (!src || !data[src]) return;
+      // For list-type sources (arrays)
+      if (Array.isArray(data[src])) {
+        div.dataset.dsType = 'list';
+      } else {
+        // For scalar sources (current_user, current_date, etc.)
+        div.dataset.dsType = 'auto';
+        div.dataset.dsValue = data[src].value || data[src].label || '';
+      }
+    });
+    // Auto-fill scalar fields after loading
+    dsFields.forEach(function(div){
+      if (div.dataset.dsType === 'auto') {
+        var fid = div.getAttribute('data-field');
+        if (fid) try { fid = JSON.parse(fid).id; } catch(e) {}
+        var valEl = div.querySelector('.editable-value');
+        if (valEl && !div.dataset.dsFilled) {
+          var autoVal = div.dataset.dsValue;
+          if (autoVal) {
+            valEl.innerHTML = autoVal;
+            valEl.dataset.hasValue = '1';
+            // Auto-save
+            var fd = {}; fd[fid] = autoVal;
+            fetch(saveUrl, {
+              method:'POST', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({field_values: fd})
+            }).catch(function(){});
+            div.dataset.dsFilled = '1';
+          }
+        }
+      }
+    });
+  }).catch(function(e){console.warn('DS load failed',e);});
+}
+setTimeout(loadDataSources, 500);
+
+function signField(fid) {
+  var sigDiv = document.getElementById('sig-' + fid);
+  if (!sigDiv) return;
+  var existing = sigDiv.querySelector('img');
+  // 弹出简单签名对话框
+  var d = document.createElement('div');
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:8px;padding:16px;width:400px;max-width:90%';
+  box.innerHTML = '<h6 style="margin-bottom:12px">✍ 签字</h6><canvas id="sigCanvas" width="350" height="100" style="width:100%;height:100px;border:2px solid #e0e4ea;border-radius:4px;background:#fafafa"></canvas><div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-sm btn-outline-secondary" id="sigClearBtn">清除</button><button class="btn btn-sm btn-success" id="sigConfirmBtn">确认签字</button><button class="btn btn-sm btn-outline-danger" id="sigCancelBtn" style="margin-left:auto">取消</button></div>';
+  d.appendChild(box);
+  document.body.appendChild(d);
+  var canvas = document.getElementById('sigCanvas');
+  var ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fafafa'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = '#1d2939'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  var drawing = false;
+  canvas.onmousedown = function(e) { drawing = true; ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); };
+  canvas.onmousemove = function(e) { if (!drawing) return; ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke(); };
+  canvas.onmouseup = function() { drawing = false; };
+  canvas.onmouseleave = function() { drawing = false; };
+  document.getElementById('sigClearBtn').onclick = function() { ctx.fillStyle = '#fafafa'; ctx.fillRect(0,0,canvas.width,canvas.height); };
+  document.getElementById('sigConfirmBtn').onclick = function() {
+    var dataUrl = canvas.toDataURL('image/png');
+    fetch(signUrl, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({field_id: fid, signature: dataUrl})
+    }).then(function() {
+      sigDiv.innerHTML = '<img src="' + dataUrl + '" alt="签名">';
+      d.remove();
+    }).catch(function() { d.remove(); });
+  };
+  document.getElementById('sigCancelBtn').onclick = function() { d.remove(); };
+}
+
+function submitOrder() {
+  fetch(submitUrl, {method:'POST', headers:{'Content-Type':'application/json'}})
+    .then(function(){ location.reload(); })
+    .catch(function(){});
+}
+function approveOrder() {
+  fetch(approveUrl, {method:'POST', headers:{'Content-Type':'application/json'}})
+    .then(function(){ location.reload(); })
+    .catch(function(){});
+}
+function rejectOrder() {
+  fetch(rejectUrl, {method:'POST', headers:{'Content-Type':'application/json'}})
+    .then(function(){ location.reload(); })
+    .catch(function(){});
+}
+function deleteOrder() {
+  if (!confirm('确认删除此维修单？')) return;
+  fetch(deleteUrl, {method:'POST', headers:{'Content-Type':'application/json'}})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.redirect) { window.location.href = d.redirect; }
+      else { location.reload(); }
+    })
+    .catch(function(){});
+}
+</script>
+{% endblock %}

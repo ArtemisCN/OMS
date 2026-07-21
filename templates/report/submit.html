@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}提交报修 · {{ hospital.name }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title text-center mb-3"><i class="fas fa-tools text-danger"></i> {{ hospital.name }} - 故障报修</h5>
+                <p class="text-muted small text-center">无需登录，填写信息后提交即可</p>
+                <hr>
+                <form method="post">
+                    <div class="mb-3">
+                        <label class="form-label">您的姓名 <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="form-control" required placeholder="如：张护士">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">联系电话</label>
+                        <input type="tel" name="phone" class="form-control" placeholder="方便工程师联系您">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">科室</label>
+                        <input type="text" name="department" class="form-control" value="{{ request.args.get('dept', '') }}" placeholder="如：内科">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">具体位置</label>
+                        <input type="text" name="location" class="form-control" placeholder="如：3楼301室">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">设备类型</label>
+                        <select name="device_type" class="form-select">
+                            <option value="电脑">电脑</option>
+                            <option value="打印机">打印机</option>
+                            <option value="网络设备">网络设备</option>
+                            <option value="软件">软件</option>
+                            <option value="其他" selected>其他</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">故障描述 <span class="text-danger">*</span></label>
+                        <textarea name="description" class="form-control" rows="4" required placeholder="请详细描述故障现象..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-danger w-100 py-2">
+                        <i class="fas fa-paper-plane"></i> 提交报修
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

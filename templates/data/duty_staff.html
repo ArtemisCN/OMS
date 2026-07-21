@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="mb-0 fw-bold" style="font-size:15px;">
+        <i class="fas fa-users" style="color:#0891b2;"></i> 排班人员管理
+    </h5>
+    <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-primary" onclick="showAddStaff()"><i class="fas fa-plus"></i> 添加人员</button>
+        <a href="{{ url_for('data.list_duty_schedules') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> 返回排班</a>
+    </div>
+</div>
+
+<div class="card" style="border-radius:10px;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0" style="font-size:14px;">
+            <thead><tr><th style="width:40px;">#</th><th>姓名</th><th>状态</th><th style="width:120px;">操作</th></tr></thead>
+            <tbody>
+                {% for s in staff %}
+                <tr>
+                    <td>{{ s.sort_order }}</td>
+                    <td><strong>{{ s.name }}</strong></td>
+                    <td>
+                        {% if s.is_active %}
+                        <span class="badge bg-success">启用</span>
+                        {% else %}
+                        <span class="badge bg-secondary">禁用</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-{{ 'warning' if s.is_active else 'success' }}"
+                                onclick="toggleStaff({{ s.id }})">
+                            {{ '禁用' if s.is_active else '启用' }}
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteStaff({{ s.id }},'{{ s.name|e }}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 添加人员弹窗 -->
+<div class="modal fade" id="staffModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content" style="border-radius:12px;">
+            <form method="post" action="{{ url_for('data.duty_staff_manage') }}">
+                <div class="modal-header border-0 pb-0">
+                    <h6 class="modal-title fw-bold">添加排班人员</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-medium" style="font-size:13px;">姓名 <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="form-control" required placeholder="如：张三">
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-save"></i> 添加</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function showAddStaff() {
+    new bootstrap.Modal(document.getElementById('staffModal')).show();
+}
+function toggleStaff(id) {
+    fetch('/data/duty-schedules/staff/' + id + '/toggle', {method:'POST'})
+        .then(function(r){return r.json()})
+        .then(function(d){if(d.ok) location.reload();});
+}
+function deleteStaff(id, name) {
+    if (!confirm('确定删除人员「' + name + '」？')) return;
+    fetch('/data/duty-schedules/staff/' + id + '/delete', {method:'POST'})
+        .then(function(r){return r.json()})
+        .then(function(d){if(d.ok) location.reload();});
+}
+</script>
+{% endblock %}

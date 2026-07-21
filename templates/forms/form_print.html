@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ form.name }} - 打印</title>
+<style>
+@page { size: A4 portrait; margin: 15mm 20mm; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'SimSun', 'STSong', serif; font-size: 13px; color: #000; line-height: 1.6; }
+.page { max-width: 720px; margin: 0 auto; }
+h3 { text-align: center; font-weight: 700; font-size: 18px; margin-bottom: 16px; letter-spacing: 2px; }
+.info-line { text-align: right; font-size: 12px; color: #666; margin-bottom: 10px; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+td, th { border: 1px solid #000; padding: 6px 8px; vertical-align: top; }
+.label { font-weight: 600; width: 140px; background: #f9f9f9; }
+.value { min-height: 24px; }
+.checkbox-group { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.checkbox-item { display: inline-flex; align-items: center; gap: 3px; }
+.radio-group { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.radio-item { display: inline-flex; align-items: center; gap: 3px; }
+.sig-placeholder { display: inline-block; min-width: 80px; border-bottom: 1px solid #000; padding: 0 8px; color: #333; }
+@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+<div class="page">
+    {% set d = form.form_data or {} %}
+    {% set fields = template.fields_json or [] %}
+    <div class="info-line">编号: {{ form.name }}</div>
+    <h3>{{ template.name }}</h3>
+
+    <table>
+    {% for field in fields %}
+    {% set ftype = field.type or 'text' %}
+    {% set fid = field.id %}
+    {% set val = d.get(fid, '') %}
+
+    {% if ftype == 'textarea' %}
+        <tr>
+            <td class="label"{% if field.get('valign') %} style="vertical-align:{{ field.valign }};"{% endif %}>{{ field.label }}</td>
+            <td class="value" colspan="3">{{ val }}</td>
+        </tr>
+    {% elif ftype == 'checkbox' %}
+        <tr>
+            <td class="label">{{ field.label }}</td>
+            <td class="value" colspan="3">
+                {% set opts = field.options or [] %}
+                {% if opts %}
+                <div class="checkbox-group">
+                {% for opt in opts %}
+                    {% set opt_val = opt.value if opt is mapping else opt %}
+                    {% set opt_label = opt.label if opt is mapping else opt %}
+                    <span class="checkbox-item">{% if opt_val in (val if val is iterable and val is not string else [val]) %}☑{% else %}□{% endif %} {{ opt_label }}</span>
+                {% endfor %}
+                </div>
+                {% else %}
+                    <span>{% if val %}☑{% else %}□{% endif %} {{ val if val else '未选择' }}</span>
+                {% endif %}
+            </td>
+        </tr>
+    {% elif ftype == 'radio' %}
+        <tr>
+            <td class="label">{{ field.label }}</td>
+            <td class="value" colspan="3">
+                {% set opts = field.options or [] %}
+                {% if opts %}
+                <div class="radio-group">
+                {% for opt in opts %}
+                    {% set opt_val = opt.value if opt is mapping else opt %}
+                    {% set opt_label = opt.label if opt is mapping else opt %}
+                    <span class="radio-item">{% if val == opt_val %}◉{% else %}○{% endif %} {{ opt_label }}</span>
+                {% endfor %}
+                </div>
+                {% else %}
+                    {{ val }}
+                {% endif %}
+            </td>
+        </tr>
+    {% elif ftype == 'signature' %}
+        <tr>
+            <td class="label" style="vertical-align:middle;">{{ field.label }}</td>
+            <td class="value" colspan="3">
+                {% if val and val.startswith('data:image') %}
+                <img src="{{ val }}" alt="签名" style="max-height:60px;">
+                {% elif val %}
+                <span class="sig-placeholder">{{ val }}</span>
+                {% else %}
+                <span class="sig-placeholder" style="color:#ccc;">&nbsp;</span>
+                {% endif %}
+            </td>
+        </tr>
+    {% else %}
+        {# 单行字段: text / number / email / date / select 等 #}
+        <tr>
+            <td class="label">{{ field.label }}</td>
+            <td class="value" colspan="3">{{ val }}</td>
+        </tr>
+    {% endif %}
+    {% endfor %}
+    </table>
+
+    <div style="text-align:center;margin-top:20px;font-size:11px;color:#999;">
+        {{ form.created_at.strftime('%Y-%m-%d %H:%M') if form.created_at else '' }} | 创建：{{ form.created_by }}
+    </div>
+</div>
+</body>
+</html>

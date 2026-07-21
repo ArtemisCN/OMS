@@ -1,0 +1,453 @@
+{% extends "mobile/base.html" %}
+{% block content %}
+<style>
+.pub-form { padding: 12px; }
+.pub-form .form-group { margin-bottom: 16px; }
+.pub-form label { display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+.pub-form .form-input {
+    width: 100%; padding: 13px 14px; border: 1px solid #d1d5db; border-radius: 10px;
+    font-size: 16px; outline: none; transition: border-color .2s; background: #fff;
+    font-family: inherit; box-sizing: border-box;
+}
+.pub-form .form-input:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,.1); }
+.form-hint { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+
+/* 地址选择入口行 */
+.addr-pick-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    margin-top: 8px;
+    background: #f0f4ff;
+    border: 1px dashed #c7d2fe;
+    border-radius: 10px;
+    cursor: pointer;
+}
+.addr-pick-row:active { background: #e0e7ff; }
+.addr-pick-icon { font-size: 16px; }
+.addr-pick-text { flex: 1; font-size: 14px; color: #4f46e5; }
+.addr-pick-arrow { font-size: 20px; color: #818cf8; }
+
+/* 自动识别标签 */
+.match-bar { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 14px; font-size: 12px; }
+.match-tag {
+    background: #eef2ff; color: #4f46e5; padding: 4px 10px; border-radius: 20px;
+}
+
+/* 地址建议 */
+.address-suggest {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+    max-height: 240px; overflow-y: auto; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+    display: none; margin: -6px 0 10px;
+}
+.address-suggest .sug-item {
+    padding: 12px 14px; font-size: 14px; cursor: pointer; border-bottom: 1px solid #f3f4f6;
+    display: flex; justify-content: space-between; align-items: center;
+}
+.address-suggest .sug-item:active { background: #eef2ff; }
+.address-suggest .sug-loc { font-size: 15px; color: #1e293b; }
+.address-suggest .sug-dept { font-size: 12px; color: #9ca3af; }
+.address-suggest .sug-bdg { font-size: 11px; color: #9ca3af; }
+
+/* 已选地址 */
+.addr-preview {
+    display: flex; align-items: center; gap: 6px;
+    background: #f0f4ff; border: 1px solid #c7d2fe; border-radius: 10px;
+    padding: 10px 14px; margin: -8px 0 14px;
+}
+.addr-preview .icon { font-size: 16px; }
+.addr-preview .text { flex:1; font-size: 14px; color: #4f46e5; }
+.addr-preview .del {
+    width: 22px; height: 22px; border-radius: 50%; background: #e5e7eb;
+    text-align: center; line-height: 22px; font-size: 12px; color: #6b7280; cursor: pointer;
+}
+
+/* 地址选择弹窗 */
+.picker-overlay {
+    display: none;
+    position: fixed; z-index: 9999;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,.4);
+    align-items: flex-end;
+    justify-content: center;
+}
+.picker-overlay.open { display: flex; }
+.picker-sheet {
+    width: 100%;
+    max-height: 80vh;
+    background: #fff;
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp .25s ease;
+}
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+.picker-header {
+    display: flex;
+    align-items: center;
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid #f3f4f6;
+    flex-shrink: 0;
+    gap: 8px;
+}
+.picker-back {
+    width: 28px; height: 28px; border-radius: 50%; background: #f3f4f6;
+    text-align: center; line-height: 28px; font-size: 14px; color: #6b7280;
+    cursor: pointer; border: none; display: none; flex-shrink: 0;
+}
+.picker-header h3 { margin: 0; font-size: 16px; font-weight: 600; color: #1e293b; flex:1; }
+.picker-close {
+    width: 28px; height: 28px; border-radius: 50%; background: #f3f4f6;
+    text-align: center; line-height: 28px; font-size: 14px; color: #6b7280;
+    cursor: pointer; border: none; flex-shrink: 0;
+}
+.picker-body {
+    overflow-y: auto;
+    padding: 4px 0 16px;
+    -webkit-overflow-scrolling: touch;
+}
+/* 步骤面包屑 */
+.crumb-bar {
+    display: flex; gap: 4px; padding: 8px 18px 0; flex-shrink: 0;
+    font-size: 12px; color: #9ca3af; align-items: center; flex-wrap: wrap;
+}
+.crumb-item {
+    cursor: pointer; color: #4f46e5; font-weight: 500;
+}
+.crumb-item:hover { text-decoration: underline; }
+.crumb-sep { color: #d1d5db; }
+.picker-search-box {
+    padding: 8px 18px 6px; flex-shrink: 0;
+}
+.picker-search-box input {
+    width:100%; padding:10px 14px; font-size:14px; border-radius:8px;
+    box-sizing:border-box;
+}
+/* 列表项 */
+.pick-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 18px; border-bottom: 1px solid #f9fafb; cursor: pointer;
+}
+.pick-item:active { background: #eef2ff; }
+.pick-item-name { font-size: 15px; color: #1e293b; }
+.pick-item-arrow { font-size: 16px; color: #cbd5e1; }
+.pick-item-info { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+.picker-empty { padding: 40px 18px; text-align: center; color: #9ca3af; font-size: 14px; }
+
+/* 提交按钮 */
+.submit-bar {
+    position: sticky; bottom: 0; background: #fff; padding: 12px;
+    border-top: 1px solid #e5e7eb; margin: 0 -12px;
+    box-shadow: 0 -2px 10px rgba(0,0,0,.06);
+}
+.submit-bar button {
+    width: 100%; padding: 14px; border: none; border-radius: 12px;
+    font-size: 17px; font-weight: 600; cursor: pointer;
+    background: linear-gradient(135deg, #4f46e5, #6366f1); color: #fff;
+    transition: opacity .2s;
+}
+.submit-bar button:active { opacity: .85; }
+.submit-bar button:disabled { opacity: .5; }
+</style>
+
+<div class="pub-form">
+    <div style="margin-bottom:12px;">
+        <a href="javascript:history.back()" style="color:#6b7280;text-decoration:none;font-size:14px;">
+            <i class="fas fa-arrow-left"></i> 返回
+        </a>
+    </div>
+    <form method="post" id="publishForm">
+        <!-- 工单名称 -->
+        <div class="form-group">
+            <label>工单名称</label>
+            <input type="text" class="form-input" name="title" id="title" required
+                   placeholder="例：15楼财务处电脑无法开机"
+                   autocomplete="off"
+                   oninput="onTitleChange()">
+            <div id="matchResult" class="match-bar"></div>
+        </div>
+
+        <input type="hidden" name="building" id="fldBuilding" value="">
+        <input type="hidden" name="floor" id="fldFloor" value="">
+        <input type="hidden" name="department" id="fldDept" value="">
+        <input type="hidden" name="location" id="fldLocation" value="">
+        <input type="hidden" name="fault_subcategory" id="fldFaultSub" value="">
+        <input type="hidden" name="priority" value="normal">
+
+        <!-- 地址：输入＋选择 -->
+        <div class="form-group">
+            <label>地址 <span style="font-weight:400;color:#9ca3af;font-size:12px;">（输入搜索 或 下方选择）</span></label>
+            <input type="text" class="form-input" id="addrInput"
+                   placeholder="输入楼区/科室名称搜索…"
+                   autocomplete="off"
+                   oninput="filterAddr()"
+                   onfocus="filterAddr()"
+                   onblur="setTimeout(function(){hideAddrSug()},300)">
+            <div class="addr-pick-row" onclick="openAddrPicker()">
+                <span class="addr-pick-icon">📋</span>
+                <span class="addr-pick-text">从列表中选择地址</span>
+                <span class="addr-pick-arrow">›</span>
+            </div>
+            <div class="address-suggest" id="addrSug"></div>
+        </div>
+
+        <!-- 已选地址 -->
+        <div class="addr-preview" id="addrPreview" style="display:none;">
+            <span class="icon">📍</span>
+            <span class="text" id="addrPreviewText"></span>
+            <span class="del" onclick="clearAddr()">✕</span>
+        </div>
+
+        <!-- 提交 -->
+        <div class="submit-bar">
+            <button type="submit"><i class="fas fa-paper-plane"></i> 发布工单</button>
+        </div>
+    </form>
+</div>
+
+<!-- 地址选择弹窗（三级联动） -->
+<div class="picker-overlay" id="addrPicker">
+    <div class="picker-sheet">
+        <div class="crumb-bar" id="crumbBar"></div>
+        <div class="picker-header">
+            <button class="picker-back" id="pickerBack" onclick="pickerBack()">‹</button>
+            <h3 id="pickerTitle">选择楼区</h3>
+            <button class="picker-close" onclick="closeAddrPicker()">✕</button>
+        </div>
+        <div class="picker-search-box">
+            <input type="text" id="pickerSearch" class="form-input" placeholder="🔍 搜索..." autocomplete="off" oninput="pickerFilter()">
+        </div>
+        <div class="picker-body" id="pickerBody"></div>
+    </div>
+</div>
+
+<script>
+var allLocs = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    fetch('/orders/api/address/all')
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            allLocs = data.locations || [];
+        });
+});
+
+function onTitleChange() {
+    var title = document.getElementById('title').value.trim();
+    var el = document.getElementById('matchResult');
+    if (!title) { el.innerHTML = ''; return; }
+    fetch('/orders/api/guess?title=' + encodeURIComponent(title))
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            var tags = '';
+            if (data.fault) tags += '<span class="match-tag">🔧 ' + data.fault + '</span>';
+            if (data.building) tags += '<span class="match-tag">🏢 ' + data.building + '</span>';
+            if (data.department) tags += '<span class="match-tag">🚪 ' + data.department + '</span>';
+            el.innerHTML = tags;
+            if (data.fault_subcategory) document.getElementById('fldFaultSub').value = data.fault_subcategory;
+            var current = document.getElementById('fldBuilding').value;
+            if (!current && data.building) setAddr(data.building, data.floor||'', data.department||'', data.location||'');
+        })
+        .catch(function(){ el.innerHTML = ''; });
+}
+
+function filterAddr() {
+    var q = document.getElementById('addrInput').value.trim();
+    var sug = document.getElementById('addrSug');
+    if (!q) { sug.style.display = 'none'; return; }
+    var ql = q.toLowerCase();
+    var pool = allLocs.filter(function(a){
+        return a.location.toLowerCase().indexOf(ql) >= 0 ||
+               (a.department && a.department.toLowerCase().indexOf(ql) >= 0) ||
+               a.building.toLowerCase().indexOf(ql) >= 0;
+    });
+    var seen = {};
+    pool = pool.filter(function(a){ var k = a.building+'|'+a.floor+'|'+a.location; if(seen[k])return false; seen[k]=true; return true; });
+    if (pool.length === 0 || pool.length > 150) { sug.style.display = 'none'; return; }
+    sug.innerHTML = pool.slice(0,50).map(function(a){
+        return '<div class="sug-item" onmousedown="selectAddr(\'' +
+            a.building.replace(/'/g,"\\'") + '\',\'' +
+            (a.floor||'').replace(/'/g,"\\'") + '\',\'' +
+            a.location.replace(/'/g,"\\'") + '\',\'' +
+            (a.department||'').replace(/'/g,"\\'") + '\')">' +
+            '<div><div class="sug-loc">' + a.location + '</div>' +
+            (a.department ? '<div class="sug-dept">' + a.department + '</div>' : '') + '</div>' +
+            '<div class="sug-bdg">' + a.building + ' ' + (a.floor||'') + '</div></div>';
+    }).join('');
+    sug.style.display = 'block';
+}
+
+function selectAddr(building, floor, location, dept) {
+    setAddr(building, floor, dept, location);
+    document.getElementById('addrInput').value = location;
+    document.getElementById('addrSug').style.display = 'none';
+}
+
+function setAddr(building, floor, dept, location) {
+    document.getElementById('fldBuilding').value = building;
+    document.getElementById('fldFloor').value = floor;
+    document.getElementById('fldDept').value = dept;
+    document.getElementById('fldLocation').value = location;
+    var text = building + ' ' + floor + ' ' + location;
+    document.getElementById('addrPreviewText').textContent = text;
+    document.getElementById('addrPreview').style.display = 'flex';
+    document.getElementById('addrInput').value = location;
+}
+
+function clearAddr() {
+    document.getElementById('fldBuilding').value = '';
+    document.getElementById('fldFloor').value = '';
+    document.getElementById('fldDept').value = '';
+    document.getElementById('fldLocation').value = '';
+    document.getElementById('addrPreview').style.display = 'none';
+    document.getElementById('addrInput').value = '';
+}
+
+function hideAddrSug() {
+    document.getElementById('addrSug').style.display = 'none';
+}
+
+/* === 三级联动地址选择器 === */
+var _ps = {step:0, building:'', floor:''};  // picker state
+
+function openAddrPicker() {
+    _ps = {step:0, building:'', floor:''};
+    document.getElementById('pickerSearch').value = '';
+    renderBuildings();
+    setTimeout(function(){ document.getElementById('pickerSearch').focus(); }, 300);
+}
+
+function renderBuildings() {
+    _ps.step = 0;
+    document.getElementById('pickerBack').style.display = 'none';
+    document.getElementById('pickerTitle').textContent = '选择楼区';
+    document.getElementById('pickerSearch').placeholder = '🔍 搜索楼区...';
+    var seen = {};
+    var buildings = [];
+    allLocs.forEach(function(a){
+        if (seen[a.building]) return;
+        seen[a.building] = true;
+        buildings.push({name: a.building});
+    });
+    buildings.sort(function(a,b){ return a.name.localeCompare(b.name); });
+    renderList(buildings, 'building');
+}
+
+function renderFloors(building) {
+    _ps.step = 1;
+    _ps.building = building;
+    document.getElementById('pickerBack').style.display = '';
+    document.getElementById('pickerTitle').textContent = '选择楼层';
+    document.getElementById('pickerSearch').value = '';
+    document.getElementById('pickerSearch').placeholder = '🔍 搜索楼层...';
+    var floors = [];
+    var seen = {};
+    allLocs.forEach(function(a) {
+        if (a.building !== building) return;
+        var f = a.floor || '(未指定)';
+        if (seen[f]) return;
+        seen[f] = true;
+        floors.push({name: f, count: allLocs.filter(function(x){return x.building===building && (x.floor||'(未指定)')===f;}).length});
+    });
+    floors.sort(function(a,b){ return a.name.localeCompare(b.name); });
+    renderList(floors, 'floor');
+    updateCrumb();
+}
+
+function renderLocations(building, floor) {
+    _ps.step = 2;
+    _ps.floor = floor;
+    document.getElementById('pickerTitle').textContent = '选择科室/位置';
+    document.getElementById('pickerSearch').value = '';
+    document.getElementById('pickerSearch').placeholder = '🔍 搜索科室/位置...';
+    var locs = allLocs.filter(function(a){
+        return a.building === building && (a.floor||'(未指定)') === floor;
+    });
+    var items = locs.map(function(a){
+        return {name: a.location, info: a.department||'', building: a.building, floor: a.floor||'', location: a.location, dept: a.department||''};
+    });
+    renderList(items, 'location');
+    updateCrumb();
+}
+
+function renderList(items, type) {
+    document.getElementById('addrPicker').classList.add('open');
+    var body = document.getElementById('pickerBody');
+    var q = document.getElementById('pickerSearch').value.trim().toLowerCase();
+    if (q && items.length > 0) {
+        items = items.filter(function(item){
+            var name = (item.name || item.building || '').toLowerCase();
+            var info = (item.info || '').toLowerCase();
+            return name.indexOf(q) >= 0 || info.indexOf(q) >= 0;
+        });
+    }
+    if (items.length === 0) {
+        body.innerHTML = '<div class="picker-empty">' + (q ? '🔍 无匹配结果' : '暂无数据') + '</div>';
+        return;
+    }
+    var html = '';
+    items.forEach(function(item){
+        if (type === 'building') {
+            var count = allLocs.filter(function(a){ return a.building === item.name; }).length;
+            html += '<div class="pick-item" onclick="renderFloors(\'' +
+                (item.name||'').replace(/'/g,"\\'") + '\')">' +
+                '<div><div class="pick-item-name">🏢 ' + item.name + '</div></div>' +
+                '<div><span class="pick-item-arrow">›</span></div></div>';
+        } else if (type === 'floor') {
+            html += '<div class="pick-item" onclick="renderLocations(\'' +
+                _ps.building.replace(/'/g,"\\'") + '\',\'' +
+                (item.name||'').replace(/'/g,"\\'") + '\')">' +
+                '<div><div class="pick-item-name">' + (item.name==='(未指定)'?'📍 未指定楼层':'📍 '+item.name) + '</div>' +
+                '<div class="pick-item-info">' + item.count + ' 个位置</div></div>' +
+                '<div><span class="pick-item-arrow">›</span></div></div>';
+        } else if (type === 'location') {
+            html += '<div class="pick-item" onclick="pickLocation(\'' +
+                (item.building||'').replace(/'/g,"\\'") + '\',\'' +
+                (item.floor||'').replace(/'/g,"\\'") + '\',\'' +
+                (item.location||'').replace(/'/g,"\\'") + '\',\'' +
+                (item.dept||'').replace(/'/g,"\\'") + '\')">' +
+                '<div><div class="pick-item-name">📍 ' + item.name + '</div>' +
+                (item.info ? '<div class="pick-item-info">' + item.info + '</div>' : '') + '</div>' +
+                '<div><span style="font-size:11px;color:#4f46e5;">选择</span></div></div>';
+        }
+    });
+    body.innerHTML = html;
+}
+
+function pickerFilter() {
+    if (_ps.step === 0) renderBuildings();
+    else if (_ps.step === 1) renderFloors(_ps.building);
+    else if (_ps.step === 2) renderLocations(_ps.building, _ps.floor);
+}
+
+function pickerBack() {
+    if (_ps.step === 1) { renderBuildings(); }
+    else if (_ps.step === 2) { renderFloors(_ps.building); }
+    document.getElementById('pickerSearch').value = '';
+    updateCrumb();
+}
+
+function pickLocation(building, floor, location, dept) {
+    selectAddr(building, floor, location, dept);
+    closeAddrPicker();
+}
+
+function updateCrumb() {
+    var bar = document.getElementById('crumbBar');
+    if (_ps.step === 0) { bar.innerHTML = ''; return; }
+    var html = '<span class="crumb-item" onclick="pickerBack()">楼区</span><span class="crumb-sep"> › </span>';
+    if (_ps.step === 2) {
+        html += '<span class="crumb-item" onclick="pickerBack()">' + _ps.building + '</span><span class="crumb-sep"> › </span>';
+    }
+    bar.innerHTML = html;
+}
+
+function closeAddrPicker() {
+    document.getElementById('addrPicker').classList.remove('open');
+}
+</script>
+{% endblock %}

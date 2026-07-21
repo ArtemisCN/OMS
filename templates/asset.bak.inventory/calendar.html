@@ -1,0 +1,145 @@
+<!-- 保修日历（硬件+软件） -->
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="mb-0 fw-bold" style="font-size:15px;">
+        <i class="fas fa-calendar-check" style="color:#059669;"></i> 保修日历
+    </h5>
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        <span class="text-muted" style="font-size:12px;">共 {{ assets|length }} 项</span>
+        <div class="btn-group btn-group-sm">
+            <a href="{{ url_for('asset.calendar', status=status_filter, cat='all') }}" class="btn btn-outline-secondary {{ 'active' if cat_filter=='all' else '' }}">全部</a>
+            <a href="{{ url_for('asset.calendar', status=status_filter, cat='hardware') }}" class="btn btn-outline-secondary {{ 'active' if cat_filter=='hardware' else '' }}"><i class="fas fa-server"></i> 硬件</a>
+            <a href="{{ url_for('asset.calendar', status=status_filter, cat='software') }}" class="btn btn-outline-secondary {{ 'active' if cat_filter=='software' else '' }}"><i class="fas fa-code"></i> 软件</a>
+        </div>
+        <div class="btn-group btn-group-sm">
+            <a href="{{ url_for('asset.calendar', status='all', cat=cat_filter) }}" class="btn btn-outline-secondary {{ 'active' if status_filter=='all' else '' }}">全部</a>
+            <a href="{{ url_for('asset.calendar', status='valid', cat=cat_filter) }}" class="btn btn-outline-success {{ 'active' if status_filter=='valid' else '' }}">在保</a>
+            <a href="{{ url_for('asset.calendar', status='expiring', cat=cat_filter) }}" class="btn btn-outline-warning {{ 'active' if status_filter=='expiring' else '' }}">即将到期</a>
+            <a href="{{ url_for('asset.calendar', status='expired', cat=cat_filter) }}" class="btn btn-outline-danger {{ 'active' if status_filter=='expired' else '' }}">已过期</a>
+        </div>
+        {% if current_user.is_admin %}
+        <a href="{{ url_for('asset.add') }}" class="btn btn-sm btn-primary"><i class="fas fa-plus"></i> 添加</a>
+        {% endif %}
+        <a href="{{ url_for('asset.list_view') }}" class="btn btn-sm btn-outline-success"><i class="fas fa-server"></i> 资产台账</a>
+    </div>
+</div>
+
+<style>
+.asset-card { border:1px solid #e5e7eb; border-radius:10px; padding:16px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.06); transition:box-shadow 0.2s; }
+.asset-card:hover { box-shadow:0 4px 12px rgba(0,0,0,0.1); }
+.warranty-badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+.warranty-valid { background:#d1fae5; color:#065f46; }
+.warranty-expiring { background:#fef3c7; color:#92400e; }
+.warranty-expired { background:#fee2e2; color:#991b1b; }
+.warranty-unknown { background:#f3f4f6; color:#6b7280; }
+.cat-badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:600; margin-left:6px; }
+.cat-hardware { background:#e0e7ff; color:#4338ca; }
+.cat-software { background:#fce7f3; color:#9d174d; }
+.days-left { font-size:13px; font-weight:700; }
+.asset-icon { width:40px; height:40px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+</style>
+
+<script>
+function setFilter(type, val) {
+    var params = new URLSearchParams(window.location.search);
+    params.set(type, val);
+    params.delete('cat');  delete old 'cat' param if any
+    params.set('cat', val);  // set new
+    window.location = '?' + params.toString();
+}
+</script>
+
+<div class="row g-3">
+    {% for a in assets %}
+    {% set wstatus = a.warranty_status %}
+    {% set days = a.warranty_days_left %}
+    {% set is_sw = a.category == 'software' %}
+    {% set icon_bg = {'PC':'#e0e7ff','NB':'#dbeafe','PR':'#fef3c7','一体机':'#e0f2fe','软件':'#fce7f3'} %}
+    {% set icon_icon = {'PC':'fas fa-desktop','NB':'fas fa-laptop','PR':'fas fa-print','一体机':'fas fa-server','软件':'fas fa-code'} %}
+    <div class="col-12 col-md-6 col-lg-4">
+        <div class="asset-card">
+            <div class="d-flex gap-3 align-items-start mb-2">
+                <div class="asset-icon" style="background:{{ icon_bg.get(a.device_type,'#f3f4f6') }}; color:var(--primary);">
+                    <i class="{{ icon_icon.get(a.device_type,'fas fa-microchip') }}"></i>
+                </div>
+                <div style="flex:1; min-width:0;">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <strong style="font-size:14px;">{{ a.asset_no }}</strong>
+                            <span class="cat-badge {{ 'cat-hardware' if not is_sw else 'cat-software' }}">
+                                {% if is_sw %}<i class="fas fa-code"></i> 软件{% else %}<i class="fas fa-server"></i> 硬件{% endif %}
+                            </span>
+                            <span style="font-size:12px; color:#6b7280; margin-left:4px;">{{ '打印机' if a.device_type == 'PR' else '硬件' if a.device_type in ('PC','NB','一体机') else a.device_type }}</span>
+                        </div>
+                        <span class="warranty-badge warranty-{{ wstatus }}">
+                            {% if wstatus == 'valid' %} 有效
+                            {% elif wstatus == 'expiring' %} {{ days }}天后到期
+                            {% elif wstatus == 'expired' %} 已过保
+                            {% else %} 未知
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div style="font-size:12px; color:#6b7280; margin-top:4px; line-height:1.6;">
+                        {% if is_sw %}
+                            <div>{{ a.brand }} {{ a.model_no }}</div>
+                            {% if a.vendor %}<div>供应商: {{ a.vendor }}</div>{% endif %}
+                            {% if a.license_key %}<div>授权: <code style="font-size:11px;">{{ a.license_key }}</code></div>{% endif %}
+                            {% if a.license_seats %}<div>授权数: {{ a.license_seats }}</div>{% endif %}
+                        {% else %}
+                            <div>{{ a.brand }} {{ a.model_no }}</div>
+                            {% if a.sn %}<div>SN: <code style="font-size:11px;">{{ a.sn }}</code></div>{% endif %}
+                        {% endif %}
+                        <div>{{ a.department }}</div>
+                    </div>
+                </div>
+            </div>
+            <div style="border-top:1px solid #f3f4f6; padding-top:10px; margin-top:4px;">
+                <div class="d-flex justify-content-between" style="font-size:12px; color:#6b7280;">
+                    <span><i class="far fa-calendar-alt"></i> {% if is_sw %}购入{% else %}购入{% endif %}: {{ a.purchase_date.strftime('%Y-%m-%d') if a.purchase_date else '-' }}</span>
+                    <span><i class="fas fa-shield-alt"></i> {% if is_sw %}授权至{% else %}保修至{% endif %}: {{ a.warranty_end.strftime('%Y-%m-%d') if a.warranty_end else '-' }}</span>
+                </div>
+                {% if days is not none and days >= 0 %}
+                <div class="mt-2" style="background:#f9fafb; border-radius:6px; padding:4px 8px;">
+                    <div style="height:4px; background:#e5e7eb; border-radius:999px; overflow:hidden;">
+                        {% set pct = [days, 365]|min / 365 * 100 %}
+                        <div style="height:100%; width:{{ pct }}%; border-radius:999px; background:{% if wstatus=='expiring' %}#f59e0b{% elif wstatus=='valid' %}#10b981{% else %}#ef4444{% endif %};"></div>
+                    </div>
+                    <div style="font-size:11px; color:#6b7280; margin-top:2px;">剩余 {{ days }} 天</div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="mt-2 d-flex gap-2">
+                <a href="{{ url_for('asset.detail', asset_id=a.id) }}" class="btn btn-sm btn-outline-primary flex-fill" style="font-size:12px;">
+                    <i class="fas fa-info-circle"></i> 详情
+                </a>
+                {% if current_user.is_admin %}
+                <a href="{{ url_for('asset.edit', asset_id=a.id) }}" class="btn btn-sm btn-outline-secondary" style="font-size:12px;">
+                    <i class="fas fa-edit"></i>
+                </a>
+                <button onclick="deleteAsset({{ a.id }},'{{ a.asset_no }}')" class="btn btn-sm btn-outline-danger" style="font-size:12px;">
+                    <i class="fas fa-trash"></i>
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    {% if not assets %}
+    <div class="col-12 text-center py-5" style="color:#9ca3af;">
+        <i class="fas fa-box-open" style="font-size:48px; display:block; margin-bottom:12px;"></i>
+        还没有数据{% if current_user.is_admin %}，<a href="{{ url_for('asset.add') }}">添加第一条</a>{% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function deleteAsset(id, no) {
+    if (!confirm('确定删除 ' + no + ' 吗？')) return;
+    fetch('/asset/delete/' + id, { method:'POST' }).then(r=>r.json()).then(d=>{
+        if(d.ok) location.reload();
+        else alert(d.msg||'删除失败');
+    });
+}
+</script>
+{% endblock %}

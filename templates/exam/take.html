@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}参加考试 - {{ system_name }}{% endblock %}
+{% block extra_head %}<link href="/static/css/exam.css?v=3" rel="stylesheet">{% endblock %}
+{% block content %}<div id="examApp"></div>{% endblock %}
+{% block extra_scripts %}
+<script>
+const API_BASE = "/exam/api";
+let currentIdx = 0, answers = {}, timerInterval = null, elapsedSeconds = 0, timeLimit = 1800;
+let submissionId = null, examInfo = null, questions = [];
+
+function init() {
+    const p = new URLSearchParams(location.search);
+    const eid = p.get("id");
+    eid ? startExam(parseInt(eid)) : loadExamList();
+}
+
+function loadExamList() {
+    const app = document.getElementById("examApp");
+    app.innerHTML = '<div style="text-align:center;padding:60px;color:var(--text-tertiary)"><i class="fas fa-spinner fa-spin" style="font-size:2rem"></i></div>';
+    fetch(API_BASE+"/list").then(r=>r.json()).then(d=>{
+        const list = d.exams||[];
+        if(!list.length){
+            app.innerHTML = '<div class="exam-app"><h2 style="margin-bottom:20px;"><i class="fas fa-graduation-cap" style="color:var(--exam-primary)"></i> \u5728\u7EBF\u8003\u8BD5</h2><div class="empty-state"><i class="fas fa-inbox"></i><p>\u6682\u65E0\u53EF\u7528\u8003\u8BD5</p></div></div>';
+            return;
+        }
+        let html = '<div class="exam-app"><h2 style="margin-bottom:20px;"><i class="fas fa-graduation-cap" style="color:var(--exam-primary)"></i> \u5728\u7EBF\u8003\u8BD5</h2><div class="exam-list">';
+        list.forEach(function(e){
+            var st = "locked", stt = "\u4E0D\u53EF\u7528";
+            if(e.can_start){st="ready";stt="\u53C2\u52A0\u8003\u8BD5";}
+            else if(e.last_score!==null){st="done";stt=e.last_passed?"\u5DF2\u53CA\u683C":"\u4E0D\u53CA\u683C";}
+            html += '<a class="exam-home-item" href="?id='+e.id+'"><div class="icon-box"><i class="fas fa-file-alt"></i></div><div class="info"><div class="ti">'+e.title+'</div><div class="me">'+e.question_count+' \u9898 \u00B7 '+e.duration_minutes+' \u5206\u949F \u00B7 '+e.pass_score+'% \u53CA\u683C'+(e.max_attempts>0?' \u00B7 \u6700\u591A'+e.max_attempts+'\u6B21':'')+'</div>'+(e.last_score!==null?'<div class="me">\u4E0A\u6B21\u5F97\u5206\uFF1A'+e.last_score+'/'+e.total_score+'</div>':'')+'</div><span class="st '+st+'">'+stt+'</span></a>';
+        });
+        html += '</div></div>';
+        app.innerHTML = html;
+    }).catch(function(){
+        app.innerHTML = '<div class="exam-app"><div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>\u52A0\u8F7D\u5931\u8D25</p></div></div>';
+    });
+}
+
+function startExam(eid) {
+    const app = document.getElementById("examApp");
+    app.innerHTML = '<div style="text-align:center;padding:60px;color:var(--text-tertiary)"><i class="fas fa-spinner fa-spin" style="font-size:2rem;display:block;margin-bottom:12px"></i>\u52A0\u8F7D\u4E2D...</div>';
+    fetch(API_BASE+"/"+eid+"/questions").then(function(r){return r.json();}).then(function(data){
+        submissionId = data.submission_id; examInfo = data.exam; questions = data.questions||[];
+        timeLimit = data.time_limit || 1800;
+        currentIdx = 0; answers = {};
+        // #7: 恢复已保存答案
+        var saved = data.saved_answers || {};
+        questions.forEach(function(q){if(saved[String(q.id)]) answers[String(q.id)] = saved[String(q.id)];});
+        // #13: 恢复已用时间
+        elapsedSeconds = data.elapsed_seconds || 0;
+        renderQ(); startTimer(timeLimit);
+    }).catch(function(){
+        app.innerHTML = '<div class="exam-app"><div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>\u52A0\u8F7D\u5931\u8D25</p></div></div>';
+    });
+}
+
+function renderQ() {
+    if(!questions.length) return;
+    const q = questions[currentIdx], total = questions.length, qid = String(q.id);
+    const ua = answers[qid]||"", prog = ((currentIdx+1)/total*100).toFixed(0);
+    const ansCnt = questions.filter(function(x){return answers[String(x.id)];}).length;
+
+    var opts = "";
+    if(q.question_type==="judge"){
+        opts = '<div class="judge-row"><button class="judge-btn'+(ua==="T"?" sel-true":"")+'" onclick="selAns(\''+qid+'\',\'T\')"><i class="fas fa-check-circle"></i> \u6B63\u786E</button><button class="judge-btn'+(ua==="F"?" sel-false":"")+'" onclick="selAns(\''+qid+'\',\'F\')"><i class="fas fa-times-circle"></i> \u9519\u8BEF</button></div>';
+    } else if(q.question_type==="fill"){
+        opts = '<input type="text" class="fill-input-lg" value="'+ua.replace(/"/g,"&quot;")+'" placeholder="\u8BF7\u8F93\u5165\u7B54\u6848..." oninput="selAns(\''+qid+'\',this.value)">';
+    } else {
+        const isM = q.question_type==="multi";
+        opts = '<div class="exam-options">';
+        (q.options||[]).forEach(function(o){
+            const sel = ua.split(",").includes(o.label);
+            opts += '<div class="exam-option'+(sel?" selected":"")+'" onclick="toggleOpt(\''+qid+'\',\''+o.label+'\','+isM+')"><div class="radio'+(isM?" multi-bx":"")+'"></div><span class="opt-lbl">'+o.label+'</span><span class="opt-txt">'+o.text+'</span></div>';
+        });
+        opts += '</div>';
+    }
+
+    var dots = "";
+    questions.forEach(function(x,i){
+        dots += '<button class="exam-dot'+(i===currentIdx?" active":"")+(answers[String(x.id)]?" done":"")+'" onclick="goQ('+i+')"></button>';
+    });
+
+    const isLast = currentIdx === total - 1;
+    const html = '<div class="exam-app">'+
+        '<div class="exam-progress-box"><div class="exam-progress-info"><span class="title"><i class="fas fa-file-alt"></i>'+examInfo.title+'</span><span class="stat">\u5DF2\u56DE\u7B54 '+ansCnt+'/'+total+'</span></div><div class="exam-progress-track"><div class="exam-progress-fill" style="width:'+prog+'%"></div></div></div>'+
+        '<div class="exam-timer-box"><span class="q-idx">\u7B2C '+(currentIdx+1)+'/'+total+' \u9898</span><span class="timer" id="td">--:--</span></div>'+
+        '<div class="exam-q-wrap"><div class="exam-q-card">'+
+        '<span class="exam-q-badge">'+(q.question_type==="single"? '<i class="fas fa-dot-circle"></i> \u5355\u9009\u9898' : q.question_type==="multi"? '<i class="fas fa-check-square"></i> \u591A\u9009\u9898' : q.question_type==="judge"? '<i class="fas fa-balance-scale"></i> \u5224\u65AD\u9898' : '<i class="fas fa-pen"></i> \u586B\u7A7A\u9898')+' <span class="pts">'+q.score+' \u5206</span></span>'+
+        '<div class="exam-q-text">'+q.question_text+'</div>'+
+        opts+'</div></div>'+
+        '<div class="exam-nav"><button class="nav-prev" onclick="prevQ()" '+(currentIdx===0?"disabled":"")+'><i class="fas fa-chevron-left"></i> \u4E0A\u4E00\u9898</button>'+
+        (isLast?'<button class="nav-submit" onclick="showConfirm()"><i class="fas fa-check"></i> \u4EA4\u5377</button>':'<button class="nav-next" onclick="nextQ()">\u4E0B\u4E00\u9898 <i class="fas fa-chevron-right"></i></button>')+
+        '</div><div class="exam-dots">'+dots+'</div></div>';
+    document.getElementById("examApp").innerHTML = html;
+    upTimer();
+}
+
+function toggleOpt(qid,label,isM){
+    var cur = answers[qid]||"", sel = cur?cur.split(","):[];
+    if(isM){var idx=sel.indexOf(label); idx>=0?sel.splice(idx,1):sel.push(label);}
+    else sel=[label];
+    answers[qid]=sel.join(",");
+    saveAns(qid,answers[qid]);
+    renderQ();
+}
+
+function selAns(qid,val){ answers[qid]=val; saveAns(qid,val); 
+    // #8: 单选/判断自动跳下一题，多选题不自动跳
+    const q = questions[currentIdx];
+    if(q && (q.question_type==="single"||q.question_type==="judge")) setTimeout(nextQ,300);
+    else renderQ();
+}
+function saveAns(qid,val){ fetch(API_BASE+"/"+submissionId+"/save_answer",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({question_id:parseInt(qid),answer:val})}).catch(function(){}); }
+function prevQ(){ if(currentIdx>0){currentIdx--;renderQ();} }
+function nextQ(){ if(currentIdx<questions.length-1){currentIdx++;renderQ();} }
+function goQ(i){ currentIdx=i; renderQ(); }
+
+function startTimer(limit){
+    if(timerInterval) clearInterval(timerInterval);
+    timerInterval=setInterval(function(){elapsedSeconds++;upTimer();if(elapsedSeconds>=limit){clearInterval(timerInterval);doSubmit();}},1000);
+    upTimer();
+}
+function upTimer(){
+    var el = document.getElementById("td"); if(!el) return;
+    var rem = Math.max(0, timeLimit-elapsedSeconds);
+    var m = Math.floor(rem/60), s = rem%60;
+    el.textContent = String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");
+    el.className = "timer"+(rem<60?" danger":rem<300?" warning":"");
+}
+
+function showConfirm(){
+    var t = questions.length, a = questions.filter(function(x){return answers[String(x.id)];}).length, u = t-a;
+    var overlay = '<div class="exam-overlay show" id="so"><div class="exam-dialog"><h3><i class="fas fa-check-circle" style="color:var(--exam-success)"></i> \u786E\u8BA4\u4EA4\u5377</h3><div class="summary"><p>\u5171 <strong>'+t+'</strong> \u9898\uFF0C\u5DF2\u7B54 <strong>'+a+'</strong> \u9898</p>'+(u>0?'<p style="color:var(--exam-warning)">\u8FD8\u6709 <strong>'+u+'</strong> \u9898\u672A\u7B54</p>':'')+'<p>\u4EA4\u5377\u540E\u4E0D\u53EF\u4FEE\u6539</p></div><div class="btn-row"><button class="btn-cancel" onclick="document.getElementById(\'so\').remove()">\u7EE7\u7EED\u7B54\u9898</button><button class="btn-confirm" onclick="doSubmit()">\u786E\u8BA4\u4EA4\u5377</button></div></div></div>';
+    document.body.insertAdjacentHTML("beforeend", overlay);
+}
+
+function doSubmit(){
+    var el = document.getElementById("so"); if(el) el.remove();
+    if(timerInterval) clearInterval(timerInterval);
+    document.getElementById("examApp").innerHTML = '<div style="text-align:center;padding:60px;color:var(--text-tertiary)"><i class="fas fa-spinner fa-spin" style="font-size:2rem;display:block;margin-bottom:12px"></i>\u63D0\u4EA4\u4E2D...</div>';
+    fetch(API_BASE+"/submit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({submission_id:submissionId,answers:answers,duration_seconds:elapsedSeconds})})
+    .then(function(r){return r.json();}).then(function(data){
+        var s = data.submission||{}, passed = data.passed||false;
+        var pct = s.total_possible>0?((s.score/s.total_possible)*100).toFixed(1):"0";
+        var m = Math.floor(s.duration_seconds/60), sec = s.duration_seconds%60;
+        document.getElementById("examApp").innerHTML = '<div class="exam-app"><div class="exam-result-wrap"><div class="exam-result-circle '+(passed?"ok":"no")+'">'+(passed?'<i class="fas fa-check"></i>':'<i class="fas fa-times"></i>')+'</div><h2 style="margin-bottom:16px;">'+(passed?'\u606D\u559C\uFF0C\u8003\u8BD5\u901A\u8FC7\uFF01':'\u672A\u901A\u8FC7\uFF0C\u518D\u63A5\u518D\u538B\uFF01')+'</h2><div class="exam-result-detail"><div class="row"><span class="lbl">\u5F97\u5206</span><span class="val">'+s.score+' / '+s.total_possible+' \u5206</span></div><div class="row"><span class="lbl">\u6B63\u786E\u7387</span><span class="val">'+pct+'%</span></div><div class="row"><span class="lbl">\u6B63\u786E\u9898\u6570</span><span class="val">'+s.correct_count+' / '+s.total_count+'</span></div><div class="row"><span class="lbl">\u7528\u65F6</span><span class="val">'+m+'\u5206'+sec+'\u79D2</span></div></div><a href="'+location.pathname+'" class="btn-exam-primary" style="display:inline-block;margin-top:12px;"><i class="fas fa-arrow-left"></i> \u8FD4\u56DE\u8003\u8BD5\u5217\u8868</a></div></div>';
+    }).catch(function(){
+        document.getElementById("examApp").innerHTML = '<div class="exam-app"><div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>\u63D0\u4EA4\u5931\u8D25</p></div></div>';
+    });
+}
+
+init();
+</script>
+{% endblock %}

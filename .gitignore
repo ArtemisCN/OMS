@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+
+# Environment / Config
+.env
+*.env.local
+instance/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads
+static/uploads/*
+!static/uploads/.gitkeep
+
+# Node
+node_modules/
+
+# Backup
+backups/
+*.tar.gz
+
+# Logs
+*.log

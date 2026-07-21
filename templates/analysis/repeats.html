@@ -1,0 +1,409 @@
+{% extends "base.html" %}
+{% block title %}重复单分析{% endblock %}
+{% block extra_head %}
+<style>
+.analysis-container { max-width: 1200px; margin: 0 auto; padding: 24px 20px; }
+.analysis-header { margin-bottom: 24px; }
+.analysis-header h2 { font-size: 20px; font-weight: 700; color: #1e293b; margin: 0 0 4px 0; }
+.analysis-header p { font-size: 13px; color: #64748b; margin: 0; }
+
+/* 筛选栏 */
+.filter-bar { background: #fff; border-radius: 10px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,.06); margin-bottom: 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.filter-bar label { font-size: 13px; color: #475569; font-weight: 500; white-space: nowrap; }
+.filter-bar select, .filter-bar input { font-size: 13px; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; }
+.filter-bar select:focus, .filter-bar input:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79,70,229,.12); }
+.btn-scan { background: #4f46e5; color: #fff; border: none; padding: 7px 20px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: .2s; }
+.btn-scan:hover { background: #4338ca; }
+.btn-scan i { margin-right: 5px; }
+
+/* 统计卡片 */
+.stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+.stat-card { background: #fff; border-radius: 10px; padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.stat-card .stat-label { font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
+.stat-card .stat-value { font-size: 28px; font-weight: 700; color: #1e293b; line-height: 1.2; }
+.stat-card .stat-unit { font-size: 13px; color: #64748b; margin-left: 4px; font-weight: 400; }
+
+/* 图表区域 */
+.chart-section { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.06); margin-bottom: 20px; }
+.chart-section .section-title { font-size: 14px; font-weight: 600; color: #1e293b; margin-bottom: 16px; }
+.chart-section .section-title i { margin-right: 6px; color: #4f46e5; }
+.chart-wrap { height: 260px; position: relative; }
+
+/* 楼栋分布条 */
+.building-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+.building-card { flex: 1; min-width: 180px; background: #fff; border-radius: 10px; padding: 16px 18px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.building-card .b-name { font-size: 13px; font-weight: 600; color: #1e293b; margin-bottom: 4px; }
+.building-card .b-count { font-size: 22px; font-weight: 700; color: #4f46e5; }
+.building-card .b-meta { font-size: 11px; color: #94a3b8; }
+.building-bar { height: 4px; background: #e2e8f0; border-radius: 2px; margin-top: 8px; overflow: hidden; }
+.building-bar-fill { height: 100%; background: linear-gradient(90deg, #4f46e5, #7c3aed); border-radius: 2px; transition: width .6s ease; }
+
+/* 排行表格 */
+.table-section { background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.06); overflow: hidden; }
+.table-section .section-title { font-size: 14px; font-weight: 600; color: #1e293b; padding: 16px 20px; border-bottom: 1px solid #f1f5f9; }
+.table-section .section-title i { margin-right: 6px; color: #4f46e5; }
+.repeat-table { width: 100%; border-collapse: collapse; }
+.repeat-table th { background: #f8fafc; font-size: 12px; color: #64748b; font-weight: 500; padding: 10px 16px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+.repeat-table td { padding: 10px 16px; font-size: 13px; color: #334155; border-bottom: 1px solid #f1f5f9; }
+.repeat-table tr:hover td { background: #f8fafc; }
+.repeat-table .rank-badge { display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 4px; font-size: 11px; font-weight: 700; color: #fff; }
+.rank-1 { background: #ef4444; }
+.rank-2 { background: #f97316; }
+.rank-3 { background: #eab308; }
+.rank-other { background: #cbd5e1; color: #475569; }
+
+.fault-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+.fault-tag-hardware { background: #fee2e2; color: #dc2626; }
+.fault-tag-software { background: #dbeafe; color: #2563eb; }
+.fault-tag-network { background: #f3e8ff; color: #9333ea; }
+.fault-tag-other { background: #f1f5f9; color: #64748b; }
+
+.count-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+.count-high { background: #fef2f2; color: #dc2626; }
+.count-medium { background: #fff7ed; color: #ea580c; }
+.count-low { background: #f0fdf4; color: #16a34a; }
+
+/* 空状态 */
+.empty-state { text-align: center; padding: 60px 20px; color: #94a3b8; }
+.empty-state i { font-size: 40px; margin-bottom: 12px; color: #cbd5e1; }
+.empty-state p { font-size: 14px; margin: 0; }
+
+/* 最小重复次数输入 */
+.min-input { width: 60px; text-align: center; }
+
+/* Loading */
+.loading-spinner { display: none; text-align: center; padding: 40px; }
+.loading-spinner.show { display: block; }
+.loading-spinner i { font-size: 28px; color: #4f46e5; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Time label in header */
+.time-badge { display: inline-block; background: #eef2ff; color: #4f46e5; padding: 2px 10px; border-radius: 4px; font-size: 12px; font-weight: 500; margin-left: 8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="analysis-container">
+    <div class="analysis-header">
+        <h2><i class="fas fa-clone" style="color:#4f46e5;margin-right:8px;"></i>重复单分析</h2>
+        <p>按位置和故障类型分组，排查同一区域反复发生的相同问题</p>
+    </div>
+
+    <!-- 筛选栏 -->
+    <div class="filter-bar">
+        <label>时间模式</label>
+        <select id="modeSelect" onchange="onModeChange()">
+            <option value="year">按年</option>
+            <option value="month" selected>按月</option>
+            <option value="week">按周</option>
+        </select>
+
+        <label>年份</label>
+        <select id="yearSelect">
+            {% for y in range(now.year, now.year - 5, -1) %}
+            <option value="{{ y }}" {% if y == now.year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+
+        <label>月份</label>
+        <select id="monthSelect">
+            {% for m in range(1, 13) %}
+            <option value="{{ m }}" {% if m == now.month %}selected{% endif %}>{{ m }}月</option>
+            {% endfor %}
+        </select>
+
+        <label id="weekLabel" style="display:none;">周次</label>
+        <select id="weekSelect" style="display:none;">
+            <option value="0">整月</option>
+            {% for w in range(1, 7) %}
+            <option value="{{ w }}">第{{ w }}周</option>
+            {% endfor %}
+        </select>
+
+        <label>≥ 次数</label>
+        <input type="number" id="minCount" class="min-input" value="2" min="1" max="99">
+
+        <button class="btn-scan" onclick="scanRepeats()"><i class="fas fa-search"></i> 开始筛查</button>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="stat-row" id="statRow" style="display:none;">
+        <div class="stat-card">
+            <div class="stat-label">重复单总数</div>
+            <div class="stat-value"><span id="statTotal">0</span><span class="stat-unit">单</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">涉及位置组合</div>
+            <div class="stat-value"><span id="statLocations">0</span><span class="stat-unit">组</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">最高重复次数</div>
+            <div class="stat-value"><span id="statMax">0</span><span class="stat-unit">次</span></div>
+        </div>
+    </div>
+
+    <!-- 楼栋分布 -->
+    <div id="buildingSection" style="display:none;"></div>
+
+    <!-- Loading -->
+    <div class="loading-spinner" id="loadingSpinner">
+        <i class="fas fa-spinner"></i>
+        <div style="margin-top:8px;font-size:13px;color:#94a3b8;">正在筛查...</div>
+    </div>
+
+    <!-- 柱状图 -->
+    <div class="chart-section" id="chartSection" style="display:none;">
+        <div class="section-title"><i class="fas fa-chart-bar"></i> 重复次数排行 <span class="time-badge" id="chartTimeBadge"></span></div>
+        <div class="chart-wrap">
+            <canvas id="repeatChart"></canvas>
+        </div>
+    </div>
+
+    <!-- 表格 -->
+    <div class="table-section" id="tableSection" style="display:none;">
+        <div class="section-title"><i class="fas fa-list"></i> 详细列表 <span class="time-badge" id="tableTimeBadge"></span></div>
+        <table class="repeat-table">
+            <thead>
+                <tr>
+                    <th style="width:40px;">#</th>
+                    <th style="width:24%;">位置</th>
+                    <th style="width:12%;">故障类型</th>
+                    <th style="width:12%;">子分类</th>
+                    <th style="width:10%;">设备类型</th>
+                    <th style="width:56px;">次数</th>
+                    <th style="width:80px;">首次</th>
+                    <th style="width:80px;">最近</th>
+                    <th style="width:64px;">操作</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/vendor/chartjs/chart.umd.min.js"></script>
+<script>
+var repeatChart = null;
+
+function onModeChange() {
+    var mode = document.getElementById('modeSelect').value;
+    var weekLabel = document.getElementById('weekLabel');
+    var weekSelect = document.getElementById('weekSelect');
+    if (mode === 'week') {
+        weekLabel.style.display = '';
+        weekSelect.style.display = '';
+    } else {
+        weekLabel.style.display = 'none';
+        weekSelect.style.display = 'none';
+    }
+}
+
+function getFaultTagClass(ft) {
+    var m = (ft || '').toLowerCase();
+    if (m.indexOf('硬件') >= 0 || m.indexOf('hardware') >= 0) return 'fault-tag-hardware';
+    if (m.indexOf('软件') >= 0 || m.indexOf('software') >= 0) return 'fault-tag-software';
+    if (m.indexOf('网络') >= 0 || m.indexOf('network') >= 0) return 'fault-tag-network';
+    return 'fault-tag-other';
+}
+
+function getCountBadgeClass(c) {
+    if (c >= 8) return 'count-high';
+    if (c >= 4) return 'count-medium';
+    return 'count-low';
+}
+
+function scanRepeats() {
+    var mode = document.getElementById('modeSelect').value;
+    var year = document.getElementById('yearSelect').value;
+    var month = document.getElementById('monthSelect').value;
+    var week = document.getElementById('weekSelect').value || '0';
+    var min = document.getElementById('minCount').value || '2';
+
+    // 显示 loading
+    document.getElementById('loadingSpinner').classList.add('show');
+    document.getElementById('statRow').style.display = 'none';
+    document.getElementById('buildingSection').style.display = 'none';
+    document.getElementById('chartSection').style.display = 'none';
+    document.getElementById('tableSection').style.display = 'none';
+
+    fetch('/analysis/api/repeats?mode=' + mode + '&year=' + year + '&month=' + month + '&week=' + week + '&min=' + min)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            document.getElementById('loadingSpinner').classList.remove('show');
+
+            // 统计数据
+            document.getElementById('statTotal').textContent = data.stats.total_repeats;
+            document.getElementById('statLocations').textContent = data.stats.total_locations;
+            document.getElementById('statMax').textContent = data.stats.max_repeat;
+            document.getElementById('statRow').style.display = 'grid';
+
+            // 楼栋分布
+            renderBuildings(data.building_stats, data.stats.max_repeat);
+
+            // 时间标签
+            var tl = data.stats.time_label;
+            document.getElementById('chartTimeBadge').textContent = tl;
+            document.getElementById('tableTimeBadge').textContent = tl;
+
+            // 柱状图
+            renderChart(data.items);
+
+            // 表格
+            renderTable(data.items);
+        })
+        .catch(function(err) {
+            document.getElementById('loadingSpinner').classList.remove('show');
+            alert('查询失败: ' + err.message);
+        });
+}
+
+function renderBuildings(buildings, maxCount) {
+    var section = document.getElementById('buildingSection');
+    if (!buildings || buildings.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+    var html = '<div class="building-row">';
+    for (var i = 0; i < buildings.length; i++) {
+        var b = buildings[i];
+        var pct = maxCount > 0 ? Math.round(b.count / maxCount * 100) : 0;
+        html += '<div class="building-card">'
+            + '<div class="b-name">' + escapeHtml(b.name) + '</div>'
+            + '<div class="b-count">' + b.count + '<span style="font-size:12px;color:#94a3b8;font-weight:400;margin-left:4px;">单</span></div>'
+            + '<div class="b-meta">涉及 ' + b.locations + ' 个位置组合</div>'
+            + '<div class="building-bar"><div class="building-bar-fill" style="width:' + pct + '%;"></div></div>'
+            + '</div>';
+    }
+    html += '</div>';
+    section.innerHTML = html;
+    section.style.display = '';
+}
+
+function renderChart(items) {
+    if (repeatChart) {
+        repeatChart.destroy();
+        repeatChart = null;
+    }
+    var section = document.getElementById('chartSection');
+    if (!items || items.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+
+    // 最多显示 15 条
+    var display = items.slice(0, 15);
+    var labels = [];
+    var counts = [];
+    var colors = [];
+
+    for (var i = 0; i < display.length; i++) {
+        var item = display[i];
+        // 位置简化为 "楼栋-楼层" + 故障类型
+        var shortLoc = item.location;
+        if (shortLoc.length > 16) shortLoc = shortLoc.substring(0, 14) + '..';
+        labels.push(shortLoc + ' [' + item.fault_type + ']');
+        counts.push(item.count);
+        if (i === 0) colors.push('#ef4444');
+        else if (i === 1) colors.push('#f97316');
+        else if (i === 2) colors.push('#eab308');
+        else colors.push('#4f46e5');
+    }
+
+    var ctx = document.getElementById('repeatChart').getContext('2d');
+    repeatChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '重复次数',
+                data: counts,
+                backgroundColor: colors,
+                borderColor: colors.map(function(c) { return c; }),
+                borderWidth: 1,
+                borderRadius: 3,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#1e293b',
+                    titleFont: { size: 12 },
+                    bodyFont: { size: 12 },
+                    padding: 8,
+                    cornerRadius: 6,
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1,
+                        font: { size: 11 },
+                        color: '#94a3b8',
+                    },
+                    grid: { color: '#f1f5f9' }
+                },
+                x: {
+                    ticks: {
+                        font: { size: 10 },
+                        color: '#64748b',
+                        maxRotation: 35,
+                    },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+
+    section.style.display = '';
+}
+
+function renderTable(items) {
+    var section = document.getElementById('tableSection');
+    var tbody = document.getElementById('tableBody');
+    if (!items || items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><i class="fas fa-inbox"></i><p>该时间段内未发现重复报修</p></td></tr>';
+        section.style.display = '';
+        return;
+    }
+
+    var html = '';
+    for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        var rank = i + 1;
+        var rankClass = rank <= 3 ? 'rank-' + rank : 'rank-other';
+
+        html += '<tr>'
+            + '<td><span class="rank-badge ' + rankClass + '">' + rank + '</span></td>'
+            + '<td><strong>' + escapeHtml(item.location) + '</strong></td>'
+            + '<td><span class="fault-tag ' + getFaultTagClass(item.fault_type) + '">' + escapeHtml(item.fault_type) + '</span></td>'
+            + '<td>' + escapeHtml(item.fault_subcategory || '-') + '</td>'
+            + '<td>' + escapeHtml(item.device_type || '-') + '</td>'
+            + '<td><span class="count-badge ' + getCountBadgeClass(item.count) + '">' + item.count + '次</span></td>'
+            + '<td style="font-size:12px;color:#94a3b8;">' + item.first_time + '</td>'
+            + '<td style="font-size:12px;color:#94a3b8;">' + item.last_time + '</td>'
+            + '<td><a href="' + item.link_url + '" class="btn btn-sm btn-outline-primary" style="padding:2px 8px;font-size:11px;" target="_blank"><i class="fas fa-external-link-alt"></i></a></td>'
+            + '</tr>';
+    }
+    tbody.innerHTML = html;
+    section.style.display = '';
+}
+
+function escapeHtml(str) {
+    if (!str) return '-';
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+}
+
+// 默认加载当月数据
+document.addEventListener('DOMContentLoaded', function() {
+    scanRepeats();
+});
+</script>
+{% endblock %}

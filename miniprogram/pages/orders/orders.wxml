@@ -1,0 +1,98 @@
+<view class="page">
+  <!-- 顶部栏 -->
+  <view class="header">
+    <view class="header-left">
+      <text class="header-title">工单助手</text>
+      <text class="header-user">{{user.display_name || ''}}</text>
+    </view>
+    <view class="header-right">
+      <view class="fab-mini" bindtap="onFabPublish">
+        <text class="fab-mini-icon">✚</text>
+      </view>
+      <view class="fab-mini inv-btn" bindtap="onInventory">
+        <text class="fab-mini-icon" style="font-size:24rpx;">📋</text>
+      </view>
+      <view class="fab-mini exam-btn" bindtap="onExam">
+        <text class="fab-mini-icon" style="font-size:24rpx;">🎓</text>
+      </view>
+      <text class="btn-more" bindtap="onMore">⋮</text>
+    </view>
+  </view>
+
+  <!-- 微信绑定提示（未绑定时显示） -->
+  <view wx:if="{{user.wx_bound !== true && user.display_name}}" class="wx-bind-tip" bindtap="onBindWx">
+    <text>💬 绑定微信，下次自动登录</text>
+  </view>
+
+  <!-- 首次安装无缓存时显示静态 splash -->
+  <view wx:if="{{splash}}" class="splash-loading">
+    <text class="splash-loading-icon">🔧</text>
+    <text class="splash-loading-text">加载中...</text>
+  </view>
+
+  <!-- 正常界面：有三条统计标签 -->
+  <view wx:else>
+    <view class="stat-row">
+      <view class="stat-item {{activeTab === 'pending' ? 'active' : ''}}" data-tab="pending" bindtap="switchTab">
+        <text class="stat-num">{{stats.pending}}</text>
+        <text class="stat-label">📋 未接单</text>
+      </view>
+      <view class="stat-item {{activeTab === 'in_progress' ? 'active' : ''}}" data-tab="in_progress" bindtap="switchTab">
+        <text class="stat-num">{{stats.in_progress}}</text>
+        <text class="stat-label">🔧 已接单</text>
+      </view>
+      <view class="stat-item {{activeTab === 'completed' ? 'active' : ''}}" data-tab="completed" bindtap="switchTab">
+        <text class="stat-num">{{stats.completed_today}}</text>
+        <text class="stat-label">✅ 已完成</text>
+      </view>
+    </view>
+
+    <!-- 已完成的今日总结按钮 -->
+    <view wx:if="{{activeTab === 'completed' && orders.length > 0}}" class="summary-bar" bindtap="onTodaySummary">
+      <text class="summary-info">📋 今日已完成 {{stats.completed_today}} 项</text>
+      <text class="btn-summary">📄 今日总结</text>
+    </view>
+
+    <!-- 空状态 -->
+    <view wx:if="{{orders.length === 0 && !loading}}" class="empty">
+      <text class="empty-icon">{{activeTab === 'pending' ? '📋' : activeTab === 'in_progress' ? '🔧' : '✅'}}</text>
+      <text class="empty-text">
+        {{activeTab === 'pending' ? '暂无待接单工单' : activeTab === 'in_progress' ? '暂无已接单工单' : '今天暂无已完成工单'}}
+      </text>
+    </view>
+
+    <!-- 工单列表 -->
+    <scroll-view wx:if="{{orders.length > 0}}" class="order-list" scroll-y enhanced show-scrollbar="{{false}}" refresher-default-style="none">
+      <view class="order-card" wx:for="{{orders}}" wx:key="id" data-id="{{item.id}}" bindtap="onOrderTap">
+        <view class="order-top">
+          <view class="order-title-row">
+            <view wx:if="{{item.status === 'completed' && item.original_priority === 'emergency' || item.status !== 'completed' && item.priority === 'emergency'}}" class="priority-dot emergency"></view>
+            <view wx:elif="{{item.status === 'completed' && item.original_priority === 'urgent' || item.status !== 'completed' && item.priority === 'urgent'}}" class="priority-dot urgent"></view>
+            <view wx:else class="priority-dot normal"></view>
+            <text wx:if="{{item.work_type === 'inspection'}}" class="inspection-badge">🔍</text>
+            <text class="order-title">{{item.title}}</text>
+          </view>
+          <text class="badge badge-{{util.formatStatusBadge(item.status)}}">{{util.formatStatus(item.status)}}</text>
+        </view>
+        <view class="order-meta">
+          <text class="meta-item">🏢 {{item.building || '未指定'}}</text>
+          <text class="meta-item" wx:if="{{item.floor}}">📍 {{item.floor}}</text>
+          <text class="meta-item" wx:if="{{item.department}}">🚪 {{item.department}}</text>
+        </view>
+        <view class="order-footer">
+          <text class="order-time">{{item.created_at}}</text>
+          <text class="order-type">{{item.device_type}} · {{item.fault_type}}</text>
+          <view wx:if="{{item.status === 'in_progress'}}" class="btn-group-solve">
+            <button class="btn-go-solve" data-id="{{item.id}}" bindtap="onOrderTap">结单</button>
+            <button class="btn-quick-solve" data-id="{{item.id}}" catchtap="onQuickSolve">一键结单</button>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <!-- 浮动发布按钮 -->
+  <view class="fab" bindtap="onFabPublish">
+    <text class="fab-icon">✚</text>
+  </view>
+</view>

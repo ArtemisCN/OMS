@@ -1,0 +1,173 @@
+<!-- 聊天悬浮气泡 -->
+<button id="chat-bubble" title="在线聊天">
+    <i class="fas fa-comment-dots"></i>
+</button>
+
+<!-- 聊天窗口 -->
+<div id="chat-window">
+    <div id="chat-header">
+        <button id="chat-back" class="chat-back"><i class="fas fa-chevron-left"></i></button>
+        <span id="chat-title" class="chat-title">消息</span>
+        <button id="chat-sound-toggle" class="chat-header-btn" title="消息提示音"><i class="fas fa-volume-up"></i></button>
+        <button id="chat-search-btn" class="chat-header-btn" title="搜索聊天记录"><i class="fas fa-search"></i></button>
+        <button id="chat-close" class="chat-close"><i class="fas fa-times"></i></button>
+    </div>
+
+    <!-- 搜索栏（默认隐藏） -->
+    <div id="chat-search-bar" style="display:none;">
+        <input type="text" id="chat-search-input" placeholder="搜索聊天记录...">
+        <button id="chat-search-close"><i class="fas fa-times"></i></button>
+    </div>
+    <div id="chat-search-results"></div>
+
+    <!-- 新聊天入口 -->
+    <div id="chat-new-chat">
+        <i class="fas fa-plus-circle"></i> 发起聊天
+        <span id="chat-new-group" class="ms-2" style="font-size:12px;color:var(--text-muted);cursor:pointer;" title="创建群聊"><i class="fas fa-users"></i> 群聊</span>
+    </div>
+
+    <!-- 会话列表 -->
+    <div id="chat-conv-list"></div>
+
+    <!-- 用户列表 -->
+    <div id="chat-user-list"></div>
+
+    <!-- 消息区域 -->
+    <div id="chat-messages">
+        <div style="text-align:center;padding:40px 16px;color:var(--text-muted);font-size:13px;">
+            选择一个会话开始聊天
+        </div>
+    </div>
+
+    <!-- 输入区域 -->
+    <div id="chat-input-area">
+        <!-- 文件上传按钮 -->
+        <label id="chat-file-btn" class="chat-action-btn" title="发送文件">
+            <i class="fas fa-paperclip"></i>
+            <input id="chat-file-input" type="file" hidden>
+        </label>
+        <!-- 图片上传按钮 -->
+        <label id="chat-image-btn" class="chat-action-btn" title="发送图片">
+            <i class="fas fa-image"></i>
+            <input id="chat-image-input" type="file" accept="image/*" hidden>
+        </label>
+        <!-- 语音录制按钮 -->
+        <button id="chat-voice-btn" class="chat-action-btn" title="语音消息">
+            <i class="fas fa-microphone"></i>
+        </button>
+        <input id="chat-input" type="text" placeholder="输入消息..." maxlength="500">
+        <button id="chat-emoji-btn" class="chat-action-btn" title="插入表情">😊</button>
+        <button id="chat-send" class="send-btn"><i class="fas fa-paper-plane"></i></button>
+    </div>
+    <!-- Emoji 选择器 -->
+    <div id="chat-emoji-picker"></div>
+    <!-- 录音状态提示 -->
+    <div id="chat-voice-status" class="chat-voice-status" style="display:none;">
+        <div class="voice-recording-bar">
+            <span class="voice-pulse-dot"></span>
+            <span id="chat-voice-timer">00:00</span>
+            <button id="chat-voice-stop" class="voice-stop-btn" title="停止录音">
+                <i class="fas fa-stop"></i>
+            </button>
+            <button id="chat-voice-cancel" class="voice-cancel-btn" title="取消">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+</div>
+<script>
+// 聊天气泡拖拽：用指针事件，只在大幅度拖动时才阻止点击
+(function() {
+  var bubble = document.getElementById('chat-bubble');
+  if (!bubble) return;
+  var startX, startY, origX, origY;
+  var dragged = false;
+  var threshold = 6;
+
+  function onPointerDown(e) {
+    var pt = e.touches ? e.touches[0] : e;
+    startX = pt.clientX;
+    startY = pt.clientY;
+    var rect = bubble.getBoundingClientRect();
+    origX = rect.left;
+    origY = rect.top;
+    dragged = false;
+    // 拖拽期间禁用过渡，保证跟手
+    bubble.style.transition = 'none';
+
+    function onPointerMove(e2) {
+      var pt2 = e2.touches ? e2.touches[0] : e2;
+      var dx = pt2.clientX - startX;
+      var dy = pt2.clientY - startY;
+      if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
+        dragged = true;
+      }
+      if (dragged) {
+        bubble.style.left = (origX + dx) + 'px';
+        bubble.style.top = (origY + dy) + 'px';
+        bubble.style.right = 'auto';
+        bubble.style.bottom = 'auto';
+      }
+    }
+
+    function onWindowBlur() {
+      // 窗口失去焦点时清理拖拽，防止事件泄漏
+      document.removeEventListener('mousemove', onPointerMove);
+      document.removeEventListener('mouseup', onPointerUp);
+      document.removeEventListener('touchmove', onPointerMove);
+      document.removeEventListener('touchend', onPointerUp);
+      window.removeEventListener('blur', onWindowBlur);
+      bubble.style.transition = '';
+    }
+    function onPointerUp() {
+      document.removeEventListener('mousemove', onPointerMove);
+      document.removeEventListener('mouseup', onPointerUp);
+      document.removeEventListener('touchmove', onPointerMove);
+      document.removeEventListener('touchend', onPointerUp);
+      window.removeEventListener('blur', onWindowBlur);
+      bubble.style.transition = '';
+      // 拖动后吸附到边缘 + 拦截点击
+      if (dragged) {
+        snapToEdge(bubble);
+        bubble.addEventListener('click', function trap(e2) {
+          e2.stopPropagation();
+          bubble.removeEventListener('click', trap);
+        }, {once: true, capture: true});
+        dragged = false;
+      }
+    }
+
+    // ====== 吸附到最近屏幕边缘，自动贴边隐藏只露 10px ======
+    function snapToEdge(el) {
+      var rect = el.getBoundingClientRect();
+      var winW = window.innerWidth;
+      var distLeft = rect.left + rect.width / 2;
+      var distRight = winW - rect.right + rect.width / 2;
+
+      el.classList.remove('docked-left', 'docked-right');
+      el.style.transition = 'left 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), right 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.3s ease';
+
+      if (distLeft < distRight) {
+        el.style.left = '0px';
+        el.style.right = 'auto';
+        el.classList.add('docked-left');
+      } else {
+        el.style.right = '0px';
+        el.style.left = 'auto';
+        el.classList.add('docked-right');
+      }
+
+      setTimeout(function() { el.style.transition = ''; }, 400);
+    }
+
+    document.addEventListener('mousemove', onPointerMove);
+    document.addEventListener('mouseup', onPointerUp);
+    document.addEventListener('touchmove', onPointerMove, {passive: true});
+    document.addEventListener('touchend', onPointerUp);
+    window.addEventListener('blur', onWindowBlur);
+  }
+
+  bubble.addEventListener('mousedown', onPointerDown);
+  bubble.addEventListener('touchstart', onPointerDown, {passive: true});
+})();
+</script>

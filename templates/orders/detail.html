@@ -1,0 +1,856 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-file-alt text-primary"></i> 工单详情 #{{ order.id }}
+    <a href="{{ url_for('forms.form_create', work_order_id=order.id) }}" class="btn btn-sm btn-outline-warning ms-2" style="font-size:12px"><i class="fas fa-tools"></i> 创建维修单</a>
+</h5>
+    <a href="{{ url_for('orders.list_orders') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-left"></i> 返回列表
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-8">
+                <h5>{{ order.title }}</h5>
+                <div class="mt-3">
+                    <span class="badge bg-{{ 'info' if order.fault_type=='软件' else 'warning' if order.fault_type=='硬件' else 'danger' }} me-2">
+                        {{ order.fault_type }}{% if order.fault_subcategory %} &gt; {{ order.fault_subcategory }}{% endif %}
+                    </span>
+                    <span class="badge bg-secondary">{{ order.device_type }}</span>
+                </div>
+                <hr>
+                <dl class="row detail-card">
+                    <dt class="col-sm-3">区域位置</dt>
+                    <dd class="col-sm-9">{{ order.building }} {{ order.floor }} {{ order.department }} {{ order.location }}</dd>
+
+                    {% if order.fault_subcategory %}
+                    <dt class="col-sm-3">二级故障</dt>
+                    <dd class="col-sm-9">{{ order.fault_subcategory }}</dd>
+                    {% endif %}
+
+                    {% if order.work_type == 'inspection' and order.inspection_data %}
+                    <dt class="col-sm-3">巡检清单</dt>
+                    <dd class="col-sm-9">
+                        {% for item in order.inspection_data.get('items', []) %}
+                        <div class="d-flex align-items-center mb-1">
+                            {% if item.result == true %}
+                            <span style="color:#22c55e;margin-right:8px;">✅</span>
+                            {% elif item.result == false %}
+                            <span style="color:#ef4444;margin-right:8px;">❌</span>
+                            {% else %}
+                            <span style="color:#94a3b8;margin-right:8px;">⬜</span>
+                            {% endif %}
+                            <span>{{ item.name }}</span>
+                        </div>
+                        {% endfor %}
+                    </dd>
+                    {% endif %}
+
+                    <dt class="col-sm-3">故障描述</dt>
+                    <dd class="col-sm-9">{{ order.description or '无' }}</dd>
+
+                    <dt class="col-sm-3">
+                        解决方案
+                        <button class="btn btn-sm btn-outline-info ms-1" style="font-size:10px;padding:1px 6px;" 
+                                onclick="openKnowledgeSearch('{{ order.fault_type }}', '{{ order.fault_subcategory or '' }}')"
+                                title="搜索知识库">
+                            <i class="fas fa-book"></i> 查知识库
+                        </button>
+                    </dt>
+                    <dd class="col-sm-9">{{ order.solution or '无' }}</dd>
+
+                    <dt class="col-sm-3">处理人员</dt>
+                    <dd class="col-sm-9"><strong>{{ order.person }}</strong></dd>
+
+                    <dt class="col-sm-3">开始时间</dt>
+                    <dd class="col-sm-9">{% if order.start_time %}{{ order.start_time.strftime('%Y/%m/%d %H:%M:%S') }}{% else %}无{% endif %}</dd>
+
+                    <dt class="col-sm-3">结束时间</dt>
+                    <dd class="col-sm-9">{% set _et = order.end_time or order.completed_at %}{% if _et %}{{ _et.strftime('%Y/%m/%d %H:%M:%S') }}{% else %}无{% endif %}</dd>
+
+                    <dt class="col-sm-3">创建时间</dt>
+                    <dd class="col-sm-9">{% if order.created_at %}{{ order.created_at.strftime('%Y/%m/%d %H:%M:%S') }}{% endif %}</dd>
+
+                    <dt class="col-sm-3">创建人</dt>
+                    <dd class="col-sm-9">{{ order.created_by }}</dd>
+                </dl>
+            </div>
+            <div class="col-md-4 text-center">
+                <div class="card bg-light">
+                    <div class="card-body py-4">
+                        <div class="text-muted small">工单编号</div>
+                        <div class="fs-1 fw-bold text-primary">#{{ order.id }}</div>
+                        <hr>
+                        <form method="post" action="{{ url_for('orders.delete_order', order_id=order.id) }}"
+                              onsubmit="return confirm('确定删除该工单？')" class="d-inline">
+                            <a href="{{ url_for('orders.edit_order', order_id=order.id) }}" class="btn btn-outline-primary btn-sm me-1">
+                                <i class="fas fa-edit"></i> 编辑
+                            </a>
+                            <button type="submit" class="btn btn-outline-danger btn-sm">
+                                <i class="fas fa-trash"></i> 删除
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== 工单照片 ===== -->
+<div class="card mt-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-camera text-primary"></i> 现场照片 <small class="text-muted">(720p 记录参考)</small></span>
+        <button class="btn btn-sm btn-outline-primary" onclick="document.getElementById('photoInput').click()">
+            <i class="fas fa-upload"></i> 上传照片
+        </button>
+    </div>
+    <div class="card-body">
+        <form id="photoForm" method="post" enctype="multipart/form-data"
+              action="{{ url_for('orders.upload_photo', order_id=order.id) }}"
+              target="photoIframe" style="display:none;">
+            <input type="file" id="photoInput" name="photos" accept="image/*" multiple
+                   onchange="setupPhotoUpload();this.value=''">
+        </form>
+        <iframe name="photoIframe" style="display:none;" id="photoIframe"></iframe>
+        {% if photos %}
+        <div id="photoGallery" class="d-flex flex-wrap gap-2">
+            {% for p in photos %}
+            <div class="position-relative" style="width:120px;height:120px;">
+                <img src="{{ url_for('main.serve_upload', filename=p.filepath) }}"
+                     class="rounded photo-thumb-blur" style="width:100%;height:100%;object-fit:cover;cursor:pointer;"
+                     onclick="previewPhoto('{{ url_for('main.serve_upload', filename=p.filepath) }}')"
+                     alt="{{ p.filename }}">
+                <form method="post" action="{{ url_for('orders.delete_photo', order_id=order.id, photo_id=p.id) }}"
+                      style="position:absolute;top:2px;right:2px;"
+                      onsubmit="return confirm('确定删除？')">
+                    <button class="btn btn-sm btn-danger" style="padding:0 6px;font-size:12px;line-height:20px;">✕</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted mb-0" style="font-size:14px;">暂无照片，点击上方按钮上传</p>
+        {% endif %}
+        <small class="text-muted d-block mt-2">💡 点击图片放大查看（滚轮缩放）</small>
+    </div>
+</div>
+
+<!-- 照片预览弹窗 -->
+<div class="modal fade" id="photoPreviewModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content bg-dark border-0">
+            <div class="modal-body p-0 text-center" style="overflow:hidden;">
+                <img id="photoPreviewImg" src="" style="max-width:100%;max-height:85vh;cursor:zoom-in;transition:transform .2s;"
+                     ondblclick="this.style.transform='scale(1)';this.dataset.scale='1';">
+            </div>
+            <div class="modal-footer border-0 justify-content-center py-1">
+                <button class="btn btn-sm btn-outline-light" onclick="zoomPhoto(1.5)">🔍+</button>
+                <button class="btn btn-sm btn-outline-light" onclick="zoomPhoto(0.67)">🔍-</button>
+                <button class="btn btn-sm btn-outline-light" onclick="document.getElementById('photoPreviewImg').style.transform='scale(1)';document.getElementById('photoPreviewImg').dataset.scale='1';">↺ 重置</button>
+                <button class="btn btn-sm btn-outline-light" data-bs-dismiss="modal">✕ 关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+var photoScale = 1;
+function previewPhoto(url) {
+    photoScale = 1;
+    var img = document.getElementById('photoPreviewImg');
+    img.src = url;
+    img.style.transform = 'scale(1)';
+    img.dataset.scale = '1';
+    new bootstrap.Modal(document.getElementById('photoPreviewModal')).show();
+}
+function zoomPhoto(factor) {
+    var img = document.getElementById('photoPreviewImg');
+    photoScale = parseFloat(img.dataset.scale || 1) * factor;
+    photoScale = Math.max(0.5, Math.min(5, photoScale));
+    img.style.transform = 'scale(' + photoScale + ')';
+    img.dataset.scale = photoScale;
+}
+// 滚轮缩放
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('photoPreviewImg').addEventListener('wheel', function(e) {
+        if (e.target.closest('.modal.show')) {
+            e.preventDefault();
+            zoomPhoto(e.deltaY > 0 ? 0.9 : 1.1);
+        }
+    });
+});
+// 上传完成回调 — 只有在上传时才设 onload，避免页面加载误触
+function setupPhotoUpload() {
+    document.getElementById('photoIframe').onload = function() {
+        location.reload();
+    };
+    document.getElementById('photoForm').submit();
+}
+</script>
+
+<!-- ===== 备件关联工单 ===== -->
+{% include 'feature/stock_link.html' %}
+
+<!-- ===== 工单关联聊天 ===== -->
+<div class="wo-chat-section mt-4">
+    <div class="wo-chat-header">
+        <i class="fas fa-comments"></i> 工单讨论
+        <span class="wo-chat-badge" id="woChatBadge" style="display:none;">new</span>
+    </div>
+    <div class="wo-chat-body" id="woChatBody">
+        <div class="wo-chat-msgs" id="woChatMsgs">
+            <div class="wo-chat-loading">加载中...</div>
+        </div>
+        <div class="wo-chat-input-row">
+            <button class="wo-chat-emoji-btn" id="woChatEmojiBtn" title="表情"><i class="far fa-smile"></i></button>
+            <button class="wo-chat-image-btn" id="woChatImageBtn" title="图片"><i class="far fa-image"></i></button>
+            <input type="file" id="woChatImageInput" accept="image/*" style="display:none;">
+            <input type="text" class="wo-chat-input" id="woChatInput" placeholder="输入消息...">
+            <button class="wo-chat-send-btn" id="woChatSendBtn"><i class="fas fa-paper-plane"></i></button>
+        </div>
+    </div>
+    <!-- Emoji 选择器 -->
+    <div class="wo-chat-emoji-picker" id="woChatEmojiPicker"></div>
+</div>
+
+<!-- 图片预览 -->
+<div class="wochat-preview-overlay" id="wochatPreview">
+    <img src="" alt="preview">
+</div>
+
+<!-- 知识库搜索弹窗 -->
+<div class="modal fade" id="knowledgeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h6 class="modal-title"><i class="fas fa-book"></i> 知识库搜索</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" class="form-control" id="kbSearchInput"
+                           placeholder="输入关键词搜索解决方案..." autofocus>
+                    <button class="btn btn-info" id="kbSearchBtn" type="button">搜索</button>
+                </div>
+                <div id="kbResults" style="max-height:60vh;overflow-y:auto;">
+                    <div class="text-center text-muted py-5">
+                        <i class="fas fa-lightbulb" style="font-size:40px;opacity:0.3;"></i>
+                        <p class="mt-2">输入关键词搜索知识库</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <small class="text-muted">匹配标题、内容、关键词和故障类型</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+var kbTimer = null;
+
+function openKnowledgeSearch(faultType, subcategory) {
+    var modal = new bootstrap.Modal(document.getElementById('knowledgeModal'));
+    modal.show();
+    var input = document.getElementById('kbSearchInput');
+    // 预填故障类型作为搜索关键词
+    var keywords = [faultType];
+    if (subcategory) keywords.push(subcategory);
+    input.value = keywords.filter(Boolean).join(' ');
+    doKBSearch();
+    setTimeout(function(){ input.focus(); input.select(); }, 500);
+}
+
+document.getElementById('kbSearchInput').addEventListener('input', function(){
+    clearTimeout(kbTimer);
+    kbTimer = setTimeout(doKBSearch, 300);
+});
+
+document.getElementById('kbSearchBtn').addEventListener('click', doKBSearch);
+
+document.getElementById('kbSearchInput').addEventListener('keydown', function(e){
+    if (e.key === 'Enter') { e.preventDefault(); doKBSearch(); }
+});
+
+function doKBSearch() {
+    var q = document.getElementById('kbSearchInput').value.trim();
+    if (!q) {
+        document.getElementById('kbResults').innerHTML =
+            '<div class="text-center text-muted py-5"><i class="fas fa-lightbulb" style="font-size:40px;opacity:0.3;"></i><p class="mt-2">输入关键词搜索知识库</p></div>';
+        return;
+    }
+    var container = document.getElementById('kbResults');
+    container.innerHTML = '<div class="text-center py-4"><div class="spinner-border spinner-border-sm text-info"></div> 搜索中...</div>';
+    fetch('/data/knowledge/api/search?q=' + encodeURIComponent(q) + '&limit=20')
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if (!data || data.length === 0) {
+                container.innerHTML = '<div class="text-center text-muted py-5"><i class="fas fa-search-minus" style="font-size:36px;opacity:0.3;"></i><p class="mt-2">未找到匹配结果</p></div>';
+                return;
+            }
+            var html = '';
+            data.forEach(function(a){
+                var preview = a.content ? a.content.substring(0, 150) : '';
+                var catBadge = a.category ? '<span class="badge bg-secondary me-1">' + a.category + '</span>' : '';
+                var pinBadge = a.is_pinned ? '<span class="badge bg-warning text-dark me-1">📌 置顶</span>' : '';
+                html += '<div class="card mb-2 kb-result-card" style="cursor:pointer;border-left:3px solid #0dcaf0;" onclick="showKBDetail(' + a.id + ')">' +
+                    '<div class="card-body py-2 px-3">' +
+                    '<div class="d-flex justify-content-between align-items-start">' +
+                    '<h6 class="mb-1" style="font-size:14px;">' + pinBadge + catBadge + escapeHtml(a.title) + '</h6>' +
+                    '</div>' +
+                    '<p class="mb-0 text-muted" style="font-size:12px;line-height:1.4;">' + escapeHtml(preview) + '</p>' +
+                    '</div></div>';
+            });
+            container.innerHTML = '<div class="small text-muted mb-2">找到 ' + data.length + ' 条结果</div>' + html;
+        })
+        .catch(function(){
+            container.innerHTML = '<div class="text-center text-danger py-4"><i class="fas fa-exclamation-circle"></i> 搜索失败</div>';
+        });
+}
+
+function showKBDetail(kid) {
+    fetch('/data/knowledge/api/' + kid)
+        .then(function(r){ return r.json(); })
+        .then(function(a){
+            var modal = document.getElementById('knowledgeModal');
+            var body = modal.querySelector('.modal-body');
+            body.innerHTML =
+                '<div class="mb-3">' +
+                '<button class="btn btn-sm btn-outline-secondary" onclick="backToKBSearch()"><i class="fas fa-arrow-left"></i> 返回搜索</button>' +
+                '</div>' +
+                '<h5>' + escapeHtml(a.title) + '</h5>' +
+                '<div class="small text-muted mb-2">' +
+                (a.category ? '<span class="badge bg-secondary me-1">' + a.category + '</span>' : '') +
+                '</div>' +
+                '<hr><div style="white-space:pre-wrap;font-size:14px;line-height:1.7;">' + escapeHtml(a.content) + '</div>';
+            body.scrollTop = 0;
+        });
+}
+
+function backToKBSearch() {
+    var modal = document.getElementById('knowledgeModal');
+    modal.querySelector('.modal-body').innerHTML =
+        '<div class="input-group mb-3">' +
+        '<span class="input-group-text"><i class="fas fa-search"></i></span>' +
+        '<input type="text" class="form-control" id="kbSearchInput" placeholder="输入关键词搜索解决方案..." autofocus>' +
+        '<button class="btn btn-info" id="kbSearchBtn" type="button">搜索</button>' +
+        '</div>' +
+        '<div id="kbResults" style="max-height:60vh;overflow-y:auto;">' +
+        '<div class="text-center text-muted py-5"><i class="fas fa-lightbulb" style="font-size:40px;opacity:0.3;"></i><p class="mt-2">输入关键词搜索知识库</p></div>' +
+        '</div>';
+    // 重新绑定事件
+    document.getElementById('kbSearchInput').addEventListener('input', function(){
+        clearTimeout(kbTimer);
+        kbTimer = setTimeout(doKBSearch, 300);
+    });
+    document.getElementById('kbSearchBtn').addEventListener('click', doKBSearch);
+    document.getElementById('kbSearchInput').addEventListener('keydown', function(e){
+        if (e.key === 'Enter') { e.preventDefault(); doKBSearch(); }
+    });
+    document.getElementById('kbSearchInput').focus();
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    var d = document.createElement('div');
+    d.textContent = text;
+    return d.innerHTML;
+}
+</script>
+<style>
+.kb-result-card:hover { background:#f0f9ff; border-color:#0ea5e9 !important; }
+[data-theme="dark"] .kb-result-card:hover { background:#1e293b; }
+</style>
+
+<!-- ===== 工单关联聊天 JS ===== -->
+<script>
+(function() {
+    'use strict';
+    var woChat = {
+        orderId: {{ order.id }},
+        pollTimer: null,
+        lastMsgId: 0,
+        emojiVisible: false
+    };
+
+    var EMOJIS = ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','😉','😊','😇','🥰','😍','🤩','😘','😋','😛','😜','🤪','😝','🤑','🤗','🤔','🤐','😑','😶','😏','😒','🙄','😬','😌','😪','😴','😷','🤒','🤕','🤢','🤮','🥴','😵','🤯','🥳','🥺','😢','😭','😤','😠','😡','🤬','💀','💩','🤡','👹','👺','👻','👽','👾','🤖','👍','👎','👊','✊','🤞','👌','✌️','💪','❤️','💛','💚','💙','💜','💕','💞','💖','💘','💝','🔥','🎉','🎊','🎈','🎁','🎀','💡','📌','✅','❌','⭐','🌟','💯','🔧','🔨','⚙️','🔩','🛠️','📝','📋','📊','📈','📉','📌','🔗','💾','🖥️','💻','📱','🔋','💡','🔦','🧰'];
+
+    woChat.init = function() {
+        woChat.msgsEl = document.getElementById('woChatMsgs');
+        woChat.inputEl = document.getElementById('woChatInput');
+        woChat.sendBtn = document.getElementById('woChatSendBtn');
+        woChat.emojiBtn = document.getElementById('woChatEmojiBtn');
+        woChat.emojiPicker = document.getElementById('woChatEmojiPicker');
+        woChat.imageBtn = document.getElementById('woChatImageBtn');
+        woChat.imageInput = document.getElementById('woChatImageInput');
+        woChat.preview = document.getElementById('wochatPreview');
+        woChat.badge = document.getElementById('woChatBadge');
+
+        if (!woChat.msgsEl) { console.error('woChat: msgsEl not found'); return; }
+        if (!woChat.sendBtn) { console.error('woChat: sendBtn not found'); return; }
+        if (!woChat.inputEl) { console.error('woChat: inputEl not found'); return; }
+
+        console.log('woChat: 初始化成功, orderId=' + woChat.orderId);
+
+        // 发送
+        woChat.sendBtn.addEventListener('click', woChat.send);
+        woChat.inputEl.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); woChat.send(); }
+        });
+
+        // Emoji
+        woChat.emojiBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            woChat.toggleEmoji();
+        });
+        document.addEventListener('click', function() {
+            if (woChat.emojiVisible) { woChat.hideEmoji(); }
+        });
+        woChat.renderEmojiPicker();
+
+        // 图片
+        woChat.imageBtn.addEventListener('click', function() { woChat.imageInput.click(); });
+        woChat.imageInput.addEventListener('change', woChat.onImageSelected);
+
+        // 预览点击关闭
+        woChat.preview.addEventListener('click', function() { woChat.preview.classList.remove('show'); });
+
+        // 首次加载
+        woChat.loadMessages();
+
+        // 轮询
+        woChat.pollTimer = setInterval(function() {
+            try { woChat.pollNew(); } catch(e) { console.error('woChat poll error:', e); }
+        }, 3000);
+    };
+
+    woChat.loadMessages = function() {
+        woChat.msgsEl.innerHTML = '<div class="wo-chat-loading">加载中...</div>';
+        console.log('woChat: 加载消息...');
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/orders/' + woChat.orderId + '/chat', true);
+        xhr.onload = function() {
+            console.log('woChat: 消息响应 status=' + xhr.status);
+            if (xhr.status === 200) {
+                try {
+                    var msgs = JSON.parse(xhr.responseText);
+                    console.log('woChat: 收到 ' + msgs.length + ' 条消息');
+                    woChat.renderMessages(msgs);
+                } catch(e) {
+                    console.error('woChat parse error:', e);
+                    woChat.msgsEl.innerHTML = '<div class="wo-chat-empty">消息加载失败</div>';
+                }
+            } else {
+                woChat.msgsEl.innerHTML = '<div class="wo-chat-empty">HTTP ' + xhr.status + '</div>';
+            }
+        };
+        xhr.onerror = function() {
+            console.error('woChat: 网络错误');
+            woChat.msgsEl.innerHTML = '<div class="wo-chat-empty">网络错误</div>';
+        };
+        xhr.send();
+    };
+
+    woChat.renderMessages = function(msgs) {
+        if (!msgs || msgs.length === 0) {
+            woChat.msgsEl.innerHTML = '<div class="wo-chat-empty">暂无讨论消息，发送第一条吧</div>';
+            return;
+        }
+        woChat.lastMsgId = 0;
+        var html = '';
+        msgs.forEach(function(m) {
+            if (m.id > woChat.lastMsgId) woChat.lastMsgId = m.id;
+            html += woChat.renderMsg(m);
+        });
+        woChat.msgsEl.innerHTML = html;
+        woChat.scrollBottom();
+    };
+
+    woChat.renderMsg = function(m) {
+        var cls = m.is_self ? 'self' : 'other';
+        var content = '';
+        if (m.msg_type === 'image') {
+            content = '<img class="wo-chat-img" src="' + escapeHtml(m.content) + '" alt="图片" onclick="event.stopPropagation();document.getElementById(\'wochatPreview\').querySelector(\'img\').src=this.src;document.getElementById(\'wochatPreview\').classList.add(\'show\')">';
+        } else {
+            content = '<span>' + escapeHtml(m.content) + '</span>';
+        }
+        return '<div class="wo-chat-msg ' + cls + '">' +
+            '<div class="wo-chat-msg-sender">' + escapeHtml(m.sender_name) + '</div>' +
+            '<div class="wo-chat-msg-bubble">' + content + '</div>' +
+            '<div class="wo-chat-msg-time">' + formatTime(m.created_at) + '</div>' +
+            '</div>';
+    };
+
+    woChat.appendMsg = function(m) {
+        if (m.id > woChat.lastMsgId) woChat.lastMsgId = m.id;
+        // 去重
+        var existing = woChat.msgsEl.querySelector('[data-msgid="' + m.id + '"]');
+        if (existing) return;
+        var div = document.createElement('div');
+        div.className = 'wo-chat-msg ' + (m.is_self ? 'self' : 'other');
+        div.setAttribute('data-msgid', m.id);
+        var content = '';
+        if (m.msg_type === 'image') {
+            content = '<img class="wo-chat-img" src="' + escapeHtml(m.content) + '" alt="图片" onclick="event.stopPropagation();document.getElementById(\'wochatPreview\').querySelector(\'img\').src=this.src;document.getElementById(\'wochatPreview\').classList.add(\'show\')">';
+        } else {
+            content = '<span>' + escapeHtml(m.content) + '</span>';
+        }
+        div.innerHTML = '<div class="wo-chat-msg-sender">' + escapeHtml(m.sender_name) + '</div>' +
+            '<div class="wo-chat-msg-bubble">' + content + '</div>' +
+            '<div class="wo-chat-msg-time">' + formatTime(m.created_at) + '</div>';
+        // 移除空状态
+        var empty = woChat.msgsEl.querySelector('.wo-chat-empty');
+        if (empty) empty.remove();
+        woChat.msgsEl.appendChild(div);
+        woChat.scrollBottom();
+        // 如果不在可见区域，显示 new 标记
+        if (!woChat.isVisible()) {
+            woChat.badge.style.display = 'inline';
+            woChat.badge.textContent = 'new';
+        }
+    };
+
+    woChat.pollNew = function() {
+        if (!woChat.lastMsgId) return;
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/orders/' + woChat.orderId + '/chat?after_id=' + woChat.lastMsgId, true);
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    var msgs = JSON.parse(xhr.responseText);
+                    msgs.forEach(function(m) {
+                        woChat.appendMsg(m);
+                    });
+                } catch(e) {}
+            }
+        };
+        xhr.send();
+    };
+
+    woChat.send = function() {
+        var content = woChat.inputEl.value.trim();
+        if (!content) return;
+        woChat.inputEl.value = '';
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/orders/' + woChat.orderId + '/chat/send', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onload = function() {
+            if (xhr.status === 201) {
+                try {
+                    var msg = JSON.parse(xhr.responseText);
+                    woChat.appendMsg(msg);
+                } catch(e) {}
+            }
+        };
+        xhr.send(JSON.stringify({content: content}));
+    };
+
+    woChat.onImageSelected = function(e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        woChat.imageInput.value = '';
+        var formData = new FormData();
+        formData.append('file', file);
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/orders/' + woChat.orderId + '/chat/upload', true);
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    // 发送图片消息
+                    var xhr2 = new XMLHttpRequest();
+                    xhr2.open('POST', '/orders/' + woChat.orderId + '/chat/send', true);
+                    xhr2.setRequestHeader('Content-Type', 'application/json');
+                    xhr2.onload = function() {
+                        if (xhr2.status === 201) {
+                            try {
+                                var msg = JSON.parse(xhr2.responseText);
+                                woChat.appendMsg(msg);
+                            } catch(e) {}
+                        }
+                    };
+                    xhr2.send(JSON.stringify({content: data.url, msg_type: 'image'}));
+                } catch(e) {}
+            }
+        };
+        xhr.send(formData);
+    };
+
+    woChat.toggleEmoji = function() {
+        if (woChat.emojiVisible) { woChat.hideEmoji(); }
+        else { woChat.showEmoji(); }
+    };
+
+    woChat.showEmoji = function() {
+        woChat.emojiPicker.classList.add('show');
+        woChat.emojiVisible = true;
+    };
+
+    woChat.hideEmoji = function() {
+        woChat.emojiPicker.classList.remove('show');
+        woChat.emojiVisible = false;
+    };
+
+    woChat.renderEmojiPicker = function() {
+        if (!woChat.emojiPicker) return;
+        woChat.emojiPicker.innerHTML = '';
+        EMOJIS.forEach(function(e) {
+            var span = document.createElement('span');
+            span.textContent = e;
+            span.addEventListener('click', function(ev) {
+                ev.stopPropagation();
+                woChat.insertEmoji(e);
+            });
+            woChat.emojiPicker.appendChild(span);
+        });
+    };
+
+    woChat.insertEmoji = function(emoji) {
+        if (!woChat.inputEl) return;
+        var start = woChat.inputEl.selectionStart;
+        var end = woChat.inputEl.selectionEnd;
+        var val = woChat.inputEl.value;
+        woChat.inputEl.value = val.substring(0, start) + emoji + val.substring(end);
+        woChat.inputEl.selectionStart = woChat.inputEl.selectionEnd = start + emoji.length;
+        woChat.inputEl.focus();
+    };
+
+    woChat.scrollBottom = function() {
+        setTimeout(function() {
+            var body = document.getElementById('woChatBody');
+            if (body) body.scrollTop = body.scrollHeight;
+        }, 50);
+    };
+
+    woChat.isVisible = function() {
+        var body = document.getElementById('woChatBody');
+        if (!body) return false;
+        var rect = body.getBoundingClientRect();
+        return rect.top < window.innerHeight && rect.bottom > 0;
+    };
+
+    function formatTime(isoStr) {
+        if (!isoStr) return '';
+        try {
+            var d = new Date(isoStr);
+            var pad = function(n) { return String(n).padStart(2, '0'); };
+            return pad(d.getHours()) + ':' + pad(d.getMinutes());
+        } catch(e) { return ''; }
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        var d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    // 页面载入后初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', woChat.init);
+    } else {
+        woChat.init();
+    }
+})();
+</script>
+
+<!-- 工单聊天样式 -->
+<style>
+.wo-chat-section {
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-card, #fff);
+}
+.wo-chat-header {
+    padding: 10px 14px;
+    font-size: 14px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-color, #e2e8f0);
+    background: var(--bg-header, #f8fafc);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.wo-chat-header i { color: var(--primary, #3b82f6); }
+.wo-chat-badge {
+    font-size: 10px;
+    background: #ef4444;
+    color: #fff;
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-left: auto;
+    animation: woPulse 1s infinite;
+}
+@keyframes woPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+.wo-chat-body {
+    height: 320px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-chat, #f1f5f9);
+}
+.wo-chat-msgs {
+    flex: 1;
+    padding: 12px;
+    overflow-y: auto;
+}
+.wo-chat-loading, .wo-chat-empty {
+    text-align: center;
+    color: var(--text-muted, #94a3b8);
+    font-size: 13px;
+    padding: 60px 16px;
+}
+.wo-chat-msg {
+    margin-bottom: 12px;
+    max-width: 80%;
+}
+.wo-chat-msg.self {
+    margin-left: auto;
+}
+.wo-chat-msg.other {
+    margin-right: auto;
+}
+.wo-chat-msg-sender {
+    font-size: 11px;
+    color: var(--text-muted, #94a3b8);
+    margin-bottom: 2px;
+    padding: 0 4px;
+}
+.wo-chat-msg.self .wo-chat-msg-sender {
+    text-align: right;
+}
+.wo-chat-msg-bubble {
+    padding: 8px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    word-break: break-word;
+}
+.wo-chat-msg.self .wo-chat-msg-bubble {
+    background: var(--primary, #3b82f6);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+}
+.wo-chat-msg.other .wo-chat-msg-bubble {
+    background: var(--bg-card, #fff);
+    color: var(--text, #1e293b);
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-bottom-left-radius: 4px;
+}
+.wo-chat-msg-time {
+    font-size: 10px;
+    color: var(--text-muted, #94a3b8);
+    padding: 2px 4px 0;
+}
+.wo-chat-msg.self .wo-chat-msg-time { text-align: right; }
+.wo-chat-img {
+    max-width: 180px;
+    max-height: 160px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: block;
+}
+.wo-chat-input-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 10px;
+    border-top: 1px solid var(--border-color, #e2e8f0);
+    background: var(--bg-card, #fff);
+}
+.wo-chat-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    padding: 6px 10px;
+    font-size: 13px;
+    background: var(--bg-input, #f1f5f9);
+    border-radius: 18px;
+    color: var(--text, #1e293b);
+}
+.wo-chat-input:focus { background: var(--bg-input-focus, #e2e8f0); }
+.wo-chat-emoji-btn, .wo-chat-image-btn, .wo-chat-send-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 6px;
+    font-size: 16px;
+    color: var(--text-muted, #64748b);
+    border-radius: 4px;
+    line-height: 1;
+}
+.wo-chat-emoji-btn:hover, .wo-chat-image-btn:hover { color: var(--primary, #3b82f6); }
+.wo-chat-send-btn { color: var(--primary, #3b82f6); font-size: 15px; }
+.wo-chat-send-btn:hover { opacity: 0.8; }
+.wo-chat-emoji-picker {
+    display: none;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 8px;
+    border-top: 1px solid var(--border-color, #e2e8f0);
+    max-height: 160px;
+    overflow-y: auto;
+    background: var(--bg-card, #fff);
+}
+.wo-chat-emoji-picker.show { display: flex; }
+.wo-chat-emoji-picker span {
+    font-size: 22px;
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 4px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s;
+}
+.wo-chat-emoji-picker span:hover { background: var(--bg-hover, #e2e8f0); }
+.wochat-preview-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 9999;
+    cursor: pointer;
+    justify-content: center;
+    align-items: center;
+}
+.wochat-preview-overlay.show { display: flex; }
+.wochat-preview-overlay img {
+    max-width: 90%;
+    max-height: 90%;
+    border-radius: 8px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+
+/* Dark mode */
+[data-theme="dark"] .wo-chat-section { border-color: #334155; background: #1e293b; }
+[data-theme="dark"] .wo-chat-header { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .wo-chat-body { background: #0f172a; }
+[data-theme="dark"] .wo-chat-msg.other .wo-chat-msg-bubble { background: #334155; color: #e2e8f0; border-color: #475569; }
+[data-theme="dark"] .wo-chat-input-row { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .wo-chat-input { background: #334155; color: #e2e8f0; }
+[data-theme="dark"] .wo-chat-input:focus { background: #475569; }
+[data-theme="dark"] .wo-chat-emoji-picker { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .wo-chat-emoji-picker span:hover { background: #334155; }
+/* 照片缩略图：模糊预览效果 */
+.photo-thumb-blur {
+    filter: blur(3px);
+    transition: filter .2s;
+}
+.photo-thumb-blur:hover {
+    filter: blur(0);
+}
+</style>
+{% endblock %}

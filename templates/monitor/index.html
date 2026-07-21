@@ -1,0 +1,560 @@
+{% extends "base.html" %}
+{% block title %}服务器监控{% endblock %}
+{% block extra_head %}
+<style>
+    .mc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .mc-stat { border: 1px solid var(--card-border); border-radius: var(--radius); padding: 14px 16px; background: #fff; box-shadow: var(--card-shadow); position: relative; }
+    .mc-stat .icon { position: absolute; top: 14px; right: 16px; font-size: 28px; opacity: .12; }
+    .mc-stat .lbl { font-size: 12px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: .3px; }
+    .mc-stat .val { font-size: 24px; font-weight: 700; line-height: 1.3; }
+    .mc-stat .sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .card { border: 1px solid var(--card-border); border-radius: var(--radius); background: #fff; box-shadow: var(--card-shadow); height: 100%; display: flex; flex-direction: column; }
+    .card .card-hd { border-bottom: 1px solid var(--card-border); padding: 11px 14px; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .card .card-hd i { margin-right: 7px; color: var(--primary); }
+    .card .card-bd { padding: 14px; flex: 1; display: flex; flex-direction: column; }
+    .r-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    @media (max-width: 992px) { .r-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 576px) { .r-grid, .mc-grid { grid-template-columns: 1fr; } }
+    .mt-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; font-size: 13px; }
+    .mt-row + .mt-row { border-top: 1px solid #f1f5f9; }
+    .mt-label { color: var(--text-muted); }
+    .mt-value { font-weight: 600; }
+    .mt-bar { height: 8px; border-radius: 20px; background: #f1f5f9; overflow: hidden; }
+    .mt-bar-fill { height: 100%; border-radius: 20px; transition: width .6s ease; }
+    .mt-bar-fill.green { background: #22c55e; }
+    .mt-bar-fill.yellow { background: #eab308; }
+    .mt-bar-fill.orange { background: #f97316; }
+    .mt-bar-fill.red { background: #ef4444; }
+    .cpu-cores { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+    .cpu-core { flex: 0 0 calc(10% - 5px); text-align: center; padding: 3px 0; border-radius: 4px; font-size: 10px; font-weight: 600; background: #f1f5f9; }
+    .net-item { flex: 1; text-align: center; padding: 10px; border-radius: 6px; background: #f8fafc; }
+    .net-item .v { font-size: 18px; font-weight: 700; }
+    .net-item .l { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .collapse-toggle { font-size: 12px; color: var(--primary); cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 4px; padding: 4px 0; margin-top: auto; }
+    .collapse-toggle i { font-size: 10px; transition: transform .2s; }
+    .collapse-toggle.open i { transform: rotate(180deg); }
+    .collapse-wrap { overflow: hidden; max-height: 0; transition: max-height .3s ease; }
+    .partition-row { padding: 6px 0; }
+    .partition-row + .partition-row { border-top: 1px solid #f1f5f9; }
+    .health-bar { display: flex; gap: 10px; flex-wrap: wrap; }
+    .health-item { flex: 1; min-width: 120px; text-align: center; padding: 8px 6px; border-radius: 6px; background: #f8fafc; }
+    .health-item .v { font-size: 16px; font-weight: 700; }
+    .health-item .l { font-size: 11px; color: var(--text-muted); }
+    .health-item .s { font-size: 10px; color: var(--text-muted); margin-top: 2px; word-break: break-all; }
+    .refresh-time { font-size: 12px; color: var(--text-muted); font-weight: 400; }
+    @media (min-width: 1920px) { .container-fluid { max-width: none; } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h5 class="mb-0"><i class="fas fa-server" style="color:var(--primary)"></i> 服务器监控</h5>
+    <div>
+        <span class="refresh-time" id="refreshTime">最后刷新: --:--:--</span>
+        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="loadData()"><i class="fas fa-sync-alt"></i> 刷新</button>
+    </div>
+</div>
+
+<!-- 行1 -->
+<div class="mc-grid mb-3">
+    <div class="mc-stat">
+        <div class="icon"><i class="fas fa-microchip"></i></div>
+        <div class="lbl">CPU 使用率</div>
+        <div class="val" id="cpuStat">--%</div>
+        <div class="sub" id="cpuSub">-- 核 / 负载 --</div>
+    </div>
+    <div class="mc-stat">
+        <div class="icon"><i class="fas fa-memory"></i></div>
+        <div class="lbl">内存使用率</div>
+        <div class="val" id="memStat">--%</div>
+        <div class="sub" id="memSub">-- / --</div>
+    </div>
+    <div class="mc-stat">
+        <div class="icon"><i class="fas fa-hdd"></i></div>
+        <div class="lbl">磁盘使用率</div>
+        <div class="val" id="diskStat">--%</div>
+        <div class="sub" id="diskSub">-- / --</div>
+    </div>
+    <div class="mc-stat">
+        <div class="icon"><i class="fas fa-clock"></i></div>
+        <div class="lbl">运行时间</div>
+        <div class="val" id="uptimeStat">--</div>
+        <div class="sub" id="uptimeSub">启动: ----</div>
+    </div>
+</div>
+
+<!-- 行2 -->
+<div class="r-grid mb-3">
+    <div class="card">
+        <div class="card-hd"><span><i class="fas fa-microchip"></i> CPU 详情</span></div>
+        <div class="card-bd">
+            <div class="mt-row"><span class="mt-label">使用率</span><span class="mt-value" id="cpuDetailPct">--%</span></div>
+            <div class="mt-bar mb-2"><div class="mt-bar-fill" id="cpuBar" style="width:0%"></div></div>
+            <div class="collapse-wrap" id="cpuCollapse">
+                <div class="mt-row"><span class="mt-label">物理核心</span><span class="mt-value" id="cpuCores">--</span></div>
+                <div class="mt-row"><span class="mt-label">逻辑核心</span><span class="mt-value" id="cpuLogical">--</span></div>
+                <div class="mt-row"><span class="mt-label">1min 负载</span><span class="mt-value" id="cpuLoad1">--</span></div>
+                <div class="mt-row"><span class="mt-label">5min 负载</span><span class="mt-value" id="cpuLoad5">--</span></div>
+                <div class="mt-row"><span class="mt-label">15min 负载</span><span class="mt-value" id="cpuLoad15">--</span></div>
+                <div class="mt-row"><span class="mt-label">频率</span><span class="mt-value" id="cpuFreq">-- MHz</span></div>
+                <div class="mt-row"><span class="mt-label">进程数</span><span class="mt-value" id="procCount">--</span></div>
+                <div class="mt-label mb-1" style="margin-top:8px;font-size:12px;">各核心使用率</div>
+                <div class="cpu-cores" id="cpuCoresContainer"></div>
+            </div>
+            <div class="collapse-toggle mt-2" onclick="toggleCollapse('cpuCollapse', this)"><i class="fas fa-chevron-down"></i> 展开详情</div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-hd"><span><i class="fas fa-memory"></i> 内存详情</span></div>
+        <div class="card-bd">
+            <div class="mt-row"><span class="mt-label">使用率</span><span class="mt-value" id="memDetailPct">--%</span></div>
+            <div class="mt-bar mb-2"><div class="mt-bar-fill" id="memBar" style="width:0%"></div></div>
+            <div class="collapse-wrap" id="memCollapse">
+                <div class="mt-row"><span class="mt-label">总量</span><span class="mt-value" id="memTotal">--</span></div>
+                <div class="mt-row"><span class="mt-label">已用</span><span class="mt-value" id="memUsed">--</span></div>
+                <div class="mt-row"><span class="mt-label">可用</span><span class="mt-value" id="memAvail">--</span></div>
+                <div class="mt-row" style="border-top:1px dashed #e0e4ea;margin-top:6px;padding-top:7px;"><span class="mt-label">SWAP 使用率</span><span class="mt-value" id="swapPct">--%</span></div>
+                <div class="mt-bar mb-2"><div class="mt-bar-fill" id="swapBar" style="width:0%"></div></div>
+                <div class="mt-row"><span class="mt-label">SWAP 已用</span><span class="mt-value" id="swapUsed">--</span></div>
+                <div class="mt-row"><span class="mt-label">SWAP 总量</span><span class="mt-value" id="swapTotal">--</span></div>
+            </div>
+            <div class="collapse-toggle mt-2" onclick="toggleCollapse('memCollapse', this)"><i class="fas fa-chevron-down"></i> 展开详情</div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-hd"><span><i class="fas fa-hdd"></i> 磁盘详情</span></div>
+        <div class="card-bd">
+            <div class="mt-row"><span class="mt-label">使用率</span><span class="mt-value" id="diskDetailPct">--%</span></div>
+            <div class="mt-bar mb-2"><div class="mt-bar-fill" id="diskBar" style="width:0%"></div></div>
+            <div class="collapse-wrap" id="diskCollapse">
+                <div class="mt-row"><span class="mt-label">总量</span><span class="mt-value" id="diskTotal">--</span></div>
+                <div class="mt-row"><span class="mt-label">已用</span><span class="mt-value" id="diskUsed">--</span></div>
+                <div class="mt-row"><span class="mt-label">可用</span><span class="mt-value" id="diskFree">--</span></div>
+                <div class="mt-label mb-1" style="margin-top:10px;font-size:12px;">分区详情</div>
+                <div id="partitionList"></div>
+            </div>
+            <div class="collapse-toggle mt-2" onclick="toggleCollapse('diskCollapse', this)"><i class="fas fa-chevron-down"></i> 展开详情</div>
+        </div>
+    </div>
+</div>
+
+<!-- 行3 -->
+<div class="r-grid mb-3">
+    <div class="card">
+        <div class="card-hd"><span><i class="fas fa-network-wired"></i> 网络流量</span></div>
+        <div class="card-bd">
+            <div class="d-flex" style="gap:12px;">
+                <div class="net-item"><div class="l">上传</div><div class="v" id="netSent">--</div></div>
+                <div class="net-item"><div class="l">下载</div><div class="v" id="netRecv">--</div></div>
+            </div>
+            <div class="collapse-toggle mt-2" onclick="toggleCollapse('netConnCollapse', this)"><i class="fas fa-chevron-down"></i> 连接详情</div>
+            <div class="collapse-wrap" id="netConnCollapse">
+                <div class="mt-row"><span class="mt-label">总连接数</span><span class="mt-value" id="connTotal">--</span></div>
+                <div class="mt-row"><span class="mt-label">ESTABLISHED</span><span class="mt-value" id="connEst">--</span></div>
+                <div class="mt-row"><span class="mt-label">LISTEN</span><span class="mt-value" id="connListen">--</span></div>
+                <div class="mt-row"><span class="mt-label">TIME_WAIT</span><span class="mt-value" id="connTW">--</span></div>
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-hd"><span><i class="fas fa-database"></i> 磁盘 I/O</span></div>
+        <div class="card-bd">
+            <div class="d-flex" style="gap:12px;">
+                <div class="net-item"><div class="l">读取</div><div class="v" id="ioRead">--</div></div>
+                <div class="net-item"><div class="l">写入</div><div class="v" id="ioWrite">--</div></div>
+            </div>
+            <div style="margin-top:8px;display:flex;gap:12px;justify-content:center;font-size:12px;color:var(--text-muted);">
+                <span>读取次数: <strong id="ioReadCount" class="text-dark">--</strong></span>
+                <span>写入次数: <strong id="ioWriteCount" class="text-dark">--</strong></span>
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-hd"><span><i class="fas fa-shield-alt"></i> 证书信息</span></div>
+        <div class="card-bd">
+            <div class="mt-row"><span class="mt-label">到期时间</span><span class="mt-value" id="certExpire">--</span></div>
+            <div class="mt-row"><span class="mt-label">剩余天数</span><span class="mt-value" id="certDays">--</span></div>
+            <div class="mt-bar mb-2"><div class="mt-bar-fill" id="certBar" style="width:0%"></div></div>
+            <div class="mt-row"><span class="mt-label">颁发者</span><span class="mt-value" id="certIssuer" style="font-size:12px;">--</span></div>
+            <button class="btn btn-sm btn-outline-primary mt-1" onclick="renewCert()"><i class="fas fa-sync-alt"></i> 手动续签</button>
+            <span id="certMsg" class="ms-2" style="font-size:12px;"></span>
+        </div>
+    </div>
+</div>
+
+<!-- 行4 -->
+<div class="r-grid mb-3">
+    <div class="card">
+        <div class="card-hd"><span><i class="fas fa-file-alt"></i> 系统日志</span></div>
+        <div class="card-bd">
+            <div id="logList"></div>
+            <div class="collapse-wrap" id="logCollapse"><div id="logListAll" style="margin-top:6px;"></div></div>
+            <div class="collapse-toggle mt-2" onclick="toggleCollapse('logCollapse', this)"><i class="fas fa-chevron-down"></i> 查看所有日志</div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-hd"><span><i class="fas fa-clock"></i> 定时任务</span></div>
+        <div class="card-bd">
+            <div id="cronList"></div>
+            <div class="collapse-wrap" id="cronCollapse"><div id="cronListAll" style="margin-top:6px;"></div></div>
+            <div class="collapse-toggle mt-2" onclick="toggleCollapse('cronCollapse', this)"><i class="fas fa-chevron-down"></i> 查看所有任务</div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-hd"><span><i class="fas fa-plug"></i> 监听端口</span></div>
+        <div class="card-bd">
+            <div id="portList"></div>
+            <div class="collapse-wrap" id="portCollapse"><div id="portListAll" style="margin-top:6px;"></div></div>
+            <div class="collapse-toggle mt-2" onclick="toggleCollapse('portCollapse', this)"><i class="fas fa-chevron-down"></i> 查看全部端口</div>
+        </div>
+    </div>
+</div>
+
+<!-- 行5 -->
+<div class="r-grid mb-3">
+    <div class="card">
+        <div class="card-hd"><span><i class="fas fa-archive"></i> 备份管理</span></div>
+        <div class="card-bd">
+            <div class="d-flex" style="gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+                <button class="btn btn-sm btn-outline-primary" onclick="backupCreate('system')"><i class="fas fa-code"></i> 备份系统</button>
+                <button class="btn btn-sm btn-outline-success" onclick="backupCreate('data')"><i class="fas fa-database"></i> 备份数据库</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="backupCreate('full')"><i class="fas fa-box"></i> 完整备份</button>
+                <button class="btn btn-sm btn-outline-info" onclick="backupList()"><i class="fas fa-sync-alt"></i> 刷新列表</button>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">最近备份：</div>
+            <div id="backupFileList" style="max-height:180px;overflow-y:auto;"></div>
+            <div id="backupMsg" style="font-size:12px;margin-top:6px;"></div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-hd"><span><i class="fas fa-heartbeat"></i> 系统健康</span></div>
+        <div class="card-bd">
+            <div class="health-bar mb-2">
+                <div class="health-item"><div class="v" id="backupStat">--</div><div class="l">备份</div><div class="s" id="backupSub"></div></div>
+                <div class="health-item"><div class="v" id="svcStat">--</div><div class="l">服务</div><div class="s" id="svcSub"></div></div>
+                <div class="health-item"><div class="v" id="updateStat">--</div><div class="l">更新</div><div class="s" id="updateSub"></div></div>
+                <div class="health-item"><div class="v" id="sshStat">--</div><div class="l">SSH失败</div><div class="s" id="sshSub"></div></div>
+            </div>
+            <div class="collapse-toggle mt-1" onclick="toggleCollapse('errorCollapse', this)"><i class="fas fa-chevron-down"></i> 最近错误日志</div>
+            <div class="collapse-wrap" id="errorCollapse"><div id="errorList" style="margin-top:6px;font-size:12px;font-family:monospace;max-height:200px;overflow-y:auto;"></div></div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-hd"><span><i class="fas fa-chart-bar"></i> 网络连接</span></div>
+        <div class="card-bd">
+            <div class="health-bar">
+                <div class="health-item"><div class="v" id="connTotalNm">--</div><div class="l">总计</div></div>
+                <div class="health-item"><div class="v" id="connEstNm">--</div><div class="l">已建立</div></div>
+                <div class="health-item"><div class="v" id="connListenNm">--</div><div class="l">监听中</div></div>
+                <div class="health-item"><div class="v" id="connTWNm">--</div><div class="l">等待关闭</div></div>
+            </div>
+            <div class="mt-row" style="margin-top:10px;"><span class="mt-label">进程数</span><span class="mt-value" id="procCountCard">--</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- 二次确认弹窗 -->
+<div id="verifyModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;background:rgba(0,0,0,.45);align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:12px;padding:28px 32px 20px;width:360px;max-width:90vw;box-shadow:0 8px 40px rgba(0,0,0,.2);">
+        <div style="font-size:16px;font-weight:600;margin-bottom:4px;">⚠️ 确认恢复备份</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;" id="verifyModalDesc">此操作将覆盖当前数据</div>
+        <div style="margin-bottom:10px;">
+            <label style="font-size:12px;color:var(--text-muted);font-weight:500;">管理员账号</label>
+            <input id="verifyUser" class="form-control form-control-sm" placeholder="输入账号">
+        </div>
+        <div style="margin-bottom:16px;">
+            <label style="font-size:12px;color:var(--text-muted);font-weight:500;">密码</label>
+            <input id="verifyPass" type="password" class="form-control form-control-sm" placeholder="输入密码">
+        </div>
+        <div id="verifyError" style="font-size:12px;color:#ef4444;margin-bottom:8px;display:none;"></div>
+        <div class="d-flex justify-content-end" style="gap:8px;">
+            <button class="btn btn-sm btn-outline-secondary" onclick="closeVerifyModal()">取消</button>
+            <button class="btn btn-sm btn-danger" id="verifySubmitBtn" onclick="submitVerify()"><i class="fas fa-check"></i> 确认恢复</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block extra_scripts %}
+<script>
+function barClass(pct) {
+    if (pct < 50) return 'green';
+    if (pct < 75) return 'yellow';
+    if (pct < 90) return 'orange';
+    return 'red';
+}
+function toggleCollapse(id, btn) {
+    var wrap = document.getElementById(id);
+    if (btn.classList.contains('open')) {
+        wrap.style.maxHeight = '0';
+        btn.innerHTML = '<i class="fas fa-chevron-down"></i> 展开详情';
+        btn.classList.remove('open');
+    } else {
+        wrap.style.maxHeight = '800px';
+        btn.innerHTML = '<i class="fas fa-chevron-up"></i> 收起';
+        btn.classList.add('open');
+    }
+}
+function loadData() {
+    fetch('/monitor/data').then(function(r) { return r.json(); }).then(function(d) {
+        // CPU
+        document.getElementById('cpuStat').textContent = d.cpu.percent + '%';
+        document.getElementById('cpuSub').textContent = d.cpu.count + '核 / 负载 ' + d.cpu.load_1;
+        document.getElementById('cpuDetailPct').textContent = d.cpu.percent + '%';
+        var cb = document.getElementById('cpuBar');
+        cb.style.width = d.cpu.percent + '%';
+        cb.className = 'mt-bar-fill ' + barClass(d.cpu.percent);
+        document.getElementById('cpuCores').textContent = d.cpu.count;
+        document.getElementById('cpuLogical').textContent = d.cpu.count_logical;
+        document.getElementById('cpuLoad1').textContent = d.cpu.load_1;
+        document.getElementById('cpuLoad5').textContent = d.cpu.load_5;
+        document.getElementById('cpuLoad15').textContent = d.cpu.load_15;
+        document.getElementById('cpuFreq').textContent = d.cpu.freq_current + ' / ' + d.cpu.freq_max + ' MHz';
+        document.getElementById('procCount').textContent = d.process_count;
+        var cc = document.getElementById('cpuCoresContainer');
+        cc.innerHTML = d.cpu.per_core.map(function(p, i) {
+            return '<div class="cpu-core" style="background:' + (p < 30 ? '#e0f2fe;color:#0369a1' : p < 60 ? '#fef9c3;color:#a16207' : p < 80 ? '#fed7aa;color:#c2410c' : '#fecaca;color:#b91c1c') + '">C' + i + ' ' + p + '%</div>';
+        }).join('');
+        // 内存
+        document.getElementById('memStat').textContent = d.memory.percent + '%';
+        document.getElementById('memSub').textContent = d.memory.used_fmt + ' / ' + d.memory.total_fmt;
+        document.getElementById('memDetailPct').textContent = d.memory.percent + '%';
+        var mb = document.getElementById('memBar');
+        mb.style.width = d.memory.percent + '%';
+        mb.className = 'mt-bar-fill ' + barClass(d.memory.percent);
+        document.getElementById('memTotal').textContent = d.memory.total_fmt;
+        document.getElementById('memUsed').textContent = d.memory.used_fmt;
+        document.getElementById('memAvail').textContent = d.memory.available_fmt;
+        document.getElementById('swapPct').textContent = d.memory.swap_percent + '%';
+        var sb = document.getElementById('swapBar');
+        sb.style.width = (d.memory.swap_percent || 0) + '%';
+        sb.className = 'mt-bar-fill ' + barClass(d.memory.swap_percent || 0);
+        document.getElementById('swapUsed').textContent = d.memory.swap_used_fmt;
+        document.getElementById('swapTotal').textContent = d.memory.swap_total_fmt;
+        // 磁盘
+        document.getElementById('diskStat').textContent = d.disk.percent + '%';
+        document.getElementById('diskSub').textContent = d.disk.used_fmt + ' / ' + d.disk.total_fmt;
+        document.getElementById('diskDetailPct').textContent = d.disk.percent + '%';
+        var db = document.getElementById('diskBar');
+        db.style.width = d.disk.percent + '%';
+        db.className = 'mt-bar-fill ' + barClass(d.disk.percent);
+        document.getElementById('diskTotal').textContent = d.disk.total_fmt;
+        document.getElementById('diskUsed').textContent = d.disk.used_fmt;
+        document.getElementById('diskFree').textContent = d.disk.free_fmt;
+        var pl = document.getElementById('partitionList');
+        pl.innerHTML = d.disk.partitions.map(function(p) {
+            var pc = barClass(p.percent);
+            return '<div class="partition-row"><div class="d-flex justify-content-between align-items-center"><span class="fw-semibold" style="font-size:13px;">' + p.device + '</span><span style="font-size:13px;font-weight:600;">' + p.percent + '%</span></div><div style="font-size:11px;color:var(--text-muted);">挂载: ' + p.mount + ' · ' + p.fstype + '</div><div class="mt-bar" style="height:6px;margin-top:4px;"><div class="mt-bar-fill ' + pc + '" style="width:' + p.percent + '%"></div></div><div style="font-size:11px;color:var(--text-muted);">' + p.used_fmt + ' / ' + p.total_fmt + '</div></div>';
+        }).join('');
+        // 运行时间
+        document.getElementById('uptimeStat').textContent = d.uptime.fmt;
+        document.getElementById('uptimeSub').textContent = '启动: ' + d.uptime.boot_time;
+        // 网络 / IO
+        document.getElementById('netSent').textContent = d.net.sent_fmt;
+        document.getElementById('netRecv').textContent = d.net.recv_fmt;
+        if (d.disk_io) {
+            document.getElementById('ioRead').textContent = d.disk_io.read_fmt;
+            document.getElementById('ioWrite').textContent = d.disk_io.write_fmt;
+            document.getElementById('ioReadCount').textContent = d.disk_io.read_count;
+            document.getElementById('ioWriteCount').textContent = d.disk_io.write_count;
+        }
+        document.getElementById('refreshTime').textContent = '最后刷新: ' + d.ts;
+        // 证书
+        if (d.cert && d.cert.valid) {
+            document.getElementById('certExpire').textContent = d.cert.expire_date;
+            document.getElementById('certDays').textContent = d.cert.days_left + ' 天';
+            var cdBar = document.getElementById('certBar');
+            var cdPct = Math.min(100, Math.max(0, (1 - d.cert.days_left / 90) * 100));
+            cdBar.style.width = cdPct + '%';
+            cdBar.className = 'mt-bar-fill ' + (d.cert.days_left > 30 ? 'green' : d.cert.days_left > 14 ? 'yellow' : 'red');
+            document.getElementById('certIssuer').textContent = d.cert.issuer || '--';
+        } else {
+            document.getElementById('certExpire').textContent = '无证书';
+            document.getElementById('certDays').textContent = '--';
+        }
+        // 日志
+        if (d.logs) {
+            var topLogs = d.logs.slice(0, 4);
+            document.getElementById('logList').innerHTML = topLogs.map(function(l) {
+                var sizeClass = l.size > 50*1024*1024 ? 'text-danger' : l.size > 10*1024*1024 ? 'text-warning' : '';
+                var cleanBtn = l.path.endsWith('.log') && l.exists ? '<button class="btn btn-sm btn-outline-danger ms-1 py-0 px-1" style="font-size:10px;line-height:1.5;" onclick="cleanLog(\'' + l.path + '\',this)"><i class="fas fa-trash-alt"></i></button>' : '';
+                return '<div class="mt-row"><span class="mt-label">' + l.name + '</span><span class="mt-value ' + sizeClass + '">' + l.size_fmt + cleanBtn + '</span></div>';
+            }).join('');
+            document.getElementById('logListAll').innerHTML = d.logs.map(function(l) {
+                var sizeClass = l.size > 50*1024*1024 ? 'text-danger' : l.size > 10*1024*1024 ? 'text-warning' : '';
+                var cleanBtn = l.path.endsWith('.log') && l.exists ? '<button class="btn btn-sm btn-outline-danger ms-1 py-0 px-1" style="font-size:10px;line-height:1.5;" onclick="cleanLog(\'' + l.path + '\',this)"><i class="fas fa-trash-alt"></i> 清理</button>' : '';
+                return '<div class="mt-row"><span class="mt-label" style="font-size:12px;">' + l.name + '</span><span class="mt-value ' + sizeClass + '" style="font-size:12px;">' + l.size_fmt + cleanBtn + '</span></div><div style="font-size:11px;color:var(--text-muted);padding:0 0 4px 0;">' + l.path + ' · ' + l.mtime + '</div>';
+            }).join('');
+        }
+        // 定时任务
+        if (d.cron_jobs && d.cron_jobs.length > 0) {
+            var topCron = d.cron_jobs.slice(0, 3);
+            document.getElementById('cronList').innerHTML = topCron.map(function(c) {
+                var statusClass = c.last_run && c.last_run !== '-' ? 'text-success' : 'text-muted';
+                return '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #f1f5f9;"><div><strong>' + c.desc + '</strong></div><div style="color:var(--text-muted);font-size:11px;">上次: <span class="' + statusClass + '">' + (c.last_run || '-') + '</span></div></div>';
+            }).join('');
+            document.getElementById('cronListAll').innerHTML = d.cron_jobs.map(function(c) {
+                var statusClass = c.last_run && c.last_run !== '-' ? 'text-success' : 'text-muted';
+                return '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #f1f5f9;"><div><strong>' + c.desc + '</strong></div><div style="color:var(--text-muted);font-size:11px;">' + c.cmd + '</div><div style="color:var(--text-muted);font-size:11px;">上次: <span class="' + statusClass + '">' + (c.last_run || '-') + '</span></div></div>';
+            }).join('');
+        } else {
+            document.getElementById('cronList').innerHTML = '<div style="font-size:12px;color:var(--text-muted);">暂无定时任务</div>';
+        }
+        // 系统健康
+        if (d.backup && d.backup.exists) {
+            document.getElementById('backupStat').textContent = d.backup.age;
+            document.getElementById('backupSub').textContent = d.backup.size_fmt;
+        } else {
+            document.getElementById('backupStat').textContent = '⚠';
+            document.getElementById('backupSub').textContent = '无备份';
+        }
+        if (d.services) {
+            var ok = d.services.filter(function(s) { return s.ok; }).length;
+            var total = d.services.length;
+            document.getElementById('svcStat').textContent = ok + '/' + total;
+            document.getElementById('svcSub').textContent = d.services.map(function(s) { return s.name + (s.ok ? ' ✓' : ' ✗'); }).join(' · ');
+        }
+        if (d.updates !== undefined) {
+            document.getElementById('updateStat').textContent = d.updates + ' 个';
+            document.getElementById('updateSub').textContent = (d.security > 0 ? '含' + d.security + '个安全' : (d.updates > 0 ? '有更新' : '已是最新'));
+            document.getElementById('updateStat').style.color = d.security > 0 ? '#ef4444' : d.updates > 0 ? '#f97316' : '';
+        }
+        if (d.ssh_fails !== undefined) {
+            document.getElementById('sshStat').textContent = d.ssh_fails + ' 次';
+            document.getElementById('sshSub').textContent = '累计失败登录';
+            document.getElementById('sshStat').style.color = d.ssh_fails > 100 ? '#ef4444' : d.ssh_fails > 10 ? '#f97316' : '';
+        }
+        // 最近错误
+        if (d.recent_errors && d.recent_errors.length > 0) {
+            document.getElementById('errorList').innerHTML = d.recent_errors.map(function(e) {
+                return '<div style="padding:2px 0;color:#ef4444;">' + e.replace(/</g, '&lt;') + '</div>';
+            }).join('');
+        } else {
+            document.getElementById('errorList').innerHTML = '<div style="color:var(--text-muted);">暂无错误记录 ✓</div>';
+        }
+        // 网络连接详情
+        if (d.net_conns) {
+            document.getElementById('connTotal').textContent = d.net_conns.total;
+            document.getElementById('connEst').textContent = d.net_conns.established;
+            document.getElementById('connListen').textContent = d.net_conns.listen;
+            document.getElementById('connTW').textContent = d.net_conns.time_wait;
+            document.getElementById('connTotalNm').textContent = d.net_conns.total;
+            document.getElementById('connEstNm').textContent = d.net_conns.established;
+            document.getElementById('connListenNm').textContent = d.net_conns.listen;
+            document.getElementById('connTWNm').textContent = d.net_conns.time_wait;
+        }
+        document.getElementById('procCountCard').textContent = d.process_count;
+        // 监听端口
+        if (d.listen_ports && d.listen_ports.length > 0) {
+            var topPorts = d.listen_ports.slice(0, 5);
+            document.getElementById('portList').innerHTML = topPorts.map(function(p) {
+                return '<div class="mt-row"><span class="mt-label">' + p.proto + '/' + p.port + '</span><span class="mt-value" style="font-size:12px;">' + p.proc + '</span></div>';
+            }).join('');
+            document.getElementById('portListAll').innerHTML = d.listen_ports.map(function(p) {
+                return '<div class="mt-row"><span class="mt-label">' + p.proto + '/' + p.port + '</span><span class="mt-value" style="font-size:12px;">' + p.proc + (p.pid ? ' (PID ' + p.pid + ')' : '') + '</span></div>';
+            }).join('');
+        } else {
+            document.getElementById('portList').innerHTML = '<div style="font-size:12px;color:var(--text-muted);">暂无监听端口</div>';
+        }
+    }).catch(function(e) { console.error('Monitor data error:', e); }).then(function() { backupList(); });
+}
+
+// ---- 备份管理 ----
+function backupCreate(type) {
+    var labels = {system:'系统', data:'数据', full:'完整'};
+    var btn = document.querySelector('button[onclick="backupCreate(\'' + type + '\')"]');
+    btn.disabled = true; var orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 备份中...';
+    document.getElementById('backupMsg').innerHTML = '';
+    fetch('/monitor/backup-create', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type:type})})
+        .then(function(r) { return r.json(); }).then(function(d) {
+            document.getElementById('backupMsg').innerHTML = '<span class="' + (d.success?'text-success':'text-danger') + '">' + d.msg + '</span>';
+            if (d.success) backupList();
+        }).catch(function(e) { document.getElementById('backupMsg').innerHTML = '<span class="text-danger">请求失败</span>'; })
+        .finally(function() { btn.disabled = false; btn.innerHTML = orig; });
+}
+function backupList() {
+    fetch('/monitor/backup-list').then(function(r) { return r.json(); }).then(function(d) {
+        var list = document.getElementById('backupFileList');
+        if (!d.backups || d.backups.length === 0) { list.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">暂无备份文件</div>'; return; }
+        var tl = {system:'系统', data:'数据', full:'完整'};
+        list.innerHTML = d.backups.slice(0,10).map(function(b) {
+            var t = tl[b.type] || b.type;
+            var rBtn = '<button class="btn btn-sm btn-outline-danger py-0 px-1 ms-1" style="font-size:10px;line-height:1.5;" onclick="backupRestore(\'' + b.name + '\',\'' + t + '\')"><i class="fas fa-undo"></i></button>';
+            var dBtn = '<button class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1" style="font-size:10px;line-height:1.5;" onclick="backupDelete(\'' + b.name + '\')"><i class="fas fa-times"></i></button>';
+            return '<div class="mt-row" style="padding:3px 0;"><span><span class="badge bg-secondary" style="font-size:9px;font-weight:400;">' + t + '</span> ' + b.name.slice(0,24) + '</span><span style="font-size:11px;color:var(--text-muted);">' + b.size_fmt + dBtn + rBtn + '</span></div>';
+        }).join('');
+    });
+}
+function backupRestore(name, label) {
+    document.getElementById('verifyModalDesc').textContent = '确认恢复 ' + label + ' 备份【' + name + '】？\n当前数据将被覆盖';
+    document.getElementById('verifyModal').style.display = 'flex';
+    document.getElementById('verifyUser').value = '';
+    document.getElementById('verifyPass').value = '';
+    document.getElementById('verifyError').style.display = 'none';
+    document.getElementById('verifyModal').dataset.name = name;
+    document.getElementById('verifyModal').dataset.label = label;
+    document.getElementById('verifyUser').focus();
+}
+function closeVerifyModal() {
+    document.getElementById('verifyModal').style.display = 'none';
+}
+function submitVerify() {
+    var name = document.getElementById('verifyModal').dataset.name;
+    var user = document.getElementById('verifyUser').value.trim();
+    var pass = document.getElementById('verifyPass').value;
+    if (!user || !pass) {
+        document.getElementById('verifyError').textContent = '请输入账号和密码';
+        document.getElementById('verifyError').style.display = 'block';
+        return;
+    }
+    document.getElementById('verifySubmitBtn').disabled = true;
+    document.getElementById('verifySubmitBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> 验证中...';
+    document.getElementById('verifyError').style.display = 'none';
+    var label = document.getElementById('verifyModal').dataset.label;
+    fetch('/monitor/backup-restore', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:name, username:user, password:pass})})
+        .then(function(r) { return r.json(); }).then(function(d) {
+            document.getElementById('backupMsg').innerHTML = '<span class="' + (d.success?'text-success':'text-danger') + '">' + d.msg + '</span>';
+            closeVerifyModal();
+        }).catch(function(e) { document.getElementById('backupMsg').innerHTML = '<span class="text-danger">请求失败</span>'; closeVerifyModal(); })
+        .finally(function() {
+            document.getElementById('verifySubmitBtn').disabled = false;
+            document.getElementById('verifySubmitBtn').innerHTML = '<i class="fas fa-check"></i> 确认恢复';
+        });
+}
+function backupDelete(name) {
+    if (!confirm('确认删除备份【' + name + '】？')) return;
+    fetch('/monitor/backup-delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:name})})
+        .then(function(r) { return r.json(); }).then(function(d) {
+            document.getElementById('backupMsg').innerHTML = '<span class="' + (d.success?'text-success':'text-danger') + '">' + d.msg + '</span>';
+            if (d.success) backupList();
+        });
+}
+
+// ---- 证书 ----
+function renewCert() {
+    if (!confirm('确认手动续签SSL证书？')) return;
+    var btn = document.querySelector('button[onclick="renewCert()"]');
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 续签中...';
+    document.getElementById('certMsg').textContent = '';
+    fetch('/monitor/renew-cert', {method:'POST'}).then(function(r) { return r.json(); }).then(function(d) {
+        document.getElementById('certMsg').textContent = d.msg;
+        document.getElementById('certMsg').className = 'ms-2 ' + (d.success ? 'text-success' : 'text-danger');
+        if (d.success) setTimeout(loadData, 2000);
+    }).catch(function(e) {
+        document.getElementById('certMsg').textContent = '请求失败';
+        document.getElementById('certMsg').className = 'ms-2 text-danger';
+    }).finally(function() { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> 手动续签'; });
+}
+function cleanLog(path, btn) {
+    if (!confirm('确认清理该日志文件？')) return;
+    btn.disabled = true; var orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    fetch('/monitor/clean-log', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path: path})})
+        .then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) { loadData(); } else { alert(d.msg); }
+        }).catch(function(e) { alert('请求失败'); })
+        .finally(function() { if (btn) btn.disabled = false; });
+}
+loadData();
+</script>
+{% endblock %}

@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}自定义报表{% endblock %}
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    .report-card { background:#fff; border-radius:16px; border:1px solid #e2e8f0; padding:20px; margin-bottom:16px; }
+    body[data-theme="dark"] .report-card { background:#1e293b; border-color:#334155; }
+    .report-card .card-title { font-size:15px; font-weight:600; color:#1e293b; margin-bottom:12px; }
+    body[data-theme="dark"] .report-card .card-title { color:#e2e8f0; }
+    .param-group { margin-bottom:12px; }
+    .param-group label { font-size:12px; font-weight:500; color:#64748b; margin-bottom:4px; }
+    #resultArea { display:none; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold mb-0"><i class="fas fa-chart-simple me-2 text-primary"></i>自定义报表</h4>
+        <small class="text-muted">多维度工单统计报表</small>
+    </div>
+
+    <div class="row g-3">
+        <!-- 参数配置 -->
+        <div class="col-lg-3">
+            <div class="report-card">
+                <div class="card-title"><i class="fas fa-sliders-h me-1 text-primary"></i> 报表参数</div>
+                <div class="param-group">
+                    <label>时间范围</label>
+                    <select class="form-select form-select-sm" id="timeRange">
+                        <option value="week">本周</option>
+                        <option value="month" selected>本月</option>
+                        <option value="quarter">本季度</option>
+                        <option value="year">今年</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                </div>
+                <div class="param-group" id="customDateGroup" style="display:none;">
+                    <label>开始日期</label>
+                    <input type="date" class="form-control form-control-sm" id="startDate">
+                    <label class="mt-2">结束日期</label>
+                    <input type="date" class="form-control form-control-sm" id="endDate">
+                </div>
+                <div class="param-group">
+                    <label>统计维度</label>
+                    <select class="form-select form-select-sm" id="dimension">
+                        <option value="department">按科室</option>
+                        <option value="fault_type">按故障类型</option>
+                        <option value="device_type">按设备类型</option>
+                        <option value="person">按处理人</option>
+                        <option value="priority">按优先级</option>
+                    </select>
+                </div>
+                <div class="param-group">
+                    <label>指标</label>
+                    <select class="form-select form-select-sm" id="metric">
+                        <option value="count">工单数</option>
+                        <option value="completion_rate">完成率</option>
+                        <option value="avg_duration">平均处理时长</option>
+                        <option value="overdue_count">超时数</option>
+                    </select>
+                </div>
+                <div class="param-group">
+                    <label>图表类型</label>
+                    <select class="form-select form-select-sm" id="chartType">
+                        <option value="bar">柱状图</option>
+                        <option value="line">折线图</option>
+                        <option value="pie">饼图</option>
+                        <option value="table">表格</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary w-100 mt-3" onclick="generateReport()">
+                    <i class="fas fa-chart-bar me-1"></i> 生成报表
+                </button>
+            </div>
+        </div>
+
+        <!-- 结果展示 -->
+        <div class="col-lg-9">
+            <div id="resultArea">
+                <div class="report-card" id="chartCard">
+                    <div class="card-title"><i class="fas fa-chart-bar me-1 text-primary"></i> <span id="chartTitle">报表</span></div>
+                    <div style="height:350px;"><canvas id="reportChart"></canvas></div>
+                </div>
+                <div class="report-card" id="tableCard">
+                    <div class="card-title"><i class="fas fa-table me-1 text-primary"></i> 数据明细</div>
+                    <div class="table-responsive" style="max-height:400px;overflow-y:auto;">
+                        <table class="table table-hover table-clean mb-0 small" id="reportTable">
+                            <thead><tr><th>维度</th><th>数值</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div id="placeholderArea" class="text-center py-5 text-muted">
+                <i class="fas fa-chart-pie fa-3x mb-3" style="opacity:0.3;"></i>
+                <div>选择参数并点击「生成报表」</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let reportChart = null;
+
+document.getElementById('timeRange').addEventListener('change', function() {
+    document.getElementById('customDateGroup').style.display = this.value === 'custom' ? 'block' : 'none';
+});
+
+function generateReport() {
+    const params = {
+        time_range: document.getElementById('timeRange').value,
+        dimension: document.getElementById('dimension').value,
+        metric: document.getElementById('metric').value,
+        chart_type: document.getElementById('chartType').value,
+        start_date: document.getElementById('startDate').value,
+        end_date: document.getElementById('endDate').value,
+    };
+
+    fetch('/feature/report-builder/generate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(params)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) {
+            showToast('❌ 生成失败', 'error');
+            return;
+        }
+
+        document.getElementById('placeholderArea').style.display = 'none';
+        document.getElementById('resultArea').style.display = 'block';
+
+        const chart = data.chart;
+        const dimName = chart.dimension_name || '维度';
+        const metricNames = {'count':'工单数','completion_rate':'完成率(%)','avg_duration':'平均处理时长(h)','overdue_count':'超时数'};
+        document.getElementById('chartTitle').textContent = dimName + ' - ' + (metricNames[chart.metric_name] || '统计');
+
+        const ctx = document.getElementById('reportChart').getContext('2d');
+        if (reportChart) reportChart.destroy();
+
+        const colors = ['#4f46e5','#3b82f6','#06b6d4','#22c55e','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316'];
+
+        if (chart.type === 'pie') {
+            reportChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: chart.labels,
+                    datasets: [{
+                        data: chart.values,
+                        backgroundColor: colors.slice(0, chart.labels.length),
+                        borderWidth: 2,
+                        borderColor: '#fff',
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { boxWidth: 12, padding: 12 } }
+                    }
+                }
+            });
+        } else {
+            reportChart = new Chart(ctx, {
+                type: chart.type === 'line' ? 'line' : 'bar',
+                data: {
+                    labels: chart.labels,
+                    datasets: [{
+                        label: dimName,
+                        data: chart.values,
+                        backgroundColor: colors.slice(0, chart.labels.length).map(c => c + '99'),
+                        borderColor: '#4f46e5',
+                        borderWidth: chart.type === 'line' ? 2 : 0,
+                        fill: chart.type === 'line',
+                        tension: 0.3,
+                        pointRadius: chart.type === 'line' ? 4 : 0,
+                        borderRadius: 4,
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: chart.type === 'line' } },
+                    scales: {
+                        x: { grid: { display: chart.type !== 'line' } },
+                        y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } }
+                    }
+                }
+            });
+        }
+
+        // 表格
+        const tbody = document.querySelector('#reportTable tbody');
+        if (chart.type === 'table') {
+            document.getElementById('chartCard').style.display = 'none';
+        } else {
+            document.getElementById('chartCard').style.display = 'block';
+        }
+        tbody.innerHTML = data.table.map(row => `
+            <tr>
+                <td>${row.label}</td>
+                <td><strong>${chart.metric_name === 'completion_rate' ? row.value.toFixed(1) + '%' : row.value.toFixed(1)}</strong></td>
+            </tr>
+        `).join('');
+    })
+    .catch(err => {
+        showToast('❌ 网络错误', 'error');
+    });
+}
+</script>
+{% endblock %}

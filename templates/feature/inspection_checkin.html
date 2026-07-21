@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}扫码签到 - {{ plan.location or '巡检签到' }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('inspection.list_templates') }}">巡检管理</a></li>
+            <li class="breadcrumb-item active">扫码签到</li>
+        </ol>
+    </nav>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card shadow-sm border-0">
+                <div class="card-body text-center p-5">
+                    <div class="mb-4">
+                        <i class="fas fa-qrcode fa-4x text-primary mb-3" style="opacity:0.8;"></i>
+                        <h4 class="fw-bold">扫码签到</h4>
+                        <p class="text-muted">巡检计划签到（替代 NFC 签到）</p>
+                    </div>
+
+                    <div class="text-start bg-light rounded-3 p-3 mb-4">
+                        <div class="row small">
+                            <div class="col-4 text-muted">计划编号</div>
+                            <div class="col-8 fw-medium">#{{ plan.id }}</div>
+                            <div class="col-4 text-muted mt-2">巡检位置</div>
+                            <div class="col-8 fw-medium mt-2">{{ plan.location or plan.building + ' ' + plan.floor + ' ' + plan.department }}</div>
+                            <div class="col-4 text-muted mt-2">计划时间</div>
+                            <div class="col-8 fw-medium mt-2">{{ plan.scheduled_time.strftime('%Y-%m-%d %H:%M') if plan.scheduled_time else '—' }}</div>
+                            <div class="col-4 text-muted mt-2">签到状态</div>
+                            <div class="col-8 fw-medium mt-2">
+                                {% if checkin %}
+                                    <span class="badge bg-success">已签到</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">未签到</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if checkin %}
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            已于 <strong>{{ checkin.checkin_time.strftime('%Y-%m-%d %H:%M:%S') }}</strong> 完成签到
+                            {% if checkin.location %}
+                                <br><small>签到位置: {{ checkin.location }}</small>
+                            {% endif %}
+                        </div>
+                        <button class="btn btn-outline-secondary mt-2" onclick="window.history.back()">
+                            <i class="fas fa-arrow-left me-1"></i> 返回
+                        </button>
+                    {% else %}
+                        <button class="btn btn-primary btn-lg px-5" onclick="doCheckin()" id="checkinBtn">
+                            <i class="fas fa-fingerprint me-2"></i> 点击签到
+                        </button>
+                        <p class="text-muted small mt-3">
+                            <i class="fas fa-info-circle me-1"></i>
+                            点击按钮模拟 NFC 签到，记录签到时间及位置
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function doCheckin() {
+    const btn = document.getElementById('checkinBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> 签到中...';
+
+    fetch('{{ url_for("feature.inspection_checkin_do", task_id=plan.id) }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+        body: JSON.stringify({
+            location: '{{ plan.location or "" }}',
+            remark: '扫码签到'
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('✅ ' + data.message, 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('❌ ' + (data.error || '签到失败'), 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-fingerprint me-2"></i> 点击签到';
+        }
+    })
+    .catch(err => {
+        showToast('❌ 网络错误', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-fingerprint me-2"></i> 点击签到';
+    });
+}
+</script>
+{% endblock %}

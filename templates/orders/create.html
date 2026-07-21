@@ -1,0 +1,822 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+/* ============================================================
+   "Modern Form" 新建工单 — 纯净极简风
+   ============================================================ */
+.cf-wrap {
+  max-width: 960px; margin: 0 auto;
+  --cf-radius: 14px;
+  --cf-glow: 0 0 0 3px rgba(79,70,229,0.12);
+}
+
+/* ── 顶部栏 ── */
+.cf-topbar {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 24px;
+}
+.cf-topbar h4 {
+  margin: 0; font-size: 20px; font-weight: 800;
+  display: flex; align-items: center; gap: 12px; letter-spacing: -0.3px;
+}
+.cf-topbar h4 .cf-plus {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 10px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff; font-size: 14px;
+  box-shadow: 0 3px 12px rgba(102,126,234,0.3);
+}
+.cf-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--text-muted, #94a3b8);
+  text-decoration: none; padding: 8px 14px; border-radius: 10px;
+  transition: all .2s; border: 1px solid transparent;
+}
+.cf-back:hover {
+  border-color: var(--card-border, #e5e7eb);
+  background: var(--card-bg, rgba(255,255,255,0.5));
+  color: var(--text, #1e293b);
+}
+
+/* ── 步骤指示器 ── */
+.cf-steps {
+  display: flex; gap: 0; margin-bottom: 28px;
+  background: var(--card-bg, rgba(255,255,255,0.5));
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--card-border, rgba(229,231,235,0.4));
+  border-radius: 12px; padding: 6px; overflow: hidden;
+}
+.cf-step {
+  flex: 1; display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: 9px; font-size: 12px;
+  font-weight: 500; color: var(--text-muted, #94a3b8);
+  transition: all .2s; cursor: default;
+}
+.cf-step.active {
+  background: linear-gradient(135deg, #667eea12, #764ba212);
+  color: var(--primary, #4f46e5); font-weight: 600;
+}
+.cf-step .step-num {
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; flex-shrink: 0;
+  background: var(--card-border, #e5e7eb); color: var(--text-muted, #94a3b8);
+}
+.cf-step.active .step-num {
+  background: var(--primary, #4f46e5); color: #fff;
+}
+.cf-step-divider {
+  width: 1px; background: var(--card-border, #e5e7eb);
+  align-self: stretch; margin: 4px 0;
+}
+
+/* ── 表单容器 ── */
+.cf-form {
+  display: flex; flex-direction: column; gap: 20px;
+}
+
+/* ── 字段区卡片 ── */
+.cf-section {
+  background: var(--card-bg, rgba(255,255,255,0.6));
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--card-border, rgba(229,231,235,0.4));
+  border-radius: var(--cf-radius);
+  padding: 20px 22px 18px;
+  transition: box-shadow .2s;
+}
+.cf-section:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.03); }
+.cf-section-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.8px; color: var(--text-muted, #94a3b8);
+  margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+}
+.cf-section-title i { font-size: 13px; }
+.cf-section-body {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px 20px;
+}
+.cf-section-body .full { grid-column: 1 / -1; }
+.cf-section-body .half { grid-column: span 2; }
+.cf-section-body .single { grid-column: span 1; }
+@media(max-width:768px) {
+  .cf-section-body { grid-template-columns: 1fr; }
+  .cf-section-body .half { grid-column: 1; }
+}
+
+/* ── 输入框组 ── */
+.cf-field { display: flex; flex-direction: column; gap: 4px; }
+.cf-field label {
+  font-size: 12px; font-weight: 600; color: var(--text-secondary, #475569);
+  display: flex; align-items: center; gap: 5px;
+}
+.cf-field label .required { color: #ef4444; }
+.cf-input-wrap {
+  position: relative; display: flex; align-items: center;
+}
+.cf-input-wrap .cf-icon {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  color: var(--text-muted, #94a3b8); font-size: 13px;
+  pointer-events: none; transition: color .2s; width: 16px; text-align: center;
+}
+.cf-input-wrap:focus-within .cf-icon { color: var(--primary, #4f46e5); }
+
+.cf-input, .cf-select {
+  width: 100%; padding: 10px 14px 10px 36px;
+  border: 1.5px solid var(--card-border, #e5e7eb);
+  border-radius: 10px; font-size: 14px; outline: none;
+  background: var(--set-bg, #fff); color: var(--text, #1e293b);
+  transition: all .2s; font-family: inherit;
+}
+.cf-input:hover, .cf-select:hover { border-color: #cbd5e1; }
+.cf-input:focus, .cf-select:focus {
+  border-color: var(--primary, #4f46e5); box-shadow: var(--cf-glow);
+  background: var(--set-bg, #fff);
+}
+.cf-input::placeholder { color: #cbd5e1; font-size: 13px; }
+.cf-select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px;
+}
+.cf-select:disabled { opacity: 0.5; cursor: not-allowed; background-color: var(--set-bg, #f8fafc); }
+.cf-textarea {
+  width: 100%; padding: 10px 14px; border: 1.5px solid var(--card-border, #e5e7eb);
+  border-radius: 10px; font-size: 14px; outline: none; resize: vertical;
+  background: var(--set-bg, #fff); color: var(--text, #1e293b);
+  transition: all .2s; font-family: inherit; line-height: 1.6;
+}
+.cf-textarea:focus { border-color: var(--primary, #4f46e5); box-shadow: var(--cf-glow); }
+.cf-textarea::placeholder { color: #cbd5e1; font-size: 13px; }
+
+/* 无图标的输入 */
+.cf-input.no-icon, .cf-select.no-icon { padding-left: 14px; }
+
+/* ── 模板提示标签 ── */
+.cf-template-chips {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;
+}
+.cf-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 6px; font-size: 11px;
+  background: var(--primary-light, #eef1ff);
+  color: var(--primary, #4f46e5); cursor: pointer;
+  border: 1px solid transparent; transition: all .15s;
+  white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis;
+}
+.cf-chip:hover { border-color: var(--primary, #4f46e5); background: #e0e4ff; }
+.cf-chip .chip-icon { font-size: 9px; }
+.chip-edit {
+  font-size: 9px; margin-left: 2px; opacity: 0.4; cursor: pointer;
+  transition: opacity .15s; padding: 1px;
+}
+.chip-edit:hover { opacity: 1; color: var(--primary,#4f46e5); }
+
+/* ── 设备类型芯片 ── */
+.cf-device-chip {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 3px 10px; border-radius: 6px; font-size: 12px;
+  background: var(--card-bg,rgba(255,255,255,0.7));
+  color: var(--text,#1e293b); cursor: pointer;
+  border: 1px solid var(--card-border,#e5e7eb);
+  transition: all .15s; white-space: nowrap;
+}
+.cf-device-chip:hover { border-color: var(--primary,#4f46e5); color: var(--primary,#4f46e5); }
+.cf-device-chip.active {
+  background: var(--primary,#4f46e5); color: #fff; border-color: var(--primary,#4f46e5);
+}
+
+/* ── 方案模板行 ── */
+.cf-template-row {
+  display: flex; gap: 6px;
+}
+.cf-template-row .cf-select { flex: 1; }
+.cf-template-btn {
+  flex-shrink: 0; padding: 10px 16px; border: 1.5px solid var(--card-border, #e5e7eb);
+  border-radius: 10px; background: var(--set-bg, #fff);
+  color: var(--text-muted, #94a3b8); cursor: pointer;
+  transition: all .15s; font-size: 13px; display: flex; align-items: center; gap: 6px;
+}
+.cf-template-btn:hover { border-color: var(--primary, #4f46e5); color: var(--primary, #4f46e5); }
+
+/* ── 底部操作栏 ── */
+.cf-actions {
+  display: flex; justify-content: flex-end; align-items: center; gap: 10px;
+  margin-top: 4px;
+}
+.cf-btn {
+  padding: 10px 28px; border-radius: 10px; font-size: 14px; font-weight: 600;
+  border: none; cursor: pointer; transition: all .2s;
+  display: inline-flex; align-items: center; gap: 8px;
+  text-decoration: none;
+}
+.cf-btn-primary {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff; box-shadow: 0 3px 14px rgba(102,126,234,0.3);
+}
+.cf-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 5px 20px rgba(102,126,234,0.4); }
+.cf-btn-primary:active { transform: translateY(0); }
+.cf-btn-outline {
+  background: transparent; color: var(--text-muted, #94a3b8);
+  border: 1.5px solid var(--card-border, #e5e7eb);
+}
+.cf-btn-outline:hover { border-color: #cbd5e1; color: var(--text, #1e293b); }
+
+/* ── 匹配模板提示 ── */
+.cf-match-info {
+  font-size: 11px; color: var(--primary, #4f46e5); font-weight: 500;
+  padding: 4px 8px; border-radius: 6px;
+  background: rgba(79,70,229,0.06);
+  display: inline-block; margin-top: 2px;
+}
+
+/* ── 深色模式 ── */
+[data-theme="dark"] .cf-section { background: rgba(26,29,39,0.6); border-color: rgba(42,46,58,0.4); }
+[data-theme="dark"] .cf-steps { background: rgba(26,29,39,0.5); border-color: rgba(42,46,58,0.3); }
+[data-theme="dark"] .cf-input, [data-theme="dark"] .cf-select, [data-theme="dark"] .cf-textarea { background: #1a1d27; border-color: #2a2e3a; color: #e2e8f0; }
+[data-theme="dark"] .cf-input:focus, [data-theme="dark"] .cf-select:focus, [data-theme="dark"] .cf-textarea:focus { border-color: #4f46e5; background: #1a1d27; }
+[data-theme="dark"] .cf-input:hover, [data-theme="dark"] .cf-select:hover { border-color: #4b5563; }
+[data-theme="dark"] .cf-template-btn { background: #1a1d27; border-color: #2a2e3a; color: #9ca3af; }
+[data-theme="dark"] .cf-chip { background: #1e1b4b; color: #a5b4fc; }
+[data-theme="dark"] .cf-device-chip { background: #1e1b4b; color: #a5b4fc; border-color: #2a2e3a; }
+[data-theme="dark"] .cf-device-chip.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+[data-theme="dark"] .cf-btn-outline { border-color: #2a2e3a; color: #9ca3af; }
+[data-theme="dark"] .cf-btn-outline:hover { border-color: #4b5563; color: #e2e8f0; }
+[data-theme="dark"] .cf-match-info { background: rgba(79,70,229,0.12); }
+[data-theme="dark"] .cf-back:hover { border-color: #2a2e3a; background: rgba(26,29,39,0.5); }
+[data-theme="dark"] .cf-select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); }
+[data-theme="dark"] .cf-input::placeholder { color: #4b5563; }
+
+/* ── 响应式 ── */
+@media(max-width:768px) {
+  .cf-steps { display: none; }
+  .cf-section { padding: 16px; }
+  .cf-section-body { gap: 10px; }
+  .cf-topbar h4 { font-size: 17px; }
+  .cf-btn { padding: 8px 18px; font-size: 13px; }
+}
+</style>
+
+<div class="cf-wrap">
+  <!-- 顶部栏 -->
+  <div class="cf-topbar">
+    <h4><span class="cf-plus"><i class="fas fa-plus"></i></span> 新建工单</h4>
+    <a href="{{ url_for('orders.list_orders') }}" class="cf-back">
+      <i class="fas fa-arrow-left"></i> 返回
+    </a>
+  </div>
+
+  <!-- 步骤指示器 -->
+  <div class="cf-steps">
+    <div class="cf-step active"><span class="step-num">1</span> 基本信息</div>
+    <div class="cf-step-divider"></div>
+    <div class="cf-step active"><span class="step-num">2</span> 位置信息</div>
+    <div class="cf-step-divider"></div>
+    <div class="cf-step active"><span class="step-num">3</span> 时间安排</div>
+    <div class="cf-step-divider"></div>
+    <div class="cf-step active"><span class="step-num">4</span> 问题描述</div>
+    <div class="cf-step-divider"></div>
+    <div class="cf-step active"><span class="step-num">5</span> 解决方案</div>
+  </div>
+
+  <!-- 表单 -->
+  <form method="post" class="cf-form" id="orderForm">
+    <!-- 基本信息 -->
+    <div class="cf-section">
+      <div class="cf-section-title"><i class="fas fa-info-circle"></i> 基本信息</div>
+      <div class="cf-section-body">
+        <div class="cf-field half">
+          <label>工单名称 <span class="required">*</span></label>
+          <div class="cf-input-wrap">
+            <i class="fas fa-pen cf-icon"></i>
+            <input type="text" name="title" id="inputTitle" class="cf-input"
+                   list="titleHints" placeholder="输入关键词自动匹配模板" required autofocus>
+          </div>
+          <datalist id="titleHints">
+            {% for t in templates %}
+            <option value="{{ t.title }}" data-content="{{ t.content|e }}">
+            {% endfor %}
+          </datalist>
+          <div>
+            <span id="titleMatchInfo" class="cf-match-info"></span>
+          </div>
+          <div class="cf-template-chips" id="templateChips">
+            {% for t in templates[:8] %}
+            <span class="cf-chip" data-id="{{ t.id }}" onclick="fillTemplate('{{ t.title|e }}')">
+              <i class="fas fa-bolt chip-icon"></i> {{ t.title[:20] }}{% if t.title|length > 20 %}…{% endif %}
+            </span>
+            {% endfor %}
+            {% if templates|length > 8 %}
+            <span class="cf-chip cf-chip-more" onclick="toggleAllTemplates()" id="toggleTplBtn">
+              <i class="fas fa-chevron-down chip-icon"></i> 查看更多 {{ templates|length }}个模板
+            </span>
+            {% endif %}
+          </div>
+          <div class="cf-template-chips" id="allTemplateChips" style="display:none;margin-top:4px;">
+            {% for t in templates %}
+            <span class="cf-chip" data-id="{{ t.id }}" onclick="fillTemplate('{{ t.title|e }}')">
+              <i class="fas fa-bolt chip-icon"></i> {{ t.title[:26] }}{% if t.title|length > 26 %}…{% endif %}
+              <i class="fas fa-pen chip-edit" onclick="event.stopPropagation();editTemplate({{ t.id }})" title="编辑模板"></i>
+            </span>
+            {% endfor %}
+            <span class="cf-chip cf-chip-more" onclick="toggleAllTemplates()">
+              <i class="fas fa-chevron-up chip-icon"></i> 收起
+            </span>
+          </div>
+        </div>
+        <div class="cf-field">
+          <label>故障类型</label>
+          <div class="cf-input-wrap">
+            <i class="fas fa-wrench cf-icon"></i>
+            <select name="fault_type" class="cf-select no-icon" id="createFaultType" style="padding-left:36px;">
+              <option value="软件">💻 软件</option>
+              <option value="硬件" selected>🖥️ 硬件</option>
+              <option value="打印机">🖨️ 打印机</option>
+              <option value="协助">🤝 协助</option>
+            </select>
+          </div>
+        </div>
+        <div class="cf-field">
+          <label>设备类型</label>
+          <div class="cf-input-wrap" style="flex-wrap:wrap;gap:4px;padding:4px 4px 4px 36px;min-height:36px;position:relative;">
+            <i class="fas fa-microchip cf-icon" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);"></i>
+            <input type="hidden" name="device_type" id="deviceTypeInput" value="其他">
+            <span class="cf-device-chip active" data-value="台式机" onclick="pickDevice(this)">🖥️ 台式机</span>
+            <span class="cf-device-chip" data-value="笔记本" onclick="pickDevice(this)">💻 笔记本</span>
+            <span class="cf-device-chip" data-value="服务器" onclick="pickDevice(this)">🖥️ 服务器</span>
+            <span class="cf-device-chip" data-value="打印机" onclick="pickDevice(this)">🖨️ 打印机</span>
+            <span class="cf-device-chip" data-value="交换机" onclick="pickDevice(this)">🌐 交换机</span>
+            <span class="cf-device-chip" data-value="显示器" onclick="pickDevice(this)">🖥️ 显示器</span>
+            <span class="cf-device-chip" data-value="UPS" onclick="pickDevice(this)">🔋 UPS</span>
+            <span class="cf-device-chip" data-value="扫描仪" onclick="pickDevice(this)">📄 扫描仪</span>
+            <span class="cf-device-chip" data-value="PDA" onclick="pickDevice(this)">📱 PDA</span>
+            <span class="cf-device-chip" data-value="电话" onclick="pickDevice(this)">📞 电话</span>
+            <span class="cf-device-chip" data-value="其他" onclick="showOtherDevice(this)">➕ 其他</span>
+          </div>
+          <div id="otherDeviceWrap" style="display:none;margin-top:6px;">
+            <input type="text" id="otherDeviceInput" class="cf-input" placeholder="请输入其他设备类型" style="font-size:13px;padding:6px 12px;">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 位置信息 -->
+    <div class="cf-section">
+      <div class="cf-section-title"><i class="fas fa-map-marker-alt"></i> 位置信息</div>
+      <div class="cf-section-body">
+        <div class="cf-field">
+          <label>楼区</label>
+          <div class="cf-input-wrap">
+            <i class="fas fa-building cf-icon"></i>
+            <select name="building" class="cf-select no-icon" id="selBuilding" style="padding-left:36px;">
+              <option value="">请选择楼区</option>
+              {% for b in buildings %}
+              <option value="{{ b }}">{{ b }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="cf-field">
+          <label>楼层</label>
+          <div class="cf-input-wrap">
+            <i class="fas fa-layer-group cf-icon"></i>
+            <select name="floor" class="cf-select no-icon" id="selFloor" disabled style="padding-left:36px;">
+              <option value="">请先选择楼区</option>
+            </select>
+          </div>
+        </div>
+        <div class="cf-field">
+          <label>物理地址</label>
+          <div class="cf-input-wrap">
+            <i class="fas fa-door-open cf-icon"></i>
+            <select name="location" class="cf-select no-icon" id="selLocation" disabled style="padding-left:36px;">
+              <option value="">请先选择楼层</option>
+            </select>
+          </div>
+        </div>
+        <div class="cf-field">
+          <label>科室</label>
+          <div class="cf-input-wrap">
+            <i class="fas fa-hospital cf-icon"></i>
+            <select name="department" class="cf-select no-icon" id="selDepartment" disabled style="padding-left:36px;">
+              <option value="">请先选择楼层</option>
+            </select>
+          </div>
+        </div>
+        <div class="cf-field">
+          <label>人员</label>
+          <div class="cf-input-wrap">
+            <i class="fas fa-user cf-icon"></i>
+            <select name="person" class="cf-select no-icon" style="padding-left:36px;">
+              <option value="">请选择</option>
+              {% for p in persons %}
+              <option value="{{ p.name }}">{{ p.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="margin-top:3px;"><small style="color:var(--text-muted,#94a3b8);font-size:11px;">也可手动输入</small></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 时间安排 -->
+    <div class="cf-section">
+      <div class="cf-section-title"><i class="far fa-clock"></i> 时间安排</div>
+      <div class="cf-section-body">
+        <div class="cf-field">
+          <label>开始时间</label>
+          <div class="cf-input-wrap">
+            <i class="far fa-calendar-alt cf-icon"></i>
+            <input type="datetime-local" name="start_time" id="inputStartTime" class="cf-input">
+          </div>
+        </div>
+        <div class="cf-field">
+          <label>结束时间</label>
+          <div class="cf-input-wrap">
+            <i class="far fa-calendar-check cf-icon"></i>
+            <input type="datetime-local" name="end_time" id="inputEndTime" class="cf-input">
+          </div>
+        </div>
+        <div class="cf-field">
+          <label>&nbsp;</label>
+          <div style="font-size:11px;color:var(--text-muted,#94a3b8);padding:10px 0;">
+            <i class="far fa-lightbulb"></i> 默认开始时间=现在，结束时间=8分钟后
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 问题描述 -->
+    <div class="cf-section">
+      <div class="cf-section-title"><i class="fas fa-align-left"></i> 问题描述</div>
+      <div class="cf-section-body">
+        <div class="cf-field full">
+          <label>故障描述 <small style="font-weight:400;color:var(--text-muted,#94a3b8);">（自动填入工单名称，可编辑修改）</small></label>
+          <textarea name="description" id="inputDescription" class="cf-textarea" rows="3"
+                    placeholder="请描述故障现象…"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- 解决方案 -->
+    <div class="cf-section">
+      <div class="cf-section-title"><i class="fas fa-tools"></i> 解决方案</div>
+      <div class="cf-section-body">
+        <div class="cf-field full">
+          <label>解决方案模板</label>
+          <div class="cf-template-row" style="position:relative;">
+            <div style="flex:1;position:relative;">
+              <input type="text" class="cf-input no-icon" id="selSolutionTemplate"
+                     placeholder="搜索或选择方案模板…" style="padding-left:14px;padding-right:36px;"
+                     autocomplete="off">
+              <i class="fas fa-chevron-down" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--text-muted,#94a3b8);font-size:11px;pointer-events:none;"></i>
+              <div id="templateDropdown"
+                   style="position:absolute;top:100%;left:0;right:0;z-index:50;max-height:220px;overflow-y:auto;
+                          background:var(--modal-bg,#fff);border:1px solid var(--card-border,#e5e7eb);
+                          border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,0.1);display:none;"></div>
+            </div>
+            <button type="button" class="cf-template-btn" id="btnApplySolution" title="填入">
+              <i class="fas fa-check"></i>
+            </button>
+          </div>
+        </div>
+        <div class="cf-field full">
+          <label>方案内容</label>
+          <textarea name="solution" id="inputSolution" class="cf-textarea" rows="4"
+                    placeholder="或手动输入解决方案"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="cf-actions">
+      <a href="{{ url_for('orders.list_orders') }}" class="cf-btn cf-btn-outline">
+        <i class="fas fa-times"></i> 取消
+      </a>
+      <button type="submit" class="cf-btn cf-btn-primary">
+        <i class="fas fa-check"></i> 保存工单
+      </button>
+    </div>
+  </form>
+</div>
+
+<!-- 模板编辑弹窗 -->
+<div id="tplEditModal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;" onclick="if(event.target===this)closeTplEdit()">
+  <div style="background:var(--modal-bg,#fff);border-radius:14px;padding:24px;width:460px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h5 style="margin:0;font-weight:700;">编辑模板</h5>
+      <span onclick="closeTplEdit()" style="cursor:pointer;font-size:20px;color:#94a3b8;">&times;</span>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:13px;font-weight:600;color:var(--text,#1e293b);display:block;margin-bottom:4px;">标题</label>
+      <input type="text" id="tplEditTitle" class="cf-input" style="width:100%;">
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="font-size:13px;font-weight:600;color:var(--text,#1e293b);display:block;margin-bottom:4px;">内容</label>
+      <textarea id="tplEditContent" class="cf-textarea" rows="4" style="width:100%;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="cf-btn-outline" onclick="closeTplEdit()" style="padding:8px 20px;border-radius:8px;">取消</button>
+      <button class="cf-btn-primary" onclick="saveTemplate()" style="padding:8px 20px;border-radius:8px;border:none;background:var(--primary,#4f46e5);color:#fff;cursor:pointer;">保存</button>
+    </div>
+  </div>
+</div>
+<input type="hidden" id="tplEditId" value="">
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// 模板数据（手动构建，避免 ORM 对象直序列化）
+var TEMPLATES = [
+  {% for t in templates %}
+  {id: {{ t.id }}, title: {{ t.title|tojson }}, content: {{ t.content|tojson }}}{% if not loop.last %},{% endif %}
+  {% endfor %}
+];
+(function() {
+    // ===== 级联地址 =====
+    const selBuilding = document.getElementById('selBuilding');
+    const selFloor = document.getElementById('selFloor');
+    const selLocation = document.getElementById('selLocation');
+    const selDepartment = document.getElementById('selDepartment');
+
+    function setOptions(sel, items, placeholder) {
+        sel.innerHTML = '';
+        var opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = placeholder || '请选择';
+        sel.appendChild(opt);
+        if (items && items.length) {
+            items.forEach(function(v) {
+                var o = document.createElement('option');
+                o.value = v;
+                o.textContent = v;
+                sel.appendChild(o);
+            });
+            sel.disabled = false;
+        } else {
+            sel.disabled = true;
+        }
+    }
+
+    function loadFloors() {
+        var building = selBuilding.value;
+        if (!building) {
+            selFloor.innerHTML = '<option value="">请先选择楼区</option>';
+            selFloor.disabled = true;
+            selLocation.innerHTML = '<option value="">请先选择楼层</option>';
+            selLocation.disabled = true;
+            selDepartment.innerHTML = '<option value="">请先选择楼层</option>';
+            selDepartment.disabled = true;
+            return;
+        }
+        fetch('{{ url_for("orders.api_address_options") }}?building=' + encodeURIComponent(building))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                setOptions(selFloor, data.floors, '请选择楼层');
+                selLocation.innerHTML = '<option value="">请先选择楼层</option>';
+                selLocation.disabled = true;
+                selDepartment.innerHTML = '<option value="">请先选择楼层</option>';
+                selDepartment.disabled = true;
+            });
+    }
+
+    function loadLocations() {
+        var building = selBuilding.value;
+        var floor = selFloor.value;
+        if (!building || !floor) {
+            selLocation.innerHTML = '<option value="">' + (!floor ? '请先选择楼层' : '请先选择楼区') + '</option>';
+            selLocation.disabled = true;
+            selDepartment.innerHTML = '<option value="">' + (!floor ? '请先选择楼层' : '请先选择楼区') + '</option>';
+            selDepartment.disabled = true;
+            return;
+        }
+        fetch('{{ url_for("orders.api_address_options") }}?building=' + encodeURIComponent(building) + '&floor=' + encodeURIComponent(floor))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                setOptions(selLocation, data.locations, '请选择物理地址');
+                setOptions(selDepartment, data.departments, '请选择科室');
+                if (selDepartment.options.length > 1) {
+                    selDepartment.selectedIndex = 1;
+                }
+            });
+    }
+
+    selBuilding.addEventListener('change', loadFloors);
+    selFloor.addEventListener('change', loadLocations);
+
+    // ===== 工单名称 → 匹配模板提示 =====
+    var inputTitle = document.getElementById('inputTitle');
+    var titleMatchInfo = document.getElementById('titleMatchInfo');
+    var inputSolution = document.getElementById('inputSolution');
+
+    var templateMap = {};
+    var templateTitles = [];
+    {% for t in templates %}
+    templateMap[{{ t.title|tojson }}] = {{ t.content|tojson }};
+    templateTitles.push({{ t.title|tojson }});
+    {% endfor %}
+
+    function autoFillSolution(title) {
+        if (!title) return;
+        if (templateMap[title]) {
+            inputSolution.value = templateMap[title];
+            titleMatchInfo.textContent = '✓ 已自动匹配：「' + title + '」';
+            return;
+        }
+        var matched = [];
+        for (var i = 0; i < templateTitles.length; i++) {
+            var t = templateTitles[i];
+            if (t.indexOf(title) !== -1 || title.indexOf(t) !== -1) {
+                matched.push(t);
+            }
+        }
+        if (matched.length > 0) {
+            matched.sort(function(a, b) { return a.length - b.length; });
+            var best = matched[0];
+            if (templateMap[best]) {
+                inputSolution.value = templateMap[best];
+                titleMatchInfo.textContent = '✓ 已自动匹配：「' + best + '」';
+                return;
+            }
+        }
+        titleMatchInfo.textContent = '';
+    }
+
+    inputTitle.addEventListener('input', function() {
+        var val = this.value.trim();
+        if (!val) { titleMatchInfo.textContent = ''; return; }
+        autoFillSolution(val);
+    });
+
+    // ===== 输入工单名称自动填入故障描述 =====
+    var inputDescription = document.getElementById('inputDescription');
+    inputTitle.addEventListener('blur', function() {
+        var val = this.value.trim();
+        if (val && !inputDescription.value.trim()) {
+            inputDescription.value = val;
+        }
+    });
+    inputTitle.addEventListener('change', function() {
+        var val = this.value.trim();
+        if (val && !inputDescription.value.trim()) {
+            inputDescription.value = val;
+        }
+    });
+
+    // ===== 方案模板搜索联想 =====
+    var selSolution = document.getElementById('selSolutionTemplate');
+    var btnApply = document.getElementById('btnApplySolution');
+    var dropdown = document.getElementById('templateDropdown');
+    var templateData = [];
+    {% for t in templates %}
+    templateData.push({ title: {{ t.title|tojson }}, content: {{ t.content|tojson }} });
+    {% endfor %}
+    var selectedContent = '';
+
+    function filterTemplates(q) {
+      if (!q.trim()) { dropdown.style.display = 'none'; return; }
+      var lower = q.toLowerCase();
+      var matched = templateData.filter(function(t) {
+        return t.title.toLowerCase().indexOf(lower) !== -1 || t.content.toLowerCase().indexOf(lower) !== -1;
+      });
+      if (matched.length === 0) {
+        dropdown.innerHTML = '<div style="padding:10px 14px;color:var(--text-muted);font-size:12px;">无匹配模板</div>';
+      } else {
+        var html = '';
+        matched.forEach(function(t, i) {
+          var idx = t.title.toLowerCase().indexOf(lower);
+          var display = t.title;
+          if (idx !== -1) {
+            display = t.title.substring(0, idx) + '<strong>' + t.title.substring(idx, idx + q.length) + '</strong>' + t.title.substring(idx + q.length);
+          }
+          html += '<div class="tpl-item" data-content="' + escapeAttr(t.content) + '" data-title="' + escapeAttr(t.title) + '" style="padding:8px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--card-border,#e5e7eb);transition:background .1s;" onmouseover="this.style.background=\'rgba(79,70,229,0.06)\'" onmouseout="this.style.background=\'\'" onclick="selectTemplate(this)">' +
+            '<div>' + display + '</div>' +
+            '<div style="font-size:11px;color:var(--text-muted,#94a3b8);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;">' + escapeHtml(t.content.substring(0, 80)) + '</div></div>';
+        });
+        dropdown.innerHTML = html;
+      }
+      dropdown.style.display = 'block';
+    }
+
+    selSolution.addEventListener('input', function() {
+      filterTemplates(this.value);
+      selectedContent = '';
+    });
+    selSolution.addEventListener('focus', function() {
+      if (this.value.trim()) filterTemplates(this.value);
+    });
+    selSolution.addEventListener('blur', function() {
+      setTimeout(function() { dropdown.style.display = 'none'; }, 200);
+    });
+    selSolution.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        var active = dropdown.querySelector('.tpl-item');
+        if (active) { selectTemplate(active); e.preventDefault(); }
+      }
+      if (e.key === 'Escape') dropdown.style.display = 'none';
+    });
+
+    function selectTemplate(el) {
+      selectedContent = el.getAttribute('data-content');
+      selSolution.value = el.getAttribute('data-title');
+      dropdown.style.display = 'none';
+      inputSolution.value = selectedContent;
+    }
+
+    btnApply.addEventListener('click', function() {
+      if (selectedContent) {
+        inputSolution.value = selectedContent;
+      }
+    });
+
+    function escapeAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;'); }
+    function escapeHtml(s) { if(!s)return''; var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+    // ===== 默认时间 =====
+    function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+    var now = new Date();
+    var startStr = now.getFullYear() + '-' + pad2(now.getMonth()+1) + '-' + pad2(now.getDate())
+        + 'T' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
+    document.getElementById('inputStartTime').value = startStr;
+
+    var endDate = new Date(now.getTime() + 8 * 60 * 1000);
+    var endStr = endDate.getFullYear() + '-' + pad2(endDate.getMonth()+1) + '-' + pad2(endDate.getDate())
+        + 'T' + pad2(endDate.getHours()) + ':' + pad2(endDate.getMinutes());
+    document.getElementById('inputEndTime').value = endStr;
+})();
+
+// 全局函数：模板标签点击填入
+function fillTemplate(title) {
+  document.getElementById('inputTitle').value = title;
+  document.getElementById('inputTitle').dispatchEvent(new Event('input'));
+  document.getElementById('inputTitle').dispatchEvent(new Event('blur'));
+}
+
+// 设备类型芯片选择
+function pickDevice(el) {
+  document.querySelectorAll('.cf-device-chip').forEach(function(c){ c.classList.remove('active'); });
+  el.classList.add('active');
+  document.getElementById('deviceTypeInput').value = el.dataset.value;
+  document.getElementById('otherDeviceWrap').style.display = 'none';
+}
+function showOtherDevice(el) {
+  document.querySelectorAll('.cf-device-chip').forEach(function(c){ c.classList.remove('active'); });
+  el.classList.add('active');
+  document.getElementById('deviceTypeInput').value = '';
+  document.getElementById('otherDeviceWrap').style.display = '';
+  document.getElementById('otherDeviceInput').focus();
+}
+document.addEventListener('DOMContentLoaded', function(){
+  var oi = document.getElementById('otherDeviceInput');
+  if (oi) oi.addEventListener('input', function(){
+    document.getElementById('deviceTypeInput').value = this.value || '其他';
+  });
+});
+
+// 模板查看更多
+function toggleAllTemplates() {
+  var s = document.getElementById('templateChips');
+  var a = document.getElementById('allTemplateChips');
+  if (s.style.display === 'none') {
+    s.style.display = ''; a.style.display = 'none';
+  } else {
+    s.style.display = 'none'; a.style.display = '';
+  }
+}
+
+// 模板编辑
+function editTemplate(id) {
+  var t = TEMPLATES.find(function(x){ return x.id === id; });
+  if (!t) return;
+  document.getElementById('tplEditId').value = id;
+  document.getElementById('tplEditTitle').value = t.title || '';
+  document.getElementById('tplEditContent').value = t.content || '';
+  document.getElementById('tplEditModal').style.display = 'flex';
+}
+function closeTplEdit() {
+  document.getElementById('tplEditModal').style.display = 'none';
+}
+function saveTemplate() {
+  var id = document.getElementById('tplEditId').value;
+  var title = document.getElementById('tplEditTitle').value.trim();
+  var content = document.getElementById('tplEditContent').value.trim();
+  if (!title) { alert('标题不能为空'); return; }
+  var f = new FormData();
+  f.append('field', 'title'); f.append('value', title);
+  fetch('/data/solutions/' + id + '/edit', { method:'POST', body:f })
+    .then(function(r){ return r.text(); })
+    .then(function(){
+      var f2 = new FormData();
+      f2.append('field', 'content'); f2.append('value2', content);
+      return fetch('/data/solutions/' + id + '/edit', { method:'POST', body:f2 });
+    })
+    .then(function(){ closeTplEdit(); location.reload(); })
+    .catch(function(e){ alert('保存失败: ' + e.message); });
+}
+
+// 提交前确保地址下拉不为 disabled（disabled 的表单字段不会被提交）
+document.getElementById('orderForm').addEventListener('submit', function() {
+    ['selFloor','selLocation','selDepartment'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el.disabled) el.disabled = false;
+    });
+});
+</script>
+{% endblock %}

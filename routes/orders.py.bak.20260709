@@ -1,0 +1,1254 @@
+"""工单管理路由"""
+import io
+import random
+import uuid
+import os
+from datetime import datetime, timedelta
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, jsonify, session
+from flask_login import login_required, current_user
+from openpyxl import Workbook
+from werkzeug.utils import secure_filename
+from models import db, WorkOrder, Person, SolutionTemplate, User, SystemSetting, WorkOrderChatMessage, WorkOrderPhoto
+from models import log_audit, AuditLog
+from services import generator
+from routes.auth import admin_required
+
+orders_bp = Blueprint('orders', __name__, url_prefix='/orders')
+
+
+@orders_bp.route('/')
+@login_required
+def list_orders():
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+
+    # 筛选条件
+    query = WorkOrder.query
+    # 状态筛选：默认显示未接单（pending）
+    status = request.args.get('status', 'pending')
+    fault_type = request.args.get('fault_type', '')
+    person = request.args.get('person', '')
+    keyword = request.args.get('keyword', '')
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    building = request.args.get('building', '')
+    department = request.args.get('department', '')
+    floor_sel = request.args.get('floor', '')
+    location_sel = request.args.get('location', '')
+    team = request.args.get('team', '')
+    # 没选组则按用户自己的 Person.team（非管理员自动过滤）
+    if not team:
+        if current_user.is_admin:
+            team = ''
+        else:
+            from models import Person as PersonModel
+            _person = PersonModel.query.filter_by(user_id=current_user.id).first()
+            if _person and _person.team:
+                team = _person.team
+
+    if status in ('pending', 'in_progress', 'completed'):
+        query = query.filter(WorkOrder.status == status)
+
+    if fault_type:
+        query = query.filter(WorkOrder.fault_type == fault_type)
+    if person:
+        query = query.filter(WorkOrder.person == person)
+    if keyword:
+        query = query.filter(
+            WorkOrder.title.contains(keyword) |
+            WorkOrder.location.contains(keyword) |
+            WorkOrder.floor.contains(keyword) |
+            WorkOrder.description.contains(keyword) |
+            WorkOrder.fault_subcategory.contains(keyword)
+        )
+    if date_from:
+        try:
+            dt = datetime.strptime(date_from, '%Y-%m-%d')
+            query = query.filter(WorkOrder.start_time >= dt)
+        except:
+            pass
+    if date_to:
+        try:
+            dt = datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1)
+            query = query.filter(WorkOrder.start_time < dt)
+        except:
+            pass
+    if building:
+        query = query.filter(WorkOrder.building == building)
+    if floor_sel:
+        query = query.filter(WorkOrder.floor.contains(floor_sel))
+    if location_sel:
+        query = query.filter(WorkOrder.location.contains(location_sel))
+    if department:
+        query = query.filter(WorkOrder.department == department)
+
+    # 组别筛选：通过人员关联（仅对已接单工单有效，pending工单无person不过滤）
+    if team and status != 'pending':
+        team_persons = Person.query.filter(Person.team == team, Person.is_active == True).all()
+        team_names = [p.name for p in team_persons if p.name]
+        if team_names:
+            query = query.filter(WorkOrder.person.in_(team_names))
+        else:
+            # 该组没有人员，返回空结果
+            query = query.filter(False)
+
+    from sqlalchemy import case
+    priority_order = case(
+        (WorkOrder.priority == 'emergency', 0),
+        (WorkOrder.priority == 'urgent', 1),
+        else_=2
+    )
+    query = query.order_by(priority_order, WorkOrder.start_time.desc())
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    # 获取筛选条件下的所有工单（用于导出）
+    filtered_all = query.all()
+
+    persons = Person.query.filter_by(is_active=True).all()
+
+    # 获取所有组别
+    teams = [t[0] for t in Person.query.with_entities(Person.team).filter(Person.team != '', Person.team.isnot(None)).distinct().order_by(Person.team).all()]
+
+    # 获取所有楼区和科室（用于筛选）
+    from services.address import get_all_buildings
+    buildings = get_all_buildings()
+
+    # 三个池子的数量统计
+    stats = {
+        'pending': WorkOrder.query.filter_by(status='pending').count(),
+        'in_progress': WorkOrder.query.filter_by(status='in_progress').count(),
+        'completed': WorkOrder.query.filter_by(status='completed').count(),
+    }
+
+    return render_template('orders/list.html',
+                           pagination=pagination,
+                           orders=pagination.items,
+                           persons=persons,
+                           buildings=buildings,
+                           status=status,
+                           stats=stats,
+                           fault_type=fault_type,
+                           person_sel=person,
+                           keyword=keyword,
+                           date_from=date_from,
+                           date_to=date_to,
+                           building=building,
+                           department=department,
+                           floor_sel=floor_sel,
+                           location_sel=location_sel,
+                           team_sel=team,
+                           teams=teams)
+
+
+@orders_bp.route('/create', methods=['GET', 'POST'])
+@login_required
+def create_order():
+    """手动创建单条工单"""
+    from services.address import get_merged_addresses, get_all_buildings
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        if not title:
+            flash('请输入工单名称', 'danger')
+            return render_template('orders/create.html', addr_list=get_merged_addresses(),
+                                   buildings=get_all_buildings())
+        # 自动匹配故障分类
+        from services.fault_matcher import match_fault
+        fm = match_fault(title)
+        order = WorkOrder(
+            title=title,
+            device_type=request.form.get('device_type', '其他'),
+            fault_type=request.form.get('fault_type', '硬件'),
+            fault_subcategory=fm.get('subcategory', ''),
+            description=request.form.get('description', ''),
+            building=request.form.get('building', ''),
+            floor=request.form.get('floor', ''),
+            department=request.form.get('department', ''),
+            location=request.form.get('location', ''),
+            person=request.form.get('person', ''),
+            solution=request.form.get('solution', ''),
+            created_by=current_user.display_name or current_user.username
+        )
+        # 后台创建时直接指派人员视为已接单
+        if order.person:
+            order.accepted_at = datetime.now()
+        # 解析时间
+        st = request.form.get('start_time', '')
+        et = request.form.get('end_time', '')
+        if st:
+            try:
+                order.start_time = datetime.strptime(st, '%Y-%m-%d %H:%M')
+            except:
+                pass
+        if et:
+            try:
+                order.end_time = datetime.strptime(et, '%Y-%m-%d %H:%M')
+            except:
+                pass
+        db.session.add(order)
+        db.session.commit()
+        flash('工单创建成功', 'success')
+        return redirect(url_for('orders.list_orders'))
+
+    persons = Person.query.filter_by(is_active=True).all()
+    # 按当前用户组别筛选方案模板
+    _person = Person.query.filter_by(user_id=current_user.id).first()
+    query = SolutionTemplate.query
+    if _person and _person.team:
+        query = query.filter(db.or_(
+            SolutionTemplate.teams == '',
+            SolutionTemplate.teams.contains(_person.team),
+        ))
+    templates = query.order_by(SolutionTemplate.title).all()
+    return render_template('orders/create.html', addr_list=get_merged_addresses(), persons=persons, templates=templates, buildings=get_all_buildings())
+
+
+@orders_bp.route('/publish', methods=['GET', 'POST'])
+@login_required
+def publish_order():
+    """发布工单：输入名称（自动识别地址+故障），可手动修改地址"""
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        if not title:
+            flash('请输入工单名称', 'danger')
+            return render_template('orders/publish.html')
+
+        # 自动匹配故障类型
+        auto_fault, auto_device = guess_fault_type(title)
+        # 匹配二级子分类
+        from services.fault_matcher import match_fault
+        fm = match_fault(title)
+        auto_fault = fm['category'] if fm['match_type'] == 'keyword' else auto_fault
+        # 自动提取地址（作为兜底，手动选择的优先）
+        from services.address import extract_address_from_title
+        addr = extract_address_from_title(title)
+        # 表单手动选择的地址优先于自动提取
+        building = request.form.get('building', '') or addr['building']
+        floor = request.form.get('floor', '') or addr['floor']
+        department = request.form.get('department', '') or addr['department']
+        location = request.form.get('location', '') or addr.get('location', '')
+        now = datetime.now()
+
+        order = WorkOrder(
+            title=title,
+            device_type=auto_device,
+            fault_type=auto_fault,
+            fault_subcategory=request.form.get('fault_subcategory', '') or fm.get('subcategory', ''),
+            description='',
+            building=building,
+            floor=floor,
+            department=department,
+            location=location,
+            person='',  # 不指派，手机端公共池接单
+            solution='',
+            start_time=now,
+            status='pending',
+            created_by=current_user.display_name or current_user.username,
+            priority=request.form.get('priority', 'normal'),
+            original_priority=request.form.get('priority', 'normal')
+        )
+        db.session.add(order)
+        db.session.commit()
+        # 推送订阅通知
+        try:
+            from routes.api_mobile import send_new_order_notification, send_wecom_notification
+            send_new_order_notification(order)
+            send_wecom_notification(order)
+        except Exception:
+            pass
+        flash(f'✅ 工单已发布，等待手机端接单', 'success')
+        return redirect(url_for('orders.list_orders'))
+
+    return render_template('orders/publish.html')
+
+
+def guess_fault_type(title):
+    """根据工单名称自动匹配故障类型和设备类型"""
+    import config as app_config
+    title_lower = title.lower()
+    # 先匹配故障类型
+    for ftype, keywords in app_config.FAULT_KEYWORDS.items():
+        for kw in keywords:
+            if kw.lower() in title_lower:
+                return ftype, ''
+    # 再匹配设备类型
+    for dtype, keywords in app_config.DEVICE_KEYWORDS_PRIORITY:
+        for kw in keywords:
+            if kw.lower() in title_lower:
+                device_types = {
+                    '电脑': '硬件', '网络设备': '硬件', '叫号设备': '硬件',
+                    '自助机': '硬件', 'PDA': '硬件', '扫码设备': '硬件',
+                    '切换器': '硬件', '显示器': '硬件', '键盘': '硬件', '鼠标': '硬件',
+                    '打印机': '打印机', '软件': '软件'
+                }
+                return device_types.get(dtype, '硬件'), dtype
+    return '硬件', '其他'
+
+
+@orders_bp.route('/api/guess')
+@login_required
+def api_guess_fault():
+    """根据工单名称自动猜测故障类型 + 提取地址"""
+    title = request.args.get('title', '')
+    if not title:
+        return jsonify({'fault': '硬件', 'device': '其他',
+                        'building': '', 'floor': '', 'department': '', 'location': ''})
+    fault, device = guess_fault_type(title)
+    from services.fault_matcher import match_fault
+    fm = match_fault(title)
+    from services.address import extract_address_from_title
+    addr = extract_address_from_title(title)
+    return jsonify({
+        'fault': fm['category'] if fm['match_type'] == 'keyword' else fault,
+        'device': device,
+        'fault_subcategory': fm.get('subcategory', ''),
+        'building': addr['building'],
+        'floor': addr['floor'],
+        'department': addr['department'],
+        'location': addr.get('location', ''),
+    })
+
+@orders_bp.route('/api/solution_suggest')
+@login_required
+def api_solution_suggest():
+    """根据关键字返回方案模板候选列表"""
+    q = request.args.get('q', '').strip()
+    if not q or len(q) < 1:
+        return jsonify([])
+    # 按当前用户组别筛选
+    _person = Person.query.filter_by(user_id=current_user.id).first()
+    query = SolutionTemplate.query.filter(
+        SolutionTemplate.title.contains(q)
+    )
+    if _person and _person.team:
+        query = query.filter(db.or_(
+            SolutionTemplate.teams == '',
+            SolutionTemplate.teams.contains(_person.team),
+        ))
+    templates = query.order_by(SolutionTemplate.title).limit(20).all()
+    # 去重（同名模板只显示一次）
+    seen = set()
+    result = []
+    for t in templates:
+        if t.title not in seen:
+            seen.add(t.title)
+            result.append(t.title)
+    return jsonify(result)
+
+
+@orders_bp.route('/api/address/all')
+@login_required
+def api_address_all():
+    """返回所有地址数据（用于前端自动补全）"""
+    from services.address import get_merged_addresses
+    merged = get_merged_addresses()
+    seen = set()
+    result = []
+    for a in merged:
+        location = a.get('物理地址', '')
+        building = a.get('楼区', '')
+        floor = a.get('所属楼层', '')
+        department = a.get('所属科室', '')
+        # 用 building+floor+location 做唯一键，避免不同楼区/楼层同物理地址被去重
+        key = f"{building}|{floor}|{location}"
+        if location and key not in seen:
+            seen.add(key)
+            result.append({
+                'location': location,
+                'building': building,
+                'floor': floor,
+                'department': department,
+            })
+    return jsonify({'locations': result})
+
+@orders_bp.route('/api/address/options')
+@login_required
+def api_address_options():
+    """返回级联下拉框的选项数据"""
+    from services.address import get_floors_by_building, get_departments_by_floor, get_locations_by_floor, get_all_buildings
+    building = request.args.get('building', '')
+    floor = request.args.get('floor', '')
+    if building == 'all':
+        return jsonify({'buildings': get_all_buildings()})
+    if not building:
+        return jsonify([])
+    if floor:
+        return jsonify({
+            'departments': get_departments_by_floor(building, floor),
+            'locations': get_locations_by_floor(building, floor)
+        })
+    else:
+        return jsonify({
+            'floors': get_floors_by_building(building)
+        })
+
+
+@orders_bp.route('/batch', methods=['GET', 'POST'])
+@admin_required
+def batch_create():
+    """批量生成工单"""
+    action = request.form.get('action', '')
+    persons = Person.query.filter_by(is_active=True).all()
+    # 按当前用户组别筛选方案模板
+    batch_person = Person.query.filter_by(user_id=current_user.id).first()
+    batch_query = SolutionTemplate.query
+    if batch_person and batch_person.team:
+        batch_query = batch_query.filter(db.or_(
+            SolutionTemplate.teams == '',
+            SolutionTemplate.teams.contains(batch_person.team),
+        ))
+    batch_templates = batch_query.order_by(SolutionTemplate.title).all()
+    # 加载故障模板组（含故障项）
+    from models import FaultTemplateGroup, FaultTemplateItem
+    fault_groups = FaultTemplateGroup.query.order_by(FaultTemplateGroup.id).all()
+    # 为每组预加载 items（items 是 AppenderQuery，不能直接赋值，用 _items 替代）
+    fault_group_items = {}
+    for g in fault_groups:
+        fault_group_items[g.id] = FaultTemplateItem.query.filter_by(group_id=g.id).order_by(FaultTemplateItem.sort_order).all()
+    # 按组分
+    team_groups = {}
+    for p in persons:
+        t = p.team or '未分组'
+        if t not in team_groups:
+            team_groups[t] = []
+        team_groups[t].append(p)
+    teams = sorted(team_groups.keys(), key=lambda x: (x == '未分组', x))
+    # 系统默认组
+    default_team_setting = SystemSetting.query.filter_by(key='default_dashboard_team').first()
+    default_team_val = default_team_setting.value if default_team_setting and default_team_setting.value else ''
+
+    if request.method == 'POST' and action == 'preview':
+        """第一步：生成预览"""
+        try:
+            # 收集动态故障类型数量（fault_count_{item_id}）
+            fault_counts = {}
+            fault_details = {}
+            total = 0
+            for key, val in request.form.items():
+                if key.startswith('fault_count_'):
+                    try:
+                        item_id = int(key.replace('fault_count_', ''))
+                        count = max(0, int(val))
+                        if count > 0:
+                            item = FaultTemplateItem.query.get(item_id)
+                            if item:
+                                fault_counts[item.id] = count
+                                fault_details[item.id] = {
+                                    'fault_type': item.fault_type,
+                                    'display_name': item.display_name,
+                                }
+                                total += count
+                    except (ValueError, TypeError):
+                        pass
+            # 兼容旧格式（无故障模板组时fallback）
+            if total == 0:
+                software = max(0, int(request.form.get('software', 0)))
+                hardware = max(0, int(request.form.get('hardware', 0)))
+                printer = max(0, int(request.form.get('printer', 0)))
+                assist = max(0, int(request.form.get('assist', 0)))
+                total = software + hardware + printer + assist
+                if total > 0:
+                    for _ in range(software):
+                        fault_counts[len(fault_counts)] = 1
+                        fault_details[len(fault_counts)] = {'fault_type': '软件', 'display_name': '软件故障'}
+                    for _ in range(hardware):
+                        fault_counts[len(fault_counts)] = 1
+                        fault_details[len(fault_counts)] = {'fault_type': '硬件', 'display_name': '硬件故障'}
+                    for _ in range(printer):
+                        fault_counts[len(fault_counts)] = 1
+                        fault_details[len(fault_counts)] = {'fault_type': '打印机', 'display_name': '打印机故障'}
+                    for _ in range(assist):
+                        fault_counts[len(fault_counts)] = 1
+                        fault_details[len(fault_counts)] = {'fault_type': '协助', 'display_name': '协助类'}
+            if total == 0:
+                flash('请至少生成一个工单', 'danger')
+                return render_template('orders/batch.html', persons=persons, team_groups=team_groups, teams=teams, default_team=default_team_val, templates=batch_templates, fault_groups=fault_groups, fault_group_items=fault_group_items)
+
+            year = int(request.form.get('year', datetime.now().year))
+            month = int(request.form.get('month', datetime.now().month))
+            min_per_day = int(request.form.get('min_per_day', 20))
+            max_per_day = int(request.form.get('max_per_day', 45))
+            everyday = request.form.get('everyday') == 'on'
+
+            # 解析指定日期（格式：1,3,5-10,15,20）
+            specific_dates = None
+            dates_str = request.form.get('specific_dates', '').strip()
+            if dates_str:
+                dates = []
+                for part in dates_str.split(','):
+                    part = part.strip()
+                    if '-' in part:
+                        try:
+                            a, b = part.split('-', 1)
+                            for d in range(int(a.strip()), int(b.strip()) + 1):
+                                dates.append(d)
+                        except ValueError:
+                            pass
+                    else:
+                        try:
+                            dates.append(int(part))
+                        except ValueError:
+                            pass
+                if dates:
+                    specific_dates = sorted(set(dates))
+
+            # 安全验证
+            verify_username = request.form.get('verify_username', '').strip()
+            verify_password = request.form.get('verify_password', '')
+            if not verify_username or not verify_password:
+                flash('请输入登录账号和密码进行安全验证', 'danger')
+                return render_template('orders/batch.html', persons=persons, team_groups=team_groups, teams=teams, default_team=default_team_val, templates=batch_templates, fault_groups=fault_groups, fault_group_items=fault_group_items)
+            user = User.query.filter_by(username=verify_username).first()
+            if not user or not user.check_password(verify_password):
+                flash('安全验证失败：账号或密码错误', 'danger')
+                return render_template('orders/batch.html', persons=persons, team_groups=team_groups, teams=teams, default_team=default_team_val, templates=batch_templates, fault_groups=fault_groups, fault_group_items=fault_group_items)
+
+            # 读取勾选的人员名单
+            names = request.form.getlist('selected_names')
+            if not names:
+                flash('请至少勾选一名人员', 'danger')
+                return render_template('orders/batch.html', persons=persons, team_groups=team_groups, teams=teams, default_team=default_team_val, templates=batch_templates, fault_groups=fault_groups, fault_group_items=fault_group_items)
+
+            # 读取每人权重（weight_XXX 格式）
+            weights = {}
+            for name in names:
+                w = request.form.get(f'weight_{name}', '1').strip()
+                try:
+                    wv = int(w)
+                    if wv >= 1:
+                        weights[name] = wv
+                except ValueError:
+                    pass
+
+            use_schedule = request.form.get('use_schedule') == 'on'
+
+            orders_data = generator.create_batch_orders(
+                fault_counts, fault_details,
+                year, month, min_per_day, max_per_day, everyday, names,
+                created_by=current_user.display_name or current_user.username,
+                specific_dates=specific_dates,
+                custom_title=request.form.get('custom_title', '').strip() or None,
+                custom_solution=request.form.get('custom_solution', '').strip() or None,
+                weights=weights,
+                use_schedule=use_schedule,
+            )
+
+            # 序列化 datetime 为字符串
+            import json
+            from datetime import datetime as dt
+
+            def serialize_order(o):
+                row = dict(o)
+                if isinstance(row['start_time'], dt):
+                    row['start_time'] = row['start_time'].strftime('%Y-%m-%d %H:%M')
+                if isinstance(row['end_time'], dt):
+                    row['end_time'] = row['end_time'].strftime('%Y-%m-%d %H:%M')
+                return row
+
+            serialized = [serialize_order(o) for o in orders_data]
+            preview_json = json.dumps(serialized, ensure_ascii=False)
+
+            # 按日期分组用于预览
+            from collections import defaultdict
+            by_date = defaultdict(list)
+            for o in serialized:
+                d = o['start_time'][:10] if o['start_time'] else '未知日期'
+                by_date[d].append(o)
+            sorted_dates = sorted(by_date.keys())
+
+            return render_template('orders/batch.html',
+                                   persons=persons,
+                                   team_groups=team_groups, teams=teams, default_team=default_team_val,
+                                   preview_json=preview_json,
+                                   preview_orders=serialized,
+                                   preview_total=total,
+                                   templates=batch_templates,
+                                   fault_groups=fault_groups,
+                                   fault_group_items=fault_group_items,
+                                   by_date=dict(by_date),
+                                   sorted_dates=sorted_dates,
+                                   year=year, month=month,
+                                   min_per_day=min_per_day, max_per_day=max_per_day,
+                                   everyday=everyday,
+                                   selected_names=names,
+                                   specific_dates=specific_dates,
+                                   dates_str=dates_str)
+
+        except ValueError as e:
+            flash(str(e), 'danger')
+        except Exception as e:
+            flash(f'生成失败：{str(e)}', 'danger')
+        return render_template('orders/batch.html', persons=persons, team_groups=team_groups, teams=teams, default_team=default_team_val, templates=batch_templates, fault_groups=fault_groups, fault_group_items=fault_group_items)
+
+    if request.method == 'POST' and action == 'confirm':
+        """第二步：确认保存到数据库"""
+        try:
+            import json
+            preview_json = request.form.get('preview_json', '')
+            if not preview_json:
+                flash('预览数据丢失，请重新生成', 'danger')
+                return render_template('orders/batch.html', persons=persons, team_groups=team_groups, teams=teams, default_team=default_team_val, templates=batch_templates, fault_groups=fault_groups, fault_group_items=fault_group_items)
+
+            orders_data = json.loads(preview_json)
+            total = len(orders_data)
+
+            for od in orders_data:
+                order = WorkOrder(
+                    title=od['title'],
+                    device_type=od['device_type'],
+                    fault_type=od['fault_type'],
+                    fault_subcategory=od.get('fault_subcategory', ''),
+                    description=od['description'],
+                    building=od['building'],
+                    floor=od['floor'],
+                    department=od['department'],
+                    location=od['location'],
+                    person=od['person'],
+                    solution=od['solution'],
+                    created_by=od['created_by'],
+                    priority=od.get('priority', 'normal'),
+                    original_priority=od.get('original_priority', od.get('priority', 'normal')),
+                    status='completed',
+                )
+                # 批量创建已指派人员的视为已接单
+                if od.get('person'):
+                    order.accepted_at = order.created_at
+                # 解析时间
+                if od.get('start_time'):
+                    try:
+                        st = datetime.strptime(od['start_time'], '%Y-%m-%d %H:%M')
+                        order.start_time = st
+                        order.created_at = st  # created_at 跟随 start_time，防止SLA误判超时
+                    except:
+                        pass
+                if od.get('end_time'):
+                    try:
+                        order.end_time = datetime.strptime(od['end_time'], '%Y-%m-%d %H:%M')
+                    except:
+                        pass
+                # completed_at 设为 end_time 附近（真实感）
+                base_t = order.end_time or order.start_time or datetime.now()
+                order.completed_at = base_t + timedelta(minutes=random.randint(0, 10))
+                db.session.add(order)
+            db.session.commit()
+            # 记录本次批量生成的工单 ID 用于反悔
+            session['last_batch_time'] = datetime.now().isoformat()
+            session['last_batch_count'] = total
+            # 查询刚插入的工单 ID（取最后 total 条本用户创建的）
+            recent = WorkOrder.query.filter_by(created_by=current_user.display_name or current_user.username)\
+                .order_by(WorkOrder.id.desc()).limit(total).all()
+            session['last_batch_ids'] = [o.id for o in recent]
+            flash(f'批量生成成功！共 {total} 条工单已保存到当月工单', 'success')
+            return redirect(url_for('orders.list_orders'))
+
+        except Exception as e:
+            flash(f'保存失败：{str(e)}', 'danger')
+
+    # GET 请求或未触发生成
+    # 检查是否有可反悔的批次
+    can_undo = False
+    undo_count = 0
+    last_batch_time = session.get('last_batch_time')
+    if last_batch_time and session.get('last_batch_ids'):
+        try:
+            bt = datetime.fromisoformat(last_batch_time)
+            if (datetime.now() - bt).total_seconds() < 300:  # 5分钟内可反悔
+                can_undo = True
+                undo_count = session.get('last_batch_count', 0)
+            else:
+                # 超时清除
+                session.pop('last_batch_time', None)
+                session.pop('last_batch_ids', None)
+                session.pop('last_batch_count', None)
+        except:
+            pass
+    return render_template('orders/batch.html', persons=persons,
+                           team_groups=team_groups, teams=teams, default_team=default_team_val,
+                           can_undo=can_undo, undo_count=undo_count, templates=batch_templates, fault_groups=fault_groups, fault_group_items=fault_group_items)
+
+
+@orders_bp.route('/batch/undo', methods=['POST'])
+@login_required
+def batch_undo():
+    """撤回最近一次批量生成的工单"""
+    ids = session.get('last_batch_ids', [])
+    count = session.get('last_batch_count', 0)
+    if not ids:
+        flash('没有可撤回的批次，或已超时（限5分钟内）', 'warning')
+        return redirect(url_for('orders.batch_create'))
+    try:
+        deleted = 0
+        for oid in ids:
+            order = WorkOrder.query.get(oid)
+            if order:
+                db.session.delete(order)
+                deleted += 1
+        db.session.commit()
+        # 清除 session 记录
+        session.pop('last_batch_time', None)
+        session.pop('last_batch_ids', None)
+        session.pop('last_batch_count', None)
+        flash(f'已撤销最近一次批量生成的 {deleted} 条工单', 'success')
+    except Exception as e:
+        flash(f'撤销失败：{str(e)}', 'danger')
+    return redirect(url_for('orders.list_orders'))
+
+
+@orders_bp.route('/<int:order_id>')
+@login_required
+def detail(order_id):
+    order = WorkOrder.query.get_or_404(order_id)
+    photos = WorkOrderPhoto.query.filter_by(work_order_id=order.id).order_by(WorkOrderPhoto.created_at.desc()).all()
+    return render_template('orders/detail.html', order=order, photos=photos)
+
+
+@orders_bp.route('/<int:order_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_order(order_id):
+    order = WorkOrder.query.get_or_404(order_id)
+    if request.method == 'POST':
+        order.title = request.form.get('title', order.title)
+        order.fault_type = request.form.get('fault_type', order.fault_type)
+        order.fault_subcategory = request.form.get('fault_subcategory', order.fault_subcategory or '')
+        order.building = request.form.get('building', order.building)
+        order.floor = request.form.get('floor', order.floor)
+        order.department = request.form.get('department', order.department)
+        order.location = request.form.get('location', order.location)
+        order.person = request.form.get('person', order.person)
+        # 编辑时如果新指派了人员且尚未有接单时间，视为已接单
+        if order.person and not order.accepted_at:
+            order.accepted_at = datetime.now()
+        order.status = request.form.get('status', order.status)
+        order.solution = request.form.get('solution', order.solution)
+        # 自动记录结单时间
+        if order.status == 'completed' and not order.completed_at:
+            order.completed_at = datetime.now()
+            order.end_time = datetime.now()
+        elif order.status != 'completed' and order.completed_at:
+            order.completed_at = None
+        # 已结单工单不允许修改紧急程度
+        db_order = WorkOrder.query.with_entities(WorkOrder.status).filter_by(id=order_id).first()
+        if db_order and db_order[0] != 'completed':
+            order.priority = request.form.get('priority', order.priority or 'normal')
+        if request.form.get('quick_complete'):
+            order.status = 'completed'
+        db.session.commit()
+        flash('✅ 工单已更新', 'success')
+        return redirect(url_for('orders.detail', order_id=order.id))
+    persons = Person.query.filter_by(is_active=True).all()
+    return render_template('orders/edit.html', order=order, persons=persons)
+
+
+@orders_bp.route('/<int:order_id>/delete', methods=['POST'])
+@login_required
+def delete_order(order_id):
+    order = WorkOrder.query.get_or_404(order_id)
+    title = order.title
+    db.session.delete(order)
+    db.session.commit()
+    log_audit('delete', 'work_order', current_user.display_name or current_user.username,
+              target_id=order_id, target_desc=f'删除工单#{order_id}: {title}')
+    flash('工单已删除', 'success')
+    return redirect(url_for('orders.list_orders'))
+
+
+@orders_bp.route('/<int:order_id>/toggle_priority', methods=['POST'])
+@login_required
+def toggle_priority(order_id):
+    order = WorkOrder.query.get_or_404(order_id)
+    if order.status == 'completed':
+        return jsonify({'error': '已结单工单不允许修改紧急程度', 'priority': order.priority}), 403
+    cycle = {'normal': 'urgent', 'urgent': 'emergency', 'emergency': 'normal'}
+    order.priority = cycle.get(order.priority or 'normal', 'normal')
+    db.session.commit()
+    return jsonify({'priority': order.priority})
+
+
+@orders_bp.route('/export')
+@login_required
+def export_excel():
+    """导出当前筛选条件下的工单为 Excel"""
+    query = WorkOrder.query
+
+    # 应用相同的筛选逻辑
+    fault_type = request.args.get('fault_type', '')
+    person = request.args.get('person', '')
+    keyword = request.args.get('keyword', '')
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    status = request.args.get('status', '')
+
+    if status in ('pending', 'in_progress', 'completed'):
+        query = query.filter(WorkOrder.status == status)
+
+    if fault_type:
+        query = query.filter(WorkOrder.fault_type == fault_type)
+    if person:
+        query = query.filter(WorkOrder.person == person)
+    if keyword:
+        query = query.filter(
+            WorkOrder.title.contains(keyword) |
+            WorkOrder.location.contains(keyword) |
+            WorkOrder.floor.contains(keyword) |
+            WorkOrder.description.contains(keyword) |
+            WorkOrder.fault_subcategory.contains(keyword)
+        )
+    if date_from:
+        try:
+            dt = datetime.strptime(date_from, '%Y-%m-%d')
+            query = query.filter(WorkOrder.start_time >= dt)
+        except:
+            pass
+    if date_to:
+        try:
+            dt = datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1)
+            query = query.filter(WorkOrder.start_time < dt)
+        except:
+            pass
+
+    orders = query.order_by(WorkOrder.start_time.desc()).all()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "故障工单"
+    headers = ['工单名称', '区域位置', '设备类型', '故障类型',
+               '故障描述', '开始时间', '结束时间', '人员', '解决方案', '创建时间']
+    ws.append(headers)
+
+    for o in orders:
+        location = f"{o.building} {o.floor} {o.department} {o.location}".strip()
+        ws.append([
+            o.title,
+            location,
+            o.device_type,
+            o.fault_type,
+            o.description,
+            o.start_time.strftime('%Y/%m/%d %H:%M:%S') if o.start_time else '',
+            o.end_time.strftime('%Y/%m/%d %H:%M:%S') if o.end_time else '',
+            o.person,
+            o.solution,
+            o.created_at.strftime('%Y/%m/%d %H:%M:%S') if o.created_at else ''
+        ])
+
+    # 列宽自适应
+    for col in ws.columns:
+        max_len = 0
+        col_letter = col[0].column_letter
+        for cell in col:
+            try:
+                if cell.value and len(str(cell.value)) > max_len:
+                    max_len = len(str(cell.value))
+            except:
+                pass
+        ws.column_dimensions[col_letter].width = min(max_len + 2, 50)
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f'工单导出_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    return send_file(output, as_attachment=True, download_name=filename,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+@orders_bp.route('/api/fault-subcategories')
+@login_required
+def api_fault_subcategories():
+    """返回指定一级分类下的所有二级分类"""
+    cat_name = request.args.get('category', '')
+    if not cat_name:
+        return jsonify([])
+    from services.fault_matcher import get_categories
+    for cat in get_categories():
+        if cat['name'] == cat_name:
+            return jsonify(cat['subcategories'])
+    return jsonify([])
+
+
+@orders_bp.route('/import-template')
+@login_required
+def download_import_template():
+    """下载工单导入模板"""
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "工单导入模板"
+    headers = ['工单名称*', '设备类型', '故障类型', '故障描述',
+               '楼区', '楼层', '科室', '位置',
+               '经办人', '解决方案', '开始时间', '结束时间', '状态', '紧急程度']
+    ws.append(headers)
+    ws.append(['示例：电脑无法开机', '电脑', '硬件', '开机黑屏',
+               '1号楼', '3层', '信息科', '301室',
+               '张三', '更换电源线', '2026-07-01 09:00', '2026-07-01 09:30', 'completed', 'normal'])
+    # 设置列宽
+    for col, w in zip('ABCDEFGHIJKLMN', [30, 10, 10, 20, 10, 8, 12, 12, 10, 20, 16, 16, 12, 10]):
+        ws.column_dimensions[col].width = w
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return send_file(output, as_attachment=True, download_name='工单导入模板.xlsx',
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+@orders_bp.route('/import', methods=['GET', 'POST'])
+@login_required
+def import_orders():
+    """批量导入工单（Excel）"""
+    from openpyxl import load_workbook
+    from openpyxl.utils import get_column_letter
+    
+    if request.method == 'POST':
+        file = request.files.get('file')
+        if not file:
+            flash('请选择 Excel 文件', 'danger')
+            return render_template('orders/import.html')
+        
+        try:
+            wb = load_workbook(file, read_only=True)
+            ws = wb.active
+            rows = list(ws.iter_rows(min_row=2, values_only=True))
+            
+            if not rows:
+                flash('Excel 文件为空', 'danger')
+                return render_template('orders/import.html')
+            
+            imported = 0
+            errors = []
+            now = datetime.now()
+            
+            for idx, row in enumerate(rows, start=2):
+                if not row or not row[0]:
+                    continue  # 跳过空行
+                title = str(row[0] or '').strip()
+                if not title:
+                    errors.append(f'第{idx}行：缺少工单名称')
+                    continue
+                
+                try:
+                    order = WorkOrder(
+                        title=title,
+                        device_type=str(row[1] or '其他').strip()[:50],
+                        fault_type=str(row[2] or '硬件').strip()[:50],
+                        description=str(row[3] or '').strip(),
+                        building=str(row[4] or '').strip()[:50],
+                        floor=str(row[5] or '').strip()[:20],
+                        department=str(row[6] or '').strip()[:100],
+                        location=str(row[7] or '').strip()[:200],
+                        person=str(row[8] or '').strip()[:50],
+                        solution=str(row[9] or '').strip(),
+                        status='pending',
+                        priority='normal',
+                        created_by=current_user.display_name or current_user.username,
+                    )
+                    
+                    # 解析时间
+                    if row[10]:
+                        try:
+                            order.start_time = row[10] if isinstance(row[10], datetime) else datetime.strptime(str(row[10]).strip(), '%Y-%m-%d %H:%M')
+                            order.created_at = order.start_time
+                        except: pass
+                    if row[11]:
+                        try:
+                            order.end_time = row[11] if isinstance(row[11], datetime) else datetime.strptime(str(row[11]).strip(), '%Y-%m-%d %H:%M')
+                        except: pass
+                    
+                    # 状态
+                    status_val = str(row[12] or '').strip().lower()
+                    if status_val in ('pending', 'in_progress', 'completed'):
+                        order.status = status_val
+                        if status_val == 'completed' and not order.end_time:
+                            order.completed_at = order.end_time or now
+                        elif status_val == 'in_progress':
+                            order.accepted_at = now
+                    
+                    # 紧急程度
+                    pri = str(row[13] or '').strip().lower()
+                    if pri in ('normal', 'urgent', 'emergency'):
+                        order.priority = pri
+                        order.original_priority = pri
+                    
+                    # 有经办人的视为已接单
+                    if order.person and not order.accepted_at:
+                        order.accepted_at = order.created_at or now
+                    
+                    db.session.add(order)
+                    imported += 1
+                except Exception as e:
+                    errors.append(f'第{idx}行：{str(e)}')
+            
+            db.session.commit()
+            msg = f'✅ 成功导入 {imported} 条工单'
+            if errors:
+                msg += f'，{len(errors)} 条错误（见下方）'
+            flash(msg, 'success' if not errors else 'warning')
+            return render_template('orders/import.html', imported=imported, errors=errors[:50])
+            
+        except Exception as e:
+            flash(f'导入失败：{str(e)}', 'danger')
+            return render_template('orders/import.html')
+    
+    return render_template('orders/import.html')
+
+@orders_bp.route('/calendar')
+@login_required
+def calendar_view():
+    """工单日历视图"""
+    from calendar import monthrange
+    now = datetime.now()
+    year = request.args.get('year', now.year, type=int)
+    month = request.args.get('month', now.month, type=int)
+
+    month_start = datetime(year, month, 1)
+    _, days_in_month = monthrange(year, month)
+    month_end = datetime(year, month, days_in_month, 23, 59, 59)
+
+    # 组别筛选（非管理员自动按 Person.team 过滤）
+    team = ''
+    if not current_user.is_admin:
+        _person = Person.query.filter_by(user_id=current_user.id).first()
+        if _person and _person.team:
+            team = _person.team
+    team_persons = set()
+    if team:
+        tp = Person.query.filter(Person.team == team, Person.is_active == True).all()
+        team_persons = {p.name for p in tp if p.name}
+
+    orders = WorkOrder.query.filter(
+        WorkOrder.created_at >= month_start,
+        WorkOrder.created_at <= month_end,
+    )
+    if team_persons:
+        orders = orders.filter(WorkOrder.person.in_(team_persons))
+    orders = orders.order_by(WorkOrder.created_at).all()
+
+    from collections import defaultdict
+    cal_data = defaultdict(list)
+    for o in orders:
+        day = o.created_at.day
+        cal_data[day].append(o)
+
+    weekdays = ['一', '二', '三', '四', '五', '六', '日']
+    first_weekday = month_start.weekday()
+
+    prev_month = month - 1
+    prev_year = year
+    next_month = month + 1
+    next_year = year
+    if prev_month < 1:
+        prev_month = 12
+        prev_year -= 1
+    if next_month > 12:
+        next_month = 1
+        next_year += 1
+
+    return render_template('orders/calendar.html',
+                           year=year, month=month,
+                           days_in_month=days_in_month,
+                           first_weekday=first_weekday,
+                           weekdays=weekdays,
+                           cal_data=dict(cal_data),
+                           prev_month=prev_month, prev_year=prev_year,
+                           next_month=next_month, next_year=next_year,
+                           now=now)
+
+@orders_bp.route('/api/calendar-day')
+@login_required
+def calendar_day_api():
+    """返回某一天的工单列表（供日历弹窗调用的JSON API）"""
+    date_str = request.args.get('date', '')
+    if not date_str:
+        return jsonify([])
+    try:
+        dt = datetime.strptime(date_str, '%Y-%m-%d')
+        next_dt = dt + timedelta(days=1)
+    except:
+        return jsonify([])
+    orders = WorkOrder.query.filter(
+        WorkOrder.created_at >= dt,
+        WorkOrder.created_at < next_dt,
+    )
+    # 非管理员按 team 过滤
+    if not current_user.is_admin:
+        _person = Person.query.filter_by(user_id=current_user.id).first()
+        if _person and _person.team:
+            tp = Person.query.filter(Person.team == _person.team, Person.is_active == True).all()
+            team_names = {p.name for p in tp if p.name}
+            if team_names:
+                orders = orders.filter(WorkOrder.person.in_(team_names))
+    orders = orders.order_by(WorkOrder.created_at).all()
+    return jsonify([{
+        'id': o.id,
+        'title': o.title,
+        'status': o.status,
+        'priority': o.priority,
+        'person': o.person,
+        'start_time': o.start_time.strftime('%H:%M') if o.start_time else '',
+        'detail_url': url_for('orders.detail', order_id=o.id),
+    } for o in orders])
+
+
+# ===== 工单关联聊天 API =====
+
+WO_CHAT_UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'uploads', 'wochat')
+os.makedirs(WO_CHAT_UPLOAD_FOLDER, exist_ok=True)
+
+ALLOWED_WO_CHAT_EXT = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'}
+
+
+@orders_bp.route('/<int:order_id>/chat')
+@login_required
+def wo_chat_messages(order_id):
+    """获取工单聊天消息"""
+    order = WorkOrder.query.get_or_404(order_id)
+    before_id = request.args.get('before_id', type=int)
+    after_id = request.args.get('after_id', type=int)
+    limit = min(request.args.get('limit', 50, type=int), 100)
+    query = WorkOrderChatMessage.query.filter_by(work_order_id=order.id)
+    if after_id:
+        query = query.filter(WorkOrderChatMessage.id > after_id)
+        msgs = query.order_by(WorkOrderChatMessage.id.asc()).limit(limit).all()
+    else:
+        if before_id:
+            query = query.filter(WorkOrderChatMessage.id < before_id)
+        msgs = query.order_by(WorkOrderChatMessage.id.desc()).limit(limit).all()
+        msgs.reverse()
+    return jsonify([{
+        'id': m.id,
+        'sender_id': m.sender_id,
+        'sender_name': m.sender_name,
+        'content': m.content,
+        'msg_type': m.msg_type,
+        'created_at': m.created_at.isoformat() if m.created_at else '',
+        'is_self': m.sender_id == current_user.id
+    } for m in msgs])
+
+
+@orders_bp.route('/<int:order_id>/chat/send', methods=['POST'])
+@login_required
+def wo_chat_send(order_id):
+    """发送工单聊天消息"""
+    order = WorkOrder.query.get_or_404(order_id)
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': '无效请求'}), 400
+    content = (data.get('content') or '').strip()
+    if not content:
+        return jsonify({'error': '不能发送空消息'}), 400
+    msg = WorkOrderChatMessage(
+        work_order_id=order.id,
+        sender_id=current_user.id,
+        sender_name=current_user.display_name or current_user.username,
+        content=content,
+        msg_type=data.get('msg_type', 'text')
+    )
+    db.session.add(msg)
+    db.session.commit()
+    return jsonify({
+        'id': msg.id,
+        'sender_id': msg.sender_id,
+        'sender_name': msg.sender_name,
+        'content': msg.content,
+        'msg_type': msg.msg_type,
+        'created_at': msg.created_at.isoformat() if msg.created_at else '',
+        'is_self': True
+    }), 201
+
+
+@orders_bp.route('/<int:order_id>/chat/upload', methods=['POST'])
+@login_required
+def wo_chat_upload(order_id):
+    """上传工单聊天文件（图片）"""
+    order = WorkOrder.query.get_or_404(order_id)
+    if 'file' not in request.files:
+        return jsonify({'error': '没有上传文件'}), 400
+    file = request.files['file']
+    if file.filename == '' or not file:
+        return jsonify({'error': '文件为空'}), 400
+    ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+    if ext not in ALLOWED_WO_CHAT_EXT:
+        return jsonify({'error': '不支持的文件类型，仅支持图片'}), 400
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    filepath = os.path.join(WO_CHAT_UPLOAD_FOLDER, filename)
+    file.save(filepath)
+    return jsonify({
+        'url': f'/static/uploads/wochat/{filename}',
+        'filename': filename,
+        'is_image': True
+    })
+
+
+@orders_bp.route('/<int:order_id>/photos/upload', methods=['POST'])
+@login_required
+def upload_photo(order_id):
+    """PC端上传工单照片"""
+    order = WorkOrder.query.get_or_404(order_id)
+    files = request.files.getlist('photos')
+    if not files:
+        flash('请选择图片', 'warning')
+        return redirect(url_for('orders.detail', order_id=order.id))
+
+    from utils.photo import save_photo, allowed_file
+    person_name = current_user.display_name or current_user.username
+    count = 0
+    for f in files:
+        if not f.filename or not allowed_file(f.filename):
+            continue
+        try:
+            file_data = f.read()
+            rel_path, w, h, size = save_photo(file_data, f.filename)
+            photo = WorkOrderPhoto(
+                work_order_id=order.id, filename=f.filename,
+                filepath=rel_path,
+                file_size=size, width=w, height=h,
+                uploaded_by=person_name,
+            )
+            db.session.add(photo)
+            count += 1
+        except Exception:
+            pass
+    db.session.commit()
+    flash(f'✅ 上传成功 {count} 张图片', 'success')
+    return redirect(url_for('orders.detail', order_id=order.id))
+
+
+@orders_bp.route('/api/search')
+@login_required
+def search_orders_api():
+    """JSON API: 搜索工单（供知识库引用）"""
+    q = request.args.get('q', '').strip()
+    limit = min(int(request.args.get('limit', 10)), 20)
+    if not q:
+        return jsonify([])
+    orders = WorkOrder.query.filter(
+        db.or_(
+            WorkOrder.title.ilike(f'%{q}%'),
+            WorkOrder.id.ilike(f'%{q}%'),
+        )
+    ).order_by(WorkOrder.id.desc()).limit(limit).all()
+    return jsonify([{
+        'id': o.id,
+        'title': o.title,
+        'detail_url': url_for('orders.detail', order_id=o.id),
+        'person': o.person or '',
+        'building': o.building or '',
+        'floor': o.floor or '',
+        'status': o.status,
+    } for o in orders])
+
+
+@orders_bp.route('/<int:order_id>/photos/<int:photo_id>/delete', methods=['POST'])
+@login_required
+def delete_photo(order_id, photo_id):
+    """PC端删除工单照片"""
+    photo = db.session.get(WorkOrderPhoto, photo_id)
+    if photo and photo.work_order_id == int(order_id):
+        import os
+        base = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads')
+        for p in [photo.filepath]:
+            if p:
+                fp = os.path.join(base, p)
+                if os.path.exists(fp):
+                    os.remove(fp)
+        db.session.delete(photo)
+        db.session.commit()
+    flash('✅ 已删除', 'success')
+    return redirect(url_for('orders.detail', order_id=order_id))

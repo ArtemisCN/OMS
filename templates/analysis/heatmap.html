@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block extra_head %}<style>:root{--hbg:#f8f9fc;--hcard:#fff;--hborder:#eef1f5;--htext:#1e293b;--hmuted:#8896ab}[data-theme="dark"]{--hbg:#0f1117;--hcard:#1a1d27;--hborder:#2a2e3a;--htext:#e2e8f0;--hmuted:#6b7a8f}.hpage{background:var(--hbg);min-height:calc(100vh - 60px);padding:24px 28px}.hheader{margin-bottom:24px}.hheader h1{font-size:20px;font-weight:700;color:var(--htext);display:flex;align-items:center;gap:10px;margin:0}.hheader h1 i{color:#6366f1}.hgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}.hcard{background:var(--hcard);border:1px solid var(--hborder);border-radius:14px;padding:20px}.hcard-name{font-size:15px;font-weight:600;color:var(--htext);margin-bottom:8px;display:flex;align-items:center;gap:8px}.hbar-bg{background:#f1f5f9;border-radius:8px;height:12px;overflow:hidden;margin:4px 0}[data-theme="dark"] .hbar-bg{background:#1e2433}.hbar{height:100%;border-radius:8px;background:linear-gradient(90deg,#6366f1,#818cf8);transition:width .5s}.hcount{font-size:12px;color:var(--hmuted);margin-top:4px;text-align:right}.hsub{font-size:12px;color:var(--hmuted);margin-top:8px}ul{padding:0;margin:0;list-style:none}li{padding:6px 0;font-size:13px;border-bottom:1px solid var(--hborder);display:flex;justify-content:space-between}</style>{% endblock %}
+{% block content %}<div class="hpage">
+<div class="hheader"><h1><i class="fas fa-fire"></i> 故障热力图</h1></div>
+<div class="hgrid">
+{% for building, data in heatmap_data %}
+<div class="hcard">
+<div class="hcard-name"><i class="fas fa-building"></i> {{ building }}</div>
+<div style="font-size:24px;font-weight:700;color:#6366f1">{{ data.count }}</div>
+<div style="font-size:12px;color:var(--hmuted);margin-bottom:8px;">故障总数</div>
+<div class="hbar-bg"><div class="hbar" style="width:{{ (data.count/(heatmap_data[0][1].count if heatmap_data else 1))*100 }}%"></div></div>
+<ul>{% for dept, cnt in data.departments.items()|sort(attribute='1', reverse=True) %}<li><span>{{ dept }}</span><span>{{ cnt }}次</span></li>{% endfor %}</ul>
+</div>
+{% else %}<div class="hcard" style="text-align:center;padding:40px;color:var(--hmuted);grid-column:1/-1"><i class="fas fa-fire" style="font-size:48px;opacity:.2;display:block;margin-bottom:12px"></i><p>暂无故障数据</p></div>
+{% endfor %}
+</div>
+</div>{% endblock %}

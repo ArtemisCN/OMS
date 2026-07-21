@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.task-card { background:#fff; border-radius:12px; padding:20px; margin-bottom:16px; box-shadow:0 1px 4px rgba(0,0,0,.06); transition:box-shadow .2s; }
+.task-card:hover { box-shadow:0 4px 16px rgba(79,70,229,.1); }
+.task-card .task-no { font-size:12px; color:#94a3b8; }
+.task-card .task-name { font-size:16px; font-weight:600; color:#0f172a; }
+.task-card .stat-label { font-size:12px; color:#64748b; }
+.task-card .stat-num { font-size:22px; font-weight:700; }
+.badge-pending { background:#fffbeb; color:#b45309; }
+.badge-completed { background:#ecfdf5; color:#059669; }
+.stat-inline { display:flex; gap:24px; margin:12px 0; }
+.stat-inline > div { text-align:center; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="mb-0 fw-bold" style="font-size:15px;">
+        <i class="fas fa-clipboard-list" style="color:#4f46e5;"></i> 盘点管理
+        <span class="text-muted ms-2" style="font-size:12px; font-weight:400;">共 {{ pagination.total }} 个盘点</span>
+    </h5>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('asset.list_view') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-server"></i> 返回资产台账
+        </a>
+        {% if current_user.is_admin %}
+        <a href="{{ url_for('inventory.create') }}" class="btn btn-sm btn-primary">
+            <i class="fas fa-plus"></i> 新建盘点
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 筛选 -->
+<form class="row g-2 mb-3" method="GET">
+    <div class="col-auto">
+        <select class="form-select form-select-sm" name="status" onchange="this.form.submit()">
+            <option value="">全部状态</option>
+            <option value="pending" {{ 'selected' if status_filter=='pending' }}>进行中</option>
+            <option value="completed" {{ 'selected' if status_filter=='completed' }}>已完成</option>
+        </select>
+    </div>
+</form>
+
+{% for task in tasks %}
+<div class="task-card">
+    <div class="d-flex justify-content-between align-items-start">
+        <div>
+            <div class="task-no">{{ task.task_no }}</div>
+            <div class="task-name">{{ task.name }}</div>
+        </div>
+        <span class="badge {{ 'badge-pending' if task.status=='pending' else 'badge-completed' }}">
+            {{ '进行中' if task.status=='pending' else '已完成' }}
+        </span>
+    </div>
+    <div class="stat-inline">
+        <div><div class="stat-num">{{ task.total_count }}</div><div class="stat-label">应盘</div></div>
+        <div><div class="stat-num">{{ task.scanned_count }}</div><div class="stat-label">已盘</div></div>
+        <div><div class="stat-num" style="color:#059669;">{{ task.normal_count }}</div><div class="stat-label">正常</div></div>
+        <div><div class="stat-num" style="color:#f59e0b;">{{ task.issue_count }}</div><div class="stat-label">异常</div></div>
+        <div><div class="stat-num" style="color:#4f46e5;">{{ task.new_asset_count }}</div><div class="stat-label">新盘</div></div>
+    </div>
+    <div class="d-flex justify-content-between align-items-center">
+        <small class="text-muted">{{ task.operator }} · {{ task.created_at }}</small>
+        <div class="d-flex gap-1">
+            <a href="{{ url_for('inventory.detail', task_id=task.id) }}" class="btn btn-sm btn-outline-primary">查看详情</a>
+            {% if task.status == 'pending' and current_user.is_admin %}
+            <button class="btn btn-sm btn-success" onclick="finishTask({{ task.id }})">结束盘点</button>
+            {% endif %}
+            {% if current_user.is_admin %}
+            <button class="btn btn-sm btn-outline-danger" onclick="deleteTask({{ task.id }})">删除</button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="fas fa-clipboard-list" style="font-size:48px; opacity:.3; display:block; margin-bottom:12px;"></i>
+    暂无盘点任务
+</div>
+{% endfor %}
+
+{% if pagination.pages > 1 %}
+<nav>{% from 'macros/pagination.html' import render_pagination %}{{ render_pagination(pagination, 'inventory.list_view') }}</nav>
+{% endif %}
+
+<style>
+.inv-compare { margin-bottom:24px; }
+.inv-compare .cmp-card { background:var(--card-bg,#fff); border-radius:12px; padding:16px; border:1px solid var(--card-border,#e5e7eb); }
+.inv-compare .cmp-card h6 { font-size:13px; font-weight:600; margin-bottom:8px; }
+.inv-compare .cmp-row { display:flex; gap:16px; flex-wrap:wrap; }
+.inv-compare .cmp-stat { min-width:60px; }
+.inv-compare .cmp-stat .num { font-size:20px; font-weight:700; }
+.inv-compare .cmp-stat .num.green { color:#059669; }
+.inv-compare .cmp-stat .num.orange { color:#f59e0b; }
+.inv-compare .cmp-stat .num.blue { color:#4f46e5; }
+.inv-compare .cmp-stat .num.gray { color:#64748b; }
+.inv-compare .cmp-stat .lbl { font-size:11px; color:#94a3b8; }
+.inv-compare .cmp-bar { height:4px; background:#f1f5f9; border-radius:999px; margin:6px 0; overflow:hidden; display:flex; }
+.inv-compare .cmp-bar .green { height:100%; background:#10b981; }
+.inv-compare .cmp-bar .orange { height:100%; background:#f59e0b; }
+.inv-compare .cmp-bar .blue { height:100%; background:#6366f1; }
+.inv-compare .cmp-old { font-size:11px; color:#94a3b8; margin-top:4px; }
+.inv-compare .cmp-empty { font-size:12px; color:#94a3b8; text-align:center; padding:20px 0; }
+[data-theme="dark"] .inv-compare .cmp-card { background:#1f2937; border-color:#374151; }
+[data-theme="dark"] .inv-compare .cmp-bar { background:#374151; }
+</style>
+
+<div class="inv-compare" id="invCompare">
+  <div class="cmp-card">
+    <h6>📊 盘点趋势 <span style="font-size:11px;font-weight:400;color:#94a3b8;">—— 最近两次完成盘点对比</span></h6>
+    <div id="cmpContent"><div class="cmp-empty">加载中...</div></div>
+  </div>
+</div>
+
+<script>
+fetch('/inventory/api/dashboard-stats')
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (!d.ok || d.tasks.length === 0) {
+      document.getElementById('cmpContent').innerHTML = '<div class="cmp-empty">暂无已完成盘点数据</div>';
+      return;
+    }
+    var h = '';
+    d.tasks.forEach(function(t, idx) {
+      var label = idx === 0 ? '本次' : '上次';
+      var barGreen = (t.normal_pct || 0) + '%';
+      var barOrange = (t.issue_pct || 0) + '%';
+      var barBlue = (d.tasks[0].new_assets || 0) > 0 ? ' style="width:' + Math.min(t.new_assets / Math.max(t.total,1) * 100, 100) + '%"' : '';
+      h += '<div style="margin-bottom:' + (idx === 0 ? '12px' : '0') + ';">' +
+        '<div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">' + label + '：' + t.name + ' <span style="font-weight:400;color:#94a3b8;font-size:11px;">(' + t.task_no + ' · ' + t.end_time + ')</span></div>' +
+        '<div class="cmp-row">' +
+        '<div class="cmp-stat"><div class="num gray">' + t.total + '</div><div class="lbl">总项</div></div>' +
+        '<div class="cmp-stat"><div class="num green">' + t.normal + '</div><div class="lbl">正常</div></div>' +
+        '<div class="cmp-stat"><div class="num orange">' + t.issue + '</div><div class="lbl">异常</div></div>' +
+        '<div class="cmp-stat"><div class="num blue">' + t.new_assets + '</div><div class="lbl">新盘</div></div>' +
+        '</div>' +
+        '<div class="cmp-bar"><div class="green" style="width:' + barGreen + '"></div><div class="orange" style="width:' + barOrange + '"></div></div>';
+      if (idx === 0 && d.tasks.length > 1) {
+        var prev = d.tasks[1];
+        h += '<div class="cmp-old">较上次：正常 ' + (t.normal_pct - prev.normal_pct >= 0 ? '↑' : '↓') + Math.abs(t.normal_pct - prev.normal_pct).toFixed(1) + '%' +
+          ' · 异常 ' + (t.issue_pct - prev.issue_pct >= 0 ? '↑' : '↓') + Math.abs(t.issue_pct - prev.issue_pct).toFixed(1) + '%</div>';
+      }
+      h += '</div>';
+    });
+    document.getElementById('cmpContent').innerHTML = h;
+  })
+  .catch(function() {
+    document.getElementById('cmpContent').innerHTML = '<div class="cmp-empty">加载失败</div>';
+  });
+</script>
+
+<script>
+function finishTask(id) {
+    if (!confirm('确认结束该盘点？')) return;
+    fetch('/inventory/' + id + '/finish', { method: 'POST' })
+    .then(r => r.json()).then(d => { if(d.ok) location.reload(); else alert(d.msg); });
+}
+function deleteTask(id) {
+    if (!confirm('确认删除该盘点？')) return;
+    fetch('/inventory/' + id + '/delete', { method: 'POST' })
+    .then(r => r.json()).then(d => { if(d.ok) location.reload(); else alert(d.msg); });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,492 @@
+<!-- 系统参数设置 - 全新交互版 -->
+{% extends "base.html" %}
+{% block extra_head %}
+<style>
+:root {
+  --set-bg: #f8f9fc;
+  --set-card: #ffffff;
+  --set-border: #eef1f5;
+  --set-text: #1e293b;
+  --set-muted: #8896ab;
+  --set-accent: #4f46e5;
+  --set-accent-light: #eef1ff;
+  --set-success: #10b981;
+}
+[data-theme="dark"] {
+  --set-bg: #0f1117;
+  --set-card: #1a1d27;
+  --set-border: #2a2e3a;
+  --set-text: #e2e8f0;
+  --set-muted: #6b7a8f;
+  --set-accent-light: #1e1b4b;
+}
+.settings-page { background:var(--set-bg); min-height:calc(100vh - 60px); padding:24px 28px; }
+.settings-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
+.settings-header h1 { font-size:20px; font-weight:700; color:var(--set-text); display:flex; align-items:center; gap:10px; margin:0; }
+.settings-header h1 i { color:var(--set-accent); font-size:22px; }
+.settings-actions { display:flex; gap:8px; }
+.btn-soft { border:1px solid var(--set-border); background:var(--set-card); color:var(--set-text); border-radius:8px; padding:6px 14px; font-size:13px; font-weight:500; transition:all .2s; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+.btn-soft:hover { border-color:var(--set-accent); color:var(--set-accent); background:var(--set-accent-light); }
+
+.cat-tabs { display:flex; gap:6px; margin-bottom:28px; flex-wrap:wrap; }
+.cat-tab { padding:8px 18px; border-radius:20px; font-size:13px; font-weight:500; cursor:pointer;
+  border:1px solid var(--set-border); background:var(--set-card); color:var(--set-muted);
+  transition:all .3s cubic-bezier(.4,0,.2,1); display:flex; align-items:center; gap:6px; user-select:none; }
+.cat-tab:hover { border-color:var(--set-accent); color:var(--set-accent); background:var(--set-accent-light); }
+.cat-tab.active { background:var(--set-accent); border-color:var(--set-accent); color:#fff; }
+.cat-tab .badge-count { background:var(--set-border); color:var(--set-muted); font-size:11px; padding:1px 8px; border-radius:10px; }
+.cat-tab.active .badge-count { background:rgba(255,255,255,.2); color:rgba(255,255,255,.85); }
+
+.cat-panel { display:none; animation: fadeSlide .35s ease; }
+.cat-panel.active { display:block; }
+@keyframes fadeSlide { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+.param-row { display:flex; align-items:center; padding:16px 20px; background:var(--set-card);
+  border-radius:12px; margin-bottom:8px; border:1px solid var(--set-border);
+  transition:all .2s; gap:16px; }
+.param-row:hover { border-color:var(--set-accent); box-shadow:0 2px 16px rgba(79,70,229,.08); }
+.param-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+  font-size:16px; flex-shrink:0; background:var(--set-accent-light); color:var(--set-accent); }
+.param-info { flex:1; min-width:0; }
+.param-label { font-size:14px; font-weight:600; color:var(--set-text); margin-bottom:2px; }
+.param-desc { font-size:12px; color:var(--set-muted); line-height:1.4; }
+.param-control { flex-shrink:0; min-width:160px; display:flex; align-items:center; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
+
+.set-select { padding:6px 30px 6px 12px; border-radius:8px; border:1px solid var(--set-border);
+  background:var(--set-card); color:var(--set-text); font-size:13px; appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238896ab' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 10px center; cursor:pointer;
+  min-width:150px; transition:border-color .2s; }
+.set-select:focus { border-color:var(--set-accent); outline:none; box-shadow:0 0 0 3px rgba(79,70,229,.12); }
+
+.set-stepper { display:flex; align-items:center; gap:0; border:1px solid var(--set-border);
+  border-radius:8px; overflow:hidden; background:var(--set-card); }
+.set-stepper button { width:32px; height:32px; border:none; background:transparent; color:var(--set-muted);
+  font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .15s; }
+.set-stepper button:hover { background:var(--set-accent-light); color:var(--set-accent); }
+.set-stepper input { width:56px; height:32px; border:none; text-align:center; font-size:13px; font-weight:600;
+  color:var(--set-text); background:transparent; outline:none; -moz-appearance:textfield; }
+.set-stepper input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+
+.set-toggle-group { display:flex; border:1px solid var(--set-border); border-radius:8px; overflow:hidden; }
+.set-toggle-opt { padding:6px 14px; font-size:12px; font-weight:500; cursor:pointer; border-right:1px solid var(--set-border);
+  transition:all .2s; color:var(--set-muted); background:transparent; user-select:none; }
+.set-toggle-opt:last-child { border-right:none; }
+.set-toggle-opt.active { background:var(--set-accent); color:#fff; border-color:var(--set-accent); }
+.set-toggle-opt.active + .set-toggle-opt { border-left-color:var(--set-accent); }
+
+.tag-input-wrap { min-width:200px; }
+.tag-list { display:flex; flex-wrap:wrap; gap:4px; padding:6px 8px; border:1px solid var(--set-border);
+  border-radius:8px; min-height:34px; background:var(--set-card); cursor:text; transition:border-color .2s; }
+.tag-list:focus-within { border-color:var(--set-accent); box-shadow:0 0 0 3px rgba(79,70,229,.12); }
+.tag-chip { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; background:var(--set-accent-light);
+  color:var(--set-accent); border-radius:6px; font-size:12px; font-weight:500; }
+.tag-chip .tag-del { cursor:pointer; font-size:14px; line-height:1; opacity:.6; transition:opacity .15s; }
+.tag-chip .tag-del:hover { opacity:1; }
+.tag-input-native { border:none; outline:none; background:transparent; font-size:13px; color:var(--set-text);
+  min-width:60px; flex:1; padding:2px 4px; }
+
+.set-time { padding:6px 12px; border-radius:8px; border:1px solid var(--set-border);
+  background:var(--set-card); color:var(--set-text); font-size:13px; transition:border-color .2s; }
+.set-time:focus { border-color:var(--set-accent); outline:none; box-shadow:0 0 0 3px rgba(79,70,229,.12); }
+
+.set-text { padding:6px 12px; border-radius:8px; border:1px solid var(--set-border);
+  background:var(--set-card); color:var(--set-text); font-size:13px; min-width:160px; transition:border-color .2s; }
+.set-text:focus { border-color:var(--set-accent); outline:none; box-shadow:0 0 0 3px rgba(79,70,229,.12); }
+
+.save-indicator { font-size:12px; color:var(--set-success); opacity:0; transition:opacity .3s; display:flex; align-items:center; gap:4px; white-space:nowrap; }
+.save-indicator.show { opacity:1; }
+
+/* 医院推送 */
+.hospital-strip { margin-top:24px; }
+.hospital-strip-header { display:flex; align-items:center; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+.hospital-strip-header h3 { font-size:16px; font-weight:600; color:var(--set-text); margin:0; display:flex; align-items:center; gap:8px; }
+.hospital-strip-header h3 i { color:var(--set-accent); }
+.hospital-strip-header .hint { font-size:12px; color:var(--set-muted); }
+.hospital-scroll { display:flex; gap:12px; overflow-x:auto; padding:4px 0 12px; scroll-snap-type:x mandatory; }
+.hospital-card { flex:0 0 260px; scroll-snap-align:start; background:var(--set-card); border-radius:12px;
+  border:1px solid var(--set-border); padding:16px; transition:all .2s; }
+.hospital-card:hover { border-color:var(--set-accent); box-shadow:0 4px 16px rgba(79,70,229,.1); }
+.hospital-card-header { display:flex; align-items:center; margin-bottom:10px; }
+.hospital-card-name { font-size:14px; font-weight:600; color:var(--set-text); }
+.hospital-card .form-switch { margin-left:auto; }
+.hospital-card .form-check-input:checked { background-color:var(--set-success); border-color:var(--set-success); }
+.hospital-card .webhook-input { font-size:11px; font-family:'SF Mono',monospace; padding:6px 10px; border-radius:8px;
+  border:1px solid var(--set-border); background:var(--set-bg); color:var(--set-text); width:100%;
+  transition:border-color .2s; }
+.hospital-card .webhook-input:focus { border-color:var(--set-accent); outline:none; }
+
+@media(max-width:768px) {
+  .settings-page { padding:16px; }
+  .param-row { flex-wrap:wrap; }
+  .param-control { width:100%; justify-content:flex-start; }
+  .hospital-card { flex:0 0 220px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% set cat_icons = {
+  '仪表盘':'fas fa-chart-pie', '工单':'fas fa-file-alt', '人员':'fas fa-users-cog',
+  '资产':'fas fa-boxes', '界面':'fas fa-paint-brush', '基本':'fas fa-cog',
+  '系统':'fas fa-server', '通知':'fas fa-bell',
+} %}
+{% set param_meta = {
+  'auto_refresh_interval':     {'icon':'sync-alt','label':'自动刷新间隔','desc':'每隔多少秒自动刷新仪表盘数据？设为 0 则改为手动刷新','unit':'秒'},
+  'default_fault_type':        {'icon':'tools','label':'默认故障类型','desc':'创建工单时自动选中的故障类型，仍可在发布页修改'},
+  'default_priority':          {'icon':'exclamation-triangle','label':'默认紧急程度','desc':'新工单的紧急等级默认值'},
+  'person_teams':              {'icon':'users','label':'人员组别选项','desc':'人员管理中可选的角色组，回车添加新组','unit':''},
+  'order_page_size':           {'icon':'list-ol','label':'每页显示条数','desc':'工单列表每页显示多少条记录','unit':'条'},
+  'maintenance_reminder_days': {'icon':'bell','label':'保修到期提醒','desc':'资产保修到期前多少天开始显示提醒标记','unit':'天'},
+  'sidebar_auto_hide_seconds': {'icon':'chevron-left','label':'侧边栏自动收起','desc':'鼠标在侧边栏静止几秒后自动收起，0=关闭','unit':'秒'},
+  'default_dashboard_team':    {'icon':'layer-group','label':'默认显示组别','desc':'进入仪表盘时默认选中哪个组的数据'},
+  'default_hospital_id':       {'icon':'hospital','label':'默认显示医院','desc':'登录后默认切换到哪个医院的数据视图'},
+  'system_name':               {'icon':'tag','label':'系统品牌名','desc':'侧边栏顶部显示的品牌名称'},
+  'system_subtitle':           {'icon':'quote-right','label':'系统副标题','desc':'登录页和页脚显示的副标题'},
+  'system_title_suffix':       {'icon':'window-maximize','label':'浏览器标题后缀','desc':'浏览器标签页标题末尾的文字'},
+  'home_name':                 {'icon':'home','label':'首页名称','desc':'侧边栏「仪表盘」文字可自定义'},
+  'login_page_title':          {'icon':'sign-in-alt','label':'登录页主标题','desc':'登录页面顶部显示的欢迎标题'},
+  'site_name':                 {'icon':'globe','label':'站点名称','desc':'系统的全局站点标识'},
+  'wecom_push_schedule':       {'icon':'calendar-day','label':'推送时间模式','desc':'企业微信推送在哪些日期执行'},
+  'wecom_push_time_start':     {'icon':'clock','label':'推送开始时间','desc':'每天几点开始允许推送通知'},
+  'wecom_push_time_end':       {'icon':'clock','label':'推送结束时间','desc':'每天几点停止推送通知'},
+  'wecom_timeout_hours':       {'icon':'hourglass-half','label':'超时提醒阈值','desc':'工单超过多少小时未完成时标记为超时','unit':'小时'},
+} %}
+{% set stepper_cfg = {
+  'auto_refresh_interval':     {'step':5, 'min':0, 'max':600},
+  'order_page_size':           {'step':5, 'min':5, 'max':200},
+  'maintenance_reminder_days': {'step':5, 'min':0, 'max':365},
+  'sidebar_auto_hide_seconds': {'step':5, 'min':0, 'max':300},
+  'wecom_timeout_hours':       {'step':0.5, 'min':0.5, 'max':168},
+} %}
+
+<div class="settings-page">
+  <!-- 顶部 -->
+  <div class="settings-header">
+    <h1><i class="fas fa-sliders-h"></i> 系统参数设置</h1>
+    <div class="settings-actions">
+      <form method="post" action="{{ url_for('settings.init_defaults') }}" style="display:inline;">
+        <button type="submit" class="btn-soft"><i class="fas fa-redo-alt"></i> 恢复默认</button>
+      </form>
+      <a href="{{ url_for('data.index') }}" class="btn-soft"><i class="fas fa-arrow-left"></i> 返回</a>
+    </div>
+  </div>
+
+  {% if not settings %}
+  <div style="text-align:center;padding:60px 0;color:var(--set-muted);">
+    <i class="fas fa-info-circle" style="font-size:40px;display:block;margin-bottom:12px;"></i>
+    暂无系统参数，点击「恢复默认」创建
+  </div>
+  {% else %}
+
+  <!-- 分类标签 -->
+  <div class="cat-tabs" id="catTabs">
+    {% for cat in categories %}
+    {% if cat_counts.get(cat, 0) > 0 %}
+    <div class="cat-tab {% if loop.first %}active{% endif %}" data-cat="{{ cat }}"
+         onclick="switchCat(this, '{{ cat }}')">
+      <i class="{{ cat_icons.get(cat, 'fas fa-cog') }}"></i> {{ cat }}
+      <span class="badge-count">{{ cat_counts.get(cat, 0) }}</span>
+    </div>
+    {% endif %}
+    {% endfor %}
+    <div class="cat-tab" data-cat="__push__" onclick="switchCat(this, '__push__')">
+      <i class="fab fa-weixin"></i> 推送配置 <span class="badge-count">{{ hospitals|length }}</span>
+    </div>
+  </div>
+
+  <!-- 参数面板 -->
+  {% for cat in categories %}
+  {% set cat_settings = settings|selectattr('category', 'equalto', cat)|list %}
+  {% if cat_settings %}
+  <div class="cat-panel {% if loop.first %}active{% endif %}" id="panel-{{ cat }}">
+    {% for s in cat_settings %}
+    {% set meta = param_meta.get(s.key, {'icon':'cog','label':s.label or s.key,'desc':s.description or '','unit':''}) %}
+    {% set cfg = stepper_cfg.get(s.key, {}) %}
+    <div class="param-row" id="row-{{ s.id }}" data-key="{{ s.key }}">
+      <div class="param-icon"><i class="fas fa-{{ meta.icon }}"></i></div>
+      <div class="param-info">
+        <div class="param-label">{{ meta.label }}</div>
+        <div class="param-desc">{{ meta.desc }}</div>
+      </div>
+      <div class="param-control">
+        {% if s.key == 'default_priority' %}
+        <div class="set-toggle-group">
+          <div class="set-toggle-opt {% if s.value == 'normal' %}active{% endif %}"
+               onclick="togglePriority({{ s.id }}, this, 'normal')">🟢 普通</div>
+          <div class="set-toggle-opt {% if s.value == 'urgent' %}active{% endif %}"
+               onclick="togglePriority({{ s.id }}, this, 'urgent')">🟡 加急</div>
+          <div class="set-toggle-opt {% if s.value == 'emergency' %}active{% endif %}"
+               onclick="togglePriority({{ s.id }}, this, 'emergency')">🔴 紧急</div>
+        </div>
+
+        {% elif s.key == 'default_fault_type' %}
+        <select class="set-select" onchange="saveSetting({{ s.id }}, this)" data-key="{{ s.key }}">
+          {% for ft in fault_types %}
+          <option value="{{ ft }}" {% if s.value == ft %}selected{% endif %}>{{ ft }}</option>
+          {% endfor %}
+        </select>
+
+        {% elif s.key == 'default_hospital_id' %}
+        <select class="set-select" onchange="saveSetting({{ s.id }}, this)" data-key="{{ s.key }}">
+          <option value="" {% if not s.value %}selected{% endif %}>🌐 全部医院</option>
+          {% for h in hospitals %}
+          <option value="{{ h.id }}" {% if s.value|string == h.id|string %}selected{% endif %}>{{ h.name }}</option>
+          {% endfor %}
+        </select>
+
+        {% elif s.key == 'default_dashboard_team' %}
+        <select class="set-select" onchange="saveSetting({{ s.id }}, this)" data-key="{{ s.key }}">
+          <option value="" {% if not s.value %}selected{% endif %}>📋 全部组</option>
+          {% for t in team_list %}
+          <option value="{{ t }}" {% if s.value == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+
+        {% elif s.key == 'person_teams' %}
+        <div class="tag-input-wrap">
+          <div class="tag-list" id="tag-list-{{ s.id }}" onclick="document.getElementById('tag-input-{{ s.id }}').focus()">
+            {% set tags = s.value.split(',') if s.value else [] %}
+            {% for t in tags %}
+            {% set tname = t.strip() %}
+            {% if tname %}
+            <span class="tag-chip">{{ tname }}<span class="tag-del" onclick="event.stopPropagation();removeTag({{ s.id }}, '{{ tname }}')">×</span></span>
+            {% endif %}
+            {% endfor %}
+            <input class="tag-input-native" id="tag-input-{{ s.id }}" placeholder="输入组名按回车"
+                   onkeydown="addTag(event, {{ s.id }})">
+          </div>
+        </div>
+
+        {% elif s.key == 'wecom_push_schedule' %}
+        <div class="set-toggle-group">
+          <div class="set-toggle-opt {% if s.value == 'all' %}active{% endif %}"
+               onclick="toggleGroup({{ s.id }}, this, 'all')">📅 全年推送</div>
+          <div class="set-toggle-opt {% if s.value == 'workday' %}active{% endif %}"
+               onclick="toggleGroup({{ s.id }}, this, 'workday')">💼 仅工作日</div>
+        </div>
+
+        {% elif s.key in ('wecom_push_time_start', 'wecom_push_time_end') %}
+        <input type="time" class="set-time" value="{{ s.value or '' }}"
+               onchange="saveSetting({{ s.id }}, this)" data-key="{{ s.key }}">
+
+        {% elif cfg %}
+        <div class="set-stepper">
+          <button onclick="stepper({{ s.id }}, -{{ cfg.step }}, {{ cfg.min }}, {{ cfg.max }})">−</button>
+          <input type="number" value="{{ s.value or cfg.min }}" data-key="{{ s.key }}"
+                 step="{{ cfg.step }}" min="{{ cfg.min }}" max="{{ cfg.max }}"
+                 onchange="saveSetting({{ s.id }}, this)">
+          <button onclick="stepper({{ s.id }}, {{ cfg.step }}, {{ cfg.min }}, {{ cfg.max }})">+</button>
+        </div>
+        {% if meta.unit %}<span style="font-size:12px;color:var(--set-muted);min-width:20px;">{{ meta.unit }}</span>{% endif %}
+
+        {% else %}
+        <input type="text" class="set-text" value="{{ s.value or '' }}" data-key="{{ s.key }}"
+               onchange="saveSetting({{ s.id }}, this)" placeholder="输入值...">
+        {% endif %}
+        <span class="save-indicator" id="ok-{{ s.id }}"><i class="fas fa-check-circle"></i> 已保存</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  <!-- 推送配置 -->
+  <div class="cat-panel" id="panel-__push__">
+    <div class="hospital-strip">
+      <div class="hospital-strip-header">
+        <h3><i class="fab fa-weixin"></i> 各医院企业微信推送</h3>
+        <span class="hint">每所医院可独立配置推送开关和 Webhook 地址</span>
+      </div>
+      <div class="hospital-scroll">
+        {% for h in hospitals %}
+        <div class="hospital-card">
+          <div class="hospital-card-header">
+            <span class="hospital-card-name">{{ h.name }}</span>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch"
+                     id="push-en-{{ h.id }}" style="cursor:pointer;"
+                     {{ 'checked' if hospital_push_enabled.get(h.id, True) else '' }}
+                     onchange="savePushToggle({{ h.id }}, this)">
+            </div>
+          </div>
+          <input type="text" class="webhook-input" id="wh-{{ h.id }}"
+                 value="{{ hospital_webhooks.get(h.id, '') }}"
+                 placeholder="粘贴企业微信群 Webhook 地址..."
+                 onchange="saveWebhook({{ h.id }})"
+                 style="{% if not hospital_push_enabled.get(h.id, True) %}opacity:.4{% endif %}">
+          <div style="margin-top:6px;text-align:right;">
+            <span class="save-indicator" id="ok-wh-{{ h.id }}"><i class="fas fa-check-circle"></i> 已保存</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {% endif %}
+</div>
+
+<script>
+// 分类切换
+function switchCat(el, cat) {
+  document.querySelectorAll('.cat-tab').forEach(function(t){ t.classList.remove('active'); });
+  document.querySelectorAll('.cat-panel').forEach(function(p){ p.classList.remove('active'); });
+  el.classList.add('active');
+  var panel = document.getElementById('panel-' + cat);
+  if (panel) panel.classList.add('active');
+}
+
+// 保存
+function saveSetting(id, input) {
+  var key = input.getAttribute('data-key');
+  if (!key) return;
+  var val = input.value;
+  var ok = document.getElementById('ok-' + id);
+  var fd = new FormData();
+  fd.append('key', key);
+  fd.append('value', val);
+  fetch('/settings/save', {method:'POST', body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(d.ok) showSaved(ok); });
+}
+
+function showSaved(el) {
+  el.classList.add('show');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(function(){ el.classList.remove('show'); }, 1800);
+}
+
+// 步进器
+function stepper(id, step, min, max) {
+  var row = document.getElementById('row-' + id);
+  if (!row) return;
+  var input = row.querySelector('input[type="number"]');
+  if (!input) return;
+  var val = parseFloat(input.value) || 0;
+  var stepAbs = Math.abs(step);
+  if (stepAbs >= 1) {
+    val = Math.round((val + step) / stepAbs) * stepAbs;
+  } else {
+    val = Math.round((val + step) / 0.5) * 0.5;
+  }
+  val = Math.max(min, Math.min(max, val));
+  input.value = val;
+  input.dispatchEvent(new Event('change'));
+}
+
+// 优先级三选一
+function togglePriority(id, el, val) {
+  var parent = el.parentElement;
+  parent.querySelectorAll('.set-toggle-opt').forEach(function(o){ o.classList.remove('active'); });
+  el.classList.add('active');
+  var ok = document.getElementById('ok-' + id);
+  var fd = new FormData();
+  fd.append('key', 'default_priority');
+  fd.append('value', val);
+  fetch('/settings/save', {method:'POST', body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(d.ok) showSaved(ok); });
+}
+
+// 二选一
+function toggleGroup(id, el, val) {
+  var parent = el.parentElement;
+  parent.querySelectorAll('.set-toggle-opt').forEach(function(o){ o.classList.remove('active'); });
+  el.classList.add('active');
+  var ok = document.getElementById('ok-' + id);
+  var fd = new FormData();
+  fd.append('key', 'wecom_push_schedule');
+  fd.append('value', val);
+  fetch('/settings/save', {method:'POST', body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(d.ok) showSaved(ok); });
+}
+
+// 标签输入
+function addTag(event, id) {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  var input = document.getElementById('tag-input-' + id);
+  var text = input.value.trim();
+  if (!text) return;
+  var list = document.getElementById('tag-list-' + id);
+  var chips = list.querySelectorAll('.tag-chip');
+  var tags = [];
+  chips.forEach(function(c){
+    var t = c.childNodes[0].textContent.trim();
+    if (t) tags.push(t);
+  });
+  if (tags.indexOf(text) !== -1) { input.value = ''; return; }
+  tags.push(text);
+  saveTags(id, tags, list, input);
+}
+
+function removeTag(id, text) {
+  var list = document.getElementById('tag-list-' + id);
+  var chips = list.querySelectorAll('.tag-chip');
+  var tags = [];
+  chips.forEach(function(c){
+    var t = c.childNodes[0].textContent.trim();
+    if (t && t !== text) tags.push(t);
+  });
+  saveTags(id, tags, list, document.getElementById('tag-input-' + id));
+}
+
+function saveTags(id, tags, list, input) {
+  var val = tags.join(',');
+  var ok = document.getElementById('ok-' + id);
+  var fd = new FormData();
+  fd.append('key', 'person_teams');
+  fd.append('value', val);
+  fetch('/settings/save', {method:'POST', body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.ok) {
+        list.innerHTML = '';
+        tags.forEach(function(t){
+          var chip = document.createElement('span');
+          chip.className = 'tag-chip';
+          var del = document.createElement('span');
+          del.className = 'tag-del';
+          del.textContent = '×';
+          del.onclick = function(e){
+            e.stopPropagation();
+            removeTag(id, t);
+          };
+          chip.appendChild(document.createTextNode(t));
+          chip.appendChild(del);
+          list.appendChild(chip);
+        });
+        if (input) { list.appendChild(input); input.value = ''; input.focus(); }
+        showSaved(ok);
+      }
+    });
+}
+
+// 推送开关
+function savePushToggle(hid, cb) {
+  var card = cb.closest('.hospital-card');
+  var input = card.querySelector('.webhook-input');
+  input.style.opacity = cb.checked ? '1' : '.4';
+  var fd = new FormData();
+  fd.append('hospital_id', hid);
+  fd.append('key', 'wecom_push_enabled');
+  fd.append('value', cb.checked ? '1' : '0');
+  fetch('/settings/save_webhook_setting', {method:'POST', body:fd});
+}
+
+// 保存推送地址
+function saveWebhook(hid) {
+  var input = document.getElementById('wh-' + hid);
+  var ok = document.getElementById('ok-wh-' + hid);
+  var fd = new FormData();
+  fd.append('hospital_id', hid);
+  fd.append('value', input.value);
+  fetch('/settings/save_webhook', {method:'POST', body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(d.ok) showSaved(ok); });
+}
+</script>
+{% endblock %}

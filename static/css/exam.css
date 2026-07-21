@@ -1,0 +1,1443 @@
+/* ============================
+   考试系统 — 统一样式表
+   ============================ */
+
+/* --- 配色系统 --- */
+:root {
+  --exam-primary: #6366f1;
+  --exam-primary-dark: #4f46e5;
+  --exam-primary-light: #a5b4fc;
+  --exam-success: #22c55e;
+  --exam-warning: #f59e0b;
+  --exam-danger: #ef4444;
+  --exam-draft: #94a3b8;
+  --exam-gold: #f59e0b;
+  --exam-silver: #94a3b8;
+  --exam-bronze: #d97706;
+  --exam-gradient: linear-gradient(135deg, #6366f1, #8b5cf6);
+  --exam-glass: rgba(255,255,255,.6);
+  --exam-glass-border: rgba(255,255,255,.3);
+}
+
+[data-theme="dark"] {
+  --exam-primary: #818cf8;
+  --exam-primary-dark: #6366f1;
+  --exam-primary-light: #6366f1;
+  --exam-success: #4ade80;
+  --exam-warning: #fbbf24;
+  --exam-danger: #f87171;
+  --exam-draft: #64748b;
+  --exam-gold: #fbbf24;
+  --exam-silver: #cbd5e1;
+  --exam-bronze: #f59e0b;
+  --exam-glass: rgba(15,23,42,.5);
+  --exam-glass-border: rgba(255,255,255,.06);
+}
+
+/* --- 按钮 --- */
+.btn-exam-primary {
+  background: var(--exam-gradient); color: #fff; border: none;
+  padding: 10px 24px; border-radius: 10px; font-size: .9rem; font-weight: 500;
+  cursor: pointer; transition: all .25s; display: inline-flex;
+  align-items: center; gap: 6px; text-decoration: none;
+}
+.btn-exam-primary:hover {
+  filter: brightness(1.1); color: #fff; transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(99,102,241,.35);
+}
+.btn-exam-outline {
+  background: transparent; border: 1px solid var(--border-color, #e2e8f0);
+  color: var(--text-primary, #1e293b); padding: 8px 16px;
+  border-radius: 8px; font-size: .84rem; cursor: pointer;
+  transition: all .2s; display: inline-flex; align-items: center; gap: 5px;
+  text-decoration: none;
+}
+.btn-exam-outline:hover {
+  border-color: var(--exam-primary);
+  color: var(--exam-primary);
+  background: rgba(99,102,241,.04);
+}
+
+/* --- 搜索/筛选栏 --- */
+.exam-toolbar {
+  display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap;
+  align-items: center;
+}
+.exam-toolbar .search-box {
+  flex: 1; min-width: 200px; position: relative;
+}
+.exam-toolbar .search-box input {
+  width: 100%; padding: 10px 16px 10px 40px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 10px; background: var(--card-bg, #fff);
+  color: var(--text-primary, #1e293b); font-size: .88rem;
+  transition: all .25s;
+}
+.exam-toolbar .search-box input:focus {
+  outline: none; border-color: var(--exam-primary);
+  box-shadow: 0 0 0 3px rgba(99,102,241,.12);
+}
+.exam-toolbar .search-box i {
+  position: absolute; left: 13px; top: 50%;
+  transform: translateY(-50%); color: var(--text-tertiary, #94a3b8);
+  font-size: .9rem;
+}
+.exam-toolbar .filter-group {
+  display: flex; gap: 6px; flex-wrap: wrap;
+}
+.exam-toolbar .filter-group .btn-filter {
+  padding: 8px 18px; border-radius: 20px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  background: transparent; color: var(--text-secondary, #64748b);
+  font-size: .84rem; cursor: pointer; transition: all .2s;
+}
+.exam-toolbar .filter-group .btn-filter.active {
+  background: var(--exam-primary); color: #fff;
+  border-color: var(--exam-primary);
+}
+.exam-toolbar .filter-group .btn-filter:hover:not(.active) {
+  border-color: var(--exam-primary); color: var(--exam-primary);
+}
+[data-theme="dark"] .exam-toolbar .search-box input {
+  background: var(--card-bg, #1e293b); color: #f1f5f9;
+  border-color: #2d3748;
+}
+[data-theme="dark"] .exam-toolbar .filter-group .btn-filter {
+  border-color: #2d3748; color: #94a3b8;
+}
+[data-theme="dark"] .exam-toolbar .filter-group .btn-filter:hover:not(.active) {
+  border-color: var(--exam-primary); color: var(--exam-primary);
+}
+
+/* ============================
+   新建/编辑考试 — 表单
+   ============================ */
+.form-section {
+  background: var(--card-bg, #fff);
+  border-radius: 14px; padding: 28px; margin-bottom: 20px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  transition: box-shadow .2s;
+}
+.form-section:hover { box-shadow: 0 2px 12px rgba(0,0,0,.04); }
+.form-section h4 {
+  font-size: 1rem; font-weight: 600; margin: 0 0 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  color: var(--text-primary, #1e293b);
+  display: flex; align-items: center; gap: 8px;
+}
+.form-section h4 i { color: var(--exam-primary); }
+[data-theme="dark"] .form-section { background: var(--card-bg, #1e293b); border-color: #2d3748; }
+[data-theme="dark"] .form-section h4 { color: #f1f5f9; border-color: #2d3748; }
+
+.form-group { margin-bottom: 18px; }
+.form-group label {
+  display: block; margin-bottom: 6px;
+  font-weight: 500; font-size: .86rem;
+  color: var(--text-secondary, #64748b);
+}
+[data-theme="dark"] .form-group label { color: #94a3b8; }
+
+.form-input {
+  width: 100%; padding: 10px 14px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px; background: var(--bg-color, #fff);
+  color: var(--text-primary, #1e293b);
+  font-size: .9rem; transition: all .2s;
+  box-sizing: border-box;
+}
+.form-input:focus {
+  outline: none; border-color: var(--exam-primary);
+  box-shadow: 0 0 0 3px rgba(99,102,241,.1);
+}
+textarea.form-input { min-height: 80px; resize: vertical; }
+select.form-input { width: auto; min-width: 140px; }
+[data-theme="dark"] .form-input { background: var(--card-bg, #1e293b); color: #f1f5f9; border-color: #2d3748; }
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+/* 开关组 */
+.switch-group {
+  display: flex; gap: 16px; flex-wrap: wrap;
+}
+.switch-item {
+  display: flex; align-items: center; gap: 7px;
+  font-size: .86rem; cursor: pointer; color: var(--text-primary, #1e293b);
+}
+.switch-item input[type="checkbox"] {
+  width: 16px; height: 16px; accent-color: var(--exam-primary);
+}
+[data-theme="dark"] .switch-item { color: #e2e8f0; }
+
+/* 角色组芯片 */
+.groups-grid {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.group-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 16px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 20px; font-size: .84rem;
+  cursor: pointer; transition: all .2s;
+  user-select: none; color: var(--text-primary, #1e293b);
+}
+.group-chip:hover { border-color: var(--exam-primary); }
+.group-chip.selected {
+  border-color: var(--exam-primary);
+  background: rgba(99,102,241,.08);
+  color: var(--exam-primary);
+}
+.group-chip input { display: none; }
+[data-theme="dark"] .group-chip { border-color: #2d3748; color: #e2e8f0; }
+[data-theme="dark"] .group-chip.selected { background: rgba(99,102,241,.15); }
+
+/* 添加试题按钮 */
+.add-question-btn {
+  width: 100%; padding: 14px;
+  border: 2px dashed var(--border-color, #e2e8f0);
+  border-radius: 10px; background: transparent;
+  color: var(--text-secondary, #64748b);
+  font-size: .9rem; cursor: pointer;
+  transition: all .2s; margin-bottom: 12px;
+}
+.add-question-btn:hover {
+  border-color: var(--exam-primary);
+  color: var(--exam-primary);
+  background: rgba(99,102,241,.03);
+}
+[data-theme="dark"] .add-question-btn { border-color: #2d3748; color: #94a3b8; }
+
+/* 表单按钮区 */
+.form-actions {
+  display: flex; gap: 12px;
+  justify-content: flex-end; margin-top: 20px;
+}
+
+/* 创建页面外容器 */
+.create-form { max-width: 860px; }
+
+/* 题目编辑器 */
+.question-card {
+  background: var(--bg-secondary, #f8fafc);
+  border-radius: 12px; padding: 20px; margin-bottom: 14px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  position: relative; transition: border-color .2s;
+}
+.question-card:focus-within {
+  border-color: var(--exam-primary);
+  box-shadow: 0 0 0 2px rgba(99,102,241,.06);
+}
+.question-card .q-top {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 12px; flex-wrap: wrap;
+}
+.question-card .q-num {
+  font-weight: 700; color: var(--exam-primary);
+  font-size: .9rem; min-width: 28px;
+}
+.question-card .q-type-select {
+  padding: 5px 12px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 6px; background: var(--bg-color, #fff);
+  color: var(--text-primary, #1e293b); font-size: .82rem;
+}
+.question-card .q-del {
+  margin-left: auto; background: none; border: none;
+  color: #94a3b8; cursor: pointer; font-size: 1.1rem;
+  padding: 4px 8px; border-radius: 6px; transition: all .2s;
+}
+.question-card .q-del:hover { color: var(--exam-danger); background: rgba(239,68,68,.08); }
+.question-card .q-text-input {
+  width: 100%; padding: 9px 14px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px; background: var(--bg-color, #fff);
+  color: var(--text-primary, #1e293b);
+  font-size: .88rem; margin-bottom: 12px;
+  box-sizing: border-box;
+}
+.question-card .q-meta {
+  display: flex; gap: 12px; align-items: center;
+  margin-bottom: 10px; flex-wrap: wrap;
+}
+.question-card .q-meta label { font-size: .82rem; color: var(--text-secondary); white-space: nowrap; }
+.question-card .q-meta input[type="number"] {
+  width: 64px; padding: 5px 8px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 6px; background: var(--bg-color, #fff);
+  color: var(--text-primary, #1e293b); font-size: .82rem;
+}
+.question-card .q-meta .q-ans-input {
+  flex: 1; min-width: 100px; padding: 5px 10px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 6px; background: var(--bg-color, #fff);
+  color: var(--text-primary, #1e293b); font-size: .82rem;
+}
+[data-theme="dark"] .question-card { background: var(--bg-secondary, #1a1f2e); border-color: #2d3748; }
+[data-theme="dark"] .question-card .q-text-input { background: var(--card-bg, #1e293b); color: #f1f5f9; border-color: #2d3748; }
+[data-theme="dark"] .question-card .q-meta input[type="number"] { background: var(--card-bg, #1e293b); color: #f1f5f9; border-color: #2d3748; }
+[data-theme="dark"] .question-card .q-meta .q-ans-input { background: var(--card-bg, #1e293b); color: #f1f5f9; border-color: #2d3748; }
+[data-theme="dark"] .question-card .q-type-select { background: var(--card-bg, #1e293b); color: #f1f5f9; border-color: #2d3748; }
+
+/* 选项编辑器 */
+.q-options { margin-bottom: 8px; }
+.q-option-row {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 5px;
+}
+.q-option-row .opt-lbl {
+  font-weight: 600; color: var(--text-secondary, #64748b);
+  font-size: .82rem; min-width: 24px; text-align: center;
+}
+.q-option-row input {
+  flex: 1; padding: 6px 10px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 6px; background: var(--bg-color, #fff);
+  color: var(--text-primary, #1e293b); font-size: .84rem;
+}
+.q-option-row .opt-del {
+  background: none; border: none; color: #94a3b8;
+  cursor: pointer; padding: 2px 6px; border-radius: 4px;
+}
+.q-option-row .opt-del:hover { color: var(--exam-danger); }
+.q-opt-add {
+  background: none;
+  border: 1px dashed var(--border-color, #e2e8f0);
+  border-radius: 6px; padding: 6px 16px;
+  color: var(--text-secondary, #64748b);
+  font-size: .82rem; cursor: pointer; margin-top: 4px;
+  transition: all .2s;
+}
+.q-opt-add:hover { border-color: var(--exam-primary); color: var(--exam-primary); }
+[data-theme="dark"] .q-option-row input { background: var(--card-bg, #1e293b); color: #f1f5f9; border-color: #2d3748; }
+
+/* ============================
+   详情页 — 成绩+答案
+   ============================ */
+.exam-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 14px; margin-bottom: 24px;
+}
+.exam-stat-card {
+  text-align: center; padding: 18px 12px;
+  border-radius: 12px;
+  background: var(--bg-secondary, #f8fafc);
+  border: 1px solid var(--border-color, #e2e8f0);
+  transition: transform .2s;
+}
+.exam-stat-card:hover { transform: translateY(-2px); }
+.exam-stat-card .num {
+  font-size: 1.6rem; font-weight: 700;
+  background: var(--exam-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.exam-stat-card .lbl {
+  font-size: .78rem; color: var(--text-tertiary, #94a3b8);
+  margin-top: 4px;
+}
+[data-theme="dark"] .exam-stat-card { background: var(--bg-secondary, #1a1f2e); border-color: #2d3748; }
+
+.exam-detail-layout {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+}
+@media(max-width:960px){ .exam-detail-layout { grid-template-columns: 1fr; } }
+
+.exam-detail-section {
+  background: var(--card-bg, #fff);
+  border-radius: 14px; padding: 24px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  margin-bottom: 20px;
+}
+.exam-detail-section h4 {
+  font-size: 1rem; font-weight: 600; margin: 0 0 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  display: flex; align-items: center; gap: 8px;
+}
+.exam-detail-section h4 i { color: var(--exam-primary); }
+[data-theme="dark"] .exam-detail-section { background: var(--card-bg, #1e293b); border-color: #2d3748; }
+[data-theme="dark"] .exam-detail-section h4 { color: #f1f5f9; border-color: #2d3748; }
+
+/* 试题列表 */
+.q-list-item {
+  padding: 14px 0; border-bottom: 1px solid var(--border-color, #e2e8f0);
+}
+.q-list-item:last-child { border-bottom: none; }
+.q-list-item .q-text { font-weight: 500; margin-bottom: 4px; line-height: 1.5; color: var(--text-primary, #1e293b); }
+.q-list-item .q-tags {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  font-size: .8rem; color: var(--text-secondary, #64748b);
+}
+.q-list-item .q-tags .tag {
+  padding: 1px 10px; border-radius: 4px; font-size: .74rem;
+}
+.q-list-item .q-tags .tag.single { background: #dbeafe; color: #1e40af; }
+.q-list-item .q-tags .tag.multi { background: #fce7f3; color: #9d174d; }
+.q-list-item .q-tags .tag.judge { background: #d1fae5; color: #065f46; }
+.q-list-item .q-tags .tag.fill { background: #fef3c7; color: #92400e; }
+.q-list-item .q-ans {
+  font-size: .85rem; margin-top: 4px;
+}
+.q-list-item .q-ans .lbl { color: var(--exam-success); font-weight: 600; }
+.q-list-item .q-analysis {
+  font-size: .82rem; color: var(--text-tertiary, #94a3b8);
+  margin-top: 6px; padding: 8px 12px;
+  background: var(--bg-secondary, #f8fafc);
+  border-radius: 8px; line-height: 1.5;
+}
+[data-theme="dark"] .q-list-item { border-color: #2d3748; }
+[data-theme="dark"] .q-list-item .q-text { color: #f1f5f9; }
+[data-theme="dark"] .q-list-item .q-analysis { background: var(--bg-secondary, #1a1f2e); }
+
+/* 成绩表格 */
+.exam-table-wrap { overflow-x: auto; }
+.exam-table {
+  width: 100%; border-collapse: collapse; font-size: .86rem;
+}
+.exam-table th {
+  text-align: left; padding: 10px 12px;
+  color: var(--text-secondary, #64748b); font-weight: 500;
+  border-bottom: 2px solid var(--border-color, #e2e8f0);
+  white-space: nowrap;
+}
+.exam-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+}
+.exam-table tbody tr { transition: background .15s; }
+.exam-table tbody tr:hover td { background: var(--bg-secondary, #f8fafc); }
+.exam-table .pass { color: var(--exam-success); font-weight: 600; }
+.exam-table .fail { color: var(--exam-danger); }
+[data-theme="dark"] .exam-table th { color: #94a3b8; }
+[data-theme="dark"] .exam-table td { border-color: #2d3748; }
+[data-theme="dark"] .exam-table tbody tr:hover td { background: var(--bg-secondary, #1a1f2e); }
+
+/* ============================
+   排名页
+   ============================ */
+.rank-table-wrap { overflow-x: auto; }
+.rank-table {
+  width: 100%; border-collapse: collapse; font-size: .88rem;
+}
+.rank-table th {
+  text-align: left; padding: 12px 14px;
+  color: var(--text-secondary, #64748b); font-weight: 500;
+  border-bottom: 2px solid var(--border-color, #e2e8f0);
+}
+.rank-table td {
+  padding: 14px; border-bottom: 1px solid var(--border-color, #e2e8f0);
+}
+.rank-table tbody tr { transition: background .15s; }
+.rank-table tbody tr:hover td { background: var(--bg-secondary, #f8fafc); }
+.rank-num {
+  font-weight: 700; font-size: 1rem; width: 40px; text-align: center;
+}
+.rank-1 { color: var(--exam-gold); }
+.rank-2 { color: var(--exam-silver); }
+.rank-3 { color: var(--exam-bronze); }
+
+.score-cell { font-weight: 700; font-size: 1rem; }
+.score-cell .max { font-weight: 400; font-size: .78rem; color: var(--text-tertiary, #94a3b8); }
+[data-theme="dark"] .rank-table th { color: #94a3b8; }
+[data-theme="dark"] .rank-table td { border-color: #2d3748; }
+[data-theme="dark"] .rank-table tbody tr:hover td { background: var(--bg-secondary, #1a1f2e); }
+
+/* ============================
+   答题页 — take.html
+   ============================ */
+.exam-body-bg { background: var(--bg, #f0f2f6); }
+[data-theme="dark"] .exam-body-bg { background: var(--bg, #0f172a); }
+
+.exam-app {
+  max-width: 720px; margin: 0 auto; padding: 16px;
+  min-height: calc(100vh - 60px); display: flex; flex-direction: column;
+}
+[data-theme="dark"] .exam-app .exam-progress-box,
+[data-theme="dark"] .exam-app .exam-timer-box,
+[data-theme="dark"] .exam-app .exam-q-card {
+  background: var(--card-bg, #1e293b);
+  border-color: #2d3748;
+}
+
+/* 进度条 */
+.exam-progress-box {
+  background: var(--card-bg, #fff); border-radius: 12px;
+  padding: 16px 20px; margin-bottom: 12px;
+  border: 1px solid var(--border-color, #e2e8f0);
+}
+.exam-progress-info {
+  display: flex; justify-content: space-between;
+  align-items: center; margin-bottom: 8px;
+}
+.exam-progress-info .title {
+  font-weight: 600; font-size: .92rem;
+  color: var(--text-primary, #1e293b);
+  display: flex; align-items: center; gap: 6px;
+}
+.exam-progress-info .title i { color: var(--exam-primary); }
+.exam-progress-info .stat {
+  font-size: .82rem; color: var(--text-secondary, #64748b);
+}
+[data-theme="dark"] .exam-progress-info .title { color: #f1f5f9; }
+.exam-progress-track {
+  width: 100%; height: 6px;
+  background: var(--bg-secondary, #e2e8f0);
+  border-radius: 3px; overflow: hidden;
+}
+[data-theme="dark"] .exam-progress-track { background: #2d3748; }
+.exam-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--exam-primary), #a78bfa);
+  border-radius: 3px; transition: width .4s ease;
+}
+
+/* 计时器 */
+.exam-timer-box {
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--card-bg, #fff); border-radius: 12px;
+  padding: 12px 20px; margin-bottom: 12px;
+  border: 1px solid var(--border-color, #e2e8f0);
+}
+.exam-timer-box .q-idx {
+  font-size: .85rem; color: var(--text-secondary, #64748b);
+}
+[data-theme="dark"] .exam-timer-box .q-idx { color: #94a3b8; }
+.exam-timer-box .timer {
+  font-size: 1.1rem; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary, #1e293b);
+  padding: 4px 14px; border-radius: 8px;
+  background: var(--bg-secondary, #f8fafc);
+}
+[data-theme="dark"] .exam-timer-box .timer { color: #f1f5f9; background: var(--bg-secondary, #1a1f2e); }
+.exam-timer-box .timer.warning { color: #fff; background: var(--exam-warning); }
+.exam-timer-box .timer.danger { color: #fff; background: var(--exam-danger); animation: timerPulse 1s infinite; }
+@keyframes timerPulse { 50% { opacity: .7; } }
+
+/* 题目卡片 */
+.exam-q-wrap { flex: 1; display: flex; flex-direction: column; }
+.exam-q-card {
+  background: var(--card-bg, #fff); border-radius: 16px;
+  padding: 28px; border: 1px solid var(--border-color, #e2e8f0);
+  flex: 1; display: flex; flex-direction: column;
+  box-shadow: 0 2px 16px rgba(0,0,0,.04);
+}
+.exam-q-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 14px; border-radius: 20px;
+  font-size: .78rem; font-weight: 500; margin-bottom: 16px;
+  background: rgba(99,102,241,.1); color: var(--exam-primary);
+  align-self: flex-start;
+}
+.exam-q-badge .pts { opacity: .6; margin-left: 4px; }
+.exam-q-text {
+  font-size: 1.05rem; font-weight: 500; line-height: 1.7;
+  margin-bottom: 24px; color: var(--text-primary, #1e293b);
+}
+[data-theme="dark"] .exam-q-text { color: #f1f5f9; }
+
+/* 选项列表 */
+.exam-options { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.exam-option {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px;
+  border: 2px solid var(--border-color, #e2e8f0);
+  border-radius: 12px; cursor: pointer;
+  transition: all .2s; user-select: none;
+}
+.exam-option:hover {
+  border-color: var(--exam-primary);
+  background: rgba(99,102,241,.03);
+}
+.exam-option.selected {
+  border-color: var(--exam-primary);
+  background: rgba(99,102,241,.07);
+}
+.exam-option .radio {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid var(--border-color, #cbd5e1);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: all .2s;
+}
+.exam-option .radio.multi-bx { border-radius: 5px; }
+.exam-option.selected .radio {
+  border-color: var(--exam-primary);
+  background: var(--exam-primary);
+}
+.exam-option.selected .radio::after {
+  content: "\2713"; color: #fff; font-size: .7rem; font-weight: 700;
+}
+.exam-option .opt-lbl {
+  font-weight: 700; color: var(--text-secondary, #64748b);
+  font-size: .88rem; flex-shrink: 0; min-width: 20px;
+}
+.exam-option .opt-txt {
+  color: var(--text-primary, #1e293b); font-size: .92rem;
+  line-height: 1.4;
+}
+[data-theme="dark"] .exam-option { border-color: #2d3748; }
+[data-theme="dark"] .exam-option .opt-txt { color: #e2e8f0; }
+
+/* 判断题 */
+.judge-row { display: flex; gap: 16px; }
+.judge-btn {
+  flex: 1; padding: 18px; border: 2px solid var(--border-color, #e2e8f0);
+  border-radius: 12px; background: var(--card-bg, #fff);
+  cursor: pointer; font-size: 1.05rem; font-weight: 600;
+  text-align: center; transition: all .2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.judge-btn:hover { border-color: var(--exam-primary); }
+.judge-btn.sel-true { border-color: var(--exam-success); background: rgba(34,197,94,.07); color: var(--exam-success); }
+.judge-btn.sel-false { border-color: var(--exam-danger); background: rgba(239,68,68,.07); color: var(--exam-danger); }
+[data-theme="dark"] .judge-btn { background: var(--card-bg, #1e293b); border-color: #2d3748; color: #e2e8f0; }
+
+/* 填空题 */
+.fill-input-lg {
+  width: 100%; padding: 14px 18px;
+  border: 2px solid var(--border-color, #e2e8f0);
+  border-radius: 12px; background: var(--bg-color, #fff);
+  color: var(--text-primary, #1e293b);
+  font-size: 1rem; transition: all .2s;
+  box-sizing: border-box;
+}
+.fill-input-lg:focus {
+  outline: none; border-color: var(--exam-primary);
+  box-shadow: 0 0 0 4px rgba(99,102,241,.1);
+}
+[data-theme="dark"] .fill-input-lg { background: var(--card-bg, #1e293b); color: #f1f5f9; border-color: #2d3748; }
+
+/* 底部导航 */
+.exam-nav {
+  display: flex; gap: 12px; margin-top: 14px;
+}
+.exam-nav button {
+  flex: 1; padding: 13px; border-radius: 10px;
+  font-size: .92rem; font-weight: 500;
+  cursor: pointer; transition: all .2s; border: none;
+}
+.exam-nav .nav-prev {
+  background: var(--bg-secondary, #e2e8f0);
+  color: var(--text-primary, #1e293b);
+}
+.exam-nav .nav-prev:hover:not(:disabled) { background: #cbd5e1; }
+.exam-nav .nav-prev:disabled { opacity: .4; cursor: not-allowed; }
+.exam-nav .nav-next { background: var(--exam-primary); color: #fff; }
+.exam-nav .nav-next:hover { filter: brightness(1.1); }
+.exam-nav .nav-submit { background: var(--exam-success); color: #fff; }
+.exam-nav .nav-submit:hover { filter: brightness(1.1); }
+[data-theme="dark"] .exam-nav .nav-prev { background: #2d3748; color: #e2e8f0; }
+[data-theme="dark"] .exam-nav .nav-prev:hover:not(:disabled) { background: #3d4a5c; }
+
+/* 导航点 */
+.exam-dots {
+  display: flex; gap: 6px; justify-content: center;
+  margin-top: 14px; flex-wrap: wrap;
+}
+.exam-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--bg-secondary, #e2e8f0);
+  cursor: pointer; transition: all .2s; border: none; padding: 0;
+}
+.exam-dot.active { background: var(--exam-primary); transform: scale(1.4); }
+.exam-dot.done { background: var(--exam-success); }
+[data-theme="dark"] .exam-dot { background: #2d3748; }
+
+/* 提交确认浮层 */
+.exam-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45);
+  backdrop-filter: blur(4px);
+  display: none; align-items: center; justify-content: center;
+  z-index: 1000; padding: 20px;
+}
+.exam-overlay.show { display: flex; }
+.exam-dialog {
+  background: var(--card-bg, #fff);
+  border-radius: 18px; padding: 32px;
+  max-width: 400px; width: 100%; text-align: center;
+  box-shadow: 0 24px 48px rgba(0,0,0,.15);
+  animation: dialogIn .3s ease;
+}
+@keyframes dialogIn {
+  from { transform: scale(.9) translateY(20px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+.exam-dialog h3 { margin: 0 0 8px; font-size: 1.1rem; color: var(--text-primary, #1e293b); }
+.exam-dialog .summary { font-size: .9rem; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.6; }
+.exam-dialog .btn-row { display: flex; gap: 12px; }
+.exam-dialog .btn-row button {
+  flex: 1; padding: 11px; border-radius: 10px;
+  border: none; font-size: .9rem; cursor: pointer;
+  font-weight: 500; transition: all .2s;
+}
+.exam-dialog .btn-row .btn-cancel { background: var(--bg-secondary, #e2e8f0); color: var(--text-primary); }
+.exam-dialog .btn-row .btn-confirm { background: var(--exam-success); color: #fff; }
+.exam-dialog .btn-row .btn-confirm:hover { filter: brightness(1.1); }
+[data-theme="dark"] .exam-dialog { background: var(--card-bg, #1e293b); }
+[data-theme="dark"] .exam-dialog h3 { color: #f1f5f9; }
+[data-theme="dark"] .exam-dialog .btn-row .btn-cancel { background: #2d3748; color: #e2e8f0; }
+
+/* 结果页 */
+.exam-result-wrap {
+  max-width: 500px; margin: 0 auto; text-align: center;
+  padding: 40px 16px;
+}
+.exam-result-circle {
+  width: 120px; height: 120px; border-radius: 50%;
+  margin: 0 auto 20px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2.5rem; font-weight: 700;
+}
+.exam-result-circle.ok {
+  background: rgba(34,197,94,.12);
+  color: var(--exam-success);
+  border: 4px solid var(--exam-success);
+}
+.exam-result-circle.no {
+  background: rgba(239,68,68,.12);
+  color: var(--exam-danger);
+  border: 4px solid var(--exam-danger);
+}
+.exam-result-detail { margin-bottom: 20px; }
+.exam-result-detail .row {
+  display: flex; justify-content: space-between;
+  padding: 10px 0; border-bottom: 1px solid var(--border-color, #e2e8f0);
+  font-size: .9rem;
+}
+.exam-result-detail .row .lbl { color: var(--text-secondary, #64748b); }
+.exam-result-detail .row .val { font-weight: 600; color: var(--text-primary, #1e293b); }
+[data-theme="dark"] .exam-result-detail .row { border-color: #2d3748; }
+[data-theme="dark"] .exam-result-detail .row .val { color: #f1f5f9; }
+
+/* 考试列表（选择页面） */
+.exam-home-list { display: flex; flex-direction: column; gap: 12px; }
+.exam-home-item {
+  background: var(--card-bg, #fff); border-radius: 14px;
+  padding: 18px 22px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  display: flex; align-items: center; gap: 16px;
+  cursor: pointer; transition: all .25s;
+  text-decoration: none; color: inherit;
+}
+.exam-home-item:hover {
+  border-color: var(--exam-primary);
+  transform: translateX(4px);
+  box-shadow: 0 4px 16px rgba(0,0,0,.06);
+}
+.exam-home-item .icon-box {
+  width: 46px; height: 46px; border-radius: 12px;
+  background: rgba(99,102,241,.1); color: var(--exam-primary);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; flex-shrink: 0;
+}
+.exam-home-item .info { flex: 1; }
+.exam-home-item .info .ti { font-weight: 600; font-size: .95rem; color: var(--text-primary); }
+.exam-home-item .info .me {
+  font-size: .8rem; color: var(--text-tertiary, #94a3b8);
+  margin-top: 3px;
+}
+.exam-home-item .st {
+  font-size: .78rem; padding: 4px 14px;
+  border-radius: 20px; flex-shrink: 0;
+}
+.exam-home-item .st.ready { background: #dcfce7; color: #166534; }
+.exam-home-item .st.done { background: #f1f5f9; color: #64748b; }
+.exam-home-item .st.locked { background: #fee2e2; color: #991b1b; }
+[data-theme="dark"] .exam-home-item { background: var(--card-bg, #1e293b); border-color: #2d3748; }
+[data-theme="dark"] .exam-home-item .info .ti { color: #f1f5f9; }
+[data-theme="dark"] .exam-home-item .st.ready { background: rgba(34,197,94,.15); color: #4ade80; }
+[data-theme="dark"] .exam-home-item .st.done { background: rgba(148,163,184,.15); color: #94a3b8; }
+[data-theme="dark"] .exam-home-item .st.locked { background: rgba(239,68,68,.15); color: #f87171; }
+
+/* ============================
+   考试管理 — 列表页
+   ============================ */
+
+/* --- 汇总统计条 --- */
+.exam-summary-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+.summary-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 18px 20px;
+  background: var(--card-bg, #fff);
+  border-radius: 14px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  transition: all .3s cubic-bezier(.4,0,.2,1);
+  position: relative; overflow: hidden;
+}
+.summary-item::before {
+  content: '';
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 4px;
+  background: var(--accent);
+  border-radius: 0 2px 2px 0;
+}
+.summary-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px -8px rgba(0,0,0,.08);
+  border-color: var(--accent);
+}
+.summary-icon {
+  width: 44px; height: 44px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem;
+  color: var(--accent);
+  background: rgba(99,102,241,.08);
+  flex-shrink: 0;
+}
+.summary-item:nth-child(1) .summary-icon { background: rgba(99,102,241,.1); }
+.summary-item:nth-child(2) .summary-icon { background: rgba(34,197,94,.1); }
+.summary-item:nth-child(3) .summary-icon { background: rgba(245,158,11,.1); }
+.summary-item:nth-child(4) .summary-icon { background: rgba(167,139,250,.1); }
+.summary-item:nth-child(5) .summary-icon { background: rgba(236,72,153,.1); }
+.summary-info { min-width: 0; }
+.summary-num {
+  font-size: 1.6rem; font-weight: 800;
+  color: var(--text-primary, #1e293b);
+  line-height: 1.1; letter-spacing: -.02em;
+}
+.summary-lbl {
+  font-size: .78rem; color: var(--text-tertiary, #94a3b8);
+  margin-top: 2px;
+}
+[data-theme="dark"] .summary-item { background: var(--card-bg, #1e293b); border-color: #2d3748; }
+[data-theme="dark"] .summary-num { color: #f1f5f9; }
+
+/* --- 标题栏 --- */
+.exam-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 22px;
+  flex-wrap: wrap; gap: 12px;
+}
+.exam-list-header h2 {
+  margin: 0; font-size: 1.35rem; font-weight: 700;
+  color: var(--text-primary, #1e293b);
+  display: flex; align-items: center; gap: 10px;
+}
+.exam-list-header .header-sub {
+  margin: 2px 0 0; font-size: .86rem;
+  color: var(--text-tertiary, #94a3b8);
+}
+.header-actions { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+[data-theme="dark"] .exam-list-header h2 { color: #f1f5f9; }
+
+/* --- 筛选计数徽章 --- */
+.filter-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; border-radius: 9px;
+  background: rgba(255,255,255,.25);
+  font-size: .68rem; font-weight: 600;
+  margin-left: 4px; padding: 0 5px;
+}
+.btn-filter.active .filter-count { background: rgba(255,255,255,.3); }
+
+/* ============================
+   新版考试卡片
+   ============================ */
+.exam-card-new {
+  background: var(--card-bg, #fff);
+  border-radius: 16px; overflow: hidden;
+  transition: all .35s cubic-bezier(.4,0,.2,1);
+  border: 1px solid var(--border-color, #e2e8f0);
+  display: flex; flex-direction: column;
+  position: relative;
+}
+.exam-card-new:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px -12px rgba(0,0,0,.12);
+  border-color: transparent;
+}
+[data-theme="dark"] .exam-card-new {
+  background: var(--card-bg, #1e293b);
+  border-color: #2d3748;
+}
+[data-theme="dark"] .exam-card-new:hover {
+  box-shadow: 0 20px 40px -12px rgba(0,0,0,.3);
+}
+
+/* 顶部渐变条 */
+.card-accent {
+  height: 6px; flex-shrink: 0; position: relative; overflow: hidden;
+}
+.card-accent.published { background: linear-gradient(90deg, #22c55e, #4ade80, #22c55e); background-size: 200% 100%; animation: accentSlide 3s ease infinite; }
+.card-accent.closed { background: linear-gradient(90deg, #ef4444, #f87171); }
+.card-accent.draft { background: linear-gradient(90deg, #94a3b8, #cbd5e1); }
+.card-accent .accent-glow {
+  position: absolute; top: -12px; left: 50%;
+  transform: translateX(-50%); width: 80%; height: 24px;
+  background: radial-gradient(ellipse, rgba(255,255,255,.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+@keyframes accentSlide {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.card-body-new {
+  padding: 24px; flex: 1; display: flex; flex-direction: column;
+}
+
+/* 标题行 */
+.card-title-row-new {
+  display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px;
+}
+.card-title-text {
+  font-size: 1.05rem; font-weight: 700;
+  color: var(--text-primary, #1e293b);
+  flex: 1; line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+[data-theme="dark"] .card-title-text { color: #f1f5f9; }
+
+/* 状态徽章 */
+.status-badge-new {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: .7rem; font-weight: 600;
+  padding: 3px 12px; border-radius: 20px;
+  flex-shrink: 0; margin-top: 2px; white-space: nowrap;
+}
+.status-badge-new.published { background: #dcfce7; color: #166534; }
+.status-badge-new.draft { background: #f1f5f9; color: #64748b; }
+.status-badge-new.closed { background: #fee2e2; color: #991b1b; }
+[data-theme="dark"] .status-badge-new.published { background: rgba(34,197,94,.15); color: #4ade80; }
+[data-theme="dark"] .status-badge-new.draft { background: rgba(148,163,184,.15); color: #94a3b8; }
+[data-theme="dark"] .status-badge-new.closed { background: rgba(239,68,68,.15); color: #f87171; }
+
+/* 描述 */
+.card-desc-new {
+  color: var(--text-secondary, #64748b);
+  font-size: .84rem; line-height: 1.55;
+  margin-bottom: 16px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; min-height: 2.5em;
+}
+
+/* 四角指标 */
+.card-metrics {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 8px; margin-bottom: 16px;
+  padding: 12px;
+  background: var(--bg-secondary, #f8fafc);
+  border-radius: 10px;
+}
+[data-theme="dark"] .card-metrics { background: rgba(30,41,59,.5); }
+.metric-item {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+}
+.metric-icon {
+  width: 28px; height: 28px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .78rem; background: rgba(99,102,241,.08);
+  flex-shrink: 0;
+}
+.metric-item:nth-child(1) .metric-icon { background: rgba(99,102,241,.1); }
+.metric-item:nth-child(2) .metric-icon { background: rgba(245,158,11,.1); }
+.metric-item:nth-child(3) .metric-icon { background: rgba(34,197,94,.1); }
+.metric-item:nth-child(4) .metric-icon { background: rgba(167,139,250,.1); }
+.metric-info { min-width: 0; }
+.metric-val { font-size: .92rem; font-weight: 700; color: var(--text-primary, #1e293b); line-height: 1.2; }
+[data-theme="dark"] .metric-val { color: #f1f5f9; }
+.metric-lbl { font-size: .68rem; color: var(--text-tertiary, #94a3b8); line-height: 1; }
+
+/* 通过率进度条 */
+.card-progress-section {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: var(--bg-secondary, #f8fafc);
+  border-radius: 10px;
+}
+[data-theme="dark"] .card-progress-section { background: rgba(30,41,59,.5); }
+.progress-row {
+  display: flex; justify-content: space-between;
+  align-items: center; margin-bottom: 5px;
+}
+.progress-row.secondary { margin-bottom: 0; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border-color, #e2e8f0); }
+[data-theme="dark"] .progress-row.secondary { border-top-color: #2d3748; }
+.progress-lbl { font-size: .75rem; color: var(--text-tertiary, #94a3b8); }
+.progress-pct { font-size: .85rem; font-weight: 700; }
+.progress-pct.high { color: #22c55e; }
+.progress-pct.mid { color: #f59e0b; }
+.progress-pct.low { color: #ef4444; }
+.progress-val { font-size: .85rem; font-weight: 700; color: var(--text-primary, #1e293b); }
+[data-theme="dark"] .progress-val { color: #f1f5f9; }
+.progress-track {
+  width: 100%; height: 6px;
+  background: var(--border-color, #e2e8f0);
+  border-radius: 3px; overflow: hidden;
+}
+[data-theme="dark"] .progress-track { background: #2d3748; }
+.progress-fill {
+  height: 100%; border-radius: 3px;
+  transition: width .8s cubic-bezier(.4,0,.2,1);
+}
+
+/* 卡片底部 */
+.card-footer-new { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--border-color, #e2e8f0); }
+[data-theme="dark"] .card-footer-new { border-top-color: #2d3748; }
+.card-meta-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: .78rem; color: var(--text-tertiary, #94a3b8);
+  margin-bottom: 12px;
+}
+.card-meta-row span { display: inline-flex; align-items: center; gap: 5px; }
+.card-meta-row i { font-size: .72rem; }
+
+/* 操作按钮组 */
+.card-actions-new { display: flex; gap: 6px; }
+.action-btn {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center;
+  gap: 4px; padding: 8px 6px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px; background: transparent;
+  color: var(--text-secondary, #64748b);
+  font-size: .78rem; cursor: pointer;
+  transition: all .2s; text-decoration: none; position: relative;
+}
+.action-btn i { font-size: .82rem; }
+.action-btn .action-tip { font-size: .68rem; display: none; }
+@media(min-width:600px) { .action-btn .action-tip { display: inline; } }
+.action-btn:hover { border-color: var(--exam-primary); color: var(--exam-primary); background: rgba(99,102,241,.05); }
+.action-btn.danger:hover { border-color: var(--exam-danger); color: var(--exam-danger); background: rgba(239,68,68,.05); }
+.action-btn.primary { border-color: var(--exam-primary,#6366f1); color: var(--exam-primary,#6366f1); background: rgba(99,102,241,.06); }
+.action-btn.primary:hover { background: rgba(99,102,241,.12); }
+[data-theme="dark"] .action-btn { border-color: #2d3748; color: #94a3b8; }
+[data-theme="dark"] .action-btn:hover { background: rgba(99,102,241,.12); }
+[data-theme="dark"] .action-btn.danger:hover { background: rgba(239,68,68,.12); }
+
+/* --- 网格布局 --- */
+.exam-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+}
+
+/* --- 空状态（新版） --- */
+.exam-empty-state {
+  text-align: center; padding: 80px 20px;
+}
+.exam-empty-state .empty-illustration {
+  position: relative; display: inline-block; margin-bottom: 20px;
+}
+.exam-empty-state .empty-illustration i {
+  font-size: 4rem; color: var(--exam-primary); opacity: .3;
+}
+.exam-empty-state .empty-ring {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  width: 100px; height: 100px; border-radius: 50%;
+  border: 2px dashed var(--exam-primary-light, #a5b4fc);
+  animation: ringRotate 8s linear infinite;
+  pointer-events: none; opacity: .3;
+}
+@keyframes ringRotate {
+  0% { transform: translate(-50%,-50%) rotate(0deg); }
+  100% { transform: translate(-50%,-50%) rotate(360deg); }
+}
+.exam-empty-state h3 {
+  margin: 0 0 8px; font-size: 1.15rem;
+  font-weight: 600; color: var(--text-primary, #1e293b);
+}
+.exam-empty-state p {
+  margin: 0 0 24px; font-size: .92rem;
+  color: var(--text-tertiary, #94a3b8);
+}
+[data-theme="dark"] .exam-empty-state h3 { color: #f1f5f9; }
+
+/* ============================
+   移动端适配
+   ============================ */
+@media(max-width:640px){
+  .exam-grid { grid-template-columns: 1fr; gap: 14px; }
+  .exam-card-new .card-body-new { padding: 18px; }
+  .exam-card-new .card-title-text { font-size: .95rem; }
+  .card-actions-new { flex-wrap: wrap; }
+  .card-actions-new .action-btn { flex: none; min-width: calc(50% - 4px); padding: 8px; font-size: .76rem; }
+  .exam-toolbar { flex-direction: column; }
+  .exam-toolbar .search-box { min-width: 0; }
+  .exam-detail-layout { grid-template-columns: 1fr; }
+  .exam-app { padding: 10px; }
+  .exam-q-card { padding: 20px; }
+  .exam-q-text { font-size: .95rem; }
+  .exam-nav { gap: 8px; }
+  .exam-nav button { padding: 11px; font-size: .85rem; }
+  .exam-progress-box { padding: 12px 16px; }
+  .exam-timer-box { padding: 10px 16px; }
+  .exam-dialog { margin: 0 10px; padding: 24px; }
+  .exam-result-circle { width: 90px; height: 90px; font-size: 2rem; }
+  .form-section { padding: 18px; }
+  .form-row { grid-template-columns: 1fr 1fr; }
+  .exam-home-item { padding: 14px 16px; }
+  .exam-home-item .info .ti { font-size: .88rem; }
+  .exam-stat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .exam-stat-card { padding: 14px 8px; }
+  .exam-stat-card .num { font-size: 1.3rem; }
+  .exam-list-header { flex-direction: column; }
+  .exam-summary-bar { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .summary-item { padding: 14px; }
+  .summary-num { font-size: 1.2rem; }
+  .summary-icon { width: 36px; height: 36px; font-size: 1rem; }
+  .card-metrics { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media(max-width:380px){
+  .form-row { grid-template-columns: 1fr; }
+  .exam-stat-grid { grid-template-columns: 1fr 1fr; }
+  .exam-q-card { padding: 16px; }
+  .exam-option { padding: 12px 14px; }
+  .judge-row { gap: 10px; }
+  .judge-btn { padding: 14px; font-size: .9rem; }
+  .exam-summary-bar { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ============================
+   新建/编辑考试 — 全新设计
+   ============================ */
+
+/* 步骤指示器 */
+.exam-create-steps {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0; margin-bottom: 32px;
+  max-width: 500px; margin-left: auto; margin-right: auto;
+}
+.step { display: flex; align-items: center; gap: 8px; }
+.step-circle {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .82rem; font-weight: 700;
+  background: var(--bg-secondary, #e2e8f0); color: var(--text-tertiary, #94a3b8);
+  transition: all .3s;
+}
+.step.active .step-circle {
+  background: var(--exam-gradient); color: #fff;
+  box-shadow: 0 4px 10px rgba(99,102,241,.3);
+}
+.step-text { font-size: .82rem; font-weight: 500; color: var(--text-tertiary, #94a3b8); white-space: nowrap; }
+.step.active .step-text { color: var(--exam-primary); font-weight: 600; }
+.step-connector {
+  width: 48px; height: 2px;
+  background: var(--bg-secondary, #e2e8f0); margin: 0 12px;
+  border-radius: 1px;
+}
+[data-theme="dark"] .step-connector { background: #2d3748; }
+[data-theme="dark"] .step-circle { background: #2d3748; color: #64748b; }
+[data-theme="dark"] .step.active .step-circle { background: var(--exam-gradient); color: #fff; }
+
+/* 整体容器 */
+.create-exam-wrap { max-width: 880px; margin: 0 auto; }
+
+/* 页眉 */
+.create-exam-header {
+  display: flex; align-items: flex-start; gap: 14px;
+  margin-bottom: 24px;
+}
+.create-exam-header .back-link {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-secondary, #64748b); text-decoration: none;
+  background: var(--bg-secondary, #f8fafc); flex-shrink: 0;
+  transition: all .2s; margin-top: 2px;
+}
+.create-exam-header .back-link:hover {
+  background: var(--exam-primary); color: #fff;
+}
+.create-exam-header h2 {
+  margin: 0; font-size: 1.3rem; font-weight: 700;
+  color: var(--text-primary, #1e293b);
+  display: flex; align-items: center; gap: 8px;
+}
+.create-exam-header .header-sub {
+  margin: 2px 0 0; font-size: .84rem;
+  color: var(--text-tertiary, #94a3b8);
+}
+[data-theme="dark"] .create-exam-header h2 { color: #f1f5f9; }
+[data-theme="dark"] .create-exam-header .back-link { background: #1e293b; }
+
+/* 区块头部 */
+.section-head {
+  display: flex; align-items: flex-start; gap: 14px;
+  margin-bottom: 20px; padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+}
+[data-theme="dark"] .section-head { border-bottom-color: #2d3748; }
+.section-icon {
+  width: 42px; height: 42px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; color: var(--exam-primary);
+  background: rgba(99,102,241,.1); flex-shrink: 0;
+}
+.section-title { font-size: 1rem; font-weight: 600; color: var(--text-primary, #1e293b); }
+.section-desc { font-size: .78rem; color: var(--text-tertiary, #94a3b8); margin-top: 1px; }
+[data-theme="dark"] .section-title { color: #f1f5f9; }
+
+.section-body { padding: 0; }
+
+/* 设置项网格 */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px; margin-bottom: 20px;
+}
+.settings-card {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px; border-radius: 12px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  background: var(--bg-secondary, #f8fafc);
+  transition: all .2s;
+}
+.settings-card:hover { border-color: var(--exam-primary-light); }
+.settings-card-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.05rem; flex-shrink: 0;
+}
+.settings-card-body { flex: 1; min-width: 0; }
+.settings-card-body label {
+  font-size: .76rem; font-weight: 500;
+  color: var(--text-secondary, #64748b);
+  display: block; margin-bottom: 4px;
+}
+.settings-card-body label .unit { font-weight: 400; color: var(--text-tertiary, #94a3b8); }
+.settings-card-body .form-input {
+  font-size: .95rem; padding: 8px 12px;
+  border-radius: 8px; height: auto;
+}
+[data-theme="dark"] .settings-card { border-color: #2d3748; background: rgba(30,41,59,.5); }
+
+/* 设置行 */
+.settings-row {
+  margin-bottom: 18px; padding-bottom: 18px;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+}
+.settings-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.settings-row-label {
+  font-size: .84rem; font-weight: 600;
+  color: var(--text-primary, #1e293b); margin-bottom: 3px;
+}
+.settings-row-desc {
+  font-size: .76rem; color: var(--text-tertiary, #94a3b8);
+  margin-bottom: 10px;
+}
+[data-theme="dark"] .settings-row { border-bottom-color: #2d3748; }
+[data-theme="dark"] .settings-row-label { color: #e2e8f0; }
+
+/* 状态选择药丸 */
+.status-pills {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.status-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 20px; border-radius: 20px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  background: var(--card-bg, #fff);
+  color: var(--text-secondary, #64748b);
+  font-size: .84rem; cursor: pointer; user-select: none;
+  transition: all .2s;
+}
+.status-pill input { display: none; }
+.status-pill:hover { border-color: var(--exam-primary); color: var(--exam-primary); }
+.status-pill.active.draft { border-color: #94a3b8; background: #f1f5f9; color: #64748b; }
+.status-pill.active.published { border-color: #22c55e; background: #dcfce7; color: #166534; }
+.status-pill.active.closed { border-color: #ef4444; background: #fee2e2; color: #991b1b; }
+[data-theme="dark"] .status-pill { background: var(--card-bg, #1e293b); border-color: #2d3748; color: #94a3b8; }
+[data-theme="dark"] .status-pill.active.draft { background: rgba(148,163,184,.15); color: #94a3b8; border-color: #94a3b8; }
+[data-theme="dark"] .status-pill.active.published { background: rgba(34,197,94,.15); color: #4ade80; border-color: #4ade80; }
+[data-theme="dark"] .status-pill.active.closed { background: rgba(239,68,68,.15); color: #f87171; border-color: #f87171; }
+
+/* 开关样式 */
+.switch-item {
+  display: inline-flex; align-items: center; gap: 10px;
+  cursor: pointer; user-select: none;
+}
+.switch-item input { display: none; }
+.switch-track {
+  width: 38px; height: 22px; border-radius: 11px;
+  background: var(--bg-secondary, #cbd5e1);
+  position: relative; transition: all .25s; flex-shrink: 0;
+}
+.switch-item input:checked + .switch-track {
+  background: var(--exam-primary);
+}
+.switch-thumb {
+  position: absolute; top: 2px; left: 2px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; transition: all .25s;
+  box-shadow: 0 1px 3px rgba(0,0,0,.15);
+}
+.switch-item input:checked + .switch-track .switch-thumb {
+  left: 18px;
+}
+.switch-text {
+  font-size: .84rem; color: var(--text-primary, #1e293b);
+}
+[data-theme="dark"] .switch-track { background: #2d3748; }
+[data-theme="dark"] .switch-text { color: #e2e8f0; }
+
+/* 提示 */
+.required { color: var(--exam-danger); }
+.unit { font-weight: 400; color: var(--text-tertiary, #94a3b8); }
+
+/* 取消按钮 */
+.btn-cancel-form {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 24px; border-radius: 10px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  background: transparent; color: var(--text-secondary, #64748b);
+  font-size: .9rem; text-decoration: none;
+  transition: all .2s;
+}
+.btn-cancel-form:hover {
+  border-color: var(--exam-danger); color: var(--exam-danger);
+  background: rgba(239,68,68,.04);
+}
+[data-theme="dark"] .btn-cancel-form { border-color: #2d3748; color: #94a3b8; }
+[data-theme="dark"] .btn-cancel-form:hover { border-color: var(--exam-danger); color: var(--exam-danger); }
+
+/* ============================
+   题目卡片 — JS 生成元素样式
+   ============================ */
+
+/* 题目头部 */
+.q-header {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 12px;
+}
+.q-number {
+  font-weight: 700; color: var(--exam-primary);
+  font-size: .85rem; min-width: 32px;
+}
+.q-remove {
+  margin-left: auto; background: none; border: none;
+  color: #94a3b8; cursor: pointer; font-size: 1rem;
+  padding: 4px 8px; border-radius: 6px; transition: all .2s;
+}
+.q-remove:hover { color: var(--exam-danger); background: rgba(239,68,68,.08); }
+
+/* 题目文本输入 */
+.q-text-input {
+  width: 100%; padding: 10px 14px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px; background: var(--bg-color, #fff);
+  color: var(--text-primary, #1e293b);
+  font-size: .9rem; margin-bottom: 12px;
+  box-sizing: border-box; transition: all .2s;
+}
+.q-text-input:focus {
+  outline: none; border-color: var(--exam-primary);
+  box-shadow: 0 0 0 3px rgba(99,102,241,.1);
+}
+[data-theme="dark"] .q-text-input { background: var(--card-bg, #1e293b); color: #f1f5f9; border-color: #2d3748; }
+
+/* 选项编辑器 */
+.options-editor { margin-bottom: 10px; }
+.option-row {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+}
+.opt-label {
+  font-weight: 600; color: var(--text-secondary, #64748b);
+  font-size: .82rem; min-width: 26px; text-align: center;
+}
+.option-row input[type="text"] {
+  flex: 1; padding: 7px 10px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 6px; background: var(--bg-color, #fff);
+  color: var(--text-primary, #1e293b); font-size: .84rem;
+}
+[data-theme="dark"] .option-row input[type="text"] { background: var(--card-bg, #1e293b); color: #f1f5f9; border-color: #2d3748; }
+.opt-remove {
+  background: none; border: none; color: #94a3b8;
+  cursor: pointer; padding: 2px 6px; border-radius: 4px;
+}
+.opt-remove:hover { color: var(--exam-danger); }
+.opt-add-btn {
+  background: none;
+  border: 1px dashed var(--border-color, #e2e8f0);
+  border-radius: 6px; padding: 6px 14px;
+  color: var(--text-secondary, #64748b);
+  font-size: .82rem; cursor: pointer; margin-top: 4px;
+  transition: all .2s;
+}
+.opt-add-btn:hover { border-color: var(--exam-primary); color: var(--exam-primary); }
+[data-theme="dark"] .opt-add-btn { border-color: #2d3748; color: #94a3b8; }
+
+/* 题目元信息行 */
+.q-meta-row {
+  display: flex; gap: 10px; align-items: center;
+  flex-wrap: wrap; margin-top: 8px;
+}
+.q-meta-item {
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.q-meta-item label {
+  font-size: .78rem; color: var(--text-secondary, #64748b); white-space: nowrap;
+}
+.q-meta-item input[type="number"],
+.q-meta-item .q-answer-input {
+  padding: 5px 10px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 6px; background: var(--bg-color, #fff);
+  color: var(--text-primary, #1e293b); font-size: .82rem;
+}
+.q-meta-item input[type="number"] { width: 60px; }
+.q-meta-item .q-answer-input { width: 120px; }
+.q-meta-item.wide { flex: 1; }
+.q-meta-item.wide .q-answer-input { width: 100%; }
+[data-theme="dark"] .q-meta-item input[type="number"],
+[data-theme="dark"] .q-meta-item .q-answer-input { background: var(--card-bg, #1e293b); color: #f1f5f9; border-color: #2d3748; }
+
+/* 题型提示 */
+.q-type-hint {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; font-size: .82rem;
+  color: var(--text-secondary, #64748b);
+  background: var(--bg-secondary, #f8fafc);
+  border-radius: 8px; margin-bottom: 8px;
+}
+.q-type-hint i { color: var(--exam-primary); font-size: .9rem; }
+.q-type-hint code {
+  padding: 1px 6px; border-radius: 4px;
+  background: rgba(99,102,241,.1); color: var(--exam-primary);
+  font-size: .82rem;
+}
+[data-theme="dark"] .q-type-hint { background: rgba(30,41,59,.5); }
+
+/* 底部提示 */
+.q-tip {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 10px; font-size: .78rem;
+  color: var(--text-tertiary, #94a3b8); line-height: 1.5;
+}
+.q-tip i { color: var(--exam-primary); flex-shrink: 0; font-size: .85rem; }
+
+/* ============================
+   移动端适配 — 创建页
+   ============================ */
+@media(max-width:640px){
+  .exam-create-steps { max-width: 100%; }
+  .step-text { display: none; }
+  .step-connector { width: 24px; margin: 0 6px; }
+  .settings-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .settings-card { padding: 12px; }
+  .settings-card-icon { width: 32px; height: 32px; font-size: .85rem; }
+  .q-meta-row { flex-direction: column; align-items: stretch; }
+  .q-meta-item.wide { width: 100%; }
+  .q-meta-item.wide .q-answer-input { width: 100%; box-sizing: border-box; }
+  .q-meta-item { width: 100%; }
+  .q-meta-item input[type="number"],
+  .q-meta-item .q-answer-input { width: 100% !important; box-sizing: border-box; }
+  .create-exam-header { flex-direction: column; }
+  .status-pills { flex-direction: column; }
+  .status-pill { justify-content: center; }
+}

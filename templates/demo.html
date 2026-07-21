@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>医院IT工单管理系统 · 演示中心</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0f172a;
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    color: #e2e8f0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px 80px;
+  }
+  h1 {
+    font-size: 32px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa, #f472b6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+  .subtitle {
+    color: #94a3b8;
+    font-size: 14px;
+    text-align: center;
+    margin-bottom: 40px;
+  }
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 24px;
+    max-width: 1200px;
+    width: 100%;
+  }
+  .card {
+    background: #1e293b;
+    border-radius: 16px;
+    border: 1px solid #334155;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    position: relative;
+  }
+  .card:hover {
+    border-color: #60a5fa;
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+  }
+  .card-img {
+    width: 100%;
+    height: 220px;
+    background: #0f172a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid #334155;
+    overflow: hidden;
+  }
+  .card-img iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+  }
+  .card-img .placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  }
+  .placeholder-icon {
+    font-size: 48px;
+  }
+  .placeholder-label {
+    color: #64748b;
+    font-size: 13px;
+  }
+  .card-body {
+    padding: 20px;
+  }
+  .card-body h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #f1f5f9;
+  }
+  .card-body p {
+    color: #94a3b8;
+    font-size: 13px;
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .badge-html { background: rgba(96,165,250,0.2); color: #60a5fa; }
+  .badge-anim { background: rgba(251,191,36,0.2); color: #fbbf24; }
+  .badge-pdf { background: rgba(52,211,153,0.2); color: #34d399; }
+  .btn-group { display: flex; gap: 8px; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+  .btn-primary {
+    background: #3b82f6;
+    color: white;
+  }
+  .btn-primary:hover { background: #2563eb; }
+  .btn-secondary {
+    background: #334155;
+    color: #e2e8f0;
+  }
+  .btn-secondary:hover { background: #475569; }
+  .btn-success {
+    background: #22c55e;
+    color: white;
+  }
+  .btn-success:hover { background: #16a34a; }
+  .footer {
+    margin-top: 48px;
+    color: #64748b;
+    font-size: 12px;
+    text-align: center;
+  }
+  @media (max-width: 400px) {
+    .gallery { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<h1>🎬 医院IT工单管理系统 · 演示中心</h1>
+<p class="subtitle">交互式架构图与工作流动画 — 浏览器直接打开，零依赖</p>
+
+<div class="gallery">
+
+  <!-- Card 1: Architecture Diagram -->
+  <div class="card">
+    <div class="card-img">
+      <iframe src="/static/demo/architecture.html" loading="lazy"></iframe>
+    </div>
+    <div class="card-body">
+      <div><span class="badge badge-html">📄 HTML</span> <span class="badge badge-anim">🎨 交互</span></div>
+      <h3>📐 系统架构图</h3>
+      <p>完整的系统架构拓扑 — 前端三端（PC/Mobile/小程序/Android）、Nginx反向代理、Gunicorn+Flask应用层、SQLite数据库、企业微信/微信通知集成。深色主题，脉冲动画，离线可用。</p>
+      <div class="btn-group">
+        <a href="/static/demo/architecture.html" target="_blank" class="btn btn-primary">🔗 打开</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card 2: Animated Workflow -->
+  <div class="card">
+    <div class="card-img">
+      <iframe src="/static/demo/animated-workflow.html" loading="lazy"></iframe>
+    </div>
+    <div class="card-body">
+      <div><span class="badge badge-html">📄 HTML</span> <span class="badge badge-anim">🎬 动画</span></div>
+      <h3>🔄 工单全生命周期动画</h3>
+      <p>三大动画模块：① 工单生命周期流程图（发布→待接单→已接单→处理中→完成，状态颜色编码+流动箭头）；② 紧急程度流转（普通🟢→加急🟡→紧急🔴→结单冻结❄️）；③ 三端协同同步示意。纯CSS动画，鼠标悬停暂停。</p>
+      <div class="btn-group">
+        <a href="/static/demo/animated-workflow.html" target="_blank" class="btn btn-primary">🔗 打开</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card 3: Product Manual -->
+  <div class="card">
+    <div class="card-img">
+      <div class="placeholder">
+        <div class="placeholder-icon">📘</div>
+        <div class="placeholder-label">50页详细产品手册</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div><span class="badge badge-html">📄 Markdown</span></div>
+      <h3>📘 产品手册（PDF/MD）</h3>
+      <p>1073行、45KB的完整产品手册。涵盖产品概述、系统架构、16个功能模块详解、三端协同机制、部署指南、权限体系、运维管理、常见问题排障、附录(目录结构/数据库ER图/版本历史)。</p>
+      <div class="btn-group">
+        <a href="https://demolin.cn/static/demo/产品手册_医院IT工单管理系统.md" target="_blank" class="btn btn-success">📥 下载</a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  医院IT工单管理系统 v2.0 — 打开后点击卡片进入全屏查看
+</div>
+
+</body>
+</html>

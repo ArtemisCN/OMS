@@ -1,0 +1,418 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.draft-card { border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 16px; }
+.draft-card .card-header { background: #f9fafb; border-bottom: 1px solid #e5e7eb; padding: 10px 16px; font-size: 13px; font-weight: 600; }
+.part-row { background: #f9fafb; border-radius: 6px; padding: 8px 12px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.status-draft { background: #fef3c7; color: #92400e; }
+.status-generated { background: #d1fae5; color: #065f46; }
+
+/* 文档打印样式 */
+.doc-section { border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; margin-bottom: 20px; background: #fff; }
+.doc-title { font-size: 18px; font-weight: 700; text-align: center; margin-bottom: 20px; letter-spacing: 2px; }
+.doc-header { font-size: 14px; font-weight: 700; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #1e293b; }
+.doc-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+.doc-table th { background: #f1f5f9; padding: 8px 10px; text-align: center; border: 1px solid #d1d5db; font-weight: 600; }
+.doc-table td { padding: 6px 10px; border: 1px solid #d1d5db; }
+.doc-table tfoot td { background: #f8fafc; font-weight: 700; }
+
+/* 验收单卡片 */
+.acceptance-card { border: 2px solid #1e293b; border-radius: 8px; padding: 20px; margin-bottom: 20px; page-break-inside: avoid; }
+.acceptance-title { font-size: 16px; font-weight: 700; text-align: center; margin-bottom: 16px; letter-spacing: 4px; }
+.acceptance-row { display: flex; margin-bottom: 10px; font-size: 14px; }
+.acceptance-label { width: 100px; font-weight: 600; flex-shrink: 0; }
+.acceptance-value { flex: 1; border-bottom: 1px solid #9ca3af; padding: 0 8px; min-height: 28px; }
+.acceptance-check { font-size: 14px; letter-spacing: 8px; }
+
+/* 资产选择器 */
+.asset-option { cursor: pointer; padding: 6px 10px; border-bottom: 1px solid #f0f0f0; font-size: 13px; transition: background .15s; }
+.asset-option:hover { background: #eef2ff; }
+.asset-option.selected { background: #dbeafe; }
+.asset-no-assign { cursor: pointer; padding: 8px 12px; font-size: 13px; color: #dc2626; transition: background .15s; }
+.asset-no-assign:hover { background: #fef2f2; }
+</style>
+
+<div class="mb-3">
+    <a href="{{ url_for('finance.index') }}" class="text-muted" style="font-size:13px;"><i class="fas fa-arrow-left"></i> 返回列表</a>
+</div>
+
+<!-- 批次信息 -->
+<div class="card mb-3" style="border:1px solid #e5e7eb;border-radius:10px;">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h5 class="fw-bold mb-2" style="font-size:15px;">{{ batch.company_name or '未填公司' }}
+                    <span class="badge status-{{ batch.status }}" style="font-size:11px;">{% if batch.status=='draft' %}草稿{% else %}已生成{% endif %}</span>
+                </h5>
+                <div style="font-size:13px;color:#6b7280;">
+                    收款单位: {{ batch.payee or '-' }} |
+                    开户行: {{ batch.bank_name or '-' }} |
+                    账号: {{ batch.bank_account or '-' }}
+                    {% if batch.created_by %} | 创建人: {{ batch.created_by }}{% endif %}
+                </div>
+            </div>
+            <div style="font-size:18px;font-weight:700;color:#f59e0b;">¥{{ '%.2f'|format(batch.total_amount) }}</div>
+        </div>
+        {% if invoices %}
+        <div class="mt-2 d-flex flex-wrap gap-1" style="font-size:12px;color:#6b7280;">
+            {% for inv in invoices %}
+            <span class="badge bg-light text-dark border">{{ inv.invoice_no }} ¥{{ '%.2f'|format(inv.amount) }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 操作按钮 -->
+<div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+    {% if batch.status == 'draft' %}
+    <form method="POST" action="{{ url_for('finance.generate_drafts', batch_id=batch.id) }}" onsubmit="return confirm('根据所选月份已完成工单生成维修清单？')" class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center gap-1">
+            <select name="year" class="form-select form-select-sm" style="width:80px;font-size:12px;">
+                {% for y in range(now.year-2, now.year+1) %}
+                <option value="{{ y }}" {{ 'selected' if y==now.year }}>{{ y }}年</option>
+                {% endfor %}
+            </select>
+            <select name="month" class="form-select form-select-sm" style="width:70px;font-size:12px;">
+                {% for m in range(1, 13) %}
+                <option value="{{ m }}" {{ 'selected' if m==now.month }}>{{ m }}月</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button class="btn btn-warning btn-sm"><i class="fas fa-magic"></i> 生成维修清单</button>
+    </form>
+    {% endif %}
+    {% if drafts and batch.status != 'draft' %}
+    <form method="POST" action="{{ url_for('finance.generate_docs', batch_id=batch.id) }}" onsubmit="return confirm('确认生成全部文档？')" style="display:inline">
+        <button class="btn btn-success btn-sm"><i class="fas fa-file-export"></i> 生成文档</button>
+    </form>
+    <a href="{{ url_for('finance.print_acceptance', batch_id=batch.id) }}" class="btn btn-outline-info btn-sm" target="_blank"><i class="fas fa-print"></i> 打印验收单</a>
+    <a href="{{ url_for('finance.export_acceptance_excel', batch_id=batch.id) }}" class="btn btn-outline-success btn-sm"><i class="fas fa-file-excel"></i> 导出Excel</a>
+    <a href="{{ url_for('finance.batch_acceptance_render', batch_id=batch.id) }}" class="btn btn-outline-primary btn-sm" target="_blank"><i class="fas fa-file-alt"></i> 模板渲染</a>
+    <a href="{{ url_for('finance.acceptance_designer') }}" class="btn btn-outline-warning btn-sm"><i class="fas fa-paint-brush"></i> 设计验收单</a>
+    {% endif %}
+    <form method="POST" action="{{ url_for('finance.delete_batch', batch_id=batch.id) }}" onsubmit="return confirm('确认删除整个批次？')" style="display:inline">
+        <button class="btn btn-outline-danger btn-sm"><i class="fas fa-trash"></i> 删除批次</button>
+    </form>
+</div>
+
+<!-- ======================== 维修清单草稿（编辑区） ======================== -->
+{% if drafts %}
+<div class="mb-3">
+    <h6 class="fw-bold mb-2" style="font-size:14px;"><i class="fas fa-pen"></i> 维修清单草稿（{{ drafts|length }} 条）</h6>
+    {% for d in drafts %}
+    <div class="card draft-card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>#{{ d.sort_order+1 }}
+                {% if d.asset %}
+                {{ d.asset.brand }} {{ d.asset.model_no or d.asset.asset_no }}
+                {% else %}
+                <span class="text-muted">(未关联资产)</span>
+                {% endif %}
+                · {{ d.device_type }} · {{ d.department }}</span>
+            <div class="d-flex gap-2 align-items-center">
+                <span class="badge status-{{ d.status }}" style="font-size:11px;">{% if d.status=='draft' %}草稿{% else %}已生成{% endif %}</span>
+                <form method="POST" action="{{ url_for('finance.delete_draft', draft_id=d.id) }}" style="display:inline" onsubmit="return confirm('删除此条？')">
+                    <button class="btn btn-sm btn-outline-danger px-2" title="删除此条"><i class="fas fa-trash"></i></button>
+                </form>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row g-2 mb-2">
+                <div class="col-md-3"><label class="form-label" style="font-size:12px;">日期</label><br><span>{{ d.report_date.strftime('%Y-%m-%d') if d.report_date else '-' }}</span></div>
+                <div class="col-md-3">
+                    <label class="form-label" style="font-size:12px;">资产编码</label><br>
+                    <span id="assetDisplay_{{ d.id }}">
+                        {% if d.asset %}
+                        <strong>{{ d.asset.asset_no }}</strong>
+                        <small class="text-muted">({{ d.asset.brand or '' }} {{ d.asset.model_no or '' }})</small>
+                        {% else %}
+                        <span class="text-muted">未指定</span>
+                        {% endif %}
+                    </span>
+                    <button class="btn btn-sm btn-outline-primary ms-2 px-2" onclick="openAssetPicker({{ d.id }}, '{{ d.department }}')" title="选择资产"><i class="fas fa-search"></i></button>
+                </div>
+                <div class="col-md-3"><label class="form-label" style="font-size:12px;">科室</label><br><span>{{ d.department }}</span></div>
+                <div class="col-md-3"><label class="form-label" style="font-size:12px;">金额</label><br><strong style="color:#f59e0b;">¥{{ '%.2f'|format(d.total_amount) }}</strong></div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label" style="font-size:12px;">维修内容</label>
+                <textarea class="form-control" rows="1" style="font-size:13px;" onchange="saveDraft({{ d.id }}, this.value)">{{ d.repair_content }}</textarea>
+            </div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <label class="form-label mb-0" style="font-size:12px;cursor:pointer;" onclick="toggleParts({{ d.id }})">
+                    <i class="fas fa-chevron-right" id="chevron_{{ d.id }}" style="font-size:10px;transition:transform .2s;"></i> 配件 (<span id="partCount_{{ d.id }}">{{ d.parts.count() }}</span>种)
+                </label>
+            </div>
+            <div id="partsList_{{ d.id }}" style="display:none;">
+            {% for p in d.parts.all() %}
+            <div class="part-row" id="part_{{ p.id }}">
+                <span style="flex:3;"><strong>{{ p.part_name }}</strong></span>
+                <span style="flex:1;">{{ p.unit }}×{{ p.quantity }}</span>
+                <span style="flex:1;text-align:right;">¥{{ '%.2f'|format(p.unit_price) }}</span>
+                <span style="flex:1;text-align:right;color:#f59e0b;font-weight:600;">¥{{ '%.2f'|format(p.amount) }}</span>
+                <button class="btn btn-sm btn-outline-danger px-2" onclick="deletePart({{ d.id }}, {{ p.id }})"><i class="fas fa-times"></i></button>
+            </div>
+            {% endfor %}
+            <div class="mt-2">
+                <button class="btn btn-sm btn-outline-warning" onclick="addPart({{ d.id }})"><i class="fas fa-plus"></i> 添加配件</button>
+            </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    {% if batch.status == 'generated' %}
+    <!-- ============================================================ -->
+    <!-- 文档预览区 -->
+    <!-- ============================================================ -->
+
+    <!-- 1. 维修清单 -->
+    <div class="doc-section">
+        <div class="doc-title">上海市第七人民医院清单</div>
+        <table class="doc-table">
+            <thead>
+                <tr><th>日期</th><th>资产编码</th><th>类型</th><th>维修内容</th><th>合计金额</th><th>科室</th></tr>
+            </thead>
+            <tbody>
+                {% for d in drafts %}
+                <tr>
+                    <td style="text-align:center;">{{ d.report_date.strftime('%Y-%m-%d') if d.report_date else '' }}</td>
+                    <td style="text-align:center;">{{ d.asset.asset_no if d.asset else '' }}</td>
+                    <td style="text-align:center;">{{ d.device_type }}</td>
+                    <td>{{ d.repair_content }}</td>
+                    <td style="text-align:right;">{{ '%.0f'|format(d.total_amount) }}</td>
+                    <td>{{ d.department }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 2. 验收单（逐条） -->
+    {% for d in drafts %}
+    <div class="acceptance-card">
+        <div class="acceptance-title">维修验收单</div>
+        <div class="acceptance-row">
+            <span class="acceptance-label">维修日期</span>
+            <span class="acceptance-value">{{ d.report_date.strftime('%Y-%m-%d') if d.report_date else '' }}</span>
+            <span class="acceptance-label" style="margin-left:30px;">维修科室</span>
+            <span class="acceptance-value">{{ d.department }}</span>
+        </div>
+        <div class="acceptance-row">
+            <span class="acceptance-label">维修物品</span>
+            <span class="acceptance-value">{{ d.asset.brand if d.asset and d.asset.brand else '' }} {{ d.asset.model_no if d.asset and d.asset.model_no else d.asset.asset_no if d.asset else '' }}</span>
+        </div>
+        <div class="acceptance-row">
+            <span class="acceptance-label">维修内容</span>
+            <span class="acceptance-value">{{ d.repair_content }}</span>
+        </div>
+        <div class="acceptance-row">
+            <span class="acceptance-label">金额</span>
+            <span class="acceptance-value">¥{{ '%.2f'|format(d.total_amount) }}</span>
+        </div>
+        <div class="acceptance-row">
+            <span class="acceptance-label">是否已完成</span>
+            <span class="acceptance-value acceptance-check">☑是       □否</span>
+        </div>
+        <div class="acceptance-row">
+            <span class="acceptance-label">验收日期</span>
+            <span class="acceptance-value">{{ d.report_date.strftime('%Y-%m-%d') if d.report_date else '' }}</span>
+        </div>
+        <div class="acceptance-row">
+            <span class="acceptance-label">验收人签字</span>
+            <span class="acceptance-value"></span>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- 3. 维修小结 -->
+    <div class="doc-section">
+        <div class="doc-title">上海市第七人民医院清单</div>
+        <table class="doc-table">
+            <thead>
+                <tr><th>日期</th><th>型号</th><th>数量</th><th>单价</th><th>金额</th></tr>
+            </thead>
+            <tbody>
+                {% set ns = namespace(total=0) %}
+                {% for d in drafts %}
+                {% set ns.total = ns.total + d.total_amount %}
+                <tr>
+                    <td style="text-align:center;">{{ d.report_date.strftime('%Y-%m-%d') if d.report_date else '' }}</td>
+                    <td>{{ d.repair_content or '维护费' }}</td>
+                    <td style="text-align:center;">1</td>
+                    <td style="text-align:right;">{{ '%.0f'|format(d.total_amount) }}</td>
+                    <td style="text-align:right;">{{ '%.0f'|format(d.total_amount) }}</td>
+                </tr>
+                {% endfor %}
+                <tr><td colspan="4" style="text-align:right;font-weight:700;">小计：</td><td style="text-align:right;font-weight:700;">{{ '%.0f'|format(ns.total) }}</td></tr>
+                <tr><td colspan="4" style="text-align:right;font-weight:700;">合计：</td><td style="text-align:right;font-weight:700;">{{ '%.0f'|format(ns.total) }}</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 4. 发票汇总 -->
+    <div class="doc-section">
+        <div class="doc-header">发票汇总</div>
+        <table class="doc-table">
+            <thead>
+                <tr><th>序号</th><th>收款单位</th><th>开户银行</th><th>账号</th><th>发票号码</th><th>发票总金额</th></tr>
+            </thead>
+            <tbody>
+                {% for inv in invoices %}
+                <tr>
+                    <td style="text-align:center;">{{ loop.index }}</td>
+                    <td>{{ batch.payee }}</td>
+                    <td>{{ batch.bank_name }}</td>
+                    <td>{{ batch.bank_account }}</td>
+                    <td style="text-align:center;">{{ inv.invoice_no }}</td>
+                    <td style="text-align:right;">{{ '%.0f'|format(inv.amount) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr><td colspan="5" style="text-align:right;font-weight:700;">总计：</td><td style="text-align:right;font-weight:700;">{{ '%.0f'|format(batch.total_amount) }}</td></tr>
+            </tfoot>
+        </table>
+    </div>
+
+    {% endif %} {# batch.status == 'generated' #}
+
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="fas fa-file-invoice" style="font-size:48px;color:#d1d5db;margin-bottom:16px;"></i>
+    <p>暂无维修清单，点击「生成维修清单」从已完成工单自动生成</p>
+</div>
+{% endif %}
+
+<!-- ======================== 资产选择模态框 ======================== -->
+<div class="modal fade" id="assetPickerModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title fw-bold" style="font-size:14px;"><i class="fas fa-search"></i> 选择资产</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" class="form-control" id="assetSearchInput" placeholder="搜索科室名称、资产编码、品牌..." oninput="searchAssets()">
+                    </div>
+                </div>
+                <div style="max-height:400px;overflow-y:auto;" id="assetList">
+                    <div class="text-center text-muted py-4"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="unassignAsset()">取消关联资产</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentDraftId = null;
+
+function toggleParts(draftId) {
+    const el = document.getElementById('partsList_' + draftId);
+    const chevron = document.getElementById('chevron_' + draftId);
+    if (el.style.display === 'none') {
+        el.style.display = 'block';
+        chevron.style.transform = 'rotate(90deg)';
+    } else {
+        el.style.display = 'none';
+        chevron.style.transform = 'rotate(0deg)';
+    }
+}
+function saveDraft(draftId, content) {
+    const fd = new FormData();
+    fd.append('repair_content', content);
+    fetch('/finance/draft/' + draftId + '/save', {method:'POST', body:fd});
+}
+function deletePart(draftId, partId) {
+    if (!confirm('删除此配件？')) return;
+    fetch(`/finance/draft/${draftId}/part/${partId}/delete`, {method:'POST'})
+        .then(r=>r.json()).then(()=>location.reload());
+}
+function addPart(draftId) {
+    const name = prompt('配件名称：');
+    if (!name) return;
+    const price = parseFloat(prompt('单价(元)：')) || 0;
+    const fd = new FormData();
+    fd.append('part_name', name);
+    fd.append('unit_price', price);
+    fetch('/finance/draft/' + draftId + '/part/add', {method:'POST', body:fd})
+        .then(r=>r.json()).then(()=>location.reload());
+}
+
+// 资产选择器
+function openAssetPicker(draftId, deptHint) {
+    currentDraftId = draftId;
+    document.getElementById('assetSearchInput').value = deptHint || '';
+    const modal = new bootstrap.Modal(document.getElementById('assetPickerModal'));
+    modal.show();
+    searchAssets();
+}
+
+function searchAssets() {
+    const q = document.getElementById('assetSearchInput').value;
+    const list = document.getElementById('assetList');
+    list.innerHTML = '<div class="text-center text-muted py-4"><i class="fas fa-spinner fa-spin"></i> 搜索中...</div>';
+    fetch('/finance/assets_by_dept?q=' + encodeURIComponent(q))
+        .then(r => r.json())
+        .then(assets => {
+            if (assets.length === 0) {
+                list.innerHTML = '<div class="text-center text-muted py-4">未找到资产</div>';
+                return;
+            }
+            let html = '';
+            assets.forEach(a => {
+                html += `<div class="asset-option" onclick="selectAsset(${a.id}, '${a.asset_no}', '${a.brand}', '${a.model_no}')">
+                    <strong>${a.asset_no}</strong>
+                    <span class="text-muted"> | ${a.device_type}</span>
+                    <span class="text-muted"> | ${a.department}</span>
+                    ${a.brand ? '<span class="text-muted"> | ' + a.brand : ''}${a.model_no ? ' ' + a.model_no : ''}${a.brand ? '</span>' : ''}
+                </div>`;
+            });
+            list.innerHTML = html;
+        })
+        .catch(() => {
+            list.innerHTML = '<div class="text-danger text-center py-4">加载失败</div>';
+        });
+}
+
+function selectAsset(assetId, assetNo, brand, model) {
+    const fd = new FormData();
+    fd.append('asset_id', assetId);
+    fetch('/finance/draft/' + currentDraftId + '/select_asset', {method:'POST', body:fd})
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                const display = document.getElementById('assetDisplay_' + currentDraftId);
+                display.innerHTML = '<strong>' + data.asset_no + '</strong> <small class="text-muted">(' + data.brand + ' ' + data.model + ')</small>';
+                document.getElementById('assetPickerModal').querySelector('.btn-close').click();
+                // 刷新页面以更新文档预览区
+                location.reload();
+            }
+        });
+}
+
+function unassignAsset() {
+    if (!confirm('取消关联此资产？')) return;
+    const fd = new FormData();
+    fd.append('asset_id', '');
+    fetch('/finance/draft/' + currentDraftId + '/select_asset', {method:'POST', body:fd})
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                const display = document.getElementById('assetDisplay_' + currentDraftId);
+                display.innerHTML = '<span class="text-muted">未指定</span>';
+                document.getElementById('assetPickerModal').querySelector('.btn-close').click();
+                location.reload();
+            }
+        });
+}
+</script>
+{% endblock %}

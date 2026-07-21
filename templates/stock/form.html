@@ -1,0 +1,86 @@
+<!-- 备件表单 -->
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:600px; margin:0 auto; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.06); border:1px solid #e5e7eb;">
+    <div class="card-header bg-white" style="border-bottom:1px solid #f3f4f6; padding:14px 20px;">
+        <h5 class="mb-0 fw-bold" style="font-size:15px;">
+            {% if part %}<i class="fas fa-edit" style="color:#8b5cf6;"></i> 编辑备件{% else %}<i class="fas fa-plus" style="color:#8b5cf6;"></i> 添加备件{% endif %}
+        </h5>
+    </div>
+    <div class="card-body p-4">
+        <form method="POST">
+            {% set p = part or {} %}
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label" style="font-size:13px; font-weight:600;">名称 <span style="color:#ef4444;">*</span></label>
+                    <input type="text" name="name" class="form-control form-control-sm" required
+                           placeholder="如 硒鼓HP-1020" value="{{ p.name or '' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" style="font-size:13px; font-weight:600;">分类</label>
+                    <select name="category" class="form-select form-select-sm">
+                        <option value="打印机耗材" {{ 'selected' if p.category=='打印机耗材' else '' }}>打印机耗材</option>
+                        <option value="电脑配件" {{ 'selected' if p.category=='电脑配件' else '' }}>电脑配件</option>
+                        <option value="外设" {{ 'selected' if p.category=='外设' else '' }}>外设</option>
+                        <option value="网络" {{ 'selected' if p.category=='网络' else '' }}>网络</option>
+                        <option value="其他" {{ 'selected' if p.category=='其他' or not p.category else '' }}>其他</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" style="font-size:13px; font-weight:600;">单位</label>
+                    <select name="unit" class="form-select form-select-sm">
+                        <option value="个" {{ 'selected' if p.unit=='个' or not p.unit else '' }}>个</option>
+                        <option value="条" {{ 'selected' if p.unit=='条' else '' }}>条</option>
+                        <option value="盒" {{ 'selected' if p.unit=='盒' else '' }}>盒</option>
+                        <option value="根" {{ 'selected' if p.unit=='根' else '' }}>根</option>
+                        <option value="套" {{ 'selected' if p.unit=='套' else '' }}>套</option>
+                        <option value="箱" {{ 'selected' if p.unit=='箱' else '' }}>箱</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label class="form-label" style="font-size:13px; font-weight:600;">品牌</label>
+                    <input type="text" name="brand" class="form-control form-control-sm" value="{{ p.brand or '' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" style="font-size:13px; font-weight:600;">型号规格</label>
+                    <input type="text" name="model_no" class="form-control form-control-sm" list="modelNoList" value="{{ p.model_no or '' }}" placeholder="选择或输入型号">
+                    <datalist id="modelNoList">
+                        {% for m in model_list %}
+                        <option value="{{ m }}">
+                        {% endfor %}
+                    </datalist>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" style="font-size:13px; font-weight:600;">存放位置</label>
+                    <select name="location" class="form-select form-select-sm">
+                        <option value="">— 请选择 —</option>
+                        {% for loc in locations %}
+                        <option value="{{ loc.name }}" {{ 'selected' if p.location==loc.name else '' }}>{{ loc.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label class="form-label" style="font-size:13px; font-weight:600;">当前库存</label>
+                    <input type="number" name="stock" class="form-control form-control-sm" min="0" value="{{ p.stock or 0 }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" style="font-size:13px; font-weight:600;">预警阈值</label>
+                    <input type="number" name="min_stock" class="form-control form-control-sm" min="0" value="{{ p.min_stock or 5 }}">
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" style="font-size:13px; font-weight:600;">备注</label>
+                <textarea name="notes" class="form-control form-control-sm" rows="2">{{ p.notes or '' }}</textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-save"></i> 保存</button>
+                <a href="{{ url_for('stock.index') }}" class="btn btn-sm btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

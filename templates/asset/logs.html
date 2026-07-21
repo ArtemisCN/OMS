@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="mb-0 fw-bold" style="font-size:15px;">
+        <i class="fas fa-history" style="color:#6b7280;"></i> 资产操作日志
+        <span class="text-muted ms-2" style="font-size:12px; font-weight:400;">
+            共 {{ pagination.total }} 条
+        </span>
+    </h5>
+    <div>
+        <a href="{{ url_for('asset.list_view') }}" class="btn btn-sm btn-outline-primary">
+            <i class="fas fa-server"></i> 返回台账
+        </a>
+        <a href="{{ url_for('asset.calendar') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-calendar-check"></i> 保修日历
+        </a>
+    </div>
+</div>
+
+<!-- 筛选 -->
+<form class="row g-2 mb-3" method="GET">
+    <div class="col-auto">
+        <select name="action" class="form-select form-select-sm" onchange="this.form.submit()">
+            <option value="">全部操作</option>
+            <option value="import" {{ 'selected' if action=='import' }}>导入</option>
+            <option value="edit" {{ 'selected' if action=='edit' }}>编辑</option>
+            <option value="transfer" {{ 'selected' if action=='transfer' }}>调拨</option>
+            <option value="recover" {{ 'selected' if action=='recover' }}>回收</option>
+            <option value="relocate" {{ 'selected' if action=='relocate' }}>移位</option>
+            <option value="batch_edit" {{ 'selected' if action=='batch_edit' }}>批量修改</option>
+        </select>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('asset.logs') }}" class="btn btn-sm btn-outline-secondary">清除筛选</a>
+    </div>
+</form>
+
+<div class="card border-0" style="box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead style="background:#f8fafc;">
+                    <tr>
+                        <th>时间</th>
+                        <th>资产ID</th>
+                        <th>操作类型</th>
+                        <th>操作人</th>
+                        <th>变更内容</th>
+                        {% if current_user.is_admin %}<th style="width:40px;">操作</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td style="white-space:nowrap; font-size:12px;">{{ log.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>
+                            <a href="{{ url_for('asset.detail', asset_id=log.asset_id) }}" class="text-decoration-none">
+                                #{{ log.asset_id }}
+                            </a>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ {
+                                'import':'success', 'edit':'primary', 'transfer':'info',
+                                'recover':'danger', 'relocate':'warning', 'batch_edit':'secondary'
+                            }.get(log.action, 'secondary') }}">
+                                {% if log.action == 'import' %}导入
+                                {% elif log.action == 'edit' %}编辑
+                                {% elif log.action == 'transfer' %}调拨
+                                {% elif log.action == 'recover' %}回收
+                                {% elif log.action == 'relocate' %}移位
+                                {% elif log.action == 'batch_edit' %}批量修改
+                                {% else %}{{ log.action }}{% endif %}
+                            </span>
+                        </td>
+                        <td>{{ log.operator }}</td>
+                        <td style="font-size:12px; max-width:500px; overflow:hidden; text-overflow:ellipsis;">
+                            {% if log.old_value and log.new_value %}
+                                {% set old = log.old_value %}
+                                {% set new = log.new_value %}
+                                {% set changes = [] %}
+                                {% if old.get('department') != new.get('department') %}
+                                    {% set _ = changes.append('科室: ' + (old.get('department','') or '-') + ' → ' + (new.get('department','') or '-')) %}
+                                {% endif %}
+                                {% if old.get('status') != new.get('status') %}
+                                    {% set _ = changes.append('状态: ' + (old.get('status','') or '-') + ' → ' + (new.get('status','') or '-')) %}
+                                {% endif %}
+                                {% if old.get('building') != new.get('building') or old.get('floor') != new.get('floor') or old.get('location') != new.get('location') %}
+                                    {% set _ = changes.append('位置变更') %}
+                                {% endif %}
+                                {% if old.get('department') == new.get('department') and old.get('status') == new.get('status') %}
+                                    {% set _ = changes.append('字段变更') %}
+                                {% endif %}
+                                {{ changes | join('; ') if changes else '详见JSON' }}
+                            {% else %}
+                                {% if log.action == 'import' %}
+                                    新增资产
+                                {% else %}
+                                    -
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        {% if current_user.is_admin %}
+                        <td class="text-center">
+                            <form method="post" action="{{ url_for('asset.delete_log', log_id=log.id) }}" onsubmit="return confirm('确认删除此日志？')" style="display:inline;">
+                                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1" title="删除"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                    {% if not logs %}
+                    <tr><td colspan="5" class="text-center py-5 text-muted">暂无日志</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if pagination.pages > 1 %}
+<nav class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center">
+        <li class="page-item {{ 'disabled' if not pagination.has_prev }}">
+            <a class="page-link" href="{{ url_for('asset.logs', page=pagination.prev_num, action=action) if pagination.has_prev else '#' }}">&laquo;</a>
+        </li>
+        {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if p %}
+            <li class="page-item {{ 'active' if p == pagination.page }}">
+                <a class="page-link" href="{{ url_for('asset.logs', page=p, action=action) }}">{{ p }}</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+        <li class="page-item {{ 'disabled' if not pagination.has_next }}">
+            <a class="page-link" href="{{ url_for('asset.logs', page=pagination.next_num, action=action) if pagination.has_next else '#' }}">&raquo;</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+
+{% endblock %}

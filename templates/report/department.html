@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}选择科室 · {{ hospital.name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-qrcode text-primary"></i> {{ hospital.name }} - 选择科室</h5>
+    <a href="{{ url_for('report_qr.report_index') }}" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left"></i> 返回</a>
+</div>
+<div class="row g-3">
+    <div class="col-md-4">
+        <div class="card text-center h-100" style="cursor:pointer;border:2px dashed #0ea5e9;" onclick="location.href='{{ url_for("report_qr.qr_page", hospital_id=hospital.id) }}'">
+            <div class="card-body d-flex flex-column align-items-center justify-content-center" style="min-height:120px;">
+                <i class="fas fa-building" style="font-size:32px;color:#0ea5e9;"></i>
+                <h6 class="mt-2 mb-0">全院通用二维码</h6>
+                <small class="text-muted">报修人自行填写科室</small>
+            </div>
+        </div>
+    </div>
+    {% for dept in departments %}
+    <div class="col-md-4">
+        <div class="card text-center h-100" style="cursor:pointer;" onclick="location.href='{{ url_for("report_qr.qr_page", hospital_id=hospital.id, department=dept) }}'">
+            <div class="card-body d-flex flex-column align-items-center justify-content-center" style="min-height:120px;">
+                <i class="fas fa-hospital" style="font-size:28px;color:#6366f1;"></i>
+                <h6 class="mt-2 mb-0">{{ dept }}</h6>
+                <small class="text-muted">点此生成专属二维码</small>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

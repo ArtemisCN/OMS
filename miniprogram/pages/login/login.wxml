@@ -1,0 +1,24 @@
+<view class="login-wrap">
+  <view class="login-box">
+    <view class="logo">
+      <text class="logo-icon">🔧</text>
+      <text class="logo-text">工单助手</text>
+      <text class="logo-subtitle">运维智脑 · 智维工控</text>
+    </view>
+
+    <view class="form-group">
+      <text class="label">用户名</text>
+      <input class="input" placeholder="请输入用户名" value="{{username}}" bindinput="onInputUsername" />
+    </view>
+
+    <view class="form-group">
+      <text class="label">密码</text>
+      <input class="input" type="password" placeholder="请输入密码" value="{{password}}" bindinput="onInputPassword" />
+    </view>
+
+    <button class="btn-login" bindtap="onLogin" loading="{{loading}}" disabled="{{loading}}">
+      <text wx:if="{{!loading}}">登 录</text>
+      <text wx:else>登录中...</text>
+    </button>
+  </view>
+</view>

@@ -1,0 +1,122 @@
+<!-- 科室字典管理 -->
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="mb-0 fw-bold" style="font-size:15px;">
+        <i class="fas fa-building" style="color:#059669;"></i> 科室字典
+    </h5>
+    <div class="d-flex gap-2">
+        <form method="get" class="d-flex gap-1">
+            <input type="text" name="keyword" class="form-control form-control-sm" placeholder="搜索科室..." value="{{ keyword }}" style="width:160px;">
+            <button type="submit" class="btn btn-sm btn-outline-primary"><i class="fas fa-search"></i></button>
+        </form>
+        <button type="button" class="btn btn-sm btn-primary" onclick="showAddModal()"><i class="fas fa-plus"></i> 添加科室</button>
+        <form method="post" action="{{ url_for('settings.import_departments') }}" style="display:inline;"
+              onsubmit="return confirm('从工单和地址数据中提取科室并导入？')">
+            <button type="submit" class="btn btn-sm btn-outline-info"><i class="fas fa-file-import"></i> 从工单/地址导入</button>
+        </form>
+        <a href="{{ url_for('data.index') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> 返回</a>
+    </div>
+</div>
+
+<div class="card" style="border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.06); border:1px solid #e5e7eb;">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" style="font-size:13px;">
+            <thead class="table-light">
+                <tr>
+                    <th>ID</th><th>科室名称</th><th>楼区</th><th>楼层</th><th>电话</th><th>状态</th><th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in departments %}
+                <tr>
+                    <td>{{ d.id }}</td>
+                    <td><strong>{{ d.name }}</strong></td>
+                    <td>{{ d.building or '-' }}</td>
+                    <td>{{ d.floor or '-' }}</td>
+                    <td>{{ d.phone or '-' }}</td>
+                    <td>
+                        <form method="post" action="{{ url_for('settings.toggle_department', did=d.id) }}" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-outline-{{ 'success' if d.is_active else 'secondary' }}">
+                                {{ '禁用' if d.is_active else '启用' }}
+                            </button>
+                        </form>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="editDept({{ d.id }}, '{{ d.name|e }}', '{{ d.building or '' }}', '{{ d.floor or '' }}', '{{ d.phone or '' }}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <form method="post" action="{{ url_for('settings.delete_department', did=d.id) }}" style="display:inline;"
+                              onsubmit="return confirm('确定删除 {{ d.name }}？')">
+                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="text-center text-muted py-4">暂无科室数据</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 添加/编辑模态框 -->
+<div class="modal fade" id="deptModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:12px;">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title fw-bold" id="deptModalTitle">添加科室</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" id="deptForm">
+                <div class="modal-body">
+                    <input type="hidden" name="did" id="deptId">
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:13px;font-weight:600;">科室名称 <span class="text-danger">*</span></label>
+                        <input type="text" name="name" id="deptName" class="form-control" required>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-4">
+                            <label class="form-label" style="font-size:12px;">楼区</label>
+                            <input type="text" name="building" id="deptBuilding" class="form-control form-control-sm" placeholder="如15号楼">
+                        </div>
+                        <div class="col-3">
+                            <label class="form-label" style="font-size:12px;">楼层</label>
+                            <input type="text" name="floor" id="deptFloor" class="form-control form-control-sm" placeholder="如2楼">
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label" style="font-size:12px;">电话</label>
+                            <input type="text" name="phone" id="deptPhone" class="form-control form-control-sm" placeholder="科室电话">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-save"></i> 保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function showAddModal() {
+    document.getElementById('deptModalTitle').textContent = '添加科室';
+    document.getElementById('deptForm').action = '{{ url_for("settings.add_department") }}';
+    document.getElementById('deptName').value = '';
+    document.getElementById('deptBuilding').value = '';
+    document.getElementById('deptFloor').value = '';
+    document.getElementById('deptPhone').value = '';
+    new bootstrap.Modal(document.getElementById('deptModal')).show();
+}
+function editDept(id, name, building, floor, phone) {
+    document.getElementById('deptModalTitle').textContent = '编辑科室';
+    document.getElementById('deptForm').action = '/settings/departments/' + id + '/edit';
+    document.getElementById('deptName').value = name;
+    document.getElementById('deptBuilding').value = building;
+    document.getElementById('deptFloor').value = floor;
+    document.getElementById('deptPhone').value = phone;
+    new bootstrap.Modal(document.getElementById('deptModal')).show();
+}
+</script>
+{% endblock %}

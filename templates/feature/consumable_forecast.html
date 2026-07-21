@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}耗材用量预测{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-chart-line text-primary"></i> 耗材用量预测</h5>
+    <a href="{{ url_for('data.list_consumables') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-left"></i> 返回耗材管理
+    </a>
+</div>
+
+<!-- 预警汇总 -->
+{% set red_alerts = forecasts | selectattr('status', 'equalto', 'red') | list %}
+{% set yellow_alerts = forecasts | selectattr('status', 'equalto', 'yellow') | list %}
+{% if red_alerts or yellow_alerts %}
+<div class="alert alert-warning d-flex align-items-center gap-2 mb-3">
+    <i class="fas fa-exclamation-triangle fs-5"></i>
+    <span>
+        {% if red_alerts %}
+        <strong>{{ red_alerts | length }}</strong> 种耗材库存告急（≤7天）
+        {% endif %}
+        {% if red_alerts and yellow_alerts %}，{% endif %}
+        {% if yellow_alerts %}
+        <strong>{{ yellow_alerts | length }}</strong> 种耗材即将不足（≤14天）
+        {% endif %}
+    </span>
+</div>
+{% endif %}
+
+<div class="card mb-3">
+    <div class="card-body">
+        <canvas id="consumptionChart" height="80"></canvas>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span><i class="fas fa-table text-primary"></i> 详细预测数据</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="forecastTable">
+                <thead class="table-light">
+                    <tr>
+                        <th>名称</th>
+                        <th>规格</th>
+                        <th>当前库存</th>
+                        <th>近30日出库</th>
+                        <th>日均消耗</th>
+                        <th>预计可用天数</th>
+                        <th>预警状态</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in forecasts %}
+                    <tr>
+                        <td>{{ item.name }}</td>
+                        <td>{{ item.spec or '-' }}</td>
+                        <td>{{ item.balance }}</td>
+                        <td>{{ item.out_qty_30d }}</td>
+                        <td>{{ item.avg_daily }}</td>
+                        <td>
+                            {% if item.days_remaining is not none %}
+                                {% if item.status == 'red' %}
+                                <span class="text-danger fw-bold">{{ item.days_remaining }}</span>
+                                {% elif item.status == 'yellow' %}
+                                <span class="text-warning fw-bold">{{ item.days_remaining }}</span>
+                                {% else %}
+                                <span class="text-success">{{ item.days_remaining }}</span>
+                                {% endif %}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.status == 'red' %}
+                            <span class="badge bg-danger">告急 ≤7天</span>
+                            {% elif item.status == 'yellow' %}
+                            <span class="badge bg-warning text-dark">预警 ≤14天</span>
+                            {% elif item.status == 'safe' %}
+                            <span class="badge bg-success">充足</span>
+                            {% else %}
+                            <span class="badge bg-secondary">无数据</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="7" class="text-center text-muted py-4">暂无耗材数据</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var ctx = document.getElementById('consumptionChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: {{ chart_labels | safe }},
+            datasets: [{
+                label: '近30日消耗趋势',
+                data: {{ chart_data | safe }},
+                backgroundColor: 'rgba(79, 70, 229, 0.6)',
+                borderColor: 'rgba(79, 70, 229, 1)',
+                borderWidth: 1,
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: function(items) { return items[0].label + ' 消耗趋势'; }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: '出库数量' }
+                },
+                x: {
+                    ticks: { maxRotation: 45, font: { size: 10 } }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

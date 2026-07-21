@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}资产二维码管理{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <i class="fas fa-qrcode text-primary"></i>
+    <h4 class="mb-0">资产二维码</h4>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+      <span><i class="fas fa-server me-1"></i>资产列表</span>
+      <div>
+        <button class="btn btn-sm btn-outline-primary" onclick="selectAll(true)">全选</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="selectAll(false)">取消</button>
+        <button class="btn btn-sm btn-success ms-2" onclick="batchPrint()" id="btnBatch">
+          <i class="fas fa-print me-1"></i>批量生成二维码
+        </button>
+      </div>
+    </div>
+    <div class="card-body p-0" id="assetTableContainer">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width:40px;"><input type="checkbox" id="checkAll" onchange="toggleAll(this)"></th>
+              <th>资产编号</th>
+              <th>设备类型</th>
+              <th>品牌</th>
+              <th>科室</th>
+              <th>位置</th>
+              <th>状态</th>
+              <th style="width:120px;">二维码</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for asset in assets %}
+            <tr>
+              <td><input type="checkbox" class="asset-check" value="{{ asset.id }}"></td>
+              <td><strong>{{ asset.asset_no }}</strong></td>
+              <td>{{ asset.device_type }}</td>
+              <td>{{ asset.brand }}</td>
+              <td>{{ asset.department }}</td>
+              <td>{{ asset.building }}{{ ' ' + asset.floor if asset.floor }}{{ ' ' + asset.location if asset.location }}</td>
+              <td>
+                {% if asset.status == 'in_use' %}
+                  <span class="badge bg-success">使用中</span>
+                {% elif asset.status == 'spare' %}
+                  <span class="badge bg-warning text-dark">备用</span>
+                {% elif asset.status == 'scrapped' %}
+                  <span class="badge bg-danger">已报废</span>
+                {% elif asset.status == 'lost' %}
+                  <span class="badge bg-secondary">丢失</span>
+                {% else %}
+                  <span class="badge bg-secondary">{{ asset.status }}</span>
+                {% endif %}
+              </td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="previewQr({{ asset.id }}, '{{ asset.asset_no }}')">
+                  <i class="fas fa-qrcode me-1"></i>
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+            {% if not assets %}
+            <tr>
+              <td colspan="8" class="text-center py-4 text-muted">暂无资产数据</td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 二维码预览 Modal -->
+<div class="modal fade" id="qrModal" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="qrModalTitle">二维码</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center" id="qrModalBody">
+        <img id="qrPreviewImg" src="" alt="QR Code" class="img-fluid" style="max-width:240px;">
+        <p class="small text-muted mt-2" id="qrPreviewUrl"></p>
+        <a id="qrDownloadLink" class="btn btn-sm btn-outline-primary mt-2" download>
+          <i class="fas fa-download me-1"></i>下载
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function toggleAll(el) {
+  document.querySelectorAll('.asset-check').forEach(function(cb) {
+    cb.checked = el.checked;
+  });
+}
+
+function selectAll(checked) {
+  document.querySelectorAll('.asset-check').forEach(function(cb) {
+    cb.checked = checked;
+  });
+  document.getElementById('checkAll').checked = checked;
+}
+
+function previewQr(assetId, assetNo) {
+  var imgUrl = '/feature/asset/qr/' + assetId;
+  document.getElementById('qrPreviewImg').src = imgUrl;
+  document.getElementById('qrModalTitle').textContent = assetNo + ' - 二维码';
+  document.getElementById('qrPreviewUrl').textContent = '{{ qr_base_url }}' + assetId;
+  document.getElementById('qrDownloadLink').href = imgUrl;
+  document.getElementById('qrDownloadLink').download = 'asset_' + assetId + '.png';
+
+  var modal = new bootstrap.Modal(document.getElementById('qrModal'));
+  modal.show();
+}
+
+async function batchPrint() {
+  var checked = [];
+  document.querySelectorAll('.asset-check:checked').forEach(function(cb) {
+    checked.push(parseInt(cb.value));
+  });
+
+  if (checked.length === 0) {
+    showToast('请至少选择一个资产', 'warning');
+    return;
+  }
+
+  var btn = document.getElementById('btnBatch');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>生成中…';
+
+  try {
+    var resp = await fetch('/feature/asset/qr/batch', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({asset_ids: checked})
+    });
+
+    if (!resp.ok) {
+      var err = await resp.json().catch(function() { return {error: '请求失败'}; });
+      showToast(err.error || '生成失败', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-print me-1"></i>批量生成二维码';
+      return;
+    }
+
+    // Download the zip
+    var blob = await resp.blob();
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'asset_qr_codes.zip';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast('二维码已生成并下载', 'success');
+  } catch(e) {
+    showToast('网络错误: ' + e.message, 'error');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-print me-1"></i>批量生成二维码';
+}
+</script>
+{% endblock %}

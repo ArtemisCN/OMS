@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-plus text-primary"></i> 新建巡检模板</h5>
+    <a href="{{ url_for('inspection.list_templates') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-left"></i> 返回
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <form method="post" action="{{ url_for('inspection.create_template') }}">
+                    <div class="mb-3">
+                        <label class="form-label">模板名称</label>
+                        <input type="text" class="form-control" name="name" required placeholder="例如：机房巡检">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">巡检内容 <small class="text-muted">（每行一项）</small></label>
+                        <textarea class="form-control" name="items" rows="10" required placeholder="检查温湿度
+检查UPS状态
+检查服务器指示灯
+检查空调运行
+检查线缆整洁"></textarea>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> 创建</button>
+                        <a href="{{ url_for('inspection.list_templates') }}" class="btn btn-secondary">取消</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><i class="fas fa-info-circle"></i> 提示</div>
+            <div class="card-body" style="font-size:13px;color:#475569;">
+                <p>巡检模板用于定义巡检时需要检查的项目列表。创建后可在"发布巡检"中选择此模板，设定巡检时间和地点后自动生成巡检工单。</p>
+                <p class="mb-0">每行输入一项检查内容，例如：</p>
+                <pre style="background:#f8fafc;padding:8px;border-radius:6px;font-size:12px;margin-top:4px;">
+检查温湿度
+检查UPS状态
+检查服务器指示灯
+检查空调运行
+检查线缆整洁</pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

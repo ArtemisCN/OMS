@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.solution-form .form-control-sm { font-size:13px; }
+</style>
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="mb-0 fw-bold" style="font-size:15px;">
+        <i class="fas fa-book text-success"></i> 方案模板管理
+    </h5>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('data.index') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> 返回</a>
+    </div>
+</div>
+
+<!-- 新增方案 -->
+<div class="card mb-3" style="border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.06);border:1px solid #e5e7eb;">
+    <div class="card-header bg-white py-2 fw-bold" style="font-size:14px;"><i class="fas fa-plus text-success"></i> 新增方案模板</div>
+    <div class="card-body">
+        <form method="post" action="{{ url_for('data.add_solution') }}" class="row g-2 solution-form">
+            <div class="col-md-2">
+                <input type="text" name="title" class="form-control form-control-sm" placeholder="方案标题" required>
+            </div>
+            <div class="col-md-1">
+                <select name="fault_type" class="form-select form-select-sm">
+                    <option value="">故障类型</option>
+                    <option value="软件">软件</option>
+                    <option value="硬件">硬件</option>
+                    <option value="打印机">打印机</option>
+                    <option value="协助">协助</option>
+                    <option value="网络">网络</option>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <input type="text" name="fault_subcategory" class="form-control form-control-sm" placeholder="二级分类">
+            </div>
+            <div class="col-md-1">
+                <select name="device_type" class="form-select form-select-sm">
+                    <option value="">设备类型</option>
+                    <option value="PC">PC</option>
+                    <option value="NB">NB</option>
+                    <option value="PR">打印机</option>
+                    <option value="一体机">一体机</option>
+                    <option value="服务器">服务器</option>
+                    <option value="网络">网络</option>
+                    <option value="其他">其他</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="teams" class="form-select form-select-sm" multiple style="height:auto;min-height:32px;">
+                    <option value="" style="font-style:italic;color:#999;">— 全部组通用 —</option>
+                    {% for t in all_teams %}
+                    <option value="{{ t }}">{{ t }}</option>
+                    {% endfor %}
+                </select>
+                <small class="text-muted" style="font-size:10px;">按住 Ctrl 多选；不选则为全部组通用</small>
+            </div>
+            <div class="col-md-1">
+                <input type="text" name="keywords" class="form-control form-control-sm" placeholder="关键词">
+            </div>
+            <div class="col-md-2">
+                <input type="text" name="content" class="form-control form-control-sm" placeholder="方案内容" required>
+            </div>
+            <div class="col-md-1">
+                <button type="submit" class="btn btn-sm btn-success w-100"><i class="fas fa-plus"></i> 添加</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 操作按钮 -->
+<div class="d-flex gap-2 mb-3">
+    <form method="post" action="{{ url_for('data.import_solutions_from_orders') }}"
+          onsubmit="return confirm('从已有工单中提取方案作为模板？可能会新增大量模板。')">
+        <button type="submit" class="btn btn-sm btn-info"><i class="fas fa-file-import"></i> 从工单导入方案</button>
+    </form>
+    <form method="post" action="{{ url_for('data.reset_solutions') }}"
+          onsubmit="return confirm('确定重置所有方案模板到默认值？自定义修改将丢失。')">
+        <button type="submit" class="btn btn-sm btn-warning"><i class="fas fa-undo"></i> 重置为默认</button>
+    </form>
+</div>
+
+<!-- 搜索 -->
+<div class="card mb-3" style="border-radius:10px;border:1px solid #e5e7eb;">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2">
+            <div class="col-md-3">
+                <input type="text" name="keyword" class="form-control form-control-sm" placeholder="搜索方案关键词" value="{{ keyword }}">
+            </div>
+            <div class="col-md-2">
+                <select name="fault_filter" class="form-select form-select-sm">
+                    <option value="">全部故障类型</option>
+                    <option value="软件" {{ 'selected' if fault_filter=='软件' }}>软件</option>
+                    <option value="硬件" {{ 'selected' if fault_filter=='硬件' }}>硬件</option>
+                    <option value="打印机" {{ 'selected' if fault_filter=='打印机' }}>打印机</option>
+                    <option value="协助" {{ 'selected' if fault_filter=='协助' }}>协助</option>
+                    <option value="网络" {{ 'selected' if fault_filter=='网络' }}>网络</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="team_filter" class="form-select form-select-sm">
+                    <option value="">全部组别</option>
+                    {% for t in all_teams %}
+                    <option value="{{ t }}" {{ 'selected' if team_filter==t }}>{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="device_filter" class="form-select form-select-sm">
+                    <option value="">全部设备类型</option>
+                    <option value="PC" {{ 'selected' if device_filter=='PC' }}>PC</option>
+                    <option value="NB" {{ 'selected' if device_filter=='NB' }}>NB</option>
+                    <option value="PR" {{ 'selected' if device_filter=='PR' }}>打印机</option>
+                    <option value="一体机" {{ 'selected' if device_filter=='一体机' }}>一体机</option>
+                    <option value="服务器" {{ 'selected' if device_filter=='服务器' }}>服务器</option>
+                    <option value="网络" {{ 'selected' if device_filter=='网络' }}>网络</option>
+                    <option value="其他" {{ 'selected' if device_filter=='其他' }}>其他</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-sm btn-primary w-100"><i class="fas fa-search"></i> 搜索</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 方案列表 -->
+<div class="card" style="border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.06);border:1px solid #e5e7eb;">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" style="font-size:12px;">
+            <thead class="table-light">
+                <tr>
+                    <th>标题</th>
+                    <th style="width:70px;">故障类型</th>
+                    <th style="width:80px;">二级分类</th>
+                    <th style="width:70px;">设备类型</th>
+                    <th style="width:60px;">绑定组</th>
+                    <th>关键词</th>
+                    <th>方案内容</th>
+                    <th style="width:45px;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in pagination.items %}
+                <tr>
+                    <td>
+                        <form method="post" action="{{ url_for('data.edit_solution', sid=s.id) }}">
+                            <input type="hidden" name="field" value="title">
+                            <input type="text" name="value" class="form-control form-control-sm" value="{{ s.title }}" style="min-width:100px;">
+                    </td>
+                    <td>
+                            <input type="hidden" name="field" value="fault_type">
+                            <select name="value" class="form-select form-select-sm" style="font-size:11px;">
+                                <option value="">通用</option>
+                                <option value="软件" {{ 'selected' if s.fault_type=='软件' }}>软件</option>
+                                <option value="硬件" {{ 'selected' if s.fault_type=='硬件' }}>硬件</option>
+                                <option value="打印机" {{ 'selected' if s.fault_type=='打印机' }}>打印机</option>
+                                <option value="协助" {{ 'selected' if s.fault_type=='协助' }}>协助</option>
+                                <option value="网络" {{ 'selected' if s.fault_type=='网络' }}>网络</option>
+                            </select>
+                    </td>
+                    <td>
+                            <input type="hidden" name="field" value="fault_subcategory">
+                            <input type="text" name="value" class="form-control form-control-sm" value="{{ s.fault_subcategory or '' }}" style="min-width:60px;" placeholder="二级分类">
+                    </td>
+                    <td>
+                            <input type="hidden" name="field" value="device_type">
+                            <select name="value" class="form-select form-select-sm" style="font-size:11px;">
+                                <option value="">通用</option>
+                                <option value="PC" {{ 'selected' if s.device_type=='PC' }}>PC</option>
+                                <option value="NB" {{ 'selected' if s.device_type=='NB' }}>NB</option>
+                                <option value="PR" {{ 'selected' if s.device_type=='PR' }}>打印机</option>
+                                <option value="一体机" {{ 'selected' if s.device_type=='一体机' }}>一体机</option>
+                                <option value="服务器" {{ 'selected' if s.device_type=='服务器' }}>服务器</option>
+                                <option value="网络" {{ 'selected' if s.device_type=='网络' }}>网络</option>
+                                <option value="其他" {{ 'selected' if s.device_type=='其他' }}>其他</option>
+                            </select>
+                    </td>
+                    <td>
+                        <form method="post" action="{{ url_for('data.edit_solution', sid=s.id) }}">
+                            <input type="hidden" name="field" value="teams">
+                            <select name="value" class="form-select form-select-sm" multiple style="height:auto;min-height:28px;font-size:11px;max-width:90px;">
+                                <option value="" style="font-style:italic;color:#888;">通用</option>
+                                {% for t in all_teams %}
+                                <option value="{{ t }}" {{ 'selected' if t in (s.teams or '').split(',') }}>{{ t }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-outline-primary py-0 ms-1"><i class="fas fa-save" style="font-size:11px;"></i></button>
+                        </form>
+                    </td>
+                    <td>
+                            <input type="hidden" name="field" value="keywords">
+                            <input type="text" name="value" class="form-control form-control-sm" value="{{ s.keywords or '' }}" style="min-width:80px;" placeholder="关键词">
+                    </td>
+                    <td>
+                            <input type="text" name="value2" class="form-control form-control-sm" value="{{ s.content }}" style="min-width:160px;" placeholder="方案内容">
+                            <button type="submit" class="btn btn-sm btn-outline-primary py-0 ms-1"><i class="fas fa-save" style="font-size:11px;"></i></button>
+                        </form>
+                    </td>
+                    <td>
+                        <form method="post" action="{{ url_for('data.delete_solution', sid=s.id) }}" style="display:inline;"
+                              onsubmit="return confirm('确定删除方案「{{ s.title }}」？')">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="删除"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="8" class="text-center text-muted py-4">暂无方案数据</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 分页 -->
+{% if pagination.pages > 1 %}
+<nav class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center">
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('data.list_solutions', page=pagination.prev_num, keyword=keyword, device_filter=device_filter, fault_filter=fault_filter, team_filter=team_filter) }}">上一页</a>
+        </li>
+        {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if p %}
+            <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('data.list_solutions', page=p, keyword=keyword, device_filter=device_filter, fault_filter=fault_filter, team_filter=team_filter) }}">{{ p }}</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('data.list_solutions', page=pagination.next_num, keyword=keyword, device_filter=device_filter, fault_filter=fault_filter, team_filter=team_filter) }}">下一页</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

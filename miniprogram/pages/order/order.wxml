@@ -1,0 +1,419 @@
+<view class="page">
+  <!-- 加载中 -->
+  <view wx:if="{{loading}}" class="loading-wrap">
+    <view class="loading-icon"></view>
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <view wx:else class="detail-wrap">
+    <!-- ============ 基本信息卡片 ============ -->
+    <view class="card">
+      <view class="card-header">
+        <text class="card-title">📋 工单信息</text>
+        <text class="badge badge-{{order.status === 'pending' ? 'pending' : order.status === 'in_progress' ? 'progress' : 'done'}}">
+          {{util && util.formatStatus(order.status)}}
+        </text>
+      </view>
+      <view class="card-body">
+        <view class="row">
+          <text class="row-label">标题</text>
+          <text class="row-value">{{order.title}}</text>
+        </view>
+        <view class="row">
+          <text class="row-label">位置</text>
+          <text class="row-value">{{order.building}} {{order.floor}} {{order.department || ''}}</text>
+        </view>
+        <view class="row" wx:if="{{order.location}}">
+          <text class="row-label">详细地址</text>
+          <text class="row-value">{{order.location}}</text>
+        </view>
+        <view class="row">
+          <text class="row-label">设备</text>
+          <text class="row-value">{{order.device_type}}</text>
+        </view>
+        <view class="row">
+          <text class="row-label">故障</text>
+          <text class="row-value">{{order.fault_type}}</text>
+        </view>
+        <view class="row">
+          <text class="row-label">紧急程度</text>
+          <text class="row-value">
+            <text wx:if="{{order.priority === 'emergency'}}" style="color:#ef4444;">🔴 紧急</text>
+            <text wx:elif="{{order.priority === 'urgent'}}" style="color:#f59e0b;">🟡 加急</text>
+            <text wx:else style="color:#22c55e;">🟢 普通</text>
+          </text>
+        </view>
+        <view class="row" wx:if="{{order.start_time}}">
+          <text class="row-label">发布时间</text>
+          <text class="row-value">{{order.start_time}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- ============ 巡检区域（仅巡检工单显示） ============ -->
+    <view class="card" wx:if="{{order.work_type === 'inspection'}}">
+      <view class="card-header">
+        <text class="card-title" style="color:#2563eb;">🔍 巡检区域</text>
+      </view>
+      <view class="inspection-area-body">
+        <view class="area-row">
+          <text class="area-label">楼区</text>
+          <text class="area-value">{{order.building || '未指定'}}</text>
+        </view>
+        <view class="area-row">
+          <text class="area-label">楼层</text>
+          <text class="area-value">{{order.floor || '未指定'}}</text>
+        </view>
+        <view class="area-row">
+          <text class="area-label">科室</text>
+          <text class="area-value">{{order.department || '未指定'}}</text>
+        </view>
+        <view class="area-row" wx:if="{{order.location}}">
+          <text class="area-label">详细位置</text>
+          <text class="area-value">{{order.location}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- ============ 故障描述 ============ -->
+    <view class="card">
+      <view class="card-header">
+        <text class="card-title">🔧 故障描述</text>
+      </view>
+      <view class="card-body">
+        <text class="desc-text">{{order.description}}</text>
+      </view>
+    </view>
+
+    <!-- ============ 电子表单（内联展示填写，不跳转） ============ -->
+    <block wx:if="{{form && form.fields_json && form.fields_json.length > 0}}">
+      <view class="card" style="border-left: 8rpx solid #4f46e5;">
+        <view class="card-header">
+          <text class="card-title" style="color:#4f46e5;">📋 {{form.template_name || '电子表单'}}</text>
+          <text wx:if="{{form.status === 'active'}}" style="color:#1e40af;font-size:24rpx;">🔄 进行中</text>
+          <text wx:elif="{{form.status === 'submitted'}}" style="color:#92400e;font-size:24rpx;">⏳ 待审批</text>
+          <text wx:elif="{{form.status === 'completed'}}" style="color:#065f46;font-size:24rpx;">✅ 已完成</text>
+        </view>
+        <view class="card-body">
+          <!-- 内联表单字段 -->
+          <view class="miniform-field" wx:for="{{form.fields_json}}" wx:key="id" wx:for-item="f">
+            <!-- 单行文本 / 数字 -->
+            <view wx:if="{{f.type === 'text' || f.type === 'number' || f.type === 'email' || f.type === 'tel' || f.type === 'url'}}" class="mf-row">
+              <text class="mf-label">{{f.label}}<text wx:if="{{f.required}}" class="req">*</text></text>
+              <input class="mf-input" type="{{f.type === 'number' ? 'number' : 'text'}}" value="{{formData[f.id] || ''}}" placeholder="{{f.placeholder || '请输入'}}" data-fid="{{f.id}}" bindinput="onFormInput" disabled="{{form.status !== 'active'}}"/>
+            </view>
+
+            <!-- 多行文本 -->
+            <view wx:elif="{{f.type === 'textarea'}}" class="mf-row">
+              <text class="mf-label">{{f.label}}<text wx:if="{{f.required}}" class="req">*</text></text>
+              <textarea class="mf-textarea" value="{{formData[f.id] || ''}}" placeholder="{{f.placeholder || '请输入'}}" data-fid="{{f.id}}" bindinput="onFormInput" disabled="{{form.status !== 'active'}}"/>
+            </view>
+
+            <!-- 下拉选择 -->
+            <view wx:elif="{{f.type === 'select'}}" class="mf-row">
+              <text class="mf-label">{{f.label}}<text wx:if="{{f.required}}" class="req">*</text></text>
+              <picker mode="selector" range="{{f.options}}" value="{{_displayVals[f.id + '_selectedIndex'] || 0}}" data-fid="{{f.id}}" bindchange="onFormPickerChange" disabled="{{form.status !== 'active'}}">
+                <view class="mf-picker-val">{{_displayVals[f.id + '_selectedLabel'] || f.placeholder || '请选择'}}</view>
+              </picker>
+            </view>
+
+            <!-- 单选 -->
+            <view wx:elif="{{f.type === 'radio'}}" class="mf-row">
+              <text class="mf-label">{{f.label}}<text wx:if="{{f.required}}" class="req">*</text></text>
+              <view class="mf-radio-group">
+                <label class="mf-radio" wx:for="{{f.options}}" wx:key="index">
+                  <radio value="{{item}}" checked="{{formData[f.id] === item}}" data-fid="{{f.id}}" bindchange="onFormRadioChange" disabled="{{form.status !== 'active'}}"/>
+                  <text class="mf-radio-text">{{item}}</text>
+                </label>
+              </view>
+            </view>
+
+            <!-- 日期 -->
+            <view wx:elif="{{f.type === 'date'}}" class="mf-row">
+              <text class="mf-label">{{f.label}}<text wx:if="{{f.required}}" class="req">*</text></text>
+              <picker mode="date" value="{{formData[f.id] || ''}}" data-fid="{{f.id}}" bindchange="onFormDateChange" disabled="{{form.status !== 'active'}}">
+                <view class="mf-picker-val">{{formData[f.id] || '选择日期'}}</view>
+              </picker>
+            </view>
+
+            <!-- 复选框（开关） -->
+            <view wx:elif="{{f.type === 'checkbox'}}" class="mf-row mf-checkbox-row">
+              <text class="mf-label">{{f.label}}</text>
+              <label class="mf-checkbox-switch">
+                <switch checked="{{formData[f.id] && formData[f.id] !== '0' && formData[f.id] !== ''}}" data-fid="{{f.id}}" data-val="{{f.options[0] || 'on'}}" bindchange="onFormCheckboxChange" disabled="{{form.status !== 'active'}}"/>
+                <text class="mf-checkbox-text">{{formData[f.id] && formData[f.id] !== '0' && formData[f.id] !== '' ? '✅ 是' : '⬜ 否'}}</text>
+              </label>
+            </view>
+
+            <!-- 签名 -->
+            <view wx:elif="{{f.type === 'signature'}}" class="mf-row mf-sig-row">
+              <text class="mf-label">{{f.label}}<text wx:if="{{f.required}}" class="req">*</text></text>
+              <view wx:if="{{_displayVals[f.id + '_hasImage']}}" class="mf-sig-preview" data-fid="{{f.id}}" catchtap="onFormSignatureTap">
+                <image class="mf-sig-img" src="{{formData[f.id]}}" mode="widthFix"></image>
+                <text wx:if="{{form.status === 'active'}}" class="mf-sig-retap">点击重签</text>
+              </view>
+              <view wx:else class="mf-sig-placeholder" data-fid="{{f.id}}" catchtap="onFormSignatureTap">
+                <text wx:if="{{form.status === 'active'}}">📝 点击签字</text>
+                <text wx:else style="color:#cbd5e1;">未签字</text>
+              </view>
+            </view>
+
+            <!-- 标题/分割线 -->
+            <view wx:elif="{{f.type === 'header' || f.type === 'title'}}" class="mf-divider-title" style="{{f.fontSize ? 'font-size:'+f.fontSize+'px;' : ''}}{{f.textAlign ? 'text-align:'+f.textAlign+';' : ''}}">{{f.label}}</view>
+            <view wx:elif="{{f.type === 'divider' || f.type === 'line'}}" class="mf-divider-line"></view>
+            <view wx:elif="{{f.type === 'label'}}" class="mf-label-only" style="{{f.fontSize ? 'font-size:'+f.fontSize+'px;' : ''}}{{f.textAlign ? 'text-align:'+f.textAlign+';' : ''}}">{{f.label}}</view>
+            <view wx:elif="{{f.type === 'richtext'}}" class="mf-richtext" style="{{f.fontSize ? 'font-size:'+f.fontSize+'px;' : ''}}{{f.textAlign ? 'text-align:'+f.textAlign+';' : ''}}padding:10rpx 0;line-height:1.6;">
+              <rich-text nodes="{{f.label}}" class="mf-richtext-node"></rich-text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 操作按钮 -->
+      <block wx:if="{{form.status === 'active'}}">
+        <button class="btn btn-primary" bindtap="onSubmitForm" disabled="{{formSubmitting}}" loading="{{formSubmitting}}">
+          <text wx:if="{{!formSubmitting}}">📤 提交审批</text>
+          <text wx:else>提交中...</text>
+        </button>
+      </block>
+      <block wx:elif="{{form.status === 'submitted'}}">
+        <view class="submitted-hint">
+          <text class="submitted-text">⏳ 已提交审批，等待管理员审核</text>
+        </view>
+      </block>
+    </block>
+
+    <!-- 电子表单内联签名弹窗 -->
+    <view wx:if="{{showFormSigPad}}" class="signature-overlay" catchtouchmove="noop">
+      <view class="signature-pad">
+        <view class="signature-pad-header">
+          <text class="signature-pad-title">请签字</text>
+          <text class="signature-pad-clear" bindtap="onFormSigClear">清除</text>
+        </view>
+        <canvas type="2d" id="formSigCanvas" class="signature-canvas" catchtouchstart="onFormSigTouchStart" catchtouchmove="onFormSigTouchMove" catchtouchend="onFormSigTouchEnd"></canvas>
+        <view class="signature-pad-actions">
+          <button class="btn-sign-cancel" bindtap="onFormSigCancel">取消</button>
+          <button class="btn-sign-confirm" bindtap="onFormSigConfirm">确认签字</button>
+        </view>
+      </view>
+    </view>
+
+    <!-- ============ 待接单：接单按钮 ============ -->
+    <block wx:if="{{order.status === 'pending'}}">
+      <button class="btn btn-primary" bindtap="onAccept" disabled="{{submitting}}" loading="{{submitting}}">
+        <text wx:if="{{!submitting}}">🤝 立即接单</text>
+        <text wx:else>提交中...</text>
+      </button>
+    </block>
+
+    <!-- ============ 处理中：填写方案 ============ -->
+    <block wx:elif="{{order.status === 'in_progress'}}">
+
+      <!-- ── 巡检工单 ── -->
+      <block wx:if="{{order.work_type === 'inspection'}}">
+        <view class="card">
+          <view class="card-header">
+            <text class="card-title">🔍 巡检清单</text>
+          </view>
+          <view class="card-body">
+            <view class="inspection-item" wx:for="{{order.inspection_data.items}}" wx:key="index" data-index="{{index}}" bindtap="onToggleInspectionItem">
+              <view class="inspection-checkbox {{item.result === true ? 'checked' : item.result === false ? 'cross' : ''}}">
+                <text wx:if="{{item.result === true}}">✅</text>
+                <text wx:elif="{{item.result === false}}">❌</text>
+                <text wx:else>⬜</text>
+              </view>
+              <text class="inspection-label">{{item.name}}</text>
+            </view>
+          </view>
+        </view>
+        <!-- 签字区域 -->
+        <view class="card">
+          <view class="card-header">
+            <text class="card-title">📝 签字确认</text>
+            <text wx:if="{{signatureData}}" class="sig-badge-done">✅ 已签字</text>
+            <text wx:else class="sig-badge-tap" bindtap="onSignatureTap">点击签字</text>
+          </view>
+          <view wx:if="{{signatureData}}" class="card-body">
+            <view class="sig-preview-row">
+              <image class="sig-preview-img" src="{{signatureData}}" mode="widthFix"></image>
+              <text class="sig-clear-link" bindtap="onSignatureClear">清除</text>
+            </view>
+          </view>
+        </view>
+        <!-- 签名弹窗 -->
+        <view wx:if="{{showSignaturePad}}" class="signature-overlay" catchtouchmove="noop">
+          <view class="signature-pad">
+            <view class="signature-pad-header">
+              <text class="signature-pad-title">请在此签字</text>
+              <text class="signature-pad-clear" bindtap="onClearCanvas">清除</text>
+            </view>
+          <canvas type="2d" id="sigCanvas" class="signature-canvas" catchtouchstart="onSigTouchStart" catchtouchmove="onSigTouchMove" catchtouchend="onSigTouchEnd"></canvas>
+            <view class="signature-pad-actions">
+              <button class="btn-sign-cancel" bindtap="onSignatureCancel">取消</button>
+              <button class="btn-sign-confirm" bindtap="onSignatureConfirm">确认签字</button>
+            </view>
+          </view>
+        </view>
+        <!-- 照片 + 提交 -->
+        <view class="card">
+          <view class="card-header">
+            <text class="card-title">📷 现场照片</text>
+            <text class="photo-add-btn" bindtap="onAddPhotos">+ 添加</text>
+          </view>
+          <view class="card-body">
+            <view wx:if="{{photos.length === 0}}" class="photo-empty">暂无照片</view>
+            <view wx:else class="photo-grid">
+              <view class="photo-item" wx:for="{{photos}}" wx:key="id" data-idx="{{index}}" data-url="{{item.url}}" data-id="{{item.id}}" bindtap="onPreviewPhoto">
+                <image class="photo-thumb" src="https://demolin.cn{{item.url}}" mode="aspectFill"></image>
+                <view class="photo-delete" data-id="{{item.id}}" catchtap="onDeletePhoto">✕</view>
+              </view>
+            </view>
+          </view>
+        </view>
+        <button class="btn btn-success" bindtap="onSubmitInspection" disabled="{{submitting || !signatureData}}" loading="{{submitting}}">
+          <text wx:if="{{!submitting}}">✅ 提交巡检结果</text>
+          <text wx:else>提交中...</text>
+        </button>
+      </block>
+
+      <!-- ── 普通工单（无电子表单） ── -->
+      <block wx:elif="{{!form}}">
+        <view class="card">
+          <view class="card-header">
+            <text class="card-title">✏️ 填写解决方案</text>
+          </view>
+          <view class="card-body">
+            <textarea class="textarea" placeholder="请描述处理过程及结果..." value="{{solution}}" bindinput="onInputSolution"></textarea>
+            <view wx:if="{{matchedTemplate}}" class="fill-template-btn" bindtap="onFillTemplate">
+              <text class="fill-template-icon">✨</text>
+              <text class="fill-template-text">一键填入</text>
+              <text class="fill-template-match">匹配：{{matchedTemplate.title}}</text>
+            </view>
+          </view>
+        </view>
+        <!-- 照片 -->
+        <view class="card">
+          <view class="card-header">
+            <text class="card-title">📷 现场照片</text>
+            <text class="photo-add-btn" bindtap="onAddPhotos">+ 添加</text>
+          </view>
+          <view class="card-body">
+            <view wx:if="{{photos.length === 0}}" class="photo-empty">暂无照片</view>
+            <view wx:else class="photo-grid">
+              <view class="photo-item" wx:for="{{photos}}" wx:key="id" data-idx="{{index}}" data-url="{{item.url}}" data-id="{{item.id}}" bindtap="onPreviewPhoto">
+                <image class="photo-thumb" src="https://demolin.cn{{item.url}}" mode="aspectFill"></image>
+                <view class="photo-delete" data-id="{{item.id}}" catchtap="onDeletePhoto">✕</view>
+              </view>
+            </view>
+          </view>
+        </view>
+        <button class="btn btn-success" bindtap="onSolve" disabled="{{submitting || !canSubmit}}" loading="{{submitting}}">
+          <text wx:if="{{!submitting}}">✅ 提交完成</text>
+          <text wx:else>提交中...</text>
+        </button>
+      </block>
+    </block>
+
+    <!-- ============ 已完成 ============ -->
+    <block wx:elif="{{order.status === 'completed'}}">
+      <!-- 巡检工单 -->
+      <block wx:if="{{order.work_type === 'inspection'}}">
+        <view class="card">
+          <view class="card-header">
+            <text class="card-title" style="color: #059669;">✅ 巡检结果</text>
+          </view>
+          <view class="card-body">
+            <view class="inspection-item" wx:for="{{order.inspection_data.items}}" wx:key="index">
+              <view class="inspection-checkbox {{item.result === true ? 'checked' : 'cross'}}">
+                <text wx:if="{{item.result === true}}">✅</text>
+                <text wx:else>❌</text>
+              </view>
+              <text class="inspection-label">{{item.name}}</text>
+            </view>
+            <view wx:if="{{order.inspection_data.signature}}" class="signature-result">
+              <text class="signature-result-label">签名确认</text>
+              <image class="signature-result-img" src="{{order.inspection_data.signature}}" mode="widthFix"></image>
+            </view>
+            <text class="time-text" wx:if="{{order.completed_at}}">完成于 {{order.completed_at}}</text>
+          </view>
+        </view>
+      </block>
+      <!-- 普通工单 -->
+      <block wx:else>
+        <view class="card">
+          <view class="card-header">
+            <text class="card-title" style="color: #059669;">✅ 处理结果</text>
+          </view>
+          <view class="card-body">
+            <text class="desc-text">{{order.solution}}</text>
+            <text class="time-text" wx:if="{{order.completed_at}}">完成于 {{order.completed_at}}</text>
+          </view>
+        </view>
+      </block>
+    </block>
+
+    <!-- 返回列表 -->
+    <!-- 图片预览（使用 wx.previewImage，无自定义蒙层） -->
+    <!-- 转派人选自定义弹窗 -->
+    <view wx:if="{{showPersonnelPicker}}" class="signature-overlay" catchtouchmove="noop">
+      <view class="personnel-picker">
+        <view class="personnel-picker-header">
+          <text class="personnel-picker-title">选择转派目标</text>
+          <text class="personnel-picker-cancel" bindtap="onCancelPersonPicker">取消</text>
+        </view>
+        <view class="personnel-picker-body">
+          <view wx:if="{{personnelLoading}}" class="personnel-loading">
+            <text>加载中...</text>
+          </view>
+          <view wx:else class="personnel-list">
+            <view class="personnel-item" wx:for="{{personnelList}}" wx:key="index" data-index="{{index}}" bindtap="onPickPerson">
+              <text class="personnel-item-name">{{item}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+    <!-- 流转记录自定义弹窗 -->
+    <view wx:if="{{showTransfersModal}}" class="signature-overlay" catchtouchmove="noop">
+      <view class="transfers-modal">
+        <view class="transfers-header">
+          <text class="transfers-title">📋 流转记录（{{transferLogs.length}}条）</text>
+          <text class="transfers-close" bindtap="onCloseTransfers">关闭</text>
+        </view>
+        <view class="transfers-body">
+          <view wx:if="{{transferLogs.length === 0}}" class="transfers-empty">
+            <text>暂无流转记录</text>
+          </view>
+          <view wx:else class="transfers-list">
+            <view class="transfer-item" wx:for="{{transferLogs}}" wx:key="id">
+              <view class="transfer-item-time">{{item.created_at}}</view>
+              <view class="transfer-item-detail">
+                <text wx:if="{{item.action === 'return'}}" class="transfer-item-action">🔙 退回</text>
+                <text wx:elif="{{item.action === 'transfer'}}" class="transfer-item-action">📤 转派</text>
+                <text wx:else class="transfer-item-action">{{item.action}}</text>
+                <text class="transfer-item-desc">
+                  <text wx:if="{{item.action === 'return'}}">由 {{item.operator_name}} 退回待接单</text>
+                  <text wx:elif="{{item.action === 'transfer'}}">{{item.operator_name}}: {{item.from_person}} → {{item.to_person}}</text>
+                  <text wx:else>{{item.operator_name}}</text>
+                </text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+    <!-- ── 底部操作区 ── -->
+    <view class="footer-divider"></view>
+    <view class="footer-actions">
+      <view class="footer-action" bindtap="onShowTransfers">
+        <text>📋 流转记录</text>
+      </view>
+      <view class="footer-action footer-more" bindtap="onMoreActions">
+        <text>更多操作 ›</text>
+      </view>
+    </view>
+    <view class="back-row">
+      <button class="btn btn-secondary" bindtap="onBack">← 返回列表</button>
+    </view>
+  </view>
+</view>

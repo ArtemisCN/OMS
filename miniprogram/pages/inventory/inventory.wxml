@@ -1,0 +1,92 @@
+<view class="page">
+  <!-- 顶部栏 -->
+  <view class="header">
+    <view class="header-left">
+      <text class="header-title">资产盘点</text>
+    </view>
+    <view class="header-right">
+      <view class="header-btn" bindtap="onNewTask">
+        <text>＋ 新建盘点</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 新建盘点弹窗 -->
+  <view wx:if="{{showCreate}}" class="modal-overlay" catchtouchmove="preventDefault">
+    <view class="modal-content">
+      <text class="modal-title">新建盘点任务</text>
+      <input class="modal-input" placeholder="输入盘点名称（如：7月全院盘点）" value="{{taskName}}" bindinput="onTaskNameInput" />
+      <view class="modal-btns">
+        <text class="modal-btn cancel" bindtap="onCancelCreate">取消</text>
+        <text class="modal-btn confirm" bindtap="onCreateSubmit">创建</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 加载 -->
+  <view wx:if="{{loading}}" class="loading-wrap">
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <!-- 任务列表 -->
+  <view wx:else>
+    <!-- 统计条 -->
+    <view class="stat-bar">
+      <view class="stat-item">
+        <text class="stat-num">{{tasks.length}}</text>
+        <text class="stat-label">盘点任务</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-num">{{totalScanned}}</text>
+        <text class="stat-label">已盘点</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-num">{{totalCount}}</text>
+        <text class="stat-label">应盘点</text>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view wx:if="{{tasks.length === 0}}" class="empty">
+      <text class="empty-icon">📋</text>
+      <text class="empty-text">暂无盘点任务</text>
+      <text class="empty-hint">点击右上角「新建盘点」开始</text>
+    </view>
+
+    <!-- 任务卡片列表 -->
+    <scroll-view class="task-list" scroll-y enhanced show-scrollbar="{{false}}" wx:if="{{tasks.length > 0}}">
+      <view class="task-card" wx:for="{{tasks}}" wx:key="id" data-id="{{item.id}}" bindtap="onTaskTap">
+        <view class="task-top">
+          <text class="task-name">{{item.name}}</text>
+          <view class="task-status-wrap {{item.status === 'completed' ? 'done' : item.status ? 'pending' : 'empty'}}">
+            <text>{{item.status === 'completed' ? '已完成' : item.status ? '进行中' : ''}}</text>
+          </view>
+        </view>
+        <text class="task-no">{{item.task_no}}</text>
+        <view class="task-stats">
+          <view class="ts-item">
+            <text class="ts-num">{{item.total_count || 0}}</text>
+            <text class="ts-label">应盘</text>
+          </view>
+          <view class="ts-item">
+            <text class="ts-num primary">{{item.scanned_count || 0}}</text>
+            <text class="ts-label">已盘</text>
+          </view>
+          <view class="ts-item">
+            <text class="ts-num success">{{item.normal_count || 0}}</text>
+            <text class="ts-label">正常</text>
+          </view>
+          <view class="ts-item">
+            <text class="ts-num warning">{{item.issue_count || 0}}</text>
+            <text class="ts-label">异常</text>
+          </view>
+          <view class="ts-item">
+            <text class="ts-num purple">{{item.new_asset_count || 0}}</text>
+            <text class="ts-label">新盘</text>
+          </view>
+        </view>
+        <text class="task-meta">{{item.operator || ''}} · {{item.created_at || ''}}</text>
+      </view>
+    </scroll-view>
+  </view>
+</view>

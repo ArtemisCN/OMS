@@ -1,0 +1,7 @@
+/* 全局样式 */
+page {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  background: #f5f6fa;
+  color: #0f172a;
+  font-size: 15px;
+}

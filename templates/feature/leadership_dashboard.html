@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}院领导驾驶舱{% endblock %}
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    .kpi-card-lg {
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        border: none; border-radius: 16px; padding: 24px;
+        transition: transform .2s, box-shadow .2s;
+    }
+    .kpi-card-lg:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(59,130,246,0.15); }
+    .kpi-card-lg .kpi-icon { font-size: 28px; opacity: 0.8; }
+    .kpi-card-lg .kpi-value { font-size: 36px; font-weight: 800; color: #1e3a5f; }
+    .kpi-card-lg .kpi-label { font-size: 13px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+    .chart-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px; height: 100%; }
+    .chart-card .chart-title { font-size: 14px; font-weight: 600; color: #1e293b; margin-bottom: 12px; }
+    .section-title { font-size: 18px; font-weight: 700; color: #1e293b; margin: 24px 0 16px; }
+    .table-clean th { font-weight: 600; color: #475569; border-bottom-width: 1px; }
+    .table-clean td { color: #334155; }
+    body[data-theme="dark"] .kpi-card-lg { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); }
+    body[data-theme="dark"] .kpi-card-lg .kpi-value { color: #e2e8f0; }
+    body[data-theme="dark"] .chart-card { background: #1e293b; border-color: #334155; }
+    body[data-theme="dark"] .chart-card .chart-title { color: #e2e8f0; }
+    body[data-theme="dark"] .section-title { color: #e2e8f0; }
+    body[data-theme="dark"] .table-clean th { color: #94a3b8; }
+    body[data-theme="dark"] .table-clean td { color: #cbd5e1; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold mb-0"><i class="fas fa-tachometer-alt me-2 text-primary"></i>院领导驾驶舱</h4>
+        <button class="btn btn-outline-primary btn-sm" onclick="loadData()"><i class="fas fa-sync-alt me-1"></i> 刷新数据</button>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="row g-3" id="kpiRow">
+        <div class="col-md-3">
+            <div class="kpi-card-lg">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div><div class="kpi-label">本月工单总数</div><div class="kpi-value" id="kpiTotal">—</div></div>
+                    <div class="kpi-icon text-primary"><i class="fas fa-clipboard-list"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi-card-lg">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div><div class="kpi-label">完成率</div><div class="kpi-value" id="kpiRate">—</div></div>
+                    <div class="kpi-icon text-success"><i class="fas fa-check-circle"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi-card-lg">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div><div class="kpi-label">平均响应时间</div><div class="kpi-value" id="kpiResponse">—</div></div>
+                    <div class="kpi-icon text-warning"><i class="fas fa-clock"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi-card-lg">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div><div class="kpi-label">超时率</div><div class="kpi-value" id="kpiOverdue">—</div></div>
+                    <div class="kpi-icon text-danger"><i class="fas fa-exclamation-triangle"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row 1 -->
+    <div class="row g-3 mt-1">
+        <div class="col-md-8">
+            <div class="chart-card">
+                <div class="chart-title"><i class="fas fa-chart-line me-1 text-primary"></i> 月度工单趋势（近12月）</div>
+                <div style="height:260px;"><canvas id="trendChart"></canvas></div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="chart-card">
+                <div class="chart-title"><i class="fas fa-chart-pie me-1 text-primary"></i> 优先级分布</div>
+                <div style="height:260px;"><canvas id="priorityChart"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row 2 -->
+    <div class="row g-3 mt-1">
+        <div class="col-md-4">
+            <div class="chart-card">
+                <div class="chart-title"><i class="fas fa-chart-bar me-1 text-primary"></i> TOP5 故障类型</div>
+                <div style="height:220px;"><canvas id="faultChart"></canvas></div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="chart-card">
+                <div class="chart-title"><i class="fas fa-building me-1 text-primary"></i> 科室工单统计</div>
+                <div style="max-height:300px;overflow-y:auto;">
+                    <table class="table table-clean table-hover mb-0 small" id="deptTable">
+                        <thead><tr><th>科室</th><th>工单数</th><th>已完成</th><th>完成率</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 最新工单 -->
+    <div class="section-title"><i class="fas fa-list me-2 text-primary"></i>最近工单</div>
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-clean table-hover mb-0" id="recentTable">
+                    <thead><tr><th>#</th><th>标题</th><th>科室</th><th>状态</th><th>优先级</th><th>处理人</th><th>时间</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let trendChart, priorityChart, faultChart;
+
+function loadData() {
+    fetch('/feature/leadership-dashboard/data')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return;
+            const kpi = data.kpi;
+            document.getElementById('kpiTotal').textContent = kpi.total_month;
+            document.getElementById('kpiRate').textContent = kpi.completion_rate + '%';
+            document.getElementById('kpiResponse').textContent = kpi.avg_response_hours + 'h';
+            document.getElementById('kpiOverdue').textContent = kpi.overdue_rate + '%';
+
+            // 科室表
+            const deptTbody = document.querySelector('#deptTable tbody');
+            deptTbody.innerHTML = data.department_breakdown.map(d => `
+                <tr>
+                    <td><strong>${d.department}</strong></td>
+                    <td>${d.total}</td>
+                    <td>${d.completed}</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress" style="width:60px;height:6px;">
+                                <div class="progress-bar bg-primary" style="width:${d.rate}%"></div>
+                            </div>
+                            <span>${d.rate}%</span>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+
+            // 月度趋势
+            const ctx1 = document.getElementById('trendChart').getContext('2d');
+            if (trendChart) trendChart.destroy();
+            trendChart = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: data.monthly_trend.labels,
+                    datasets: [{
+                        label: '工单数',
+                        data: data.monthly_trend.values,
+                        borderColor: '#4f46e5',
+                        backgroundColor: 'rgba(79,70,229,0.08)',
+                        fill: true, tension: 0.3,
+                        pointBackgroundColor: '#4f46e5',
+                        pointRadius: 3,
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+                        y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } }
+                    }
+                }
+            });
+
+            // 优先级饼图
+            const ctx2 = document.getElementById('priorityChart').getContext('2d');
+            if (priorityChart) priorityChart.destroy();
+            priorityChart = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: data.priority_distribution.labels,
+                    datasets: [{
+                        data: data.priority_distribution.values,
+                        backgroundColor: ['#22c55e', '#f59e0b', '#ef4444'],
+                        borderWidth: 2,
+                        borderColor: '#fff',
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } }
+                    }
+                }
+            });
+
+            // 故障TOP5
+            const ctx3 = document.getElementById('faultChart').getContext('2d');
+            if (faultChart) faultChart.destroy();
+            faultChart = new Chart(ctx3, {
+                type: 'bar',
+                data: {
+                    labels: data.fault_top5.labels,
+                    datasets: [{
+                        label: '工单数',
+                        data: data.fault_top5.values,
+                        backgroundColor: ['#4f46e5','#3b82f6','#06b6d4','#22c55e','#f59e0b'],
+                        borderRadius: 6,
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+                        y: { grid: { display: false } }
+                    }
+                }
+            });
+
+            // 最近工单
+            const recentTbody = document.querySelector('#recentTable tbody');
+            recentTbody.innerHTML = data.recent_orders.map(o => `
+                <tr>
+                    <td><a href="/orders/list?search=${o.id}" class="text-primary">#${o.id}</a></td>
+                    <td>${o.title}</td>
+                    <td>${o.department || '—'}</td>
+                    <td><span class="badge bg-${o.status === '已完成' ? 'success' : o.status === '处理中' ? 'primary' : 'warning'}">${o.status}</span></td>
+                    <td><span class="badge bg-${o.priority === 'emergency' ? 'danger' : o.priority === 'urgent' ? 'warning' : 'secondary'}">${o.priority}</span></td>
+                    <td>${o.person || '—'}</td>
+                    <td class="text-muted">${o.created_at}</td>
+                </tr>
+            `).join('');
+        })
+        .catch(err => console.error(err));
+}
+
+document.addEventListener('DOMContentLoaded', loadData);
+</script>
+{% endblock %}

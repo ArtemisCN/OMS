@@ -1,0 +1,552 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+/* ===== 顶部操作栏 ===== */
+.hm-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 28px; flex-wrap: wrap; gap: 12px;
+}
+.hm-topbar h4 {
+  margin: 0; font-size: 1.1rem; font-weight: 700;
+  display: flex; align-items: center; gap: 10px;
+}
+.hm-topbar h4 .hm-count {
+  font-size: .8rem; font-weight: 400; color: var(--text-tertiary,#94a3b8);
+  background: var(--bg-secondary,#f1f5f9); padding: 2px 10px; border-radius: 10px;
+}
+.hm-topbar .hm-actions { display: flex; gap: 8px; align-items: center; }
+.hm-topbar .hm-actions a,
+.hm-topbar .hm-actions button {
+  padding: 7px 16px; border-radius: 10px; font-size: .82rem; font-weight: 500;
+  border: 1px solid var(--border-color,#e2e8f0); background: var(--bg-card,#fff);
+  color: var(--text-primary); text-decoration: none; cursor: pointer;
+  transition: all .2s; display: inline-flex; align-items: center; gap: 6px;
+}
+.hm-topbar .hm-actions .btn-primary-custom {
+  background: linear-gradient(135deg,#6366f1,#4f46e5); color: #fff; border: none;
+  box-shadow: 0 2px 8px rgba(99,102,241,.3);
+}
+.hm-topbar .hm-actions .btn-primary-custom:hover {
+  transform: translateY(-1px); box-shadow: 0 4px 14px rgba(99,102,241,.4);
+}
+.hm-topbar .hm-actions a:hover { border-color: var(--primary,#6366f1); color: var(--primary,#6366f1); }
+
+/* ===== 卡片网格 ===== */
+.hm-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 20px;
+}
+@media (max-width: 420px) {
+  .hm-grid { grid-template-columns: 1fr; }
+}
+
+/* ===== 卡片主体 ===== */
+.hm-card {
+  position: relative; border-radius: 16px; overflow: hidden;
+  background: var(--bg-card,#fff); border: 1px solid var(--border-color,#e2e8f0);
+  transition: transform .25s cubic-bezier(.4,0,.2,1), box-shadow .25s;
+}
+.hm-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0,0,0,.08);
+}
+[data-theme="dark"] .hm-card:hover {
+  box-shadow: 0 12px 40px rgba(0,0,0,.3);
+}
+
+/* 卡片顶部装饰色带 */
+.hm-card .hm-accent {
+  height: 4px; width: 100%; position: absolute; top: 0; left: 0;
+}
+
+/* 卡片头部 */
+.hm-card .hm-head {
+  display: flex; align-items: center; gap: 14px;
+  padding: 18px 20px 0;
+}
+.hm-card .hm-avatar {
+  width: 48px; height: 48px; border-radius: 14px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; position: relative; overflow: hidden;
+}
+.hm-card .hm-avatar img {
+  width: 100%; height: 100%; object-fit: cover; border-radius: 14px;
+}
+.hm-card .hm-avatar .hm-avatar-glow {
+  position: absolute; inset: 0; opacity: .15; border-radius: 14px;
+}
+.hm-card .hm-avatar i { position: relative; z-index: 1; }
+
+.hm-card .hm-info { flex: 1; min-width: 0; }
+.hm-card .hm-info .hm-name {
+  font-size: 1rem; font-weight: 700; line-height: 1.3;
+  display: flex; align-items: center; gap: 8px;
+}
+.hm-card .hm-info .hm-code {
+  font-size: .78rem; color: var(--text-tertiary,#94a3b8);
+  font-family: 'SF Mono', Monaco, monospace;
+}
+
+/* 状态徽章 */
+.hm-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 20px; font-size: .72rem; font-weight: 600;
+}
+.hm-badge.active { background: #dcfce7; color: #15803d; }
+.hm-badge.inactive { background: #f1f5f9; color: #64748b; }
+[data-theme="dark"] .hm-badge.active { background: rgba(34,197,94,.15); color: #4ade80; }
+[data-theme="dark"] .hm-badge.inactive { background: rgba(100,116,139,.2); color: #94a3b8; }
+
+/* 卡片联系信息 */
+.hm-contact {
+  padding: 8px 20px 0; display: flex; gap: 14px; flex-wrap: wrap;
+}
+.hm-contact .hm-contact-item {
+  font-size: .8rem; color: var(--text-secondary,#64748b);
+  display: flex; align-items: center; gap: 4px;
+}
+.hm-contact .hm-contact-item i { width: 14px; text-align: center; color: var(--text-tertiary); }
+
+/* 卡片统计行 */
+.hm-stats {
+  display: flex; gap: 0; margin: 14px 20px 0;
+  border-radius: 10px; overflow: hidden;
+  background: var(--bg-secondary,#f8fafc);
+}
+.hm-stats .hm-stat {
+  flex: 1; text-align: center; padding: 10px 6px;
+  position: relative;
+}
+.hm-stats .hm-stat + .hm-stat::before {
+  content: ''; position: absolute; left: 0; top: 20%; height: 60%;
+  width: 1px; background: var(--border-color,#e2e8f0);
+}
+.hm-stats .hm-stat .hm-stat-num {
+  font-size: 1.1rem; font-weight: 700; line-height: 1.2;
+}
+.hm-stats .hm-stat .hm-stat-lbl {
+  font-size: .68rem; color: var(--text-tertiary,#94a3b8); margin-top: 1px;
+}
+
+/* 卡片底部操作按钮 */
+.hm-actions-row {
+  padding: 12px 20px 18px; display: flex; gap: 6px; flex-wrap: wrap;
+}
+.hm-actions-row .hm-btn {
+  padding: 5px 12px; border-radius: 8px; font-size: .76rem;
+  border: 1px solid var(--border-color,#e2e8f0); background: transparent;
+  color: var(--text-secondary,#64748b); text-decoration: none; cursor: pointer;
+  transition: all .15s; display: inline-flex; align-items: center; gap: 4px;
+  font-weight: 500;
+}
+.hm-actions-row .hm-btn:hover {
+  border-color: var(--primary,#6366f1); color: var(--primary,#6366f1);
+  background: rgba(99,102,241,.04);
+}
+.hm-actions-row .hm-btn.hm-btn-edit:hover { border-color: #6366f1; color: #6366f1; }
+.hm-actions-row .hm-btn.hm-btn-toggle:hover { border-color: #f59e0b; color: #f59e0b; }
+.hm-actions-row .hm-btn.hm-btn-switch:hover { border-color: #0ea5e9; color: #0ea5e9; }
+
+/* ===== 人员列表折叠区 ===== */
+.hm-persons {
+  border-top: 1px solid var(--border-color,#e2e8f0);
+  background: var(--bg-secondary,#fafafa);
+}
+.hm-persons-inner {
+  max-height: 380px; overflow-y: auto; padding: 12px 20px;
+}
+.hm-persons-inner::-webkit-scrollbar { width: 4px; }
+.hm-persons-inner::-webkit-scrollbar-thumb { background: var(--border-color,#e2e8f0); border-radius: 4px; }
+
+.hm-team-group { margin-bottom: 12px; }
+.hm-team-group:last-child { margin-bottom: 0; }
+
+.hm-team-header {
+  font-size: .72rem; font-weight: 700; color: var(--text-tertiary,#94a3b8);
+  text-transform: uppercase; letter-spacing: .3px;
+  padding: 4px 6px; margin-bottom: 4px;
+  display: flex; align-items: center; gap: 6px;
+}
+.hm-team-header .hm-team-count {
+  font-weight: 400; font-size: .68rem; color: var(--text-tertiary,#94a3b8);
+  background: var(--bg-card,#fff); padding: 0 6px; border-radius: 4px;
+}
+
+.hm-person-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 6px; border-radius: 6px; font-size: .82rem;
+  transition: background .15s;
+}
+.hm-person-row:hover { background: rgba(99,102,241,.04); }
+.hm-person-row .hm-p-name { font-weight: 500; flex: 1; min-width: 0; }
+.hm-person-row .hm-p-phone { color: var(--text-tertiary,#94a3b8); font-size: .76rem; }
+.hm-person-row .hm-p-status {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.hm-person-row .hm-p-status.on { background: #22c55e; }
+.hm-person-row .hm-p-status.off { background: #cbd5e1; }
+.hm-person-row .hm-p-account {
+  font-size: .72rem; padding: 1px 6px; border-radius: 4px;
+  background: rgba(99,102,241,.08); color: #6366f1;
+  white-space: nowrap;
+}
+
+/* ===== 空状态 ===== */
+.hm-empty {
+  grid-column: 1 / -1; text-align: center; padding: 80px 20px;
+}
+.hm-empty .hm-empty-icon {
+  font-size: 3rem; color: var(--text-tertiary,#cbd5e1); margin-bottom: 12px;
+}
+.hm-empty p { color: var(--text-tertiary,#94a3b8); font-size: .9rem; margin: 0; }
+
+/* 暗色适配 */
+[data-theme="dark"] .hm-card { background: #1a202c; border-color: #2d3748; }
+[data-theme="dark"] .hm-stats { background: #1a202c; }
+[data-theme="dark"] .hm-persons { background: #111827; border-color: #2d3748; }
+[data-theme="dark"] .hm-topbar .hm-actions a { background: #1a202c; border-color: #2d3748; }
+
+/* ===== 头像上传 ===== */
+.hm-logo-upload { position: relative; display: inline-block; cursor: pointer; }
+.hm-logo-upload .hm-logo-preview {
+  width: 72px; height: 72px; border-radius: 16px; overflow: hidden;
+  border: 2px dashed var(--border-color,#e2e8f0);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; color: var(--text-tertiary,#94a3b8);
+  transition: border-color .2s;
+}
+.hm-logo-upload:hover .hm-logo-preview { border-color: var(--primary,#6366f1); }
+.hm-logo-upload .hm-logo-preview img {
+  width: 100%; height: 100%; object-fit: cover;
+}
+.hm-logo-upload .hm-logo-overlay {
+  position: absolute; inset: 0; border-radius: 16px;
+  background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity .2s; color: #fff; font-size: 12px;
+}
+.hm-logo-upload:hover .hm-logo-overlay { opacity: 1; }
+.hm-logo-upload input[type="file"] { display: none; }
+.hm-logo-upload .hm-logo-spinner {
+  display: none; position: absolute; inset: 0; border-radius: 16px;
+  background: rgba(255,255,255,.8); align-items: center; justify-content: center;
+}
+[data-theme="dark"] .hm-logo-upload .hm-logo-spinner { background: rgba(0,0,0,.6); }
+</style>
+
+<div class="hm-topbar">
+  <h4>
+    <i class="fas fa-hospital" style="color:var(--primary,#6366f1);"></i>
+    医院管理
+    <span class="hm-count">{{ hospitals|length }} 家</span>
+  </h4>
+  <div class="hm-actions">
+    <button class="btn-primary-custom" onclick="showAddModal()">
+      <i class="fas fa-plus"></i> 新增医院
+    </button>
+    <a href="{{ url_for('data.index') }}"><i class="fas fa-arrow-left"></i> 返回</a>
+  </div>
+</div>
+
+<!-- 配色池 -->
+{% set accent_colors = [
+  { 'bg': 'linear-gradient(135deg,#667eea,#764ba2)', 'icon_bg': 'linear-gradient(135deg,#667eea15,#764ba215)', 'icon_color': '#667eea', 'stat_color': '#667eea' },
+  { 'bg': 'linear-gradient(135deg,#f093fb,#f5576c)', 'icon_bg': 'linear-gradient(135deg,#f093fb15,#f5576c15)', 'icon_color': '#f5576c', 'stat_color': '#f5576c' },
+  { 'bg': 'linear-gradient(135deg,#4facfe,#00f2fe)', 'icon_bg': 'linear-gradient(135deg,#4facfe15,#00f2fe15)', 'icon_color': '#4facfe', 'stat_color': '#0ea5e9' },
+  { 'bg': 'linear-gradient(135deg,#43e97b,#38f9d7)', 'icon_bg': 'linear-gradient(135deg,#43e97b15,#38f9d715)', 'icon_color': '#10b981', 'stat_color': '#10b981' },
+  { 'bg': 'linear-gradient(135deg,#fa709a,#fee140)', 'icon_bg': 'linear-gradient(135deg,#fa709a15,#fee14015)', 'icon_color': '#f59e0b', 'stat_color': '#f59e0b' },
+  { 'bg': 'linear-gradient(135deg,#a18cd1,#fbc2eb)', 'icon_bg': 'linear-gradient(135deg,#a18cd115,#fbc2eb15)', 'icon_color': '#a18cd1', 'stat_color': '#8b5cf6' },
+] %}
+
+<div class="hm-grid">
+  {% for h in hospitals %}
+  {% set c = accent_colors[loop.index0 % accent_colors|length] %}
+  {% set pcount = person_counts.get(h.id, 0) %}
+  {% set ucount = user_counts.get(h.id, 0) %}
+  {% set teams_data = hospital_person_teams.get(h.id, {}) %}
+  {% set team_count = teams_data|length %}
+
+  <div class="hm-card">
+    <!-- 顶部色带 -->
+    <div class="hm-accent" style="background:{{ c.bg }};"></div>
+
+    <!-- 头部 -->
+    <div class="hm-head">
+      <div class="hm-avatar">
+        {% if h.logo %}
+        <img src="/static/uploads/hospitals/{{ h.logo }}" alt="{{ h.name }}">
+        {% else %}
+        <div class="hm-avatar-glow" style="background:{{ c.bg }};"></div>
+        <i class="fas fa-hospital" style="color:{{ c.icon_color }};"></i>
+        {% endif %}
+      </div>
+      <div class="hm-info">
+        <div class="hm-name">
+          {{ h.name }}
+          <span class="hm-badge {{ 'active' if h.is_active else 'inactive' }}">
+            <i class="fas fa-{{ 'circle' if h.is_active else 'circle' }}" style="font-size:6px;"></i>
+            {{ '启用' if h.is_active else '停用' }}
+          </span>
+        </div>
+        <div class="hm-code">{{ h.code }}</div>
+      </div>
+    </div>
+
+    <!-- 联系信息 -->
+    <div class="hm-contact">
+      {% if h.address %}
+      <span class="hm-contact-item"><i class="fas fa-map-marker-alt"></i> {{ h.address }}</span>
+      {% endif %}
+      {% if h.phone %}
+      <span class="hm-contact-item"><i class="fas fa-phone"></i> {{ h.phone }}</span>
+      {% endif %}
+      <span class="hm-contact-item"><i class="fas fa-calendar-alt"></i> {{ h.created_at.strftime('%Y-%m-%d') }}</span>
+    </div>
+
+    <!-- 统计 -->
+    <div class="hm-stats">
+      <div class="hm-stat">
+        <div class="hm-stat-num" style="color:{{ c.stat_color }};">{{ pcount }}</div>
+        <div class="hm-stat-lbl">👤 维保人员</div>
+      </div>
+      <div class="hm-stat">
+        <div class="hm-stat-num" style="color:{{ c.stat_color }};">{{ ucount }}</div>
+        <div class="hm-stat-lbl">🔐 系统账号</div>
+      </div>
+      <div class="hm-stat">
+        <div class="hm-stat-num" style="color:{{ c.stat_color }};">{{ team_count }}</div>
+        <div class="hm-stat-lbl">🏷 运维组别</div>
+      </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="hm-actions-row">
+      <button class="hm-btn hm-btn-edit" onclick="showEditModal({{ h.id }}, '{{ h.name|e }}', '{{ h.code|e }}', '{{ h.address or '' }}', '{{ h.phone or '' }}')">
+        <i class="fas fa-edit"></i> 编辑
+      </button>
+      <form method="post" action="{{ url_for('data.toggle_hospital', hid=h.id) }}" style="display:inline;" onsubmit="return confirm('确认{{ '停用' if h.is_active else '启用' }}{{ h.name }}？')">
+        <button type="submit" class="hm-btn hm-btn-toggle">
+          <i class="fas fa-{{ 'pause' if h.is_active else 'play' }}"></i> {{ '停用' if h.is_active else '启用' }}
+        </button>
+      </form>
+      <a href="{{ url_for('data.switch_hospital', hid=h.id) }}" class="hm-btn hm-btn-switch" onclick="return confirm('切换到 {{ h.name }}？系统将只显示该医院数据。')">
+        <i class="fas fa-sign-in-alt"></i> 切换
+      </a>
+      <button class="hm-btn" type="button" data-bs-toggle="collapse" data-bs-target="#hmPersons{{ h.id }}" onclick="event.stopPropagation();">
+        <i class="fas fa-users"></i> 人员
+        {% if pcount > 0 %}<span style="font-size:.7rem;color:var(--text-tertiary);">({{ pcount }})</span>{% endif %}
+      </button>
+    </div>
+
+    <!-- 人员列表（折叠） -->
+    <div class="collapse" id="hmPersons{{ h.id }}">
+      <div class="hm-persons">
+        <div class="hm-persons-inner">
+          {% if teams_data %}
+          {% for tname, tpersons in teams_data.items() %}
+          <div class="hm-team-group">
+            <div class="hm-team-header">
+              <i class="fas fa-layer-group"></i> {{ tname }}
+              <span class="hm-team-count">{{ tpersons|length }}人</span>
+            </div>
+            {% for p in tpersons %}
+            <div class="hm-person-row">
+              <span class="hm-p-status {{ 'on' if p.is_active else 'off' }}" title="{{ '启用' if p.is_active else '禁用' }}"></span>
+              <span class="hm-p-name">{{ p.name }}</span>
+              {% if p.phone %}<span class="hm-p-phone">{{ p.phone }}</span>{% endif %}
+              {% if p.account %}
+              <span class="hm-p-account" title="{{ '已启用' if p.account.active else '已禁用' }}账号: {{ p.account.username }}">
+                <i class="fas fa-{{ 'user-check' if p.account.active else 'user-slash' }}"></i>
+              </span>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% endfor %}
+          {% else %}
+          <div style="text-align:center;padding:16px 0;color:var(--text-tertiary,#94a3b8);font-size:.82rem;">
+            <i class="fas fa-user-slash" style="font-size:1.2rem;display:block;margin-bottom:4px;"></i>
+            暂无人员
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="hm-empty">
+    <div class="hm-empty-icon"><i class="fas fa-hospital"></i></div>
+    <p>暂无医院数据，请先添加医院</p>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ===== 新增模态框 ===== -->
+<div class="modal fade" id="addModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:16px;border:none;box-shadow:0 20px 60px rgba(0,0,0,.12);">
+      <div class="modal-header" style="border:none;padding:20px 24px 0;">
+        <h5 class="modal-title fw-bold" style="font-size:1rem;">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-size:14px;margin-right:8px;">
+            <i class="fas fa-plus"></i>
+          </span>
+          新增医院
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('data.add_hospital') }}">
+        <div class="modal-body" style="padding:20px 24px;">
+          <div class="mb-3">
+            <label class="form-label fw-medium" style="font-size:.85rem;">医院名称 <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required placeholder="如: 上海市第七人民医院" style="border-radius:10px;padding:10px 14px;font-size:.88rem;">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-medium" style="font-size:.85rem;">医院编码 <span class="text-danger">*</span></label>
+            <input type="text" name="code" class="form-control" required placeholder="唯一标识，如: seventh" style="border-radius:10px;padding:10px 14px;font-size:.88rem;">
+            <small class="text-muted" style="font-size:.78rem;">唯一编码，用于数据隔离标识，创建后不可随意修改</small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-medium" style="font-size:.85rem;">地址</label>
+            <input type="text" name="address" class="form-control" placeholder="医院地址" style="border-radius:10px;padding:10px 14px;font-size:.88rem;">
+          </div>
+          <div>
+            <label class="form-label fw-medium" style="font-size:.85rem;">电话</label>
+            <input type="text" name="phone" class="form-control" placeholder="联系电话" style="border-radius:10px;padding:10px 14px;font-size:.88rem;">
+          </div>
+        </div>
+        <div class="modal-footer" style="border:none;padding:0 24px 20px;">
+          <button type="button" class="btn btn-sm" style="border-radius:10px;padding:8px 20px;border:1px solid var(--border-color,#e2e8f0);" data-bs-dismiss="modal">取消</button>
+          <button type="submit" class="btn btn-sm" style="border-radius:10px;padding:8px 20px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;font-weight:500;">
+            <i class="fas fa-save"></i> 保存
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 编辑模态框 ===== -->
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:16px;border:none;box-shadow:0 20px 60px rgba(0,0,0,.12);">
+      <div class="modal-header" style="border:none;padding:20px 24px 0;">
+        <h5 class="modal-title fw-bold" style="font-size:1rem;">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#f093fb,#f5576c);color:#fff;font-size:14px;margin-right:8px;">
+            <i class="fas fa-edit"></i>
+          </span>
+          编辑医院
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="editForm">
+        <div class="modal-body" style="padding:20px 24px;">
+          <!-- 头像上传 -->
+          <div style="text-align:center;margin-bottom:18px;">
+            <div class="hm-logo-upload" id="editLogoUpload" onclick="document.getElementById('editLogoInput').click()">
+              <div class="hm-logo-preview" id="editLogoPreview">
+                <i class="fas fa-hospital"></i>
+              </div>
+              <div class="hm-logo-overlay"><i class="fas fa-camera"></i> 更换头像</div>
+              <div class="hm-logo-spinner" id="editLogoSpinner"><i class="fas fa-spinner fa-spin"></i></div>
+              <input type="file" id="editLogoInput" accept="image/png,image/jpg,image/jpeg,image/gif,image/webp,image/svg+xml" onchange="uploadHospitalLogo(this)">
+            </div>
+            <div style="font-size:.72rem;color:var(--text-tertiary,#94a3b8);margin-top:4px;">点击上传医院头像（png/jpg/gif/webp/svg）</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-medium" style="font-size:.85rem;">医院名称 <span class="text-danger">*</span></label>
+            <input type="text" name="name" id="editName" class="form-control" required style="border-radius:10px;padding:10px 14px;font-size:.88rem;">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-medium" style="font-size:.85rem;">医院编码 <span class="text-danger">*</span></label>
+            <input type="text" name="code" id="editCode" class="form-control" required style="border-radius:10px;padding:10px 14px;font-size:.88rem;">
+            <small class="text-muted" style="font-size:.78rem;">修改编码会影响数据隔离，请谨慎操作</small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-medium" style="font-size:.85rem;">地址</label>
+            <input type="text" name="address" id="editAddress" class="form-control" style="border-radius:10px;padding:10px 14px;font-size:.88rem;">
+          </div>
+          <div>
+            <label class="form-label fw-medium" style="font-size:.85rem;">电话</label>
+            <input type="text" name="phone" id="editPhone" class="form-control" style="border-radius:10px;padding:10px 14px;font-size:.88rem;">
+          </div>
+        </div>
+        <div class="modal-footer" style="border:none;padding:0 24px 20px;">
+          <button type="button" class="btn btn-sm" style="border-radius:10px;padding:8px 20px;border:1px solid var(--border-color,#e2e8f0);" data-bs-dismiss="modal">取消</button>
+          <button type="submit" class="btn btn-sm" style="border-radius:10px;padding:8px 20px;background:linear-gradient(135deg,#f093fb,#f5576c);color:#fff;border:none;font-weight:500;">
+            <i class="fas fa-save"></i> 保存
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// 存储当前编辑的医院ID
+var _editHospitalId = null;
+
+function showAddModal() {
+  new bootstrap.Modal(document.getElementById('addModal')).show();
+}
+function showEditModal(id, name, code, address, phone) {
+  _editHospitalId = id;
+  document.getElementById('editName').value = name;
+  document.getElementById('editCode').value = code;
+  document.getElementById('editAddress').value = address;
+  document.getElementById('editPhone').value = phone;
+  document.getElementById('editForm').action = '/data/hospitals/' + id + '/edit';
+  // 加载头像
+  var preview = document.getElementById('editLogoPreview');
+  preview.innerHTML = '<i class="fas fa-hospital"></i>';
+  var imgUrl = '/static/uploads/hospitals/hospital_' + id + '_';
+  var xhr = new XMLHttpRequest();
+  xhr.open('HEAD', '/static/uploads/hospitals/', true);
+  // 直接尝试从卡片上拿
+  var cardAvatar = document.querySelector('.hm-card .hm-avatar img[src*="hospital_' + id + '_"]');
+  if (cardAvatar) {
+    preview.innerHTML = '<img src="' + cardAvatar.src + '">';
+  }
+  new bootstrap.Modal(document.getElementById('editModal')).show();
+}
+
+function uploadHospitalLogo(input) {
+  if (!input.files || !input.files[0]) return;
+  if (!_editHospitalId) { alert('请先保存医院信息'); return; }
+  var file = input.files[0];
+  var spinner = document.getElementById('editLogoSpinner');
+  spinner.style.display = 'flex';
+  var fd = new FormData();
+  fd.append('logo', file);
+  fetch('/data/hospitals/' + _editHospitalId + '/upload_logo', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      spinner.style.display = 'none';
+      if (data.ok) {
+        // 更新预览
+        document.getElementById('editLogoPreview').innerHTML = '<img src="' + data.url + '?t=' + Date.now() + '">';
+        // 更新卡片头像
+        var cards = document.querySelectorAll('.hm-card');
+        // 找到对应卡片第_editHospitalId个（按顺序匹配）
+        var links = document.querySelectorAll('a[href*="switch_hospital/' + _editHospitalId + '"]');
+        for (var i = 0; i < links.length; i++) {
+          var card = links[i].closest('.hm-card');
+          if (card) {
+            var avatar = card.querySelector('.hm-avatar');
+            if (avatar) {
+              avatar.innerHTML = '<img src="' + data.url + '?t=' + Date.now() + '" alt="' + data.filename + '">';
+            }
+            break;
+          }
+        }
+      } else {
+        alert(data.error || '上传失败');
+      }
+    })
+    .catch(function(err) {
+      spinner.style.display = 'none';
+      alert('上传失败: ' + err.message);
+    });
+}
+</script>
+{% endblock %}

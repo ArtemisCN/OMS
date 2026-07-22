@@ -345,10 +345,24 @@ def edit_address(override_id, base_index, building, floor, department, location)
     return False, '参数错误'
 
 
+def normalize_floor(floor):
+    """标准化楼层格式：一楼/2楼/B1楼 → 1F/2F/B1F"""
+    import re
+    if not floor:
+        return floor
+    CN_MAP = {'一': '1', '二': '2', '三': '3', '四': '4',
+              '五': '5', '六': '6', '七': '7', '八': '8', '九': '9', '十': '10'}
+    for cn, num in CN_MAP.items():
+        floor = floor.replace(cn, num)
+    floor = re.sub(r'(\d+)楼$', r'\1F', floor)
+    return floor
+
+
 def add_address(building, floor, department, location):
     """新增地址"""
     if not all([building, floor, department, location]):
         return False, '所有字段不能为空'
+    floor = normalize_floor(floor)
     o = AddressOverride(base_index=-1, building=building,
                         floor=floor, department=department, location=location)
     db.session.add(o)

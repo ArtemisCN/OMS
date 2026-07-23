@@ -38,9 +38,9 @@
 <!-- ===== 组选择器 ===== -->
 <div class="tmpl-team-bar">
     <div class="tmpl-team-list" id="teamSelector">
-        <span class="tmpl-team-chip active" data-team="all" onclick="selectTeam('all')"><i class="fas fa-clipboard-list"></i> 全部</span>
+        <span class="tmpl-team-chip {% if not team or team == 'all' %}active{% endif %}" data-team="all" onclick="selectTeam('all')"><i class="fas fa-clipboard-list"></i> 全部</span>
         {% for t in all_teams %}
-        <span class="tmpl-team-chip" data-team="{{ t|e }}" onclick="selectTeam('{{ t|e }}')">{{ t }}</span>
+        <span class="tmpl-team-chip {% if team == t %}active{% endif %}" data-team="{{ t|e }}" onclick="selectTeam('{{ t|e }}')">{{ t }}</span>
         {% endfor %}
     </div>
 </div>
@@ -360,6 +360,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (form) collectKeywords(form);
         });
     });
+    // Auto-select team on page load
+    var team = '{{ team|e }}';
+    if (team && team != 'all') {
+        selectTeam(team);
+    }
 });
 </script>
 {% endblock %}

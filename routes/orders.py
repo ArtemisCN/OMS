@@ -99,7 +99,7 @@ def list_orders():
 @login_required
 def create_order():
     from services.address import get_merged_addresses, get_all_buildings
-    team = request.args.get('team', '')
+    team = request.args.get('team', current_user.team or '')
 
     if request.method == 'POST':
         try:
@@ -153,7 +153,7 @@ def publish_order():
 
     from services.data_service import get_team_options
     all_teams = get_team_options()
-    team = request.args.get('team', '')
+    team = request.args.get('team', current_user.team or '')
     return render_template('orders/publish.html', all_teams=all_teams, team=team)
 
 

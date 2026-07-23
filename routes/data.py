@@ -562,7 +562,7 @@ def delete_solution(sid):
 def list_addresses():
     building = request.args.get('building', '')
     keyword = request.args.get('keyword', '')
-    team = request.args.get('team', '')
+    team = request.args.get('team', current_user.team or '')
     groups, buildings, current_addresses, total = data_service.list_addresses(building, keyword, team=team)
     all_teams = get_team_options()
     return render_template('data/addresses.html',
@@ -623,7 +623,7 @@ def delete_base_address():
 @data_bp.route('/fault-types')
 @admin_required
 def list_fault_types():
-    team = request.args.get('team', '')
+    team = request.args.get('team', current_user.team or '')
     all_teams = get_team_options()
     return render_template('data/fault_types.html', types=data_service.list_fault_types(team=team),
                            team=team, all_teams=all_teams)
@@ -1182,7 +1182,7 @@ def rename_permission_group():
 @data_bp.route('/fault-categories')
 @admin_required
 def list_fault_categories():
-    team = request.args.get('team', '')
+    team = request.args.get('team', current_user.team or '')
     cats = data_service.list_fault_categories(team=team)
     all_teams = get_team_options()
     return render_template('data/fault_categories.html', categories=cats,

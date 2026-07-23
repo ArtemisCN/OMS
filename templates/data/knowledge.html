@@ -197,7 +197,7 @@
   </div>
 
   <div class="kh-cats">
-    <a href="{{ url_for('data.list_knowledge') }}" class="kh-cat {% if not cur_cat %}active{% endif %}">📋 全部 <span class="cat-count">{{ total }}</span></a>
+    <a href="{{ url_for('data.list_knowledge') }}" class="kh-cat {% if not cur_cat %}active{% endif %}"><i class="fas fa-clipboard-list"></i> 全部 <span class="cat-count">{{ total }}</span></a>
     {% for c in cat_set %}
     <a href="{{ url_for('data.list_knowledge', category=c) }}" class="kh-cat {% if cur_cat == c %}active{% endif %}">
       {% if c == '公告' %}📢{% elif c == '操作手册' %}📖{% elif c == '常见问题' %}❓{% endif %} {{ c }}
@@ -532,7 +532,7 @@ function insertWO(url, title) {
   if (!quill) return;
   var range = quill.getSelection(true);
   var html = '<a href="' + escapeAttr(url) + '" class="wo-embed" target="_blank">' +
-    '<span style="font-size:16px;">📋</span> <span>📋 关联工单：' + escapeHtml(title) + '</span>' +
+    '<span style="font-size:16px;"><i class="fas fa-clipboard-list"></i></span> <span><i class="fas fa-clipboard-list"></i> 关联工单：' + escapeHtml(title) + '</span>' +
     '<span style="font-size:10px;color:var(--text-muted);">↗</span></a>&nbsp;';
   quill.clipboard.dangerouslyPasteHTML(range.index, html);
   quill.setSelection(range.index + 1);

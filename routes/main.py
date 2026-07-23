@@ -1,9 +1,9 @@
 """仪表盘路由（优化版：合并查询+缓存）"""
-from flask import Blueprint, render_template, request
+from flask import current_app,  Blueprint, render_template, request, g
 from flask_login import login_required, current_user
 from sqlalchemy import func, case
 from datetime import datetime, timedelta
-from models import WorkOrder, Person, User, db, SystemSetting
+from models import WorkOrder, User, db, SystemSetting
 from services.cache import cached
 
 main_bp = Blueprint('main', __name__)
@@ -13,7 +13,7 @@ main_bp = Blueprint('main', __name__)
 def serve_upload(filename):
     """提供上传的图片文件"""
     import os
-    from flask import send_from_directory
+    from flask import current_app,  send_from_directory
     upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads')
     return send_from_directory(upload_dir, filename, max_age=86400)
 
@@ -36,7 +36,7 @@ def dashboard():
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start + timedelta(days=1)
 
-    # 组别筛选（非管理员自动按 Person.team 过滤，管理员可切换）
+    # 组别筛选（非管理员自动按 User.team 过滤，管理员可切换）
     # request.args.get('team'): None=URL没有team参数(首次进入) / ''=用户选了全部组
     team_param = request.args.get('team')  # 不加默认值，以区分None和空字符串
     if team_param is None:
@@ -45,18 +45,16 @@ def dashboard():
             _def_setting = SystemSetting.query.filter_by(key='default_dashboard_team').first()
             team = _def_setting.value if _def_setting and _def_setting.value else ''
         else:
-            _person = Person.query.filter_by(user_id=current_user.id).first()
-            team = _person.team if _person and _person.team else ''
+            team = current_user.team if current_user.team else ''
     else:
         # URL带了?team=，用户主动切换了组别（包括''=全部组）
         team = team_param
     team_persons = set()
     if team:
-        tp = Person.query.filter(Person.team == team, Person.is_active == True).all()
-        team_persons = {p.name for p in tp if p.name}
+        tp = User.query.filter(User.team == team, User.is_active == True).all()
+        team_persons = {p.display_name for p in tp if p.display_name}
 
-    # 获取所有组别
-    teams = [t[0] for t in Person.query.with_entities(Person.team).filter(Person.team != '', Person.team.isnot(None)).distinct().order_by(Person.team).all()]
+    teams = [t[0] for t in User.query.with_entities(User.team).filter(User.team!='', User.team!=None).distinct().order_by(User.team).all()]
 
     # ---------- 批量统计（一次查询聚合多项） ----------
     monthly_stats = _get_monthly_stats(first_of_month, today_start, today_end, person_filter=team_persons if team else None)
@@ -89,8 +87,11 @@ def dashboard():
     dept_stats = _get_dept_stats(first_of_month, person_filter=team_persons if team else None)
 
     # ---------- 待处理加急/紧急（pending工单不过滤人员） ----------
-    pending_urgent = WorkOrder.query.filter_by(status='pending', priority='urgent').count()
-    pending_emergency = WorkOrder.query.filter_by(status='pending', priority='emergency').count()
+    base_pending = WorkOrder.query.filter(WorkOrder.status == 'pending')
+    if getattr(g, 'hospital_id', None) and g.hospital_id != 0:
+        base_pending = base_pending.filter(WorkOrder.hospital_id == g.hospital_id)
+    pending_urgent = base_pending.filter(WorkOrder.priority == 'urgent').count()
+    pending_emergency = base_pending.filter(WorkOrder.priority == 'emergency').count()
 
     # ---------- 紧急程度分布 ----------
     priority_q = WorkOrder.query.filter(WorkOrder.created_at >= first_of_month)
@@ -272,18 +273,18 @@ def _get_repeat_faults(first_of_month, person_filter=None):
 
 def _get_person_stats(first_of_month, person_filter=None):
     """本月人员处理排行（排除admin和空白），按当前医院+组别过滤"""
-    from flask import g
+    from flask import current_app,  g
     active_person_names = set()
     try:
         hid = getattr(g, 'hospital_id', None)
-        query = Person.query.filter(Person.is_active == True)
+        query = User.query.filter(User.is_active == True)
         if hid:
-            query = query.filter(Person.hospital_id == hid)
+            query = query.filter(User.hospital_id == hid)
         if person_filter:
-            query = query.filter(Person.name.in_(person_filter))
-        active_person_names = {p.name for p in query.all() if p.name}
-    except Exception:
-        pass
+            query = query.filter(User.display_name.in_(person_filter))
+        active_person_names = {p.display_name for p in query.all() if p.display_name}
+    except Exception as e:
+        current_app.logger.error(f'查询活跃人员失败: {e}')
 
     admin_names = {'管理员'}
     valid_names = active_person_names - admin_names
@@ -446,22 +447,21 @@ def _get_sla_label(minutes):
 
 def _get_sla_stats(first_of_month, person_filter=None):
     """获取本月 SLA 统计：人均响应/处理时长 + 超时工单数"""
-    from flask import g
+    from flask import current_app,  g
     now = datetime.now()
 
-    # 获取当前医院的人员名单（只统计本院人员）
     local_persons = set()
     try:
         hid = getattr(g, 'hospital_id', None)
         if hid:
-            from models import Person
-            rows = Person.query.filter(
-                Person.hospital_id == hid,
-                Person.is_active == True,
+            from models import User
+            rows = User.query.filter(
+                User.hospital_id == hid,
+                User.is_active == True,
             ).all()
-            local_persons = {r.name for r in rows if r.name}
-    except Exception:
-        pass
+            local_persons = {r.display_name for r in rows if r.display_name}
+    except Exception as e:
+        current_app.logger.error(f'查询本地人员失败: {e}')
 
     # 本月工单
     q_sla = WorkOrder.query.filter(
@@ -501,12 +501,10 @@ def _get_sla_stats(first_of_month, person_filter=None):
             person_sla[p]["resp_sum"] += resp_min
             person_sla[p]["resp"] += 1
 
-        # 处理时长（创建 → 完成）
         resol_min = None
         if o.completed_at and o.created_at:
             resol_min = abs((o.completed_at - o.created_at).total_seconds() / 60)
         elif o.accepted_at and o.created_at and o.status == 'in_progress':
-            # 处理中则用接单到现在
             resol_min = abs((datetime.now() - o.accepted_at).total_seconds() / 60)
         if resol_min is not None and resol_min >= 0:
             person_sla[p]["resol_sum"] += resol_min
@@ -534,7 +532,6 @@ def _get_sla_stats(first_of_month, person_filter=None):
                 person_sla[p]["overdue"] += 1
                 overdue_count += 1
 
-    # 计算均值 + 评级
     sla_items = []
     dist = {"极速":0, "快速":0, "较快":0, "一般":0, "较慢":0, "很慢":0, "暂无数据":0}
     for p, d in sorted(person_sla.items(), key=lambda x: x[1]["total"], reverse=True):

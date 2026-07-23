@@ -44,6 +44,7 @@
         // ===== 打开转盘 =====
         function openLotteryWheel() {
             var overlay = document.createElement('div');
+            overlay.id = 'lotteryOverlay';
             overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:99998;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;animation:fadeIn 0.3s ease;';
 
             var modal = document.createElement('div');
@@ -52,7 +53,7 @@
             // 标题
             var titleRow = document.createElement('div');
             titleRow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;';
-            titleRow.innerHTML = '<span style="font-size:20px;font-weight:800;color:#fff;letter-spacing:1px;">🎰 派工抽奖</span><span style="font-size:11px;color:rgba(255,255,255,0.3);cursor:pointer;" onclick="this.closest(\'div[style*=\\"z-index:99998\\"]\').remove()">✕ 关闭</span>';
+            titleRow.innerHTML = '<span style="font-size:20px;font-weight:800;color:#fff;letter-spacing:1px;">🎰 派工抽奖</span><span style="font-size:11px;color:rgba(255,255,255,0.3);cursor:pointer;" onclick="document.getElementById(\'lotteryOverlay\').remove()">✕ 关闭</span>';
             overlay.appendChild(modal);
 
             // 先用loading占位，异步获取人员数据
@@ -111,7 +112,7 @@
             modal.innerHTML = '';
             var titleRow = document.createElement('div');
             titleRow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;';
-            titleRow.innerHTML = '<span style="font-size:20px;font-weight:800;color:#fff;letter-spacing:1px;">🎰 派工抽奖</span><span style="font-size:11px;color:rgba(255,255,255,0.3);cursor:pointer;" onclick="this.closest(\'[style*=\\"z-index:99998\\"]\').remove()">✕ 关闭</span>';
+            titleRow.innerHTML = '<span style="font-size:20px;font-weight:800;color:#fff;letter-spacing:1px;">🎰 派工抽奖</span><span style="font-size:11px;color:rgba(255,255,255,0.3);cursor:pointer;" onclick="document.getElementById(\'lotteryOverlay\').remove()">✕ 关闭</span>';
             modal.appendChild(titleRow);
 
             var persons = personsData.slice();
@@ -197,38 +198,6 @@
                 dots.textContent = '';
                 loadingText.appendChild(dots);
                 btnWrap.appendChild(loadingText);
-
-                // 🎯 #9 整蛊奖品混入（10%概率）
-                var prankItems = ['🫵 你自己上','☕ 请全组喝奶茶','🐛 放了个假虫','🧋 请喝奶茶','🎂 今天你请客','🛌 今天通宵值班'];
-                if (Math.random() < 0.1) {
-                    var prank = prankItems[Math.floor(Math.random() * prankItems.length)];
-                    persons.push({name: prank, color: '#2d2d2d', isPrank: true});
-                    n = persons.length;
-                    angleStep = 360 / n;
-                    var newStops = [];
-                    for (var pi = 0; pi < n; pi++) {
-                        persons[pi].color = funColors[pi % funColors.length];
-                        var pst = pi * angleStep;
-                        var pen = (pi + 1) * angleStep;
-                        newStops.push(persons[pi].color + ' ' + pst + 'deg ' + pen + 'deg');
-                    }
-                    wheel.style.background = 'conic-gradient(' + newStops.join(',') + ')';
-                    var oldNames = wheel.querySelectorAll('.wheel-name');
-                    for (var oi = 0; oi < (oldNames ? oldNames.length : 0); oi++) if (oldNames[oi]) oldNames[oi].remove();
-                    for (var pi = 0; pi < n; pi++) {
-                        var aD2 = pi * angleStep + angleStep / 2;
-                        var rd2 = (aD2 - 90) * Math.PI / 180;
-                        var dst2 = 105;
-                        var px2 = 150 + dst2 * Math.cos(rd2);
-                        var py2 = 150 + dst2 * Math.sin(rd2);
-                        var nt2 = document.createElement('span');
-                        nt2.className = 'wheel-name';
-                        nt2.textContent = persons[pi].name;
-                        var fs2 = n > 12 ? 10 : (n > 8 ? 11 : 12);
-                        nt2.style.cssText = 'position:absolute;left:' + px2 + 'px;top:' + py2 + 'px;transform:translate(-50%,-50%);font-size:' + fs2 + 'px;font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.8),0 0 8px rgba(0,0,0,0.3);white-space:nowrap;pointer-events:none;z-index:3;letter-spacing:0.5px;';
-                        wheel.appendChild(nt2);
-                    }
-                }
 
                 // 🔊 #4 咔咔咔动画
                 var clickChars = ['咔','嗒','哒','咯','吱','啪','咚'];

@@ -7,6 +7,9 @@
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#supplierModal" onclick="resetSupplierForm()">
             <i class="fas fa-plus"></i> 新增供应商
         </button>
+        <a href="{{ url_for('feature.contracts') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> 返回合同维保
+        </a>
         <a href="{{ url_for('feature.suppliers') }}" class="btn btn-outline-secondary btn-sm">
             <i class="fas fa-sync"></i> 刷新
         </a>

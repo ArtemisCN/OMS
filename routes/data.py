@@ -3,16 +3,18 @@ import io
 import json
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, session
 from flask_login import login_required, current_user
-from models import (db, Person, Department, SolutionTemplate, WorkOrder,
+from datetime import datetime
+from models import (db, Department, SolutionTemplate, WorkOrder,
     AddressOverride, User, FaultType, FaultCategory, FaultSubcategory,
     FaultKeyword, Hospital, FaultTemplateGroup, FaultTemplateItem, PartPrice,
     SystemSetting, Asset, SparePart, StorageLocation, Supplier,
-    Consumable, ConsumableRecord, ConsumableSignRequest,
-    DutySchedule, DutyStaff, KnowledgeBase,
-    log_audit, get_module_permissions, save_module_permissions)
+    Consumable, ConsumableRecord, DutySchedule, DutyStaff, KnowledgeBase,
+    RegistrationRequest, RoleGroup,
+    log_audit, get_module_permissions, save_module_permissions, can_access)
 import config
 from routes.auth import admin_required
 from services import data_service
+from services.data_service import get_team_options
 from flask import redirect
 
 data_bp = Blueprint('data', __name__, url_prefix='/data')
@@ -25,7 +27,7 @@ data_bp = Blueprint('data', __name__, url_prefix='/data')
 def list_hospitals():
     """医院列表（豪华卡片版）"""
     hospitals = Hospital.query.order_by(Hospital.id).all()
-    from models import Person, User
+    from models import User
     # 暂存并清除医院过滤，获取全院数据
     from flask import g as flask_g
     _saved_hid = getattr(flask_g, 'hospital_id', None)
@@ -34,32 +36,27 @@ def list_hospitals():
         # 各医院人员数
         person_counts = {}
         for h in hospitals:
-            person_counts[h.id] = Person.query.filter_by(hospital_id=h.id, is_active=True).count()
-        # 各医院关联账号数
-        user_counts = {}
-        for h in hospitals:
-            user_counts[h.id] = User.query.join(Person, User.id == Person.user_id).filter(Person.hospital_id == h.id, Person.is_active == True).count()
+            person_counts[h.id] = User.query.filter(User.hospital_id == h.id, User.is_active == True).count()
         # 各医院人员按组别归类
         hospital_person_teams = {}
         for h in hospitals:
-            persons = Person.query.filter_by(hospital_id=h.id, is_active=True).order_by(Person.team, Person.name).all()
+            persons = User.query.filter(User.hospital_id == h.id, User.is_active == True).order_by(User.team, User.display_name).all()
             teams = {}
             for p in persons:
                 t = p.team or '未分组'
                 if t not in teams:
                     teams[t] = []
                 account_info = None
-                if p.user_id:
-                    u = User.query.get(p.user_id)
+                if p.id:
+                    u = User.query.get(p.id)
                     account_info = {'username': u.username, 'active': u.is_active} if u else None
-                teams[t].append({'name': p.name, 'phone': p.phone or '', 'is_active': p.is_active, 'account': account_info})
+                teams[t].append({'name': p.display_name, 'phone': p.phone or '', 'is_active': p.is_active, 'account': account_info})
             hospital_person_teams[h.id] = teams
     finally:
         flask_g.hospital_id = _saved_hid
     return render_template('data/hospitals.html',
                            hospitals=hospitals,
                            person_counts=person_counts,
-                           user_counts=user_counts,
                            hospital_person_teams=hospital_person_teams)
 
 
@@ -107,12 +104,10 @@ def upload_hospital_logo(hid):
     ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
     if ext not in ALLOWED_EXTENSIONS:
         return jsonify({'error': '仅支持 png/jpg/gif/webp/svg 格式'}), 400
-    # 生成唯一文件名
     filename = f'hospital_{hid}_{uuid.uuid4().hex[:8]}.{ext}'
     upload_dir = '/var/www/static/uploads/hospitals'
     os.makedirs(upload_dir, exist_ok=True)
     file.save(os.path.join(upload_dir, filename))
-    # 删除旧头像
     if hospital.logo:
         old_path = os.path.join(upload_dir, hospital.logo)
         if os.path.exists(old_path):
@@ -167,7 +162,7 @@ def index():
     """数据管理总览"""
     from services.address import get_all_buildings
     return render_template('data/index.html',
-        persons_count=Person.query.count(),
+        persons_count=User.query.count(),
         departments_count=Department.query.count(),
         solutions_count=SolutionTemplate.query.count(),
         orders_count=WorkOrder.query.count(),
@@ -181,7 +176,8 @@ def index():
         consumables_count=Consumable.query.count(),
         duty_count=DutySchedule.query.count(),
         knowledge_count=KnowledgeBase.query.count(),
-        users_count=User.query.count())
+        users_count=User.query.count(),
+        pending_reg_count=RegistrationRequest.query.filter_by(status='pending').count())
 
 
 # ==================== 人员管理 ====================
@@ -191,24 +187,63 @@ def index():
 def list_persons():
     persons, user_map = data_service.list_persons()
     # 按组分类
-    from models import SystemSetting
+    from models import SystemSetting, WorkOrder
     import re
+
+    # 获取每个人员的工单数
+    order_counts = {}
+    for p in persons:
+        name = p.display_name or p.username
+        if name:
+            cnt = WorkOrder.query.filter(WorkOrder.created_by == name).count()
+            if cnt:
+                order_counts[p.id] = cnt
     team_setting = SystemSetting.query.filter_by(key='person_teams').first()
     if team_setting and team_setting.value:
         team_options = [x.strip() for x in re.split(r'[,，]', team_setting.value) if x.strip()]
     else:
         team_options = ['信息科', '后勤', '外包服务']
-    team_groups = {}
-    team_list = []
+    from models import Hospital, RoleGroup
+    hospitals = Hospital.query.order_by(Hospital.id).all()
+    hospital_map = {h.id: h for h in hospitals}
+    role_groups = RoleGroup.query.order_by(RoleGroup.id).all()
+
+    # ===== 组别筛选：默认同仪表盘 =====
+    team_sel = request.args.get('team', '')
+    if not team_sel:
+        if current_user.is_admin:
+            _def_setting = SystemSetting.query.filter_by(key='default_dashboard_team').first()
+            team_sel = _def_setting.value if _def_setting and _def_setting.value else ''
+        else:
+            if current_user.team:
+                team_sel = current_user.team
+    if team_sel:
+        persons = [p for p in persons if p.team == team_sel]
+
+    # ===== 按医院→组分二层分组 =====
+    from collections import OrderedDict
+    hospital_groups = OrderedDict()
     for p in persons:
+        # 取医院名
+        h_name = None
+        if p.hospital_id and p.hospital_id in hospital_map:
+            h_name = hospital_map[p.hospital_id].name
+        if not h_name:
+            h_list = p.hospitals.all()
+            if h_list:
+                h_name = h_list[0].name
+        h_name = h_name or '未分配医院'
+        if h_name not in hospital_groups:
+            hospital_groups[h_name] = {}
         t = p.team or '未分组'
-        if t not in team_groups:
-            team_groups[t] = []
-            team_list.append(t)
-        team_groups[t].append(p)
+        if t not in hospital_groups[h_name]:
+            hospital_groups[h_name][t] = []
+        hospital_groups[h_name][t].append(p)
     return render_template('data/persons.html', persons=persons, user_map=user_map,
                            team_options=team_options,
-                           team_groups=team_groups, team_list=team_list)
+                           hospital_groups=hospital_groups, hospitals=hospitals,
+                           role_groups=role_groups, team_sel=team_sel,
+                           order_counts=order_counts)
 
 
 @data_bp.route('/persons/add', methods=['POST'])
@@ -231,15 +266,43 @@ def import_persons_from_orders():
 @admin_required
 def toggle_person(pid):
     p = data_service.toggle_person(pid)
-    flash(f'已{"停用" if not p.is_active else "启用"}「{p.name}」', 'success')
+    flash(f'已{"停用" if not p.is_active else "启用"}「{p.display_name}」', 'success')
     return redirect(url_for('data.list_persons'))
 
 
 @data_bp.route('/persons/<int:pid>/delete', methods=['POST'])
 @admin_required
 def delete_person(pid):
-    name = data_service.delete_person(pid, current_user.display_name or current_user.username)
-    flash(f'已删除人员「{name}」', 'success')
+    p = User.query.get_or_404(pid)
+    if p.is_admin:
+        flash('管理员账号不可删除', 'danger')
+        return redirect(url_for('data.list_persons'))
+    name, err = data_service.delete_person(pid, current_user.display_name or current_user.username)
+    if err:
+        flash(err, 'danger')
+    else:
+        flash(f'已删除人员「{name}」', 'success')
+    return redirect(url_for('data.list_persons'))
+
+
+@data_bp.route('/persons/<int:pid>/reassign-orders', methods=['POST'])
+@admin_required
+def reassign_person_orders(pid):
+    """将某人的工单批量转移给另一个人"""
+    p = User.query.get_or_404(pid)
+    source_name = p.display_name or p.username
+    target_name = request.form.get('target_name', '').strip()
+    if not target_name:
+        flash('请填写接收人姓名', 'warning')
+        return redirect(url_for('data.list_persons'))
+
+    count = WorkOrder.query.filter(WorkOrder.created_by == source_name).update(
+        {WorkOrder.created_by: target_name}, synchronize_session=False
+    )
+    db.session.commit()
+    log_audit('reassign_orders', f'{source_name}→{target_name}', current_user.display_name or current_user.username,
+              target_id=pid, target_desc=f'批量转移工单 {count} 条')
+    flash(f'已将 {source_name} 的 {count} 条工单转移给 {target_name}', 'success')
     return redirect(url_for('data.list_persons'))
 
 
@@ -256,6 +319,69 @@ def edit_person_field(pid):
     return redirect(url_for('data.list_persons'))
 
 
+@data_bp.route('/persons/batch-action', methods=['POST'])
+@admin_required
+def batch_person_action():
+    """批量操作人员：启用/禁用/改组分/删除"""
+    action = request.form.get('batch_action', '')
+    ids_str = request.form.get('batch_ids', '')
+    value = request.form.get('batch_value', '').strip()
+    ids = [int(x) for x in ids_str.split(',') if x.strip().isdigit()]
+    if not ids:
+        flash('未选择有效的人员', 'warning')
+        return redirect(url_for('data.list_persons'))
+
+    from models import db, User
+    count = 0
+    try:
+        if action == 'enable':
+            count = User.query.filter(User.id.in_(ids)).update(
+                {User.is_active: True}, synchronize_session=False)
+            db.session.commit()
+            flash(f'已启用 {count} 名人员', 'success')
+        elif action == 'disable':
+            count = User.query.filter(User.id.in_(ids)).update(
+                {User.is_active: False}, synchronize_session=False)
+            db.session.commit()
+            flash(f'已禁用 {count} 名人员', 'success')
+        elif action == 'change_team':
+            if not value:
+                flash('请选择目标组', 'warning')
+                return redirect(url_for('data.list_persons'))
+            count = User.query.filter(User.id.in_(ids)).update(
+                {User.team: value}, synchronize_session=False)
+            db.session.commit()
+            flash(f'已将 {count} 名人员移动到「{value}」', 'success')
+        elif action == 'delete':
+            protected = []
+            deleted_names = []
+            for pid in ids:
+                p = User.query.get(pid)
+                if p:
+                    name = p.display_name or p.username
+                    # 检查关联记录
+                    wo_count = WorkOrder.query.filter(
+                        WorkOrder.created_by == name
+                    ).count()
+                    if wo_count:
+                        protected.append(name)
+                        continue
+                    deleted_names.append(name)
+                    log_audit('delete_person', f'删除人员「{name}」', current_user.display_name or current_user.username)
+                    db.session.delete(p)
+            db.session.commit()
+            if protected:
+                flash(f'已删除 {len(deleted_names)} 名人员；{len(protected)} 名人员因有关联工单记录被跳过：{", ".join(protected)}', 'warning')
+            else:
+                flash(f'已删除 {len(deleted_names)} 名人员', 'success')
+        else:
+            flash(f'未知操作: {action}', 'danger')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'批量操作失败：{str(e)}', 'danger')
+    return redirect(url_for('data.list_persons'))
+
+
 @data_bp.route('/persons/<int:pid>/account', methods=['GET', 'POST'])
 @admin_required
 def person_account(pid):
@@ -266,7 +392,8 @@ def person_account(pid):
     display_name = request.form.get('display_name', '').strip()
     is_admin = request.form.get('is_admin') == 'on'
     hospital_ids = request.form.getlist('hospital_ids')
-    ok, msg = data_service.person_account_save(pid, username, password, display_name, is_admin, hospital_ids)
+    group_id = request.form.get('group_id', type=int)
+    ok, msg = data_service.person_account_save(pid, username, password, display_name, is_admin, hospital_ids, group_id)
     flash(msg, 'success' if ok else 'danger')
     return redirect(url_for('data.list_persons'))
 
@@ -276,17 +403,17 @@ def person_account(pid):
 def lottery_persons_json():
     """返回当前医院活跃人员列表（大转盘抽奖用），支持 ?team= 筛选"""
     from flask import session, jsonify
-    from models import Person, db
+    from models import db, User
     hid = session.get('hospital_id')
     team = request.args.get('team', '')
-    query = Person.query.filter_by(is_active=True)
+    query = User.query.filter(User.is_active == True)
     if hid:
         query = query.filter_by(hospital_id=hid)
     if team:
-        query = query.filter(Person.team == team)
+        query = query.filter(User.team == team)
     persons = query.order_by(db.func.random()).all()
     colors = ['#FF6B6B','#FECA57','#48DBFB','#FF9FF3','#54A0FF','#5F27CD','#01A3A4','#F368E0','#EE5A24','#0ABDE3','#10AC84','#5D62E5','#A29BFE','#FD79A8','#6C5CE7','#00CEC9','#E17055','#0984E3']
-    data = [{'id': p.id, 'name': p.name, 'color': colors[i % len(colors)]} for i, p in enumerate(persons)]
+    data = [{'id': p.id, 'name': p.display_name, 'color': colors[i % len(colors)]} for i, p in enumerate(persons)]
     return jsonify({'persons': data, 'total': len(data)})
 
 
@@ -341,23 +468,30 @@ def list_solutions():
     keyword = request.args.get('keyword', '')
     device_filter = request.args.get('device_filter', '')
     fault_filter = request.args.get('fault_filter', '')
-    pagination = data_service.list_solutions(keyword, device_filter, fault_filter, page)
+    team_filter = request.args.get('team_filter', '')
+    pagination = data_service.list_solutions(keyword, device_filter, fault_filter, page, team_filter)
+    all_teams = data_service.get_team_options()
     return render_template('data/solutions.html', pagination=pagination,
-                           keyword=keyword, device_filter=device_filter, fault_filter=fault_filter)
+                           keyword=keyword, device_filter=device_filter,
+                           fault_filter=fault_filter, team_filter=team_filter,
+                           all_teams=all_teams)
 
 
 @data_bp.route('/solutions/add', methods=['POST'])
 @admin_required
 def add_solution():
+    teams_list = request.form.getlist('teams')
+    teams = ','.join([t for t in teams_list if t]) if teams_list else ''
     ok, msg = data_service.add_solution(
         request.form.get('title', '').strip(),
         request.form.get('content', '').strip(),
         request.form.get('keywords', ''),
         request.form.get('device_type', ''),
         request.form.get('fault_type', ''),
-        request.form.get('fault_subcategory', ''))
+        request.form.get('fault_subcategory', ''),
+        teams)
     flash(msg, 'success' if ok else 'danger')
-    return redirect(url_for('data.list_solutions'))
+    return redirect(url_for('data.list_templates'))
 
 
 @data_bp.route('/solutions/reset', methods=['POST'])
@@ -365,7 +499,7 @@ def add_solution():
 def reset_solutions():
     count = data_service.reset_solutions()
     flash(f'已重置 {count} 条方案模板到默认值', 'success')
-    return redirect(url_for('data.list_solutions'))
+    return redirect(url_for('data.list_templates'))
 
 
 @data_bp.route('/solutions/import-from-orders', methods=['POST'])
@@ -373,19 +507,44 @@ def reset_solutions():
 def import_solutions_from_orders():
     imported = data_service.import_solutions_from_orders()
     flash(f'从工单中导入 {imported} 条新方案模板', 'success')
-    return redirect(url_for('data.list_solutions'))
+    return redirect(url_for('data.list_templates'))
 
 
 @data_bp.route('/solutions/<int:sid>/edit', methods=['POST'])
 @admin_required
 def edit_solution(sid):
+    field = request.form.get('field', '')
+    if field == 'teams':
+        value = ','.join([v for v in request.form.getlist('value') if v])
+    else:
+        value = request.form.get('value', '')
     data_service.edit_solution(
-        sid,
-        request.form.get('field', ''),
-        request.form.get('value', ''),
+        sid, field, value,
         request.form.get('value2'))
     flash('方案已更新', 'success')
-    return redirect(url_for('data.list_solutions'))
+    return redirect(url_for('data.list_templates'))
+
+
+@data_bp.route('/solutions/<int:sid>/edit-full', methods=['POST'])
+@admin_required
+def edit_solution_full(sid):
+    """编辑方案模板全部字段"""
+    from models import SolutionTemplate
+    s = db.session.get(SolutionTemplate, sid)
+    if not s:
+        flash('方案不存在', 'danger')
+        return redirect(url_for('data.list_templates'))
+    s.title = request.form.get('title', s.title)
+    s.content = request.form.get('content', s.content)
+    s.fault_type = request.form.get('fault_type', s.fault_type)
+    s.keywords = request.form.get('keywords', s.keywords)
+    s.device_type = request.form.get('device_type', s.device_type)
+    teams = request.form.get('teams', '')
+    if teams:
+        s.teams = teams
+    db.session.commit()
+    flash(f'方案「{s.title}」已更新', 'success')
+    return redirect(url_for('data.list_templates'))
 
 
 @data_bp.route('/solutions/<int:sid>/delete', methods=['POST'])
@@ -393,7 +552,7 @@ def edit_solution(sid):
 def delete_solution(sid):
     title = data_service.delete_solution(sid, current_user.display_name or current_user.username)
     flash(f'方案「{title}」已删除', 'success')
-    return redirect(url_for('data.list_solutions'))
+    return redirect(url_for('data.list_templates'))
 
 
 # ==================== 地址数据查看 ====================
@@ -403,11 +562,14 @@ def delete_solution(sid):
 def list_addresses():
     building = request.args.get('building', '')
     keyword = request.args.get('keyword', '')
-    groups, buildings, current_addresses, total = data_service.list_addresses(building, keyword)
+    team = request.args.get('team', '')
+    groups, buildings, current_addresses, total = data_service.list_addresses(building, keyword, team=team)
+    all_teams = get_team_options()
     return render_template('data/addresses.html',
                            groups=groups, buildings=buildings,
                            building=building, keyword=keyword,
-                           addresses=current_addresses, total=total)
+                           addresses=current_addresses, total=total,
+                           team=team, all_teams=all_teams)
 
 
 @data_bp.route('/addresses/edit', methods=['POST'])
@@ -419,7 +581,8 @@ def edit_address():
         request.form.get('building', '').strip(),
         request.form.get('floor', '').strip(),
         request.form.get('department', '').strip(),
-        request.form.get('location', '').strip())
+        request.form.get('location', '').strip(),
+        teams=request.form.get('teams', '').strip())
     flash(msg, 'success' if ok else 'danger')
     return redirect(url_for('data.list_addresses', building=request.form.get('building', '')))
 
@@ -431,7 +594,8 @@ def add_address():
         request.form.get('building', '').strip(),
         request.form.get('floor', '').strip(),
         request.form.get('department', '').strip(),
-        request.form.get('location', '').strip())
+        request.form.get('location', '').strip(),
+        teams=request.form.get('teams', '').strip())
     flash(msg, 'success' if ok else 'danger')
     return redirect(url_for('data.list_addresses', building=request.form.get('building', '')))
 
@@ -459,7 +623,10 @@ def delete_base_address():
 @data_bp.route('/fault-types')
 @admin_required
 def list_fault_types():
-    return render_template('data/fault_types.html', types=data_service.list_fault_types())
+    team = request.args.get('team', '')
+    all_teams = get_team_options()
+    return render_template('data/fault_types.html', types=data_service.list_fault_types(team=team),
+                           team=team, all_teams=all_teams)
 
 
 @data_bp.route('/fault-types/add', methods=['POST'])
@@ -467,7 +634,8 @@ def list_fault_types():
 def add_fault_type():
     ok, msg = data_service.add_fault_type(
         request.form.get('name', '').strip(),
-        request.form.get('keywords', '').strip())
+        request.form.get('keywords', '').strip(),
+        teams=request.form.get('teams', '').strip())
     flash(msg, 'success' if ok else 'danger')
     return redirect(url_for('data.list_fault_types'))
 
@@ -477,7 +645,8 @@ def add_fault_type():
 def edit_fault_type(fid):
     ok, msg = data_service.edit_fault_type(
         fid, request.form.get('name', '').strip(),
-        request.form.get('keywords', '').strip())
+        request.form.get('keywords', '').strip(),
+        teams=request.form.get('teams', '').strip())
     flash(msg, 'success' if ok else 'danger')
     return redirect(url_for('data.list_fault_types'))
 
@@ -677,125 +846,11 @@ def consumable_inout():
     action = request.form.get('action')
     qty = request.form.get('quantity', type=int, default=0)
     note = request.form.get('note', '')
-    department = request.form.get('department', '')
     ok, msg, balance = data_service.consumable_inout(
-        cid, action, qty, note, current_user.display_name, department)
+        cid, action, qty, note, current_user.display_name)
     if ok:
         return jsonify({'ok': True, 'balance': balance})
     return jsonify({'ok': False, 'msg': msg}), 400
-
-
-@data_bp.route('/consumables/batch-out', methods=['POST'])
-@admin_required
-def consumable_batch_out():
-    """耗材一键出库"""
-    department = request.form.get('department', '').strip()
-    items_raw = request.form.getlist('items[]')
-    items = []
-    for item in items_raw:
-        parts = item.split(':')
-        if len(parts) != 2:
-            continue
-        try:
-            cid, qty = int(parts[0]), int(parts[1])
-        except ValueError:
-            continue
-        if qty <= 0:
-            continue
-        items.append({'cid': cid, 'qty': qty})
-    ok, msg, out_records = data_service.batch_consumable_out(
-        items, department, current_user.display_name)
-    if ok:
-        return jsonify({'ok': True, 'msg': msg, 'records': out_records})
-    return jsonify({'ok': False, 'msg': msg}), 400
-
-
-@data_bp.route('/consumables/batch-out-sign/init', methods=['POST'])
-@admin_required
-def consumable_batch_out_sign_init():
-    """创建耗材出库签名请求，返回token和二维码URL"""
-    import secrets, json as pyjson
-    department = request.form.get('department', '').strip()
-    if not department:
-        return jsonify({'ok': False, 'msg': '请选择科室'}), 400
-    items_raw = request.form.getlist('items[]')
-    if not items_raw:
-        return jsonify({'ok': False, 'msg': '请选择出库物品'}), 400
-    # 检查库存
-    for item in items_raw:
-        parts = item.split(':')
-        if len(parts) != 2:
-            continue
-        try:
-            cid, qty = int(parts[0]), int(parts[1])
-        except ValueError:
-            continue
-        if qty <= 0:
-            continue
-        c = Consumable.query.get(cid)
-        if not c:
-            continue
-        if c.quantity < qty:
-            return jsonify({'ok': False, 'msg': f'「{c.name}」库存不足'}), 400
-    token = secrets.token_hex(16)
-    sign_req = ConsumableSignRequest(
-        token=token, department=department,
-        items_json=pyjson.dumps(items_raw),
-        operator=current_user.display_name,
-    )
-    db.session.add(sign_req)
-    db.session.commit()
-    qr_url = f'https://demolin.cn/forms/sign-consumable/{token}'
-    return jsonify({'ok': True, 'token': token, 'qr_url': qr_url})
-
-
-@data_bp.route('/consumables/batch-out-sign/execute/<token>', methods=['POST'])
-@admin_required
-def consumable_batch_out_sign_execute(token):
-    """签名完成后执行耗材出库"""
-    import json as pyjson
-    from datetime import datetime
-    sign_req = ConsumableSignRequest.query.filter_by(token=token).first()
-    if not sign_req:
-        return jsonify({'ok': False, 'msg': '签名请求不存在'}), 404
-    if sign_req.status != 'signed':
-        return jsonify({'ok': False, 'msg': '尚未签名'}), 400
-    if sign_req.status == 'completed':
-        return jsonify({'ok': False, 'msg': '已执行'}), 400
-    department = sign_req.department
-    items = pyjson.loads(sign_req.items_json)
-    signature = sign_req.signature
-    out_records = []
-    for item in items:
-        parts = item.split(':')
-        if len(parts) != 2:
-            continue
-        try:
-            cid, qty = int(parts[0]), int(parts[1])
-        except ValueError:
-            continue
-        if qty <= 0:
-            continue
-        c = Consumable.query.get(cid)
-        if not c:
-            continue
-        if c.quantity < qty:
-            return jsonify({'ok': False, 'msg': f'「{c.name}」库存不足'}), 400
-        c.quantity -= qty
-        record = ConsumableRecord(
-            consumable_id=cid, type='out', quantity=qty,
-            balance=c.quantity, operator=sign_req.operator,
-            department=department, note=f'扫码签名出库至{department}',
-            signature=signature,
-        )
-        db.session.add(record)
-        out_records.append({'name': c.name, 'qty': qty, 'unit': c.unit})
-    sign_req.status = 'completed'
-    sign_req.completed_at = datetime.now()
-    db.session.commit()
-    log_audit('batch_out', 'consumable', sign_req.operator,
-              target_desc=f'耗材扫码签名出库至{department}，共{len(out_records)}项')
-    return jsonify({'ok': True, 'msg': f'已出库 {len(out_records)} 项至「{department}」', 'records': out_records})
 
 
 @data_bp.route('/consumables/export-template')
@@ -823,21 +878,66 @@ def list_duty_schedules():
     year = request.args.get('year', now.year, type=int)
     month = request.args.get('month', now.month, type=int)
     staff = data_service.get_duty_schedule_staff()
+    # 医院映射：仅取活跃医院
+    from models import Hospital
+    active_hospitals = Hospital.query.filter_by(is_active=True).all()
+    active_hids = {h.id for h in active_hospitals}
+    hospital_map = {h.id: h.name for h in active_hospitals}
+    # 过滤：停用医院的人员不显示；排除非值班人员（系统管理员、测试账号等）
+    _excluded_usernames = {'admin', 'testminiapp'}
+    _excluded_ids = {u.id for u in User.query.filter(User.username.in_(_excluded_usernames)).all()}
+    staff = [s for s in staff if s.id not in _excluded_ids
+             and (s.hospital_id is None or s.hospital_id in active_hids
+             or any(h.id in active_hids for h in s.hospitals))]
+    # 按当前院区筛选（管理员选了特定医院则只看该医院）
+    from flask import g as flask_g
+    cur_hid = getattr(flask_g, 'hospital_id', None)
+    if cur_hid and cur_hid in hospital_map:
+        staff = [s for s in staff if s.hospital_id == cur_hid
+                 or any(h.id == cur_hid for h in s.hospitals)]
     total_days, first_weekday, holidays = data_service.get_duty_month_info(year, month)
-    # 获取系统配置的组别选项
     team_setting = SystemSetting.query.filter_by(key='person_teams').first()
     if team_setting and team_setting.value:
         team_list = [x.strip() for x in re.split(r'[,，]', team_setting.value) if x.strip()]
     else:
         team_list = ['信息科', '后勤', '外包服务']
+
+    # ===== 组别默认值：非管理员默认自己的组，管理员默认全部 =====
     team_sel = request.args.get('team', '')
+    if not team_sel and not current_user.is_admin:
+        if current_user.team:
+            team_sel = current_user.team
+
     # 按组别筛选值班人员
     if team_sel:
         staff = [s for s in staff if s.team == team_sel]
-    return render_template('data/duty_schedules.html', staff=staff, year=year, month=month,
+
+    # 按医院分组
+    from collections import OrderedDict
+    staff_groups = OrderedDict()
+    staff_groups['__unassigned__'] = []  # 未分配医院的放最后
+    for s in staff:
+        # 取该人员的主医院名
+        hname = None
+        if s.hospital_id and s.hospital_id in hospital_map:
+            hname = hospital_map[s.hospital_id]
+        if not hname:
+            h = s.hospitals.first()
+            if h:
+                hname = h.name
+        key = hname or '__unassigned__'
+        if key not in staff_groups:
+            staff_groups[key] = []
+        staff_groups[key].append(s)
+    # 把"未分配"移到末尾
+    if staff_groups.get('__unassigned__'):
+        unassigned = staff_groups.pop('__unassigned__')
+        staff_groups['__unassigned__'] = unassigned
+    return render_template('data/duty_schedules.html', staff=staff, staff_groups=staff_groups, year=year, month=month,
                            total_days=total_days, first_weekday=first_weekday,
                            now=datetime.combine(date.today(), datetime.min.time()),
-                           holidays=holidays, team_list=team_list, team_sel=team_sel)
+                           holidays=holidays, team_list=team_list, team_sel=team_sel,
+                           hospital_map=hospital_map)
 
 
 @data_bp.route('/duty-schedules/api')
@@ -973,9 +1073,20 @@ def delete_knowledge(kid):
 @admin_required
 def permissions():
     users, module_perms, all_module_names, persons, users_by_group, role_groups = data_service.get_permissions_page_data()
+    user_group_map = {}
+    from models import RoleGroup
+    for u in users:
+        if u.is_admin:
+            user_group_map[u.id] = '管理员'
+        elif u.group_id:
+            rg = RoleGroup.query.get(u.group_id)
+            user_group_map[u.id] = rg.name if rg else (u.group or '普通用户')
+        else:
+            user_group_map[u.id] = u.group or '普通用户'
     return render_template('data/permissions.html', users=users, module_perms=module_perms,
                            all_module_names=all_module_names, persons=persons,
-                           users_by_group=users_by_group, role_groups=role_groups)
+                           users_by_group=users_by_group, role_groups=role_groups,
+                           user_group_map=user_group_map)
 
 
 @data_bp.route('/permissions/sync-users', methods=['POST'])
@@ -1009,9 +1120,16 @@ def toggle_admin(uid):
 @data_bp.route('/permissions/set-group', methods=['POST'])
 @admin_required
 def set_user_group():
+    uid = request.form.get('uid', type=int)
+    group_id = request.form.get('group_id', type=int)
+    from models import RoleGroup
+    if group_id:
+        rg = RoleGroup.query.get(group_id)
+        group_name = rg.name if rg else ''
+    else:
+        group_name = ''
     ok, msg = data_service.set_user_group(
-        request.form.get('uid', type=int),
-        request.form.get('group', '').strip(),
+        uid, group_name,
         current_user.display_name or current_user.username)
     flash(msg, 'success' if ok else 'danger')
     return redirect(url_for('data.permissions'))
@@ -1064,8 +1182,11 @@ def rename_permission_group():
 @data_bp.route('/fault-categories')
 @admin_required
 def list_fault_categories():
-    cats = data_service.list_fault_categories()
-    return render_template('data/fault_categories.html', categories=cats)
+    team = request.args.get('team', '')
+    cats = data_service.list_fault_categories(team=team)
+    all_teams = get_team_options()
+    return render_template('data/fault_categories.html', categories=cats,
+                           team=team, all_teams=all_teams)
 
 
 @data_bp.route('/fault-categories/subcategory/add', methods=['POST'])
@@ -1073,7 +1194,8 @@ def list_fault_categories():
 def add_fault_subcategory():
     ok, msg = data_service.add_fault_subcategory(
         request.form.get('category_id', type=int),
-        request.form.get('name', '').strip())
+        request.form.get('name', '').strip(),
+        teams=request.form.get('teams', '').strip())
     flash(msg, 'success' if ok else 'danger')
     return redirect(url_for('data.list_fault_categories'))
 
@@ -1091,7 +1213,8 @@ def delete_fault_subcategory(sub_id):
 def add_fault_keyword():
     ok, msg = data_service.add_fault_keywords(
         request.form.get('subcategory_id', type=int),
-        request.form.get('keywords', '').strip())
+        request.form.get('keywords', '').strip(),
+        teams=request.form.get('teams', '').strip())
     flash(msg, 'success' if ok else 'danger')
     return redirect(url_for('data.list_fault_categories'))
 
@@ -1150,15 +1273,10 @@ def delete_part(part_id):
 def consumable_records_view():
     q = request.args.get('q', '').strip()
     action = request.args.get('action', '').strip()
-    department = request.args.get('department', '').strip()
     page = request.args.get('page', 1, type=int)
-    records, pagination, total = data_service.list_consumable_records(q, action, department, page)
-    # 获取所有出库科室列表（用于筛选下拉）
-    departments_list = data_service.get_consumable_departments()
+    records, pagination, total = data_service.list_consumable_records(q, action, page)
     return render_template('data/consumable_records.html', records=records,
-                           pagination=pagination, total=total, q=q,
-                           action=action, department=department,
-                           departments=departments_list)
+                           pagination=pagination, total=total, q=q, action=action)
 
 
 @data_bp.route('/consumables/records/<int:rid>/delete', methods=['POST'])
@@ -1167,6 +1285,109 @@ def delete_consumable_record(rid):
     data_service.delete_consumable_record(rid)
     flash('记录已删除', 'success')
     return redirect(url_for('data.consumable_records_view'))
+
+
+# ==================== 统一模板管理 ====================
+
+@data_bp.route('/templates')
+@admin_required
+def list_templates():
+    """统一模板管理页面（按组查看故障模板组+方案模板）"""
+    from models import FaultTemplateGroup, SolutionTemplate, FaultTemplateItem
+    all_teams = data_service.get_team_options()
+
+    fault_groups = FaultTemplateGroup.query.order_by(FaultTemplateGroup.id).all()
+    for g in fault_groups:
+        g.items = FaultTemplateItem.query.filter_by(
+            group_id=g.id
+        ).order_by(FaultTemplateItem.sort_order).all()
+
+    fault_group_map = {'': []}
+    for g in fault_groups:
+        if g.teams:
+            for t in g.teams.split(','):
+                t = t.strip()
+                if t not in fault_group_map:
+                    fault_group_map[t] = []
+                fault_group_map[t].append(g)
+        else:
+            fault_group_map[''].append(g)
+
+    solutions = SolutionTemplate.query.order_by(SolutionTemplate.title).all()
+    solution_map = {'': []}
+    for s in solutions:
+        if s.teams:
+            for t in s.teams.split(','):
+                t = t.strip()
+                if t not in solution_map:
+                    solution_map[t] = []
+                solution_map[t].append(s)
+        else:
+            solution_map[''].append(s)
+
+    return render_template('data/templates.html', all_teams=all_teams,
+                           fault_groups=fault_groups, fault_group_map=fault_group_map,
+                           solutions=solutions, solution_map=solution_map)
+
+
+@data_bp.route('/templates/copy-to/<target_team>', methods=['POST'])
+@admin_required
+def copy_templates_to_team(target_team):
+    """从华博复制模板到目标组"""
+    from models import FaultTemplateGroup, FaultTemplateItem, SolutionTemplate, db
+    from urllib.parse import unquote
+    target_team = unquote(target_team)
+    source_team = '华博'
+    template_type = request.args.get('template_type', 'fault')
+
+    imported = 0
+    try:
+        if template_type == 'fault':
+            source_groups = FaultTemplateGroup.query.filter(
+                FaultTemplateGroup.teams.contains(source_team)
+            ).all()
+            for g in source_groups:
+                existing = FaultTemplateGroup.query.filter(
+                    FaultTemplateGroup.name == g.name,
+                    FaultTemplateGroup.teams.contains(target_team)
+                ).first()
+                if existing:
+                    continue
+                new_g = FaultTemplateGroup(name=g.name, teams=target_team)
+                db.session.add(new_g)
+                db.session.flush()
+                for item in FaultTemplateItem.query.filter_by(group_id=g.id).all():
+                    db.session.add(FaultTemplateItem(
+                        group_id=new_g.id, fault_type=item.fault_type,
+                        display_name=item.display_name,
+                        default_count=item.default_count, sort_order=item.sort_order,
+                    ))
+                    imported += 1
+        else:
+            source_solutions = SolutionTemplate.query.filter(
+                SolutionTemplate.teams.contains(source_team)
+            ).all()
+            for s in source_solutions:
+                existing = SolutionTemplate.query.filter(
+                    SolutionTemplate.title == s.title,
+                    SolutionTemplate.teams.contains(target_team)
+                ).first()
+                if existing:
+                    continue
+                db.session.add(SolutionTemplate(
+                    title=s.title, content=s.content, keywords=s.keywords,
+                    device_type=s.device_type, fault_type=s.fault_type,
+                    fault_subcategory=s.fault_subcategory, teams=target_team,
+                ))
+                imported += 1
+
+        db.session.commit()
+        flash(f'已从「{source_team}」复制 {imported} 条{"故障项" if template_type=="fault" else "方案"}到「{target_team}」', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'复制失败：{str(e)}', 'danger')
+
+    return redirect(url_for('data.list_templates'))
 
 
 # ==================== 故障模板组管理 ====================
@@ -1186,7 +1407,7 @@ def add_fault_template_group():
         request.form.getlist('teams'),
         current_user.display_name or current_user.username)
     flash(msg, 'success' if ok else 'danger')
-    return redirect(url_for('data.list_fault_template_groups'))
+    return redirect(url_for('data.list_templates'))
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/edit', methods=['POST'])
@@ -1196,7 +1417,7 @@ def edit_fault_template_group(gid):
         request.form.get('field', ''),
         request.form.get('value', ''))
     flash('模板组已更新', 'success')
-    return redirect(url_for('data.list_fault_template_groups'))
+    return redirect(url_for('data.list_templates'))
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/delete', methods=['POST'])
@@ -1205,7 +1426,7 @@ def delete_fault_template_group(gid):
     name = data_service.delete_fault_template_group(gid,
         current_user.display_name or current_user.username)
     flash(f'已删除模板组「{name}」', 'success')
-    return redirect(url_for('data.list_fault_template_groups'))
+    return redirect(url_for('data.list_templates'))
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/items/add', methods=['POST'])
@@ -1216,7 +1437,7 @@ def add_fault_template_item(gid):
         request.form.get('display_name', '').strip(),
         int(request.form.get('default_count', 1)))
     flash(msg, 'success' if ok else 'danger')
-    return redirect(url_for('data.list_fault_template_groups'))
+    return redirect(url_for('data.list_templates'))
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/items/<int:iid>/edit', methods=['POST'])
@@ -1227,7 +1448,7 @@ def edit_fault_template_item(gid, iid):
         request.form.get('display_name', ''),
         int(request.form.get('default_count', 1)))
     flash('故障项已更新', 'success')
-    return redirect(url_for('data.list_fault_template_groups'))
+    return redirect(url_for('data.list_templates'))
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/items/<int:iid>/delete', methods=['POST'])
@@ -1235,4 +1456,100 @@ def edit_fault_template_item(gid, iid):
 def delete_fault_template_item(gid, iid):
     data_service.delete_fault_template_item(gid, iid)
     flash('故障项已删除', 'success')
-    return redirect(url_for('data.list_fault_template_groups'))
+    return redirect(url_for('data.list_templates'))
+
+
+# ==================== 注册审批 ====================
+
+@data_bp.route('/registration-approvals')
+@admin_required
+def list_registration_approvals():
+    """注册审批列表"""
+    if not can_access('注册审批'):
+        flash('无权限访问', 'danger')
+        return redirect(url_for('data.index'))
+    page = request.args.get('page', 1, type=int)
+    status = request.args.get('status', 'pending')
+    q = RegistrationRequest.query.order_by(RegistrationRequest.created_at.desc())
+    if status != 'all':
+        q = q.filter_by(status=status)
+    pagination = q.paginate(page=page, per_page=20, error_out=False)
+    return render_template('data/registration_approvals.html',
+                         pagination=pagination, current_status=status)
+
+
+@data_bp.route('/registration-approvals/<int:rid>/approve', methods=['POST'])
+@admin_required
+def approve_registration(rid):
+    """通过注册申请：创建用户"""
+    if not can_access('注册审批'):
+        flash('无权限访问', 'danger')
+        return redirect(url_for('data.index'))
+    req = db.session.get(RegistrationRequest, rid)
+    if not req or req.status != 'pending':
+        flash('申请不存在或已处理', 'danger')
+        return redirect(url_for('data.list_registration_approvals'))
+    if User.query.filter_by(username=req.username).first():
+        flash('用户名已被占用，无法通过', 'danger')
+        req.status = 'rejected'
+        req.reject_reason = '用户名已被占用'
+        req.reviewed_by = current_user.id
+        req.reviewed_at = datetime.utcnow()
+        db.session.commit()
+        return redirect(url_for('data.list_registration_approvals'))
+    target_hospital_id = req.hospital_id or current_user.hospital_id
+    user = User(
+        username=req.username,
+        display_name=req.display_name,
+        hospital_id=target_hospital_id,
+    )
+    user.password_hash = req.password_hash  # 使用已加密的密码
+    # 分配角色组（优先用注册时选的，其次常规运维权限，其次普通用户）
+    if req.group_id:
+        user.group_id = req.group_id
+    else:
+        default_group = (RoleGroup.query.filter_by(name='常规运维权限').first()
+                         or RoleGroup.query.filter_by(name='普通用户').first())
+        if default_group:
+            user.group_id = default_group.id
+    db.session.add(user)
+    db.session.flush()
+    # 同步创建User记录（使人员管理能看到此人）
+    if not User.query.filter(User.display_name == req.display_name).first():
+        user_obj = User(display_name=req.display_name, is_active=True, team='')
+        db.session.add(user_obj)
+    # 分配医院（同时写入多对多关联表，确保 get_assigned_hospitals 能查到）
+    h = db.session.get(Hospital, target_hospital_id)
+    if h:
+        user.hospitals.append(h)
+    req.status = 'approved'
+    req.reviewed_by = current_user.id
+    req.reviewed_at = datetime.utcnow()
+    db.session.commit()
+    log_audit('register_approve', 'registration', req.username,
+              target_id=user.id, target_desc=f'审批通过注册: {req.username}')
+    flash(f'已通过 {req.display_name} 的注册申请', 'success')
+    return redirect(url_for('data.list_registration_approvals'))
+
+
+@data_bp.route('/registration-approvals/<int:rid>/reject', methods=['POST'])
+@admin_required
+def reject_registration(rid):
+    """拒绝注册申请"""
+    if not can_access('注册审批'):
+        flash('无权限访问', 'danger')
+        return redirect(url_for('data.index'))
+    req = db.session.get(RegistrationRequest, rid)
+    if not req or req.status != 'pending':
+        flash('申请不存在或已处理', 'danger')
+        return redirect(url_for('data.list_registration_approvals'))
+    reason = request.form.get('reason', '').strip() or '未通过审批'
+    req.status = 'rejected'
+    req.reject_reason = reason
+    req.reviewed_by = current_user.id
+    req.reviewed_at = datetime.utcnow()
+    db.session.commit()
+    log_audit('register_reject', 'registration', req.username,
+              target_id=rid, target_desc=f'拒绝注册: {req.username}')
+    flash(f'已拒绝 {req.display_name} 的注册申请', 'success')
+    return redirect(url_for('data.list_registration_approvals'))

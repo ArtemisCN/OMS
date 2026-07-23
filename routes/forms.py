@@ -115,7 +115,6 @@ def template_import_excel():
                 headers.append('')
             else:
                 headers.append(str(cell).strip().lower())
-        # 判断是否有表头，通过关键词匹配
         has_header = any(k in str(h).lower() for h in headers for k in
                          ['字段名', 'field_label', '标签', 'label', '字段标签', '字段名称',
                           '类型', 'field_type', '字段类型',
@@ -236,7 +235,6 @@ def template_delete(tid):
     if not t:
         flash('模板不存在', 'danger')
         return redirect(url_for('forms.template_list'))
-    # 检查是否有表单或维修单引用此模板
     ref_forms = PaperForm.query.filter_by(template_id=tid).count()
     ref_repairs = RepairOrder.query.filter_by(template_id=tid).count()
     if ref_forms > 0 or ref_repairs > 0:
@@ -285,7 +283,6 @@ def form_create():
         rep_count = RepairOrder.query.filter(
             RepairOrder.created_at >= datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         ).count()
-        # 读取编号前缀（按医院独立配置）
         from models import SystemSetting
         from flask import g
         hid = getattr(g, 'hospital_id', None)

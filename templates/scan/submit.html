@@ -1,107 +1,403 @@
-{% extends "base.html" %}
-{% block title %}提交报修 · {{ hospital.name }}{% endblock %}
-{% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title text-center mb-3"><i class="fas fa-tools text-danger"></i> {{ hospital.name }} - 故障报修</h5>
-                {% if asset %}
-                <div class="alert alert-info py-2 px-3 mb-3" style="font-size:13px;">
-                    <i class="fas fa-qrcode me-1"></i> 资产扫码：
-                    <strong>{{ asset.asset_no }}</strong>
-                    {% if asset.device_type %} · {{ asset.device_type }}{% endif %}
-                    {% if asset.department %} · {{ asset.department }}{% endif %}
-                    <br><small class="text-muted">{{ asset.model_no or '' }} {{ asset.brand or '' }}</small>
-                </div>
-                {% endif %}
-                <p class="text-muted small text-center">填写信息后提交即可</p>
-                <hr>
-                <form method="post">
-                    <div class="mb-3">
-                        <label class="form-label">您的姓名 <span class="text-danger">*</span></label>
-                        <input type="text" name="name" class="form-control" required placeholder="">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">联系电话</label>
-                        <input type="tel" name="phone" class="form-control" placeholder="方便工程师联系您">
-                    </div>
-                    <div class="mb-3" id="deptWrapper" style="position:relative;">
-                        <label class="form-label">科室</label>
-                        <div class="input-group">
-                            <input type="text" name="department" class="form-control" id="deptInput"
-                                   placeholder="输入搜索或点击选择" autocomplete="off"
-                                   value="{{ request.args.get('dept', '') }}"
-                                   onfocus="showDeptList()" oninput="filterDeptList()">
-                            <button class="btn btn-outline-secondary" type="button" onclick="toggleDeptList()">
-                                <i class="fas fa-chevron-down"></i>
-                            </button>
-                        </div>
-                        <div id="deptDropdown" class="list-group" style="display:none; position:absolute; z-index:999; top:100%; left:0; right:0;
-                                max-height:240px; overflow-y:auto; box-shadow:0 4px 16px rgba(0,0,0,.15); border-radius:6px; background:#fff;">
-                            {% for d in departments %}
-                            <button type="button" class="list-group-item list-group-item-action dept-option"
-                                    style="font-size:13px; padding:8px 12px; border:none; border-bottom:1px solid #f0f0f0; text-align:left;"
-                                    data-value="{{ d.name }}" onclick="selectDept('{{ d.name }}')">{{ d.name }}</button>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">具体位置</label>
-                        <input type="text" name="location" class="form-control" placeholder="如：3楼301室">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">设备类型</label>
-                        <select name="device_type" class="form-select">
-                            <option value="电脑">电脑</option>
-                            <option value="打印机">打印机</option>
-                            <option value="网络设备">网络设备</option>
-                            <option value="软件">软件</option>
-                            <option value="其他" selected>其他</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">故障描述 <span class="text-danger">*</span></label>
-                        <textarea name="description" class="form-control" rows="4" required placeholder="请详细描述故障现象..."></textarea>
-                    </div>
-                    <button type="submit" class="btn btn-danger w-100 py-2">
-                        <i class="fas fa-paper-plane"></i> 提交报修
-                    </button>
-                </form>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>故障报修 · {{ hospital.name }}</title>
+    <link href="/static/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/vendor/fontawesome/all.min.css" rel="stylesheet">
+    <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+        min-height: 100vh;
+        color: #e2e8f0;
+        overflow-x: hidden;
+    }
+    body::before {
+        content: '';
+        position: fixed;
+        top: -30%;
+        left: -20%;
+        width: 70%;
+        height: 70%;
+        background: radial-gradient(ellipse, rgba(99,102,241,0.12), transparent 70%);
+        pointer-events: none;
+        z-index: 0;
+    }
+    body::after {
+        content: '';
+        position: fixed;
+        bottom: -20%;
+        right: -20%;
+        width: 60%;
+        height: 60%;
+        background: radial-gradient(ellipse, rgba(236,72,153,0.08), transparent 70%);
+        pointer-events: none;
+        z-index: 0;
+    }
+    .scan-container {
+        position: relative;
+        z-index: 1;
+        max-width: 460px;
+        margin: 0 auto;
+        padding: 20px 16px 40px;
+    }
+    .scan-header {
+        text-align: center;
+        padding: 24px 0 8px;
+    }
+    .scan-header .icon-wrap {
+        width: 56px;
+        height: 56px;
+        margin: 0 auto 12px;
+        background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(236,72,153,0.15));
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(99,102,241,0.25);
+        backdrop-filter: blur(8px);
+    }
+    .scan-header .icon-wrap i { font-size: 24px; color: #818cf8; }
+    .scan-header h1 {
+        font-size: 20px;
+        font-weight: 600;
+        color: #f1f5f9;
+        margin: 0 0 4px;
+    }
+    .scan-header p {
+        font-size: 13px;
+        color: #94a3b8;
+        margin: 0;
+    }
+    .asset-card {
+        background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.08));
+        border: 1px solid rgba(99,102,241,0.2);
+        border-radius: 14px;
+        padding: 16px;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+    .asset-card .asset-icon {
+        width: 44px;
+        height: 44px;
+        flex-shrink: 0;
+        background: rgba(99,102,241,0.2);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .asset-card .asset-icon i { font-size: 20px; color: #818cf8; }
+    .asset-card .asset-info { flex: 1; min-width: 0; }
+    .asset-card .asset-info .asset-no {
+        font-size: 15px;
+        font-weight: 600;
+        color: #e2e8f0;
+    }
+    .asset-card .asset-info .asset-meta {
+        font-size: 12px;
+        color: #94a3b8;
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .asset-card .asset-badge {
+        font-size: 11px;
+        padding: 3px 10px;
+        border-radius: 20px;
+        background: rgba(34,197,94,0.15);
+        color: #4ade80;
+        border: 1px solid rgba(34,197,94,0.2);
+        flex-shrink: 0;
+    }
+    .step-indicator {
+        display: flex;
+        justify-content: center;
+        gap: 32px;
+        margin-bottom: 20px;
+        padding: 0 16px;
+    }
+    .step-indicator .step {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: #475569;
+        position: relative;
+    }
+    .step-indicator .step .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #334155;
+        transition: all 0.3s;
+    }
+    .step-indicator .step.active .dot {
+        background: #818cf8;
+        box-shadow: 0 0 8px rgba(99,102,241,0.5);
+    }
+    .step-indicator .step.active { color: #c7d2fe; }
+    .step-indicator .step.done .dot { background: #22c55e; }
+    .step-indicator .step.done { color: #4ade80; }
+    .form-card {
+        background: rgba(30,41,59,0.7);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 14px;
+    }
+    .form-card .card-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: #94a3b8;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .form-card .card-label i { color: #818cf8; font-size: 12px; }
+    .form-card .card-label .required { color: #f87171; }
+    .form-card .form-control,
+    .form-card .form-select {
+        background: rgba(15,23,42,0.6) !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        border-radius: 10px;
+        color: #e2e8f0 !important;
+        font-size: 15px;
+        padding: 11px 14px;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .form-card .form-control:focus,
+    .form-card .form-select:focus {
+        border-color: rgba(99,102,241,0.5) !important;
+        box-shadow: 0 0 0 3px rgba(99,102,241,0.1) !important;
+    }
+    .form-card .form-control::placeholder { color: #475569; }
+    .form-card textarea.form-control { resize: vertical; min-height: 100px; }
+    .dept-wrapper { position: relative; }
+    .dept-wrapper .input-group .form-control {
+        border-top-right-radius: 0 !important;
+        border-bottom-right-radius: 0 !important;
+    }
+    .dept-wrapper .input-group .btn {
+        background: rgba(15,23,42,0.6);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-left: none;
+        color: #64748b;
+        border-radius: 10px;
+        border-top-left-radius: 0 !important;
+        border-bottom-left-radius: 0 !important;
+        padding: 0 12px;
+    }
+    .dept-wrapper .input-group .btn:hover { color: #818cf8; }
+    #deptDropdown {
+        position: absolute;
+        z-index: 999;
+        top: 100%;
+        left: 0;
+        right: 0;
+        max-height: 220px;
+        overflow-y: auto;
+        background: rgba(30,41,59,0.95);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        margin-top: 4px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        display: none;
+    }
+    #deptDropdown .dept-option {
+        display: block;
+        width: 100%;
+        padding: 10px 14px;
+        border: none;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+        background: transparent;
+        color: #e2e8f0;
+        font-size: 14px;
+        text-align: left;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    #deptDropdown .dept-option:last-child { border-bottom: none; }
+    #deptDropdown .dept-option:hover { background: rgba(99,102,241,0.15); color: #c7d2fe; }
+    .submit-btn {
+        display: block;
+        width: 100%;
+        padding: 14px;
+        border: none;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        color: #fff;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.15s, box-shadow 0.2s;
+        margin-top: 8px;
+        position: relative;
+        overflow: hidden;
+    }
+    .submit-btn:active { transform: scale(0.98); }
+    .submit-btn i { margin-right: 6px; }
+    .submit-btn .btn-shimmer {
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+        animation: shimmer 2.5s infinite;
+    }
+    @keyframes shimmer {
+        0% { left: -100%; }
+        100% { left: 100%; }
+    }
+    .scan-footer {
+        text-align: center;
+        padding: 20px 0 0;
+        font-size: 12px;
+        color: #334155;
+    }
+    .scan-toast {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%) translateY(-80px);
+        background: rgba(30,41,59,0.95);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px;
+        padding: 12px 20px;
+        color: #e2e8f0;
+        font-size: 14px;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        pointer-events: none;
+    }
+    .scan-toast.show { transform: translateX(-50%) translateY(0); }
+    .scan-toast.danger i { color: #f87171; }
+    .scan-toast.success i { color: #4ade80; }
+    .scan-toast i { font-size: 16px; }
+
+    @media (max-width: 480px) {
+        .scan-container { padding: 12px 12px 32px; }
+        .form-card { padding: 16px; border-radius: 12px; }
+        .scan-header { padding: 16px 0 4px; }
+        .scan-header .icon-wrap { width: 48px; height: 48px; }
+        .scan-header .icon-wrap i { font-size: 20px; }
+        .step-indicator { gap: 24px; }
+    }
+    </style>
+</head>
+<body>
+
+<div class="scan-container">
+    <div class="scan-header">
+        <div class="icon-wrap"><i class="fas fa-tools"></i></div>
+        <h1>{{ hospital.name }}</h1>
+        <p>扫码快速报修 · 工程师即到</p>
+    </div>
+
+    {% if asset %}
+    <div class="asset-card">
+        <div class="asset-icon"><i class="fas fa-qrcode"></i></div>
+        <div class="asset-info">
+            <div class="asset-no">{{ asset.asset_no }}</div>
+            <div class="asset-meta">
+                {% if asset.device_type %}{{ asset.device_type }}{% endif %}
+                {% if asset.device_type and asset.department %} · {% endif %}
+                {% if asset.department %}{{ asset.department }}{% endif %}
+                {% if asset.model_no %} · {{ asset.model_no }}{% endif %}
             </div>
         </div>
+        <span class="asset-badge"><i class="fas fa-check-circle me-1"></i>已识别</span>
+    </div>
+    {% endif %}
+
+    <div class="step-indicator">
+        <div class="step active"><span class="dot"></span> 信息</div>
+        <div class="step"><span class="dot"></span> 描述</div>
+        <div class="step"><span class="dot"></span> 提交</div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="scan-toast show {{ category }}"><i class="fas fa-{% if category == 'danger' %}exclamation-circle{% else %}info-circle{% endif %}"></i> {{ message }}</div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <form method="post" id="reportForm" onsubmit="return validateForm()">
+        <div class="form-card">
+            <div class="card-label"><i class="fas fa-user"></i> 报修人</div>
+            <div class="row g-2 mb-2">
+                <div class="col-7">
+                    <input type="text" name="name" class="form-control" placeholder="姓名（选填）">
+                </div>
+                <div class="col-5">
+                    <input type="tel" name="phone" class="form-control" placeholder="手机号（选填）">
+                </div>
+            </div>
+            <div class="card-label mt-2" style="margin-bottom:8px;"><i class="fas fa-map-marker-alt"></i> 报修位置 <span class="required">*</span></div>
+            <div class="mb-2 dept-wrapper">
+                <div class="input-group">
+                    <input type="text" name="department" class="form-control" id="deptInput"
+                           placeholder="搜索或选择科室" autocomplete="off"
+                           value="{{ default_dept or '' }}"
+                           onfocus="showDeptList()" oninput="filterDeptList()">
+                    <button class="btn" type="button" onclick="toggleDeptList()">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </div>
+                <div id="deptDropdown">
+                    {% for d in departments %}
+                    <button type="button" class="dept-option" data-value="{{ d.name }}" onclick="selectDept('{{ d.name|e }}')">{{ d.name }}</button>
+                    {% endfor %}
+                </div>
+            </div>
+            <input type="text" name="location" class="form-control" required placeholder="具体位置，如：3楼301室">
+        </div>
+
+        <div class="form-card">
+            <div class="card-label"><i class="fas fa-pen"></i> 故障描述 <span class="required">*</span></div>
+            <textarea name="description" class="form-control" rows="4" required placeholder="请详细描述故障现象，如：开机蓝屏、打印机卡纸、网络不通..."></textarea>
+        </div>
+
+        <button type="submit" class="submit-btn">
+            <span class="btn-shimmer"></span>
+            <i class="fas fa-paper-plane"></i> 提交报修
+        </button>
+    </form>
+
+    <div class="scan-footer">
+        <i class="fas fa-shield-alt me-1"></i> 提交后工程师将尽快处理
     </div>
 </div>
-<style>
-    #deptDropdown { background: var(--modal-bg, #fff); border: 1px solid var(--card-border, #e5e7eb); }
-    #deptDropdown .dept-option { background: transparent; color: var(--text, #0f172a); }
-    #deptDropdown .dept-option:hover { background: var(--primary, #6366f1); color: #fff; }
-</style>
+
 <script>
-var deptOptions = [];
-(function() {
-    var items = document.querySelectorAll('.dept-option');
-    items.forEach(function(item) { deptOptions.push(item.dataset.value); });
-})();
 function toggleDeptList() {
     var dl = document.getElementById('deptDropdown');
-    if (dl.style.display === 'none' || dl.style.display === '') {
-        showDeptList();
-    } else {
-        dl.style.display = 'none';
-    }
+    dl.style.display = dl.style.display === 'none' || dl.style.display === '' ? 'block' : 'none';
 }
 function showDeptList() {
-    var dl = document.getElementById('deptDropdown');
-    var input = document.getElementById('deptInput');
-    dl.style.display = 'block';
+    document.getElementById('deptDropdown').style.display = 'block';
     filterDeptList();
 }
 function filterDeptList() {
-    var input = document.getElementById('deptInput');
-    var val = input.value.toLowerCase();
-    var items = document.querySelectorAll('.dept-option');
-    items.forEach(function(item) {
+    var val = document.getElementById('deptInput').value.toLowerCase();
+    document.querySelectorAll('.dept-option').forEach(function(item) {
         item.style.display = item.dataset.value.toLowerCase().includes(val) ? '' : 'none';
     });
 }
@@ -109,12 +405,36 @@ function selectDept(name) {
     document.getElementById('deptInput').value = name;
     document.getElementById('deptDropdown').style.display = 'none';
 }
-// 点击外部关闭下拉
 document.addEventListener('click', function(e) {
-    var container = document.getElementById('deptWrapper');
-    if (container && !container.contains(e.target)) {
+    var wrapper = document.querySelector('.dept-wrapper');
+    if (wrapper && !wrapper.contains(e.target)) {
         document.getElementById('deptDropdown').style.display = 'none';
     }
 });
+(function() {
+    var toasts = document.querySelectorAll('.scan-toast');
+    toasts.forEach(function(t) {
+        setTimeout(function() { t.classList.remove('show'); }, 4000);
+    });
+})();
+function validateForm() {
+    var location = document.querySelector('input[name="location"]').value.trim();
+    var dept = document.querySelector('input[name="department"]').value.trim();
+    var desc = document.querySelector('textarea[name="description"]').value.trim();
+    if (!dept && !location) { showScanToast('请填写报修位置（科室或具体地点）', 'danger'); return false; }
+    if (!desc || desc.length < 4) { showScanToast('请详细描述故障现象', 'danger'); return false; }
+    return true;
+}
+function showScanToast(msg, type) {
+    var existing = document.querySelector('.scan-toast');
+    if (existing) existing.remove();
+    var t = document.createElement('div');
+    t.className = 'scan-toast ' + type;
+    t.innerHTML = '<i class="fas fa-' + (type === 'danger' ? 'exclamation-circle' : 'info-circle') . '"></i> ' + msg;
+    document.body.appendChild(t);
+    setTimeout(function() { t.classList.add('show'); }, 10);
+    setTimeout(function() { t.classList.remove('show'); }, 4000);
+}
 </script>
-{% endblock %}
+</body>
+</html>

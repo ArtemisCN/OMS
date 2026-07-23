@@ -10,6 +10,7 @@ from fuzzywuzzy import fuzz
 import io
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+from utils.time_helpers import fmt_dt, now, fmt_date
 
 finance_bp = Blueprint('finance', __name__, url_prefix='/finance')
 
@@ -120,7 +121,6 @@ def create():
         bank = request.form.get('bank_name', '').strip()
         account = request.form.get('bank_account', '').strip()
 
-        # 解析发票 JSON
         invoices_data = request.form.get('invoices_json', '[]')
         try:
             invoices = json.loads(invoices_data)
@@ -185,7 +185,6 @@ def generate_drafts(batch_id):
     target_amount = float(batch.total_amount)
     hid = getattr(g, 'hospital_id', 1) or 1
 
-    # 获取选中的月份（默认当月）
     year = request.form.get('year', datetime.now().year, type=int)
     month = request.form.get('month', datetime.now().month, type=int)
     month_start = datetime(year, month, 1)
@@ -205,7 +204,6 @@ def generate_drafts(batch_id):
         flash(f'{year}年{month}月暂无已完成硬件报修工单，无法生成清单', 'warning')
         return redirect(url_for('finance.detail', batch_id=batch_id))
 
-    # 获取零件列表，按类型分类
     all_parts = PartPrice.query.filter(
         PartPrice.hospital_id == hid,
         PartPrice.unit_price > 0,
@@ -218,7 +216,6 @@ def generate_drafts(batch_id):
     for p in all_parts:
         parts_by_type[p.category].append(p)
 
-    # 删除旧草稿
     FinanceDraftPart.query.filter(
         FinanceDraftPart.draft_id.in_(
             db.session.query(FinanceDraft.id).filter(FinanceDraft.batch_id == batch_id)
@@ -501,7 +498,7 @@ def export_acceptance_excel(batch_id):
             r = row + 1
             ws.cell(row=r, column=col, value='日期：').font = Font(bold=True, size=7)
             ws.merge_cells(start_row=r, start_column=col+1, end_row=r, end_column=col+1)
-            ws.cell(row=r, column=col+1, value=d.report_date.strftime('%m-%d') if d.report_date else '').font = Font(size=7)
+            ws.cell(row=r, column=col+1, value=fmt_dt(d.report_date, '%m-%d')).font = Font(size=7)
             ws.cell(row=r, column=col+2, value='科室：').font = Font(bold=True, size=7)
             ws.merge_cells(start_row=r, start_column=col+3, end_row=r, end_column=col+4)
             ws.cell(row=r, column=col+3, value=d.department or '').font = Font(size=7)
@@ -617,7 +614,7 @@ def export_excel(batch_id):
     total = 0
     for d in drafts:
         ws1.append([
-            d.report_date.strftime('%Y-%m-%d') if d.report_date else '',
+            fmt_date(d.report_date),
             d.asset.asset_no if d.asset else '',
             d.device_type,
             d.repair_content,
@@ -686,7 +683,7 @@ def export_excel(batch_id):
 
         # 日期 + 科室
         ws.cell(row=r+1, column=c, value='维修日期').font = Font(bold=True)
-        ws.cell(row=r+1, column=c+1, value=d.report_date.strftime('%Y-%m-%d') if d.report_date else '')
+        ws.cell(row=r+1, column=c+1, value=fmt_date(d.report_date))
         ws.cell(row=r+1, column=c+2, value='维修科室').font = Font(bold=True)
         ws.cell(row=r+1, column=c+3, value=d.department)
 
@@ -911,7 +908,6 @@ def batch_acceptance_render(batch_id):
     if not check_access():
         return redirect(url_for('main.dashboard'))
     batch = FinanceBatch.query.get_or_404(batch_id)
-    # 获取默认模板
     tpl = AcceptanceTemplate.query.filter_by(is_default=True).first()
     if not tpl:
         tpl = AcceptanceTemplate.query.first()

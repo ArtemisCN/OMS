@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}运维成本核算{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="/static/vendor/fontawesome/all.min.css">
+<style>
+    :root { --bg-card: #1e293b; --border-card: #334155; --text-heading: #e2e8f0; --text-body: #cbd5e1; --text-muted-c: #94a3b8; }
+    body[data-theme="dark"] { background: #0f172a; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+    .page-header h4 { color: #e2e8f0; font-weight: 700; margin: 0; }
+    .month-picker { display: flex; align-items: center; gap: 8px; }
+    .month-picker .btn { background: #1e293b; border: 1px solid #334155; color: #cbd5e1; padding: 6px 14px; border-radius: 8px; font-size: 14px; transition: all .2s; }
+    .month-picker .btn:hover { background: #334155; color: #f1f5f9; }
+    .month-picker .cur-date { color: #e2e8f0; font-size: 16px; font-weight: 600; min-width: 130px; text-align: center; }
+    .kpi-card { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 1px solid #334155; border-radius: 14px; padding: 20px; transition: transform .2s, box-shadow .2s; height: 100%; }
+    .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.3); }
+    .kpi-card .kpi-icon { font-size: 28px; opacity: .85; }
+    .kpi-card .kpi-value { font-size: 30px; font-weight: 800; color: #e2e8f0; line-height: 1.2; }
+    .kpi-card .kpi-label { font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: .4px; margin-top: 4px; }
+    .card-panel { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 20px; height: 100%; }
+    .card-panel .panel-title { font-size: 15px; font-weight: 600; color: #e2e8f0; margin-bottom: 14px; }
+    .card-panel .panel-title i { margin-right: 8px; color: #3b82f6; }
+    .table-dark-custom { width: 100%; border-collapse: collapse; }
+    .table-dark-custom th { color: #94a3b8; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .3px; padding: 10px 8px; border-bottom: 1px solid #334155; text-align: left; }
+    .table-dark-custom td { color: #cbd5e1; padding: 10px 8px; border-bottom: 1px solid #2d3748; font-size: 14px; }
+    .table-dark-custom tr:last-child td { border-bottom: none; }
+    .table-dark-custom tr:hover td { background: rgba(59,130,246,.06); }
+    .rank-badge { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; font-size: 12px; font-weight: 700; }
+    .rank-1 { background: #f59e0b; color: #0f172a; }
+    .rank-2 { background: #94a3b8; color: #0f172a; }
+    .rank-3 { background: #b45309; color: #fff; }
+    .rank-other { background: #334155; color: #94a3b8; }
+    .bar-chart { margin-top: 8px; }
+    .bar-row { display: flex; align-items: center; margin-bottom: 10px; gap: 10px; }
+    .bar-label { width: 80px; font-size: 13px; color: #cbd5e1; text-align: right; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bar-track { flex: 1; height: 22px; background: #2d3748; border-radius: 11px; overflow: hidden; position: relative; }
+    .bar-fill { height: 100%; border-radius: 11px; background: linear-gradient(90deg, #3b82f6, #6366f1); transition: width .6s ease; min-width: 4px; }
+    .bar-value { width: 50px; font-size: 13px; color: #94a3b8; text-align: left; flex-shrink: 0; }
+    .text-primary-c { color: #3b82f6; }
+    .text-success-c { color: #22c55e; }
+    .text-warning-c { color: #eab308; }
+    .text-danger-c { color: #ef4444; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="page-header">
+        <h4><i class="fas fa-calculator text-primary-c me-2"></i>运维成本核算</h4>
+        <div class="month-picker">
+            <button class="btn" onclick="prevMonth()"><i class="fas fa-chevron-left"></i></button>
+            <span class="cur-date" id="curDate">2026年7月</span>
+            <button class="btn" onclick="nextMonth()"><i class="fas fa-chevron-right"></i></button>
+            <button class="btn" onclick="goToday()"><i class="fas fa-calendar-day me-1"></i>本月</button>
+        </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="kpi-card">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div><div class="kpi-label">总工单数</div><div class="kpi-value" id="kpiOrders">—</div></div>
+                    <div class="kpi-icon text-primary-c"><i class="fas fa-clipboard-list"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi-card">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div><div class="kpi-label">总工时 (h)</div><div class="kpi-value" id="kpiHours">—</div></div>
+                    <div class="kpi-icon text-warning-c"><i class="fas fa-clock"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi-card">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div><div class="kpi-label">备件成本 (元)</div><div class="kpi-value" id="kpiPartsCost">—</div></div>
+                    <div class="kpi-icon text-danger-c"><i class="fas fa-tools"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi-card">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div><div class="kpi-label">总成本 (元)</div><div class="kpi-value" id="kpiTotalCost">—</div></div>
+                    <div class="kpi-icon text-success-c"><i class="fas fa-money-bill-wave"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Content Row -->
+    <div class="row g-4">
+        <!-- 科室排行 -->
+        <div class="col-md-6">
+            <div class="card-panel">
+                <div class="panel-title"><i class="fas fa-building"></i>科室成本排行</div>
+                <table class="table-dark-custom">
+                    <thead>
+                        <tr><th style="width:32px">#</th><th>科室名称</th><th style="text-align:right">工单数</th><th style="text-align:right">总工时</th><th style="text-align:right">成本(元)</th></tr>
+                    </thead>
+                    <tbody id="deptRankBody">
+                        <tr><td><span class="rank-badge rank-1">1</span></td><td>急诊科</td><td style="text-align:right">128</td><td style="text-align:right">256</td><td style="text-align:right">38,400</td></tr>
+                        <tr><td><span class="rank-badge rank-2">2</span></td><td>外科</td><td style="text-align:right">96</td><td style="text-align:right">192</td><td style="text-align:right">28,800</td></tr>
+                        <tr><td><span class="rank-badge rank-3">3</span></td><td>内科</td><td style="text-align:right">74</td><td style="text-align:right">148</td><td style="text-align:right">22,200</td></tr>
+                        <tr><td><span class="rank-badge rank-other">4</span></td><td>检验科</td><td style="text-align:right">53</td><td style="text-align:right">106</td><td style="text-align:right">15,900</td></tr>
+                        <tr><td><span class="rank-badge rank-other">5</span></td><td>放射科</td><td style="text-align:right">41</td><td style="text-align:right">82</td><td style="text-align:right">12,300</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <!-- 故障类型排行 (柱状图) -->
+        <div class="col-md-6">
+            <div class="card-panel">
+                <div class="panel-title"><i class="fas fa-chart-bar"></i>故障类型成本排行</div>
+                <div class="bar-chart" id="faultBarChart">
+                    <div class="bar-row">
+                        <span class="bar-label">设备故障</span>
+                        <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+                        <span class="bar-value">¥38,400</span>
+                    </div>
+                    <div class="bar-row">
+                        <span class="bar-label">网络故障</span>
+                        <div class="bar-track"><div class="bar-fill" style="width:72%"></div></div>
+                        <span class="bar-value">¥27,648</span>
+                    </div>
+                    <div class="bar-row">
+                        <span class="bar-label">软件异常</span>
+                        <div class="bar-track"><div class="bar-fill" style="width:55%"></div></div>
+                        <span class="bar-value">¥21,120</span>
+                    </div>
+                    <div class="bar-row">
+                        <span class="bar-label">电力故障</span>
+                        <div class="bar-track"><div class="bar-fill" style="width:40%"></div></div>
+                        <span class="bar-value">¥15,360</span>
+                    </div>
+                    <div class="bar-row">
+                        <span class="bar-label">管路故障</span>
+                        <div class="bar-track"><div class="bar-fill" style="width:28%"></div></div>
+                        <span class="bar-value">¥10,752</span>
+                    </div>
+                    <div class="bar-row">
+                        <span class="bar-label">其他</span>
+                        <div class="bar-track"><div class="bar-fill" style="width:15%"></div></div>
+                        <span class="bar-value">¥5,760</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+let curYear = 2026, curMonth = 7;
+function updateDateDisplay() { document.getElementById('curDate').textContent = curYear + '年' + curMonth + '月'; }
+function prevMonth() { if (--curMonth < 1) { curMonth = 12; curYear--; } updateDateDisplay(); loadCostData(); }
+function nextMonth() { if (++curMonth > 12) { curMonth = 1; curYear++; } updateDateDisplay(); loadCostData(); }
+function goToday() { const d = new Date(); curYear = d.getFullYear(); curMonth = d.getMonth() + 1; updateDateDisplay(); loadCostData(); }
+function loadCostData() {
+    // TODO: AJAX load cost data for curYear/curMonth
+    console.log('Load cost data for', curYear, curMonth);
+}
+</script>
+{% endblock %}

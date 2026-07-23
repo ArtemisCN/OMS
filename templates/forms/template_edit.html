@@ -114,7 +114,7 @@ body { overflow: hidden; background: #1a1d23; }
 <div class="editor-wrap">
   <!-- Toolbar -->
   <div class="editor-tbar">
-    <span class="title">📋 {{ '新建模板' if is_new else '编辑模板' }}</span>
+    <span class="title"><i class="fas fa-clipboard-list"></i> {{ '新建模板' if is_new else '编辑模板' }}</span>
     <input type="text" id="tpl-name" style="width:180px" placeholder="模板名称" value="{{ tpl.name or '' }}" required>
     <input type="text" id="tpl-desc" style="width:240px" placeholder="描述（可选）" value="{{ tpl.description or '' }}">
     <select id="tpl-page-size" style="background:#2a2d37;border:1px solid #3a3d48;color:#e8eaed;border-radius:6px;padding:5px 8px;font-size:12px;">
@@ -310,7 +310,7 @@ function render() {
       content = `<div class="fld-label">${esc(f.label||'字段')} ${badge} ${reqBadge}</div><div class="fld-value">${esc(f.placeholder||'')}</div>`;
     }
     html += `<div class="fld type-${f.type}${sel}" id="fld-${f.id}" style="left:${xp};top:${yp};width:${wp};height:${hp};" data-id="${f.id}" ondblclick="editField('${f.id}')">
-      <button class="fld-del" onclick="event.stopPropagation();deleteField('${f.id}')">✕</button>
+      <button class="fld-del" onclick="event.stopPropagation();deleteField('${f.id}')"><i class="fas fa-times"></i></button>
       ${content}
       <span class="rh rh-nw"></span><span class="rh rh-n"></span><span class="rh rh-ne"></span>
       <span class="rh rh-w"></span><span class="rh rh-e"></span>

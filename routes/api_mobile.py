@@ -3,7 +3,7 @@ import threading
 import urllib.request
 import json as pyjson
 from flask import Blueprint, request, jsonify, current_app
-from models import db, User, WorkOrder, MobileToken, SubscribeUser, PaperForm, SystemSetting, WorkOrderTransferLog, Person, WorkOrderPhoto, InventoryTask, InventoryItem, Asset, Exam, ExamQuestion, ExamSubmission
+from models import db, User, WorkOrder, MobileToken, SubscribeUser, PaperForm, SystemSetting, WorkOrderTransferLog, WorkOrderPhoto, InventoryTask, InventoryItem, Asset, Exam, ExamQuestion, ExamSubmission
 import random
 from datetime import datetime, date
 from sqlalchemy import func, case
@@ -25,7 +25,6 @@ def login_required_api(f):
         user = MobileToken.verify(token_str)
         if not user:
             return jsonify({'error': '令牌无效或已过期', 'code': 401}), 401
-        # 设置医院上下文
         assigned = user.get_assigned_hospitals()
         if user.is_admin:
             # 管理员：取第一个关联医院，没有则 None
@@ -46,6 +45,7 @@ def login_required_api(f):
 import qrcode
 from io import BytesIO
 from flask import send_file
+from utils.time_helpers import fmt_dt, now, fmt_date
 
 
 @api_mobile_bp.route('/qr')
@@ -79,7 +79,6 @@ def api_login():
     if not user or not user.check_password(password):
         return jsonify({'error': '用户名或密码错误', 'code': 401}), 401
 
-    # 清理旧 token（每个用户只保留一个）
     MobileToken.query.filter_by(user_id=user.id).delete()
     db.session.commit()
     token = MobileToken.generate(user)
@@ -115,7 +114,6 @@ def wx_login():
     if not code:
         return jsonify({'error': '缺少微信登录凭证', 'code': 400}), 400
 
-    # 调用微信接口换取 openid
     wx_url = f'https://api.weixin.qq.com/sns/jscode2session?appid={appid}&secret={secret}&js_code={code}&grant_type=authorization_code'
     try:
         req = urllib.request.Request(wx_url)
@@ -138,7 +136,6 @@ def wx_login():
             'openid': openid,  # 返回给小程序以便绑定
         }), 404
 
-    # 登录成功，生成 token
     MobileToken.query.filter_by(user_id=user.id).delete()
     token = MobileToken.generate(user)
 
@@ -172,7 +169,6 @@ def bind_wx(user):
     if not code:
         return jsonify({'error': '缺少微信登录凭证', 'code': 400}), 400
 
-    # 调用微信接口
     wx_url = f'https://api.weixin.qq.com/sns/jscode2session?appid={appid}&secret={secret}&js_code={code}&grant_type=authorization_code'
     try:
         req = urllib.request.Request(wx_url)
@@ -186,12 +182,10 @@ def bind_wx(user):
         err_msg = wx_resp.get('errmsg', '未知错误')
         return jsonify({'error': f'微信绑定失败: {err_msg}', 'code': 401}), 401
 
-    # 检查该 openid 是否已被其他账号绑定
     existing = User.query.filter(User.wx_openid == openid, User.id != user.id).first()
     if existing:
         return jsonify({'error': '该微信号已绑定其他账号', 'code': 409}), 409
 
-    # 绑定
     user.wx_openid = openid
     db.session.commit()
 
@@ -290,7 +284,7 @@ def orders(user):
             'priority': o.priority,
             'original_priority': o.original_priority,
             'work_type': o.work_type or 'normal',
-            'created_at': o.created_at.strftime('%m/%d %H:%M') if o.created_at else '',
+            'created_at': fmt_dt(o.created_at),
         } for o in orders_list]
     }
 
@@ -352,10 +346,10 @@ def order_detail(user, order_id):
             'priority': order.priority,
             'work_type': order.work_type or 'normal',
             'inspection_data': order.inspection_data or None,
-            'created_at': order.created_at.strftime('%m/%d %H:%M') if order.created_at else '',
-            'accepted_at': order.accepted_at.strftime('%m/%d %H:%M') if order.accepted_at else '',
-            'completed_at': order.completed_at.strftime('%m/%d %H:%M') if order.completed_at else '',
-            'start_time': order.start_time.strftime('%m/%d %H:%M') if order.start_time else '',
+            'created_at': fmt_dt(order.created_at),
+            'accepted_at': fmt_dt(order.accepted_at),
+            'completed_at': fmt_dt(order.completed_at),
+            'start_time': fmt_dt(order.start_time),
         }
     }
 
@@ -388,7 +382,6 @@ def accept_order(user, order_id):
     if order.status != 'pending':
         return jsonify({'error': f'当前状态({order.status})不允许接单', 'code': 400}), 400
 
-    # 校验医院权限：只能接自己可访问医院的工单
     hospital_ids = user.get_assigned_hospital_ids()
     if hospital_ids and order.hospital_id not in hospital_ids:
         return jsonify({'error': '无权接此医院的工单', 'code': 403}), 403
@@ -550,7 +543,6 @@ def send_new_order_notification(order):
         print('[NOTIFY] WECHAT_APPID/SECRET/TEMPLATE_ID 未配置', flush=True)
         return
 
-    # 获取 access_token
     token_url = f'https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={appid}&secret={secret}'
     try:
         req = urllib.request.Request(token_url)
@@ -574,7 +566,7 @@ def send_new_order_notification(order):
 
     # 预先计算推送内容（闭包捕获）
     push_title = order.title[:20] if order.title else ''
-    push_time = order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else ''
+    push_time = fmt_dt(order.created_at, '%Y-%m-%d %H:%M')
     push_note = f"{order.building} {order.department} · {order.device_type}"[:20]
 
     def _do_push(app):
@@ -643,14 +635,12 @@ def send_wecom_notification(order, skip_time_check=False):
 
     # ====== 推送时间检查 ======
     now = datetime.now()
-    # 检查推送日期模式：工作日/全年
     schedule_setting = SystemSetting.query.filter_by(key='wecom_push_schedule', hospital_id=hid).first()
     schedule = schedule_setting.value if schedule_setting else 'all'
     if not skip_time_check and schedule == "workday" and now.weekday() >= 5:  # 5=周六 6=周日
         print(f'[WECOM] 跳过推送 order_id={order.id} 非工作日', flush=True)
         return
 
-    # 检查推送时间段
     ts_setting = SystemSetting.query.filter_by(key='wecom_push_time_start', hospital_id=hid).first()
     te_setting = SystemSetting.query.filter_by(key='wecom_push_time_end', hospital_id=hid).first()
     t_start = ts_setting.value if ts_setting else '08:00'
@@ -671,7 +661,7 @@ def send_wecom_notification(order, skip_time_check=False):
     title = order.title[:40] if order.title else '未命名工单'
     building = order.building or '未指定'
     department = order.department or '未指定'
-    created_at = order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else ''
+    created_at = fmt_dt(order.created_at, '%Y-%m-%d %H:%M')
 
     payload = {
         "msgtype": "markdown",
@@ -841,7 +831,7 @@ def today_summary(user):
         WorkOrder.completed_at >= today_start
     ).order_by(WorkOrder.completed_at.asc()).all()
 
-    today = date.today().strftime('%Y-%m-%d')
+    today = fmt_date(date.today())
     priority_map = {'normal': '普通', 'urgent': '加急', 'emergency': '紧急'}
     lines = [f'{today} 工作总结', f'员工：{person_name}', '']
     lines.append(f'今日完成工单：{len(orders)} 项')
@@ -849,7 +839,7 @@ def today_summary(user):
 
     for i, o in enumerate(orders, 1):
         pri = priority_map.get(o.priority, '普通')
-        time_str = o.completed_at.strftime('%H:%M') if o.completed_at else ''
+        time_str = fmt_dt(o.completed_at, '%H:%M')
         lines.append(f'{i}. [{pri}]{o.title}')
         parts = []
         if o.building: parts.append(o.building)
@@ -883,7 +873,7 @@ def order_transfers(user, order_id):
             'to_person': log.to_person or '',
             'operator_name': log.operator_name,
             'remark': log.remark or '',
-            'created_at': log.created_at.strftime('%m/%d %H:%M') if log.created_at else '',
+            'created_at': fmt_dt(log.created_at),
         } for log in logs]
     })
 
@@ -960,23 +950,22 @@ def order_personnel(user, order_id):
     person_name = user.display_name or user.username
     hospital_id = order.hospital_id
 
-    # 通过 Person 表找当前用户的组别
-    my_person = Person.query.filter_by(user_id=user.id).first()
-    my_team = my_person.team if my_person and my_person.team else None
+    my_user = User.query.filter_by(id=user.id).first()
+    my_team = my_user.team if my_user and my_user.team else None
 
     # 查询同医院同组且激活的人员（如果用户没有组，则查同医院所有激活人员）
-    query = Person.query.filter(
-        Person.hospital_id == hospital_id,
-        Person.is_active == True,
+    query = User.query.filter(
+        User.hospital_id == hospital_id,
+        User.is_active == True,
     )
     if my_team:
-        query = query.filter(Person.team == my_team)
+        query = query.filter(User.team == my_team)
 
-    persons = query.order_by(Person.sort_order, Person.name).all()
+    persons = query.order_by(User.sort_order, User.display_name).all()
     result = []
     seen = set()
     for p in persons:
-        name = p.name
+        name = p.display_name
         if name == person_name or name in seen or not name:
             continue
         seen.add(name)
@@ -1037,8 +1026,8 @@ def api_create_order(user):
     try:
         send_new_order_notification(order)
         send_wecom_notification(order)
-    except Exception:
-        pass
+    except Exception as e:
+        current_app.logger.error(f'推送通知失败: {e}')
 
     return jsonify({
         'ok': True,
@@ -1126,7 +1115,7 @@ def list_photos(user, order_id):
             'width': p.width,
             'height': p.height,
             'uploaded_by': p.uploaded_by,
-            'created_at': p.created_at.strftime('%m/%d %H:%M') if p.created_at else '',
+            'created_at': fmt_dt(p.created_at),
         } for p in photos]
     })
 
@@ -1257,7 +1246,6 @@ def inv_create(user):
 def inv_detail(user, task_id):
     """获取盘点详情：楼区/楼层列表 + 已扫描明细"""
     task = InventoryTask.query.get_or_404(task_id)
-    # 权限校验：管理员 或 该医院用户可访问
     if not user.is_admin and user.hospital_id != task.hospital_id:
         assigned = set(user.get_assigned_hospital_ids())
         if task.hospital_id not in assigned:
@@ -1286,7 +1274,6 @@ def inv_detail(user, task_id):
             ),
             x
         ))
-        # 统计该楼区各楼层的盘点情况
         floor_stats = {}
         for f in floors_list:
             scanned = InventoryItem.query.filter_by(task_id=task_id, building=b, floor=f).count()
@@ -1314,7 +1301,7 @@ def inv_detail(user, task_id):
             'brand': item.brand,
             'model_no': item.model_no,
             'notes': item.notes,
-            'scanned_at': item.scanned_at.strftime('%m-%d %H:%M') if item.scanned_at else '',
+            'scanned_at': fmt_dt(item.scanned_at, '%m-%d %H:%M'),
         }
         if item.asset:
             d['asset_detail'] = {
@@ -1362,7 +1349,6 @@ def inv_scan(user):
     task = db.session.get(InventoryTask, task_id)
     if not task:
         return jsonify({'error': '盘点任务不存在', 'code': 404}), 404
-    # 权限校验
     if not user.is_admin and user.hospital_id != task.hospital_id:
         assigned = set(user.get_assigned_hospital_ids())
         if task.hospital_id not in assigned:
@@ -1371,10 +1357,8 @@ def inv_scan(user):
     # 查找匹配的资产（按任务所属院区）
     asset = Asset.query.filter_by(asset_no=asset_no, hospital_id=task.hospital_id).first()
 
-    # 检查是否已扫过
     existing = InventoryItem.query.filter_by(task_id=task_id, asset_no=asset_no).first()
     if existing:
-        # 更新已有记录
         existing.result = result
         existing.notes = notes
         if building:
@@ -1394,7 +1378,6 @@ def inv_scan(user):
                 existing.floor = asset.floor or existing.floor
             existing.location = asset.location or existing.location
         existing.scanned_by = user.display_name or user.username
-        # 更新资产盘点状态
         if asset:
             if result == 'issue':
                 asset.inventory_status = 'issue'
@@ -1402,11 +1385,9 @@ def inv_scan(user):
                 asset.inventory_status = ''
         db.session.commit()
 
-        # 更新任务统计
         _refresh_task_stats(task)
         return jsonify({'ok': True, 'item': _item_to_dict(existing), 'updated': True})
 
-    # 新建盘点记录
     item = InventoryItem(
         task_id=task_id,
         asset_id=asset.id if asset else None,
@@ -1422,14 +1403,13 @@ def inv_scan(user):
         model_no=asset.model_no if asset else '',
         sn=asset.sn if asset else '',
         scanned_by=user.display_name or user.username,
-        scanned_at=datetime.now(),
+        scanned_at=now(),
         hospital_id=task.hospital_id,
     )
     if asset:
         item.asset_id = asset.id
     db.session.add(item)
 
-    # 更新/创建资产盘点状态
     if asset:
         if result == 'issue':
             asset.inventory_status = 'issue'
@@ -1460,7 +1440,6 @@ def inv_scan(user):
             item.asset_id = new_asset.id
     db.session.commit()
 
-    # 更新任务统计
     _refresh_task_stats(task)
 
     return jsonify({'ok': True, 'item': _item_to_dict(item)})
@@ -1531,7 +1510,7 @@ def _item_to_dict(item):
         'brand': item.brand,
         'model_no': item.model_no,
         'notes': item.notes,
-        'scanned_at': item.scanned_at.strftime('%m-%d %H:%M') if item.scanned_at else '',
+        'scanned_at': fmt_dt(item.scanned_at, '%m-%d %H:%M'),
     }
 
 
@@ -1633,7 +1612,7 @@ def mobile_exam_questions(user, exam_id):
         'questions': qlist,
         'saved_answers': saved_answers,
         'time_limit': exam.duration_minutes * 60,
-        'started_at': submission.started_at.strftime('%Y-%m-%d %H:%M:%S') if submission.started_at else '',
+        'started_at': fmt_dt(submission.started_at, '%Y-%m-%d %H:%M:%S'),
         'elapsed_seconds': elapsed,
     })
 

@@ -237,7 +237,7 @@
 
         {% elif s.key == 'default_dashboard_team' %}
         <select class="set-select" onchange="saveSetting({{ s.id }}, this)" data-key="{{ s.key }}">
-          <option value="" {% if not s.value %}selected{% endif %}>📋 全部组</option>
+          <option value="" {% if not s.value %}selected{% endif %}><i class="fas fa-clipboard-list"></i> 全部组</option>
           {% for t in team_list %}
           <option value="{{ t }}" {% if s.value == t %}selected{% endif %}>{{ t }}</option>
           {% endfor %}

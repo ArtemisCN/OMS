@@ -133,19 +133,19 @@ def upload_file():
 @chat_bp.route('/users')
 @login_required
 def list_chat_users():
-    my_team = current_user.person.team if current_user.person and current_user.person.team else None
+    my_team = current_user.team if current_user.team else None
     users = User.query.order_by(User.display_name).all()
     teams_map, teams_order = {}, []
     for u in users:
         if u.id == current_user.id: continue
-        team_name = (u.person.team if u.person and u.person.team else '未分组')
+        team_name = (u.team if u.team else '未分组')
         if my_team and team_name != my_team: continue
         hospital_name = _get_user_hospital_name(u.id)
         group_name = get_group_name_by_id(u.group_id) or u.group or ''
         if team_name not in teams_map:
             teams_map[team_name] = []
             teams_order.append(team_name)
-        teams_map[team_name].append({'id': u.id, 'name': u.display_name or u.username, 'hospital': hospital_name, 'team': u.person.team if u.person else '', 'group': group_name, 'is_admin': u.is_admin})
+        teams_map[team_name].append({'id': u.id, 'name': u.display_name or u.username, 'hospital': hospital_name, 'team': u.team if u.team else '', 'group': group_name, 'is_admin': u.is_admin})
     result = []
     for tname in teams_order:
         if tname == '未分组': continue

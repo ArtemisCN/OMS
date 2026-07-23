@@ -1,0 +1,695 @@
+{% extends "base.html" %}
+{% block title %}维保日历{% endblock %}
+{% block extra_head %}
+<style>
+    .cal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+    .cal-nav {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .cal-nav .nav-btn {
+        width: 36px; height: 36px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--card-border);
+        background: var(--card-bg);
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all .2s;
+        backdrop-filter: blur(12px);
+    }
+    .cal-nav .nav-btn:hover {
+        background: var(--primary);
+        color: #fff;
+        border-color: var(--primary);
+    }
+    .cal-nav .cal-title {
+        font-size: 20px;
+        font-weight: 700;
+        min-width: 160px;
+        text-align: center;
+        color: var(--text);
+    }
+    .cal-nav .today-btn {
+        padding: 6px 16px;
+        border-radius: var(--radius-xs);
+        border: 1px solid var(--card-border);
+        background: var(--card-bg);
+        color: var(--primary-light);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all .2s;
+        backdrop-filter: blur(12px);
+    }
+    .cal-nav .today-btn:hover {
+        background: var(--primary);
+        color: #fff;
+        border-color: var(--primary);
+    }
+
+    /* Stats row */
+    .cal-stats {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+    .cal-stat-card {
+        flex: 1;
+        min-width: 120px;
+        padding: 14px 18px;
+        border-radius: var(--radius-sm);
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        backdrop-filter: blur(12px);
+        text-align: center;
+    }
+    .cal-stat-card .stat-num {
+        font-size: 24px;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+    .cal-stat-card .stat-label {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 2px;
+    }
+
+    /* Calendar grid */
+    .cal-grid-wrap {
+        border-radius: var(--radius);
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        backdrop-filter: blur(12px);
+        overflow: hidden;
+        margin-bottom: 24px;
+    }
+    .cal-weekdays {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        background: rgba(99,102,241,0.06);
+        border-bottom: 1px solid var(--card-border);
+    }
+    .cal-weekdays > div {
+        padding: 10px 4px;
+        text-align: center;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .cal-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+    }
+    .cal-day {
+        min-height: 110px;
+        padding: 6px;
+        border-right: 1px solid var(--card-border);
+        border-bottom: 1px solid var(--card-border);
+        transition: background .15s;
+        position: relative;
+    }
+    .cal-day:nth-child(7n) { border-right: none; }
+    .cal-day:hover { background: rgba(99,102,241,0.03); }
+    .cal-day.other-month { opacity: 0.35; }
+    .cal-day.today {
+        background: rgba(99,102,241,0.06);
+        box-shadow: inset 0 0 0 1.5px var(--primary);
+    }
+    .cal-day .day-number {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+        margin-bottom: 4px;
+        padding: 2px 6px;
+        border-radius: 20px;
+        display: inline-block;
+    }
+    .cal-day.today .day-number {
+        background: var(--primary);
+        color: #fff;
+        min-width: 24px;
+        text-align: center;
+    }
+
+    /* Contract cards inside calendar cells */
+    .cal-contract-item {
+        display: block;
+        padding: 3px 6px;
+        margin-bottom: 2px;
+        border-radius: 4px;
+        font-size: 11px;
+        line-height: 1.3;
+        cursor: pointer;
+        text-decoration: none;
+        transition: all .15s;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .cal-contract-item:hover {
+        transform: translateX(2px);
+    }
+    .cal-contract-item .cci-name {
+        font-weight: 600;
+        display: inline;
+    }
+    .cal-contract-item .cci-supplier {
+        opacity: 0.7;
+    }
+    .cal-contract-item.status-active {
+        background: rgba(16,185,129,0.12);
+        color: #059669;
+        border-left: 2.5px solid #10b981;
+    }
+    .cal-contract-item.status-expiring {
+        background: rgba(245,158,11,0.12);
+        color: #d97706;
+        border-left: 2.5px solid #f59e0b;
+    }
+    .cal-contract-item.status-expired {
+        background: rgba(239,68,68,0.1);
+        color: #dc2626;
+        border-left: 2.5px solid #ef4444;
+    }
+    .cal-day .more-link {
+        font-size: 10px;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 1px 6px;
+        display: inline-block;
+    }
+    .cal-day .more-link:hover { color: var(--primary); }
+
+    /* Expired badge style base overrides */
+    [data-theme="dark"] .cal-contract-item.status-active {
+        background: rgba(16,185,129,0.08);
+        color: #34d399;
+        border-left-color: #10b981;
+    }
+    [data-theme="dark"] .cal-contract-item.status-expiring {
+        background: rgba(245,158,11,0.1);
+        color: #fbbf24;
+        border-left-color: #f59e0b;
+    }
+    [data-theme="dark"] .cal-contract-item.status-expired {
+        background: rgba(239,68,68,0.1);
+        color: #f87171;
+        border-left-color: #ef4444;
+    }
+    [data-theme="dark"] .cal-day.today {
+        background: rgba(99,102,241,0.08);
+    }
+    [data-theme="dark"] .cal-weekdays {
+        background: rgba(255,255,255,0.03);
+    }
+
+    /* Contract detail list below calendar */
+    .cal-list-wrap {
+        border-radius: var(--radius);
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        backdrop-filter: blur(12px);
+        overflow: hidden;
+    }
+    .cal-list-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--card-border);
+    }
+    .cal-list-header h6 {
+        margin: 0;
+        font-weight: 700;
+        color: var(--text);
+    }
+    .cal-list-header .filter-group {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+    .cal-list-header .filter-group select,
+    .cal-list-header .filter-group input {
+        font-size: 13px;
+        padding: 4px 10px;
+        border-radius: var(--radius-xs);
+        border: 1px solid var(--card-border);
+        background: var(--input-bg);
+        color: var(--text);
+    }
+    .cal-list-body { padding: 0; }
+    .cal-list-item {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--card-border);
+        transition: background .15s;
+        cursor: pointer;
+    }
+    .cal-list-item:last-child { border-bottom: none; }
+    .cal-list-item:hover { background: rgba(99,102,241,0.03); }
+    .cal-list-item .cli-status-dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .cal-list-item .cli-status-dot.dot-active { background: #10b981; }
+    .cal-list-item .cli-status-dot.dot-expiring { background: #f59e0b; }
+    .cal-list-item .cli-status-dot.dot-expired { background: #ef4444; }
+    .cal-list-item .cli-info { flex: 1; min-width: 0; }
+    .cal-list-item .cli-info .cli-name {
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .cal-list-item .cli-info .cli-meta {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 1px;
+    }
+    .cal-list-item .cli-info .cli-meta i {
+        margin-right: 3px;
+        font-size: 11px;
+    }
+    .cal-list-item .cli-end-date {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        text-align: right;
+    }
+    .cal-list-item .cli-badge {
+        font-size: 11px;
+        padding: 2px 10px;
+        border-radius: 10px;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+    .cal-list-item .cli-badge.bg-success { background: rgba(16,185,129,0.15) !important; color: #059669; }
+    .cal-list-item .cli-badge.bg-warning { background: rgba(245,158,11,0.15) !important; color: #d97706; }
+    .cal-list-item .cli-badge.bg-danger { background: rgba(239,68,68,0.12) !important; color: #dc2626; }
+    [data-theme="dark"] .cal-list-item .cli-badge.bg-success { color: #34d399; }
+    [data-theme="dark"] .cal-list-item .cli-badge.bg-warning { color: #fbbf24; }
+    [data-theme="dark"] .cal-list-item .cli-badge.bg-danger { color: #f87171; }
+
+    /* Modal for contract detail */
+    .cal-detail-modal .modal-content {
+        border-radius: var(--radius);
+        border: none;
+    }
+    .cal-detail-modal .modal-header {
+        border-bottom: 1px solid var(--card-border);
+        padding: 16px 20px;
+    }
+    .cal-detail-modal .modal-body { padding: 20px; }
+    .cal-detail-modal .modal-footer { border-top: 1px solid var(--card-border); padding: 12px 20px; }
+    .cal-detail-modal .detail-row {
+        display: flex;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--card-border);
+    }
+    .cal-detail-modal .detail-row:last-child { border-bottom: none; }
+    .cal-detail-modal .detail-label {
+        width: 90px;
+        flex-shrink: 0;
+        font-size: 13px;
+        color: var(--text-muted);
+    }
+    .cal-detail-modal .detail-value {
+        flex: 1;
+        font-size: 13px;
+        color: var(--text);
+        word-break: break-all;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .cal-day { min-height: 80px; padding: 4px; }
+        .cal-day .day-number { font-size: 11px; }
+        .cal-contract-item { font-size: 10px; padding: 2px 4px; }
+        .cal-nav .cal-title { font-size: 17px; min-width: 120px; }
+        .cal-stat-card .stat-num { font-size: 20px; }
+        .cal-list-item { flex-wrap: wrap; gap: 8px; }
+        .cal-list-item .cli-end-date { text-align: left; }
+    }
+    @media (max-width: 576px) {
+        .cal-day { min-height: 60px; }
+        .cal-contract-item { display: none; }
+        .cal-day .more-link { display: block; font-size: 9px; }
+        .cal-weekdays > div { font-size: 10px; padding: 6px 2px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <!-- ===== 页面标题 ===== -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+        <h4 class="fw-bold mb-0">
+            <i class="fas fa-calendar-alt text-primary me-2"></i>维保日历
+        </h4>
+        <a href="{{ url_for('feature.contracts') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-file-contract me-1"></i>合同管理
+        </a>
+    </div>
+
+    <!-- ===== 统计卡片 ===== -->
+    <div class="cal-stats">
+        <div class="cal-stat-card">
+            <div class="stat-num" style="color:#10b981;">{{ stats.active or 0 }}</div>
+            <div class="stat-label"><i class="fas fa-check-circle me-1" style="color:#10b981;"></i>有效合同</div>
+        </div>
+        <div class="cal-stat-card">
+            <div class="stat-num" style="color:#f59e0b;">{{ stats.expiring or 0 }}</div>
+            <div class="stat-label"><i class="fas fa-exclamation-triangle me-1" style="color:#f59e0b;"></i>即将到期</div>
+        </div>
+        <div class="cal-stat-card">
+            <div class="stat-num" style="color:#ef4444;">{{ stats.expired or 0 }}</div>
+            <div class="stat-label"><i class="fas fa-times-circle me-1" style="color:#ef4444;"></i>已过期</div>
+        </div>
+        <div class="cal-stat-card">
+            <div class="stat-num" style="color:var(--primary-light);">{{ stats.total or 0 }}</div>
+            <div class="stat-label"><i class="fas fa-file-contract me-1" style="color:var(--primary-light);"></i>全部合同</div>
+        </div>
+    </div>
+
+    <!-- ===== 年月导航 ===== -->
+    <div class="cal-header">
+        <div class="cal-nav">
+            <button class="nav-btn" onclick="changeMonth(-1)" title="上个月">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <div class="cal-title" id="calTitle">{{ year }}年{{ '%02d' % month }}月</div>
+            <button class="nav-btn" onclick="changeMonth(1)" title="下个月">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+            <button class="today-btn ms-2" onclick="goToday()">
+                <i class="fas fa-calendar-day me-1"></i>今天
+            </button>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+            <select class="form-select form-select-sm" id="yearSelect" onchange="goToYearMonth()" style="width:auto;">
+                {% for y in years %}
+                <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}年</option>
+                {% endfor %}
+            </select>
+            <select class="form-select form-select-sm" id="monthSelect" onchange="goToYearMonth()" style="width:auto;">
+                {% for m in range(1, 13) %}
+                <option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ '%02d' % m }}月</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <!-- ===== 日历网格 ===== -->
+    <div class="cal-grid-wrap" id="calendarWrap">
+        <div class="cal-weekdays">
+            <div>日</div>
+            <div>一</div>
+            <div>二</div>
+            <div>三</div>
+            <div>四</div>
+            <div>五</div>
+            <div>六</div>
+        </div>
+        <div class="cal-grid" id="calGrid">
+            {% for week in calendar_grid %}
+                {% for day in week %}
+                <div class="cal-day
+                    {% if day.other_month %}other-month{% endif %}
+                    {% if day.is_today %}today{% endif %}"
+                    data-date="{{ day.date_str }}" data-day="{{ day.day }}">
+                    <div class="day-number">{{ day.day }}</div>
+                    {% for c in day.contracts[:3] %}
+                    <a class="cal-contract-item status-{{ c.status_flag }}"
+                       href="javascript:void(0)"
+                       onclick="showContractDetail({{ c.id }})"
+                       title="{{ c.contract_name }} · {{ c.supplier_name }} · 到期{{ c.end_date_str }}">
+                        <span class="cci-name">{{ c.contract_name }}</span>
+                        {% if c.supplier_name %}
+                        <span class="cci-supplier"> · {{ c.supplier_name }}</span>
+                        {% endif %}
+                    </a>
+                    {% endfor %}
+                    {% if day.contracts|length > 3 %}
+                    <span class="more-link" onclick="scrollToList('{{ day.date_str }}')">
+                        +{{ day.contracts|length - 3 }} 更多
+                    </span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- ===== 合同明细列表 ===== -->
+    <div class="cal-list-wrap">
+        <div class="cal-list-header">
+            <h6><i class="fas fa-list text-primary me-1"></i>本月维保合同明细</h6>
+            <div class="filter-group">
+                <select id="filterStatus" onchange="filterContractList()" style="width:110px;">
+                    <option value="all">全部状态</option>
+                    <option value="active">有效</option>
+                    <option value="expiring">即将到期</option>
+                    <option value="expired">已过期</option>
+                </select>
+                <input type="text" id="filterSearch" placeholder="搜索合同…" style="width:150px;" oninput="filterContractList()">
+            </div>
+        </div>
+        <div class="cal-list-body" id="contractListBody">
+            {% for c in month_contracts %}
+            <div class="cal-list-item" data-status="{{ c.status_flag }}" data-search="{{ c.contract_name }}{{ c.supplier_name or '' }}" onclick="showContractDetail({{ c.id }})">
+                <span class="cli-status-dot dot-{{ c.status_flag }}"></span>
+                <div class="cli-info">
+                    <div class="cli-name">{{ c.contract_name }}</div>
+                    <div class="cli-meta">
+                        {% if c.supplier_name %}
+                        <i class="fas fa-building"></i>{{ c.supplier_name }}
+                        {% endif %}
+                        {% if c.contract_no %}
+                        <i class="fas fa-hashtag ms-2"></i>{{ c.contract_no }}
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="cli-end-date">
+                    <i class="far fa-calendar-alt me-1"></i>{{ c.end_date_str or '—' }}
+                </div>
+                <span class="cli-badge
+                    {% if c.status_flag == 'expired' %}bg-danger
+                    {% elif c.status_flag == 'expiring' %}bg-warning
+                    {% else %}bg-success{% endif %}">
+                    {% if c.status_flag == 'expired' %}已过期
+                    {% elif c.status_flag == 'expiring' %}即将到期
+                    {% else %}有效{% endif %}
+                </span>
+            </div>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-calendar-times fa-3x mb-3" style="opacity:0.2;"></i>
+                <div>本月暂无维保合同</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- ===== 合同详情弹窗 ===== -->
+<div class="modal fade cal-detail-modal" id="contractDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fas fa-file-contract text-primary me-1"></i><span id="detailTitle">合同详情</span></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detailBody">
+                <div class="detail-row">
+                    <span class="detail-label">合同编号</span>
+                    <span class="detail-value" id="dd_no">—</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">合同名称</span>
+                    <span class="detail-value fw-semibold" id="dd_name">—</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">供应商</span>
+                    <span class="detail-value" id="dd_supplier">—</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">起止日期</span>
+                    <span class="detail-value" id="dd_dates">—</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">合同金额</span>
+                    <span class="detail-value" id="dd_amount">—</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">支付方式</span>
+                    <span class="detail-value" id="dd_payment">—</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">状态</span>
+                    <span class="detail-value" id="dd_status">—</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">联系人</span>
+                    <span class="detail-value" id="dd_contact">—</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">联系电话</span>
+                    <span class="detail-value" id="dd_phone">—</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">备注</span>
+                    <span class="detail-value" id="dd_remark">—</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>关闭
+                </button>
+                <a href="#" class="btn btn-primary btn-sm" id="dd_edit_link" target="_blank">
+                    <i class="fas fa-external-link-alt me-1"></i>查看完整信息
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ===== Data passed from backend =====
+var contractsData = {{ contracts_json | safe }};
+var calYear = {{ year }};
+var calMonth = {{ month }};
+
+// ===== Calendar Navigation =====
+function changeMonth(delta) {
+    calMonth += delta;
+    if (calMonth > 12) { calMonth = 1; calYear++; }
+    if (calMonth < 1) { calMonth = 12; calYear--; }
+    loadCalendar(calYear, calMonth);
+}
+
+function goToday() {
+    var now = new Date();
+    calYear = now.getFullYear();
+    calMonth = now.getMonth() + 1;
+    loadCalendar(calYear, calMonth);
+}
+
+function goToYearMonth() {
+    calYear = parseInt(document.getElementById('yearSelect').value);
+    calMonth = parseInt(document.getElementById('monthSelect').value);
+    loadCalendar(calYear, calMonth);
+}
+
+function loadCalendar(year, month) {
+    var url = new URL(window.location.href);
+    url.searchParams.set('year', year);
+    url.searchParams.set('month', month);
+    window.location.href = url.toString();
+}
+
+// ===== Scroll to specific date in list =====
+function scrollToList(dateStr) {
+    var items = document.querySelectorAll('.cal-list-item');
+    var found = false;
+    items.forEach(function(item) {
+        if (!found && item.textContent.indexOf(dateStr) > -1) {
+            item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            item.style.transition = 'background 0.5s';
+            item.style.background = 'rgba(99,102,241,0.08)';
+            setTimeout(function(){ item.style.background = ''; }, 1500);
+            found = true;
+        }
+    });
+}
+
+// ===== Filter contract list =====
+function filterContractList() {
+    var statusFilter = document.getElementById('filterStatus').value;
+    var searchText = document.getElementById('filterSearch').value.toLowerCase().trim();
+    var items = document.querySelectorAll('#contractListBody .cal-list-item');
+    items.forEach(function(item) {
+        var status = item.getAttribute('data-status') || '';
+        var searchData = (item.getAttribute('data-search') || '').toLowerCase();
+        var statusMatch = statusFilter === 'all' || status === statusFilter;
+        var searchMatch = !searchText || searchData.indexOf(searchText) > -1;
+        item.style.display = (statusMatch && searchMatch) ? '' : 'none';
+    });
+}
+
+// ===== Show contract detail modal =====
+function showContractDetail(id) {
+    var c = contractsData.find(function(x) { return x.id == id; });
+    if (!c) { showToast('<i class=\"fas fa-exclamation-triangle\"></i> 合同不存在', 'warning'); return; }
+
+    document.getElementById('detailTitle').textContent = '合同详情 · ' + (c.contract_name || '');
+    document.getElementById('dd_no').textContent = c.contract_no || '—';
+    document.getElementById('dd_name').textContent = c.contract_name || '—';
+    document.getElementById('dd_supplier').textContent = c.supplier_name || '—';
+
+    var startStr = c.start_date || '—';
+    var endStr = c.end_date || '—';
+    document.getElementById('dd_dates').textContent = startStr + ' ~ ' + endStr;
+
+    var amount = c.contract_amount;
+    if (amount !== null && amount !== undefined) {
+        document.getElementById('dd_amount').textContent = parseFloat(amount).toLocaleString('zh-CN', {minimumFractionDigits:2}) + ' 元';
+    } else {
+        document.getElementById('dd_amount').textContent = '—';
+    }
+    document.getElementById('dd_payment').textContent = c.payment_type || '—';
+
+    var statusText = '';
+    var statusClass = '';
+    if (c.status_flag === 'expired') {
+        statusText = '已过期';
+        statusClass = 'badge bg-danger';
+    } else if (c.status_flag === 'expiring') {
+        statusText = '即将到期';
+        statusClass = 'badge bg-warning text-dark';
+    } else {
+        statusText = '有效';
+        statusClass = 'badge bg-success';
+    }
+    document.getElementById('dd_status').innerHTML = '<span class="' + statusClass + '">' + statusText + '</span>';
+
+    document.getElementById('dd_contact').textContent = c.contact_person || '—';
+    document.getElementById('dd_phone').textContent = c.contact_phone || '—';
+    document.getElementById('dd_remark').textContent = c.remark || '—';
+
+    var editLink = document.getElementById('dd_edit_link');
+    editLink.href = c.edit_url || '{{ url_for("feature.contracts") }}';
+
+    new bootstrap.Modal(document.getElementById('contractDetailModal')).show();
+}
+
+// ===== Keyboard shortcuts =====
+document.addEventListener('keydown', function(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); changeMonth(-1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); changeMonth(1); }
+    if (e.key === 't' || e.key === 'T') { e.preventDefault(); goToday(); }
+});
+</script>
+{% endblock %}

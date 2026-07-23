@@ -12,13 +12,24 @@ from datetime import datetime, date, timedelta
 from calendar import monthrange
 
 from models import (
-    db, Person, Department, SolutionTemplate, WorkOrder, AddressOverride,
-    User, FaultType, FaultCategory, FaultSubcategory, FaultKeyword,
+    db, User, Department, SolutionTemplate, WorkOrder, AddressOverride,
+    FaultType, FaultCategory, FaultSubcategory, FaultKeyword,
     StorageLocation, Supplier, Consumable, ConsumableRecord,
     DutySchedule, DutyStaff, KnowledgeBase, Hospital,
     FaultTemplateGroup, FaultTemplateItem, PartPrice,
-    SystemSetting, log_audit, get_module_permissions, save_module_permissions
+    SystemSetting, log_audit, get_module_permissions, save_module_permissions,
+    RoleGroup
 )
+
+
+def _team_filter(query, model, team):
+    """按团队过滤查询：team=""或None=不过滤，team="all"=不过滤，其他只显示本组+通用"""
+    if not team or team == 'all':
+        return query
+    return query.filter(db.or_(
+        model.teams == '',
+        model.teams.contains(team),
+    ))
 
 
 # ===================================================================
@@ -26,25 +37,18 @@ from models import (
 # ===================================================================
 
 def list_persons():
-    """获取人员列表及对应的账号映射"""
-    persons = Person.query.order_by(Person.is_active.desc(), Person.id).all()
-    user_map = {}
-    for p in persons:
-        user = User.query.filter(
-            (User.display_name == p.name) | (User.username == p.name)
-        ).first()
-        if user:
-            user_map[p.name] = user
-    return persons, user_map
+    """获取人员列表（User 已合并 Person 数据）"""
+    persons = User.query.filter(User.is_admin == False).order_by(User.is_active.desc(), User.sort_order, User.display_name).all()
+    return persons, {}
 
 
 def add_person(name):
     """新增人员，返回 (ok, msg)"""
     if not name:
         return False, '人员姓名不能为空'
-    if Person.query.filter_by(name=name).first():
+    if User.query.filter_by(display_name=name).first():
         return False, f'人员 "{name}" 已存在'
-    db.session.add(Person(name=name))
+    db.session.add(User(display_name=name))
     db.session.commit()
     return True, f'已添加人员 "{name}"'
 
@@ -56,8 +60,8 @@ def import_persons_from_orders():
     for (name,) in persons_in_orders:
         if name and name.strip():
             name = name.strip()
-            if not Person.query.filter_by(name=name).first():
-                db.session.add(Person(name=name, is_active=True))
+            if not User.query.filter_by(display_name=name).first():
+                db.session.add(User(display_name=name, is_active=True))
                 imported += 1
     db.session.commit()
     return imported
@@ -65,26 +69,47 @@ def import_persons_from_orders():
 
 def toggle_person(pid):
     """切换人员启用/停用"""
-    p = Person.query.get_or_404(pid)
+    p = User.query.get_or_404(pid)
     p.is_active = not p.is_active
     db.session.commit()
     return p
 
 
 def delete_person(pid, operator_name):
-    """删除人员"""
-    p = Person.query.get_or_404(pid)
-    name = p.name
+    """删除人员（检查关联工单，有则禁止删除）"""
+    p = User.query.get_or_404(pid)
+    name = p.display_name or p.username
+
+    # 检查关联工单（操作日志是历史记录，不阻止删除）
+    wo_count = WorkOrder.query.filter(
+        WorkOrder.created_by == name
+    ).count()
+    if wo_count:
+        return None, f'该人员仍有 {wo_count} 条工单记录，请先转移工单后再删除'
+
+    # 清理关联记录避免 IntegrityError
+    db.session.execute(db.text('DELETE FROM mobile_tokens WHERE user_id = :pid'), {'pid': pid})
+    db.session.execute(db.text('DELETE FROM subscribe_users WHERE user_id = :pid'), {'pid': pid})
+    db.session.execute(db.text('DELETE FROM user_hospitals WHERE user_id = :pid'), {'pid': pid})
+    db.session.execute(db.text('DELETE FROM chat_tokens WHERE user_id = :pid'), {'pid': pid})
+    db.session.execute(db.text('DELETE FROM chat_participants WHERE user_id = :pid'), {'pid': pid})
+    db.session.execute(db.text('DELETE FROM chat_messages WHERE sender_id = :pid'), {'pid': pid})
+    db.session.execute(db.text('DELETE FROM work_order_chat_messages WHERE sender_id = :pid'), {'pid': pid})
+    db.session.execute(db.text('DELETE FROM exam_submissions WHERE user_id = :pid'), {'pid': pid})
+    db.session.execute(db.text('DELETE FROM work_order_stars WHERE user_id = :pid'), {'pid': pid})
+    db.session.execute(db.text('DELETE FROM registration_requests WHERE reviewed_by = :pid'), {'pid': pid})
+    db.session.flush()
+
     db.session.delete(p)
     db.session.commit()
     log_audit('delete', 'person', operator_name,
               target_id=pid, target_desc=f'删除人员: {name}')
-    return name
+    return name, None
 
 
 def edit_person_field(pid, field, value):
     """编辑人员字段（电话/组别/备注）"""
-    p = Person.query.get_or_404(pid)
+    p = User.query.get_or_404(pid)
     if field == 'phone':
         p.phone = value
     elif field == 'team':
@@ -99,45 +124,48 @@ def edit_person_field(pid, field, value):
 
 def person_account_info(pid):
     """获取人员账号信息（JSON）"""
-    p = Person.query.get_or_404(pid)
+    p = User.query.get_or_404(pid)
     user = User.query.filter(
-        (User.display_name == p.name) | (User.username == p.name)
+        (User.display_name == p.display_name) | (User.username == p.display_name)
     ).first()
     return {
         'has_account': bool(user),
         'username': user.username if user else '',
-        'display_name': user.display_name if user else p.name,
+        'display_name': user.display_name if user else p.display_name,
         'is_admin': user.is_admin if user else False,
-        'hospital_ids': [h.id for h in user.hospitals.all()] if user else [],
+        'group_id': user.group_id if user else None,
+        'hospital_ids': user.get_assigned_hospital_ids() if user else [],
     }
 
 
-def person_account_save(pid, username, password, display_name, is_admin, hospital_ids=None):
+def person_account_save(pid, username, password, display_name, is_admin, hospital_ids=None, group_id=None):
     """创建或更新人员的登录账号"""
-    from models import Hospital
-    from flask import g
-    p = Person.query.get_or_404(pid)
+    p = User.query.get_or_404(pid)
     if not username:
         return False, '用户名不能为空'
 
     user = User.query.filter(
-        (User.display_name == p.name) | (User.username == p.name)
+        (User.display_name == p.display_name) | (User.username == p.display_name)
     ).first()
 
     if user:
         old_username = user.username
         user.username = username
-        user.display_name = display_name or p.name
+        user.display_name = display_name or p.display_name
         user.is_admin = is_admin
+        user.group_id = group_id  # ← 保存角色组
         if password:
             user.set_password(password)
         if username != old_username:
-            conflict = User.query.filter(User.username == username, User.id != user.id).first()
+            with db.session.no_autoflush:
+                conflict = User.query.filter(User.username == username, User.id != user.id).first()
             if conflict:
                 return False, f'用户名 "{username}" 已被使用'
-        # 保存所属医院（多选）
+        # 保存所属医院
         if hospital_ids is not None:
-            user.hospitals = [db.session.get(Hospital, hid) for hid in hospital_ids if hid]
+            user.hospitals = Hospital.query.filter(Hospital.id.in_([int(x) for x in hospital_ids if x])).all()
+        # 关联 Person → User
+        p.user_id = user.id
         db.session.commit()
         return True, f'✅ 账号 "{old_username}" 已更新'
     else:
@@ -147,14 +175,16 @@ def person_account_save(pid, username, password, display_name, is_admin, hospita
         if not password:
             return False, '新建账号必须设置密码'
         user = User(
-            username=username, display_name=display_name or p.name,
-            is_admin=is_admin,
+            username=username, display_name=display_name or p.display_name,
+            is_admin=is_admin, group_id=group_id,  # ← 保存角色组
         )
         user.set_password(password)
-        # 保存所属医院（多选）
-        if hospital_ids:
-            user.hospitals = [db.session.get(Hospital, hid) for hid in hospital_ids if hid]
         db.session.add(user)
+        db.session.flush()
+        if hospital_ids:
+            user.hospitals = Hospital.query.filter(Hospital.id.in_([int(x) for x in hospital_ids if x])).all()
+        # 关联 Person → User
+        p.user_id = user.id
         db.session.commit()
         return True, f'✅ 账号 "{username}" 已创建'
 
@@ -212,7 +242,7 @@ def delete_department(dept_id, operator_name):
 #  3. 方案模板
 # ===================================================================
 
-def list_solutions(keyword='', device_filter='', fault_filter='', page=1, per_page=20):
+def list_solutions(keyword='', device_filter='', fault_filter='', page=1, per_page=20, team_filter=''):
     """获取方案模板列表（分页）"""
     query = SolutionTemplate.query
     if keyword:
@@ -226,10 +256,22 @@ def list_solutions(keyword='', device_filter='', fault_filter='', page=1, per_pa
         query = query.filter(SolutionTemplate.device_type == device_filter)
     if fault_filter:
         query = query.filter(SolutionTemplate.fault_type == fault_filter)
+    if team_filter:
+        query = query.filter(SolutionTemplate.teams.contains(team_filter))
     return query.order_by(SolutionTemplate.id).paginate(page=page, per_page=per_page, error_out=False)
 
 
-def add_solution(title, content, keywords, device_type, fault_type, fault_subcategory):
+def get_team_options():
+    """获取系统设置的组别列表"""
+    from models import SystemSetting
+    import re
+    setting = SystemSetting.query.filter_by(key='person_teams').first()
+    if setting and setting.value:
+        return [x.strip() for x in re.split(r'[,，]', setting.value) if x.strip()]
+    return ['信息科', '后勤', '外包服务']
+
+
+def add_solution(title, content, keywords, device_type, fault_type, fault_subcategory, teams=''):
     """新增方案模板"""
     if not title:
         return False, '方案标题不能为空'
@@ -237,7 +279,8 @@ def add_solution(title, content, keywords, device_type, fault_type, fault_subcat
         return False, f'方案 "{title}" 已存在'
     s = SolutionTemplate(title=title, content=content or title,
                          keywords=keywords, device_type=device_type,
-                         fault_type=fault_type, fault_subcategory=fault_subcategory)
+                         fault_type=fault_type, fault_subcategory=fault_subcategory,
+                         teams=teams)
     db.session.add(s)
     db.session.commit()
     return True, f'已添加方案 "{title}"'
@@ -256,6 +299,8 @@ def edit_solution(sid, field, value, value2=None):
         s.fault_type = value
     elif field == 'fault_subcategory':
         s.fault_subcategory = value
+    elif field == 'teams':
+        s.teams = value
     else:
         s.content = value2 or value
     db.session.commit()
@@ -307,11 +352,11 @@ def import_solutions_from_orders():
 #  4. 地址数据
 # ===================================================================
 
-def list_addresses(building='', keyword=''):
+def list_addresses(building='', keyword='', team=''):
     """获取地址列表"""
     from services.address import get_addresses_grouped, get_all_buildings
-    groups = get_addresses_grouped(building=building, keyword=keyword)
-    buildings = get_all_buildings()
+    groups = get_addresses_grouped(building=building, keyword=keyword, team=team)
+    buildings = get_all_buildings(team=team)
     all_addrs = []
     for baddr in groups.values():
         all_addrs.extend(baddr)
@@ -319,7 +364,7 @@ def list_addresses(building='', keyword=''):
     return groups, buildings, current_addresses, sum(len(v) for v in groups.values())
 
 
-def edit_address(override_id, base_index, building, floor, department, location):
+def edit_address(override_id, base_index, building, floor, department, location, teams=''):
     """编辑地址"""
     if not all([building, floor, department, location]):
         return False, '所有字段不能为空'
@@ -331,6 +376,7 @@ def edit_address(override_id, base_index, building, floor, department, location)
             o.floor = floor
             o.department = department
             o.location = location
+            o.teams = teams
             db.session.commit()
             return True, '地址已更新'
         return False, '记录不存在'
@@ -338,33 +384,21 @@ def edit_address(override_id, base_index, building, floor, department, location)
         from services.address import ADDRESS_LIST
         if base_index < len(ADDRESS_LIST):
             o = AddressOverride(base_index=base_index, building=building,
-                                floor=floor, department=department, location=location)
+                                floor=floor, department=department, location=location,
+                                teams=teams)
             db.session.add(o)
             db.session.commit()
             return True, '地址已更新'
     return False, '参数错误'
 
 
-def normalize_floor(floor):
-    """标准化楼层格式：一楼/2楼/B1楼 → 1F/2F/B1F"""
-    import re
-    if not floor:
-        return floor
-    CN_MAP = {'一': '1', '二': '2', '三': '3', '四': '4',
-              '五': '5', '六': '6', '七': '7', '八': '8', '九': '9', '十': '10'}
-    for cn, num in CN_MAP.items():
-        floor = floor.replace(cn, num)
-    floor = re.sub(r'(\d+)楼$', r'\1F', floor)
-    return floor
-
-
-def add_address(building, floor, department, location):
+def add_address(building, floor, department, location, teams=''):
     """新增地址"""
     if not all([building, floor, department, location]):
         return False, '所有字段不能为空'
-    floor = normalize_floor(floor)
     o = AddressOverride(base_index=-1, building=building,
-                        floor=floor, department=department, location=location)
+                        floor=floor, department=department, location=location,
+                        teams=teams)
     db.session.add(o)
     db.session.commit()
     return True, f'已新增地址：「{building} {floor} {department} {location}」'
@@ -402,25 +436,26 @@ def delete_base_address(base_index, building=''):
 #  5. 故障类型
 # ===================================================================
 
-def list_fault_types():
+def list_fault_types(team=''):
     """获取故障类型列表"""
-    return FaultType.query.order_by(FaultType.sort_order, FaultType.id).all()
+    query = FaultType.query.order_by(FaultType.sort_order, FaultType.id)
+    return _team_filter(query, FaultType, team).all()
 
 
-def add_fault_type(name, keywords):
+def add_fault_type(name, keywords, teams=''):
     """新增故障类型"""
     if not name:
         return False, '请输入故障类型名称'
     if FaultType.query.filter_by(name=name).first():
         return False, f'故障类型「{name}」已存在'
     max_order = db.session.query(db.func.max(FaultType.sort_order)).scalar() or 0
-    ft = FaultType(name=name, keywords=keywords, sort_order=max_order + 1)
+    ft = FaultType(name=name, keywords=keywords, sort_order=max_order + 1, teams=teams)
     db.session.add(ft)
     db.session.commit()
     return True, f'已新增故障类型「{name}」'
 
 
-def edit_fault_type(fid, name, keywords):
+def edit_fault_type(fid, name, keywords, teams=None):
     """编辑故障类型"""
     ft = FaultType.query.get_or_404(fid)
     if not name:
@@ -430,6 +465,8 @@ def edit_fault_type(fid, name, keywords):
         return False, f'故障类型「{name}」已存在'
     ft.name = name
     ft.keywords = keywords
+    if teams is not None:
+        ft.teams = teams
     db.session.commit()
     return True, f'已更新故障类型「{name}」'
 
@@ -704,7 +741,7 @@ def import_consumables_from_excel(file_storage):
     return True, imported, skipped, errors
 
 
-def consumable_inout(cid, action, qty, note, operator_name, department=''):
+def consumable_inout(cid, action, qty, note, operator_name):
     """耗材出入库，返回 (ok, msg, balance)"""
     if not cid or not action or qty <= 0:
         return False, '参数错误', None
@@ -715,8 +752,7 @@ def consumable_inout(cid, action, qty, note, operator_name, department=''):
 
     c.quantity += qty if action == 'in' else -qty
     record = ConsumableRecord(consumable_id=cid, type=action, quantity=qty,
-                              balance=c.quantity, operator=operator_name,
-                              note=note, department=department)
+                              balance=c.quantity, operator=operator_name, note=note)
     db.session.add(record)
     db.session.commit()
 
@@ -724,38 +760,6 @@ def consumable_inout(cid, action, qty, note, operator_name, department=''):
     log_audit(action, 'consumable', operator_name,
               target_id=cid, target_desc=f'耗材{action_name} {c.name} ×{qty}')
     return True, action_name, c.quantity
-
-
-def batch_consumable_out(items, department, operator_name):
-    """耗材一键出库，items=[{cid,qty},...]，返回 (ok, msg, out_records)"""
-    if not department:
-        return False, '请选择目标科室', []
-    if not items:
-        return False, '请选择出库物品', []
-
-    out_records = []
-    for item in items:
-        cid = item.get('cid')
-        qty = item.get('qty', 0)
-        if not cid or qty <= 0:
-            continue
-        c = Consumable.query.get(cid)
-        if not c:
-            continue
-        if c.quantity < qty:
-            return False, f'「{c.name}」库存不足（当前 {c.quantity}{c.unit}）', []
-        c.quantity -= qty
-        record = ConsumableRecord(
-            consumable_id=cid, type='out', quantity=qty,
-            balance=c.quantity, operator=operator_name,
-            department=department, note=f'一键出库至{department}',
-        )
-        db.session.add(record)
-        out_records.append({'name': c.name, 'qty': qty, 'unit': c.unit})
-    db.session.commit()
-    log_audit('batch_out', 'consumable', operator_name,
-              target_desc=f'耗材一键出库至{department}，共{len(out_records)}项')
-    return True, f'已出库 {len(out_records)} 项至「{department}」', out_records
 
 
 def export_consumables_template():
@@ -789,7 +793,7 @@ def export_consumables_template():
 
 def get_duty_schedule_staff():
     """获取在职人员列表"""
-    return Person.query.filter_by(is_active=True).order_by(Person.sort_order, Person.id).all()
+    return User.query.filter_by(is_active=True).order_by(User.sort_order, User.id).all()
 
 
 def get_duty_month_info(year, month):
@@ -1085,14 +1089,19 @@ def get_permissions_page_data():
     users = User.query.order_by(User.is_admin.desc(), User.username).all()
     module_perms = get_module_permissions(refresh=True)
     from models import ALL_MODULE_NAMES
-    persons = Person.query.filter_by(is_active=True).order_by(Person.sort_order, Person.name).all()
+    persons = User.query.filter_by(is_active=True).order_by(User.sort_order, User.display_name).all()
     # 构建角色组用户分组
     users_by_group = {}
     for u in users:
         if u.is_admin:
             gname = '管理员'
         else:
-            gname = u.group or '普通用户'
+            # 优先用 group_id（新），兼容 group（旧字段）
+            if u.group_id:
+                rg = RoleGroup.query.get(u.group_id)
+                gname = rg.name if rg else '普通用户'
+            else:
+                gname = u.group or '普通用户'
         if gname not in users_by_group:
             users_by_group[gname] = {'group_name': gname, 'users': [], 'count': 0}
         users_by_group[gname]['users'].append(u)
@@ -1103,23 +1112,16 @@ def get_permissions_page_data():
 
 def sync_users_from_persons(operator_name):
     """从人员同步创建用户"""
-    from models import Hospital
-    persons = Person.query.filter_by(is_active=True).all()
+    persons = User.query.filter_by(is_active=True).all()
     created = 0
     for p in persons:
-        existing = User.query.filter_by(display_name=p.name).first()
+        existing = User.query.filter_by(display_name=p.display_name).first()
         if not existing:
-            pinyin = p.name
+            pinyin = p.display_name
             if not User.query.filter_by(username=pinyin).first():
-                user = User(username=pinyin, display_name=p.name, phone=p.phone,
-                            group=p.group or 'IT', is_admin=False,
-                            hospital_id=p.hospital_id)
+                user = User(username=pinyin, display_name=p.display_name, phone=p.phone,
+                            group=p.group or 'IT', is_admin=False)
                 user.set_password('123456')
-                # 同步所属医院
-                if p.hospital_id:
-                    hospital = db.session.get(Hospital, p.hospital_id)
-                    if hospital:
-                        user.hospitals = [hospital]
                 db.session.add(user)
                 created += 1
     if created:
@@ -1154,6 +1156,12 @@ def set_user_group(uid, group, operator_name):
     """设置用户角色组"""
     user = User.query.get_or_404(uid)
     user.group = group
+    # 同步 group_id（根据角色组名称查找或创建 RoleGroup 记录）
+    if group:
+        rg = RoleGroup.get_or_create(group)
+        user.group_id = rg.id
+    else:
+        user.group_id = None
     db.session.commit()
     log_audit('set_user_group', 'user', operator_name,
               target_id=uid, detail=f'将用户 {user.display_name or user.username} 设为 [{group}] 组')
@@ -1324,7 +1332,7 @@ def delete_part(part_id, operator_name):
 #  14. 耗材出入库记录
 # ===================================================================
 
-def list_consumable_records(q='', action='', department='', page=1, page_size=50):
+def list_consumable_records(q='', action='', page=1, page_size=50):
     """获取耗材出入库记录"""
     query = ConsumableRecord.query.join(Consumable, ConsumableRecord.consumable_id == Consumable.id)
     if q:
@@ -1332,21 +1340,11 @@ def list_consumable_records(q='', action='', department='', page=1, page_size=50
         query = query.filter(Consumable.name.like(like))
     if action in ('in', 'out'):
         query = query.filter(ConsumableRecord.type == action)
-    if department:
-        query = query.filter(ConsumableRecord.department == department)
     query = query.order_by(ConsumableRecord.created_at.desc())
     pagination = query.paginate(page=page, per_page=page_size, error_out=False)
     records = pagination.items
     total = query.count()
     return records, pagination, total
-
-
-def get_consumable_departments():
-    """获取所有耗材出库科室列表"""
-    rows = db.session.query(ConsumableRecord.department)\
-        .filter(ConsumableRecord.type == 'out', ConsumableRecord.department != '')\
-        .distinct().order_by(ConsumableRecord.department).all()
-    return [r[0] for r in rows]
 
 
 def delete_consumable_record(rid):
@@ -1442,12 +1440,34 @@ def delete_fault_template_item(gid, iid):
 #  16. 故障二级分类
 # ===================================================================
 
-def list_fault_categories():
-    """获取故障二级分类列表"""
-    return FaultCategory.query.order_by(FaultCategory.sort_order).all()
+def list_fault_categories(team=''):
+    """获取故障二级分类列表（按 team 过滤分类+子分类+关键词）"""
+    # 先获取全部分类
+    cats = FaultCategory.query.order_by(FaultCategory.sort_order).all()
+    if not team or team == 'all':
+        return cats
+    # 逐层过滤：只保留分类、子分类、关键词中任意级别匹配 team 的
+    result = []
+    for cat in cats:
+        # 检查分类本身是否匹配
+        cat_ok = cat.teams == '' or team in cat.teams
+        # 检查子分类
+        subs = cat.subcategories.all() if hasattr(cat, 'subcategories') else []
+        filtered_subs = []
+        for sub in subs:
+            sub_ok = sub.teams == '' or team in sub.teams
+            # 检查关键词
+            kws = sub.keywords.all() if hasattr(sub, 'keywords') else []
+            filtered_kws = [kw for kw in kws if kw.teams == '' or team in kw.teams]
+            if sub_ok or filtered_kws:
+                # 需要重新绑定过滤后的关键词列表
+                filtered_subs.append(sub)
+        if cat_ok or filtered_subs:
+            result.append(cat)
+    return result
 
 
-def add_fault_subcategory(cat_id, name):
+def add_fault_subcategory(cat_id, name, teams=''):
     """新增子分类"""
     if not cat_id or not name:
         return False, '参数错误'
@@ -1455,7 +1475,7 @@ def add_fault_subcategory(cat_id, name):
     if not cat:
         return False, '分类不存在'
     max_order = db.session.query(db.func.max(FaultSubcategory.sort_order)).filter_by(category_id=cat_id).scalar() or 0
-    sub = FaultSubcategory(category_id=cat_id, name=name, sort_order=max_order + 1)
+    sub = FaultSubcategory(category_id=cat_id, name=name, sort_order=max_order + 1, teams=teams)
     db.session.add(sub)
     db.session.commit()
     return True, f'已添加子分类「{name}」'
@@ -1470,7 +1490,7 @@ def delete_fault_subcategory(sub_id):
     return True
 
 
-def add_fault_keywords(sub_id, keywords_raw):
+def add_fault_keywords(sub_id, keywords_raw, teams=''):
     """批量添加关键词"""
     if not sub_id or not keywords_raw:
         return False, '参数错误'
@@ -1481,7 +1501,7 @@ def add_fault_keywords(sub_id, keywords_raw):
     max_order = db.session.query(db.func.max(FaultKeyword.sort_order)).filter_by(subcategory_id=sub_id).scalar() or 0
     for kw in kw_list:
         max_order += 1
-        k = FaultKeyword(subcategory_id=sub_id, keyword=kw, sort_order=max_order)
+        k = FaultKeyword(subcategory_id=sub_id, keyword=kw, sort_order=max_order, teams=teams)
         db.session.add(k)
     db.session.commit()
     return True, f'已添加 {len(kw_list)} 个关键词'

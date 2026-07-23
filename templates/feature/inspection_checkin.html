@@ -83,16 +83,16 @@ function doCheckin() {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            showToast('✅ ' + data.message, 'success');
+            showToast('<i class="fas fa-check-circle"></i> ' + data.message, 'success');
             setTimeout(() => location.reload(), 1000);
         } else {
-            showToast('❌ ' + (data.error || '签到失败'), 'error');
+            showToast('<i class="fas fa-times-circle"></i> ' + (data.error || '签到失败'), 'error');
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-fingerprint me-2"></i> 点击签到';
         }
     })
     .catch(err => {
-        showToast('❌ 网络错误', 'error');
+        showToast('<i class="fas fa-times-circle"></i> 网络错误', 'error');
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-fingerprint me-2"></i> 点击签到';
     });

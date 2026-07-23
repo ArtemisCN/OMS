@@ -24,7 +24,7 @@ def create_app():
     # Session 安全配置
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-    app.config['PERMANENT_SESSION_LIFETIME'] = 28800  # 8小时（会被系统参数覆盖）
+    app.config['PERMANENT_SESSION_LIFETIME'] = 1800  # 30分钟（会被系统参数覆盖，管理员可在设置页调长）
     app.config['REMEMBER_COOKIE_DURATION'] = 604800  # 7天
 
     db.init_app(app)
@@ -38,7 +38,6 @@ def create_app():
     def load_user(user_id):
         return db.session.get(User, int(user_id))
 
-    # 注册蓝图
     from routes.auth import auth_bp
     from routes.main import main_bp
     from routes.orders import orders_bp
@@ -110,9 +109,7 @@ def create_app():
             current_hospital = AllHospitals()
         # 所有启用的医院（供管理员切换）
         all_hospitals = Hospital.query.filter_by(is_active=True).order_by(Hospital.id).all()
-        # 当前用户可访问的医院列表（多医院用户使用）
         user_assigned_hospitals = getattr(g, 'user_assigned_hospitals', [])
-        # 加载系统参数（带缓存优化：只查一次）
         sys_settings = {}
         for s in SystemSetting.query.filter(
             SystemSetting.key.in_(['system_name','system_subtitle','system_title_suffix','home_name','login_page_title','sidebar_auto_hide_seconds','default_dark_mode','primary_color','font_scale'])
@@ -240,11 +237,9 @@ if __name__ == '__main__':
                 db.session.add(SolutionTemplate(title=title, content=content))
             db.session.commit()
             print("✓ 初始化完成")
-            print(f"  - 管理员: admin / admin123")
             print(f"  - 人员: {', '.join(default_names)}")
             print(f"  - 方案模板: {len(app_config.SOLUTION_TEMPLATES)} 条")
         else:
-            # 检查方案模板是否已导入
             from models import SolutionTemplate
             if SolutionTemplate.query.count() == 0:
                 print("导入方案模板...")
@@ -259,6 +254,5 @@ if __name__ == '__main__':
     print(f"\n{'='*50}")
     print(f"  医院故障工单管理系统 已启动")
     print(f"  访问地址: http://127.0.0.1:{port}")
-    print(f"  管理员账号: admin / admin123")
     print(f"{'='*50}\n")
     app.run(host='0.0.0.0', port=port, debug=debug)

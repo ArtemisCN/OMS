@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.tmpl-page { min-height:calc(100vh - 60px); padding:24px 28px; }
+.tmpl-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+.tmpl-header h1 { font-size:20px; font-weight:700; color:var(--text,#1e293b); display:flex; align-items:center; gap:10px; margin:0; }
+
+.tmpl-team-bar {
+    background:var(--card-bg,#fff); border:1px solid var(--border,#e5e7eb);
+    border-radius:12px; padding:14px 18px; margin-bottom:16px;
+}
+.tmpl-team-list { display:flex; flex-wrap:wrap; gap:6px; }
+.tmpl-team-chip {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:7px 18px; border-radius:24px; font-size:13px; font-weight:700;
+    cursor:pointer; border:2px solid var(--border,#e2e8f0);
+    background:var(--card-bg,#fff); color:var(--text,#1e293b);
+    transition:all 0.15s; user-select:none;
+}
+.tmpl-team-chip:hover { border-color:#6366f1;background:rgba(99,102,241,0.04); }
+.tmpl-team-chip.active {
+    background:linear-gradient(135deg,#6366f1,#4f46e5);
+    color:#fff; border-color:#6366f1; box-shadow:0 2px 8px rgba(99,102,241,0.3);
+}
+
+.tmpl-card {
+    background:var(--card-bg,#fff); border:1px solid var(--border,#e5e7eb);
+    border-radius:12px; margin-bottom:16px; overflow:hidden;
+}
+.tmpl-card-header {
+    padding:12px 18px; border-bottom:1px solid var(--border,#e5e7eb);
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:14px; font-weight:700; color:var(--text,#1e293b);
+}
+.tmpl-card-body { padding:12px 18px; }
+
+.tmpl-group-label {
+    font-size:12px; font-weight:600; color:var(--text,#1e293b);
+    margin:10px 0 4px; display:flex; align-items:center; gap:6px;
+}
+.tmpl-group-label:first-child { margin-top:0; }
+
+.tmpl-row {
+    display:flex; align-items:center; gap:8px;
+    padding:5px 8px; border-radius:6px;
+    border-bottom:1px solid var(--border,#f1f5f9);
+    font-size:13px; transition:background 0.1s;
+}
+.tmpl-row:hover { background:var(--hover-bg,#f8fafc); }
+.tmpl-row:last-child { border-bottom:none; }
+.tmpl-badge-type { font-size:10px;padding:1px 8px;border-radius:4px;background:#e2e8f0;color:#475569; }
+.tmpl-name { flex:1;font-weight:500;color:var(--text,#1e293b);min-width:0; }
+.tmpl-meta { font-size:11px;color:#94a3b8;white-space:nowrap; }
+.tmpl-actions { display:flex;gap:3px;flex-shrink:0; }
+.tmpl-actions .btn { font-size:10px;padding:1px 6px;line-height:1.4; }
+
+.tmpl-empty { text-align:center; padding:24px 20px; color:#94a3b8; font-size:13px; }
+.copy-btn {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:8px 20px; border-radius:10px;
+    background:linear-gradient(135deg,#6366f1,#4f46e5);
+    color:#fff; border:none; font-size:13px; font-weight:600;
+    cursor:pointer; margin-top:8px;
+}
+
+.inline-form { display:flex; align-items:center; gap:6px; padding:5px 8px; }
+.inline-form input, .inline-form select {
+    font-size:12px; padding:3px 8px; border-radius:6px;
+    border:1px solid var(--border,#e2e8f0); background:var(--input-bg,#fff);
+    color:var(--text,#1e293b);
+}
+.inline-form .btn { font-size:11px; padding:3px 10px; }
+</style>
+
+<div class="tmpl-page">
+  <div class="tmpl-header">
+    <h1><i class="fas fa-puzzle-piece text-primary"></i> 模板管理</h1>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('data.index') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> 返回</a>
+    </div>
+  </div>
+
+  <!-- ===== 组选择器 ===== -->
+  <div class="tmpl-team-bar">
+    <div class="tmpl-team-list" id="teamSelector">
+      <span class="tmpl-team-chip active" data-team="all" onclick="selectTeam('all')"><i class="fas fa-clipboard-list"></i> 全部</span>
+      {% for t in all_teams %}
+      <span class="tmpl-team-chip" data-team="{{ t|e }}" onclick="selectTeam('{{ t|e }}')">{{ t }}</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ===== 全部组（只读概览） ===== -->
+  <div class="team-section" data-team="all">
+    <div class="tmpl-card">
+      <div class="tmpl-card-header">
+        <span><i class="fas fa-cubes text-primary"></i> 故障模板组</span>
+        <span class="text-muted" style="font-weight:400;font-size:12px;">共 {{ fault_groups|length }} 组</span>
+      </div>
+      <div class="tmpl-card-body">
+        {% for g in fault_groups %}
+        <div class="tmpl-group-label">{{ g.name }}
+          <span class="text-muted" style="font-weight:400;font-size:11px;">{% if g.teams %}({{ g.teams }}){% else %}全组通用{% endif %}</span>
+        </div>
+        {% for item in g.items %}
+        <div class="tmpl-row">
+          <span class="tmpl-badge-type">{{ item.fault_type }}</span>
+          <span class="tmpl-name">{{ item.display_name }}</span>
+        </div>
+        {% else %}<div class="tmpl-row text-muted" style="font-size:12px;">（空组）</div>{% endfor %}
+        {% else %}
+        <div class="tmpl-empty"><i class="fas fa-info-circle"></i> 暂无故障模板组</div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="tmpl-card">
+      <div class="tmpl-card-header">
+        <span><i class="fas fa-book text-success"></i> 方案模板</span>
+        <span class="text-muted" style="font-weight:400;font-size:12px;">共 {{ solutions|length }} 条</span>
+      </div>
+      <div class="tmpl-card-body">
+        {% for s in solutions %}
+        <div class="tmpl-row">
+          <span class="tmpl-name">{{ s.title }}</span>
+          <span class="tmpl-meta">{% if s.fault_type %}{{ s.fault_type }}{% endif %} · {% if s.teams %}{{ s.teams }}{% else %}全组通用{% endif %}</span>
+        </div>
+        {% else %}
+        <div class="tmpl-empty"><i class="fas fa-info-circle"></i> 暂无方案模板</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 按组展示（含操作按钮） ===== -->
+  {% for t in all_teams %}
+  {% set team_fgs = fault_group_map.get(t, []) %}
+  {% set gen_fgs = fault_group_map.get('', []) %}
+  {% set team_sols = solution_map.get(t, []) %}
+  {% set gen_sols = solution_map.get('', []) %}
+  {% set has_fault = team_fgs or gen_fgs %}
+  {% set has_solution = team_sols or gen_sols %}
+  <div class="team-section" data-team="{{ t|e }}" style="display:none;">
+
+    <!-- ===== 故障模板组 ===== -->
+    <div class="tmpl-card">
+      <div class="tmpl-card-header">
+        <span><i class="fas fa-cubes text-primary"></i> 故障模板组 · {{ t }}</span>
+        <button class="btn btn-sm btn-outline-success py-0" style="font-size:11px;" onclick="showAddFaultGroup('{{ t|e }}')"><i class="fas fa-plus"></i> 新建组</button>
+      </div>
+      <div class="tmpl-card-body">
+        {% if team_fgs %}
+        <div style="font-size:11px;font-weight:600;color:#6366f1;margin-bottom:4px;">📌 本组专属</div>
+        {% for g in team_fgs %}
+        <div class="tmpl-group-label" id="fg-label-{{ g.id }}">
+          <span id="fg-name-{{ g.id }}">{{ g.name }}</span>
+          <span class="text-muted" style="font-weight:400;font-size:11px;">{% if g.teams %}({{ g.teams }}){% else %}全组通用{% endif %}</span>
+          <span class="tmpl-actions" style="margin-left:auto;">
+            <button class="btn btn-outline-primary py-0" onclick="toggleEditGroup({{ g.id }})" title="重命名"><i class="fas fa-pen"></i></button>
+            <form method="post" action="{{ url_for('data.delete_fault_template_group', gid=g.id) }}" style="display:inline;" onsubmit="return confirm('删除模板组「{{ g.name }}」及其所有故障项？')">
+              <button class="btn btn-outline-danger py-0" title="解散"><i class="fas fa-times"></i></button>
+            </form>
+          </span>
+        </div>
+        <form method="post" action="{{ url_for('data.edit_fault_template_group', gid=g.id) }}" class="inline-form" id="edit-fg-{{ g.id }}" style="display:none;">
+          <input type="hidden" name="field" value="name">
+          <input type="text" name="value" value="{{ g.name }}" style="flex:1;" required>
+          <button class="btn btn-outline-success py-0"><i class="fas fa-check"></i></button>
+          <button type="button" class="btn btn-outline-secondary py-0" onclick="toggleEditGroup({{ g.id }})"><i class="fas fa-times"></i></button>
+        </form>
+        {% for item in g.items %}
+        <div class="tmpl-row" id="fault-row-{{ item.id }}">
+          <span class="tmpl-badge-type">{{ item.fault_type }}</span>
+          <span class="tmpl-name">{{ item.display_name }}</span>
+          <span class="tmpl-actions">
+            <button class="btn btn-outline-primary py-0" onclick="toggleEditFault({{ item.id }})" title="编辑"><i class="fas fa-pen"></i></button>
+            <form method="post" action="{{ url_for('data.delete_fault_template_item', gid=g.id, iid=item.id) }}" style="display:inline;" onsubmit="return confirm('删除「{{ item.display_name }}」？')">
+              <button class="btn btn-outline-danger py-0" title="删除"><i class="fas fa-times"></i></button>
+            </form>
+          </span>
+        </div>
+        <form method="post" action="{{ url_for('data.edit_fault_template_item', gid=g.id, iid=item.id) }}" class="inline-form" id="edit-fault-{{ item.id }}" style="display:none;">
+          <select name="fault_type" class="form-select" style="width:68px;font-size:11px;padding:2px 4px;">
+            <option value="软件" {% if item.fault_type=='软件' %}selected{% endif %}>软件</option>
+            <option value="硬件" {% if item.fault_type=='硬件' %}selected{% endif %}>硬件</option>
+            <option value="打印机" {% if item.fault_type=='打印机' %}selected{% endif %}>打印机</option>
+            <option value="协助" {% if item.fault_type=='协助' %}selected{% endif %}>协助</option>
+          </select>
+          <input type="text" name="display_name" value="{{ item.display_name }}" style="flex:1;" required>
+          <button class="btn btn-outline-success py-0"><i class="fas fa-check"></i></button>
+          <button type="button" class="btn btn-outline-secondary py-0" onclick="toggleEditFault({{ item.id }})"><i class="fas fa-times"></i></button>
+        </form>
+        {% endfor %}
+        <!-- 添加故障项 -->
+        <form method="post" action="{{ url_for('data.add_fault_template_item', gid=g.id) }}" class="inline-form">
+          <select name="fault_type" class="form-select" style="width:68px;font-size:11px;padding:2px 4px;">
+            <option value="软件">软件</option><option value="硬件" selected>硬件</option>
+            <option value="打印机">打印机</option><option value="协助">协助</option>
+          </select>
+          <input type="text" name="display_name" placeholder="故障名称" style="flex:1;">
+          <button class="btn btn-outline-success"><i class="fas fa-plus"></i> 添加</button>
+        </form>
+        {% endfor %}
+        {% endif %}
+
+        {% if gen_fgs %}
+        <div style="font-size:11px;font-weight:600;color:#94a3b8;margin-top:{% if team_fgs %}10{% else %}0{% endif %}px;margin-bottom:4px;"><i class="fas fa-clipboard-list"></i> 全组通用</div>
+        {% for g in gen_fgs %}
+        <div class="tmpl-group-label">{{ g.name }}</div>
+        {% for item in g.items %}
+        <div class="tmpl-row">
+          <span class="tmpl-badge-type">{{ item.fault_type }}</span>
+          <span class="tmpl-name">{{ item.display_name }}</span>
+        </div>
+        {% endfor %}
+        {% endfor %}
+        {% endif %}
+
+        {% if not has_fault %}
+        <div class="tmpl-empty">
+          <i class="fas fa-inbox"></i>
+          <div style="margin-top:4px;">「{{ t }}」还没有故障模板</div>
+          <form method="post" action="{{ url_for('data.copy_templates_to_team', target_team=t, template_type='fault') }}" onsubmit="return confirm('从华博复制故障模板到「{{ t }}」？')">
+            <button type="submit" class="copy-btn"><i class="fas fa-copy"></i> 从华博复制</button>
+          </form>
+        </div>
+        {% endif %}
+
+        <form id="addFaultGroupForm_{{ loop.index0 }}" method="post" action="{{ url_for('data.add_fault_template_group') }}" style="display:none;margin-top:8px;" class="inline-form">
+          <input type="hidden" name="teams" value="{{ t }}">
+          <input type="text" name="name" placeholder="模板组名称" required style="flex:1;">
+          <button class="btn btn-outline-success"><i class="fas fa-check"></i> 创建</button>
+          <button type="button" class="btn btn-outline-secondary" onclick="this.closest('form').style.display='none'">取消</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ===== 方案模板 ===== -->
+    <div class="tmpl-card">
+      <div class="tmpl-card-header">
+        <span><i class="fas fa-book text-success"></i> 方案模板 · {{ t }}</span>
+        <button class="btn btn-sm btn-outline-success py-0" style="font-size:11px;" onclick="showAddSolution('{{ t|e }}')"><i class="fas fa-plus"></i> 新建</button>
+      </div>
+      <div class="tmpl-card-body">
+        <form id="addSolutionForm_{{ loop.index0 }}" method="post" action="{{ url_for('data.add_solution') }}" style="display:none;margin-bottom:8px;" class="inline-form flex-wrap">
+          <input type="hidden" name="teams" value="{{ t }}">
+          <input type="text" name="title" placeholder="方案标题" required style="flex:1;min-width:120px;">
+          <select name="fault_type" class="form-select" style="width:70px;font-size:11px;">
+            <option value="">类型</option><option value="软件">软件</option><option value="硬件" selected>硬件</option>
+            <option value="打印机">打印机</option><option value="协助">协助</option>
+          </select>
+          <input type="text" name="content" placeholder="方案内容" required style="flex:2;min-width:150px;">
+          <button class="btn btn-outline-success"><i class="fas fa-check"></i> 创建</button>
+          <button type="button" class="btn btn-outline-secondary" onclick="this.closest('form').style.display='none'">取消</button>
+        </form>
+
+        {% if team_sols %}
+        <div style="font-size:11px;font-weight:600;color:#6366f1;margin-bottom:4px;">📌 本组专属</div>
+        {% for s in team_sols %}
+        <div class="tmpl-row" id="sol-row-{{ s.id }}">
+          <span class="tmpl-name">{{ s.title }}</span>
+          <span class="tmpl-meta">{% if s.fault_type %}{{ s.fault_type }}{% endif %}</span>
+          <span class="tmpl-meta" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">{{ s.content[:30] }}{% if s.content|length > 30 %}…{% endif %}</span>
+          <span class="tmpl-actions">
+            <button class="btn btn-outline-primary py-0" onclick="toggleEditSolution({{ s.id }})" title="编辑"><i class="fas fa-pen"></i></button>
+            <form method="post" action="{{ url_for('data.delete_solution', sid=s.id) }}" style="display:inline;" onsubmit="return confirm('删除方案「{{ s.title }}」？')">
+              <button class="btn btn-outline-danger py-0" title="删除"><i class="fas fa-times"></i></button>
+            </form>
+          </span>
+        </div>
+        <form method="post" action="{{ url_for('data.edit_solution_full', sid=s.id) }}" class="inline-form" id="edit-sol-{{ s.id }}" style="display:none;flex-wrap:wrap;">
+          <input type="text" name="title" value="{{ s.title }}" placeholder="标题" style="flex:1;min-width:100px;" required>
+          <input type="text" name="fault_type" value="{{ s.fault_type or '' }}" placeholder="故障类型" style="width:80px;">
+          <input type="text" name="content" value="{{ s.content }}" placeholder="方案内容" style="flex:2;min-width:150px;" required>
+          <button class="btn btn-outline-success py-0"><i class="fas fa-check"></i></button>
+          <button type="button" class="btn btn-outline-secondary py-0" onclick="toggleEditSolution({{ s.id }})"><i class="fas fa-times"></i></button>
+        </form>
+        {% endfor %}
+        {% endif %}
+
+        {% if gen_sols %}
+        <div style="font-size:11px;font-weight:600;color:#94a3b8;margin-top:{% if team_sols %}10{% else %}0{% endif %}px;margin-bottom:4px;"><i class="fas fa-clipboard-list"></i> 全组通用</div>
+        {% for s in gen_sols %}
+        <div class="tmpl-row">
+          <span class="tmpl-name">{{ s.title }}</span>
+          <span class="tmpl-meta">{% if s.fault_type %}{{ s.fault_type }}{% endif %}</span>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {% if not has_solution %}
+        <div class="tmpl-empty">
+          <i class="fas fa-inbox"></i>
+          <div style="margin-top:4px;">「{{ t }}」还没有方案模板</div>
+          <form method="post" action="{{ url_for('data.copy_templates_to_team', target_team=t, template_type='solution') }}" onsubmit="return confirm('从华博复制方案模板到「{{ t }}」？')">
+            <button type="submit" class="copy-btn"><i class="fas fa-copy"></i> 从华博复制</button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function selectTeam(team) {
+  document.querySelectorAll('.team-section').forEach(function(el) {
+    el.style.display = el.getAttribute('data-team') === team ? '' : 'none';
+  });
+  document.querySelectorAll('.tmpl-team-chip').forEach(function(el) {
+    el.classList.toggle('active', el.getAttribute('data-team') === team);
+  });
+}
+function showAddFaultGroup(team) {
+  var sections = document.querySelectorAll('.team-section[data-team="' + team + '"]');
+  if (sections.length) {
+    var form = sections[0].querySelector('form[id^="addFaultGroupForm_"]');
+    if (form) form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+  }
+}
+function showAddSolution(team) {
+  var sections = document.querySelectorAll('.team-section[data-team="' + team + '"]');
+  if (sections.length) {
+    var form = sections[0].querySelectorAll('form[id^="addSolutionForm_"]');
+    if (form.length) form[0].style.display = form[0].style.display === 'none' ? 'flex' : 'none';
+  }
+}
+function toggleEditFault(id) {
+  var row = document.getElementById('fault-row-' + id);
+  var form = document.getElementById('edit-fault-' + id);
+  if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+  if (form) form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+}
+function toggleEditGroup(id) {
+  var label = document.getElementById('fg-label-' + id);
+  var form = document.getElementById('edit-fg-' + id);
+  if (label) label.style.display = label.style.display === 'none' ? '' : 'none';
+  if (form) form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+}
+function toggleEditSolution(id) {
+  var row = document.getElementById('sol-row-' + id);
+  var form = document.getElementById('edit-sol-' + id);
+  if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+  if (form) form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+}
+</script>
+{% endblock %}

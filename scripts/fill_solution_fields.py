@@ -13,7 +13,6 @@ def infer_device_type(title):
     # 一体机
     if '一体机' in t:
         return '一体机'
-    # 打印机相关
     if re.match(r'^打印机', t) or re.match(r'^打印', t) or \
        '墨盒' in t or '搓纸轮' in t or '废墨' in t or '定影' in t or \
        '共享打印机' in t or '连接打印机' in t or '更换打印机' in t or \

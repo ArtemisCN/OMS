@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+{% block title %}周报月报{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="/static/vendor/fontawesome/all.min.css">
+<style>
+    :root { --bg-card: #1e293b; --border-card: #334155; --text-heading: #e2e8f0; --text-body: #cbd5e1; --text-muted-c: #94a3b8; }
+    body[data-theme="dark"] { background: #0f172a; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+    .page-header h4 { color: #e2e8f0; font-weight: 700; margin: 0; }
+
+    /* 顶部切换按钮 */
+    .toggle-group { display: flex; background: #1e293b; border: 1px solid #334155; border-radius: 10px; overflow: hidden; }
+    .toggle-group .toggle-btn { padding: 8px 24px; border: none; background: transparent; color: #94a3b8; font-size: 14px; font-weight: 600; cursor: pointer; transition: all .2s; }
+    .toggle-group .toggle-btn.active { background: #3b82f6; color: #fff; }
+    .toggle-group .toggle-btn:not(.active):hover { color: #e2e8f0; background: rgba(59,130,246,.1); }
+
+    /* 统计卡片 */
+    .stat-card { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 1px solid #334155; border-radius: 14px; padding: 20px; transition: transform .2s, box-shadow .2s; height: 100%; }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.3); }
+    .stat-card .sc-icon { font-size: 28px; opacity: .85; }
+    .stat-card .sc-value { font-size: 30px; font-weight: 800; color: #e2e8f0; line-height: 1.2; }
+    .stat-card .sc-label { font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: .4px; margin-top: 4px; }
+    .stat-card .sc-change { font-size: 12px; margin-top: 6px; }
+    .stat-card .sc-change.up { color: #22c55e; }
+    .stat-card .sc-change.down { color: #ef4444; }
+
+    /* 面板 */
+    .card-panel { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 20px; height: 100%; }
+    .card-panel .panel-title { font-size: 15px; font-weight: 600; color: #e2e8f0; margin-bottom: 14px; }
+    .card-panel .panel-title i { margin-right: 8px; color: #3b82f6; }
+
+    /* 环形图 (div模拟) */
+    .donut-wrapper { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 20px; padding: 10px 0; }
+    .donut-item { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .donut-ring { width: 80px; height: 80px; border-radius: 50%; position: relative; display: flex; align-items: center; justify-content: center; }
+    .donut-ring .donut-inner { width: 52px; height: 52px; border-radius: 50%; background: #0f172a; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+    .donut-ring .donut-inner .pct { font-size: 16px; font-weight: 800; color: #e2e8f0; line-height: 1; }
+    .donut-ring .donut-inner .sub { font-size: 10px; color: #64748b; }
+    .donut-label { font-size: 13px; color: #cbd5e1; text-align: center; }
+    .donut-legend { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 6px; }
+    .donut-legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #cbd5e1; }
+    .donut-legend-item .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* 表格 */
+    .table-dark-custom { width: 100%; border-collapse: collapse; }
+    .table-dark-custom th { color: #94a3b8; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .3px; padding: 10px 8px; border-bottom: 1px solid #334155; text-align: left; }
+    .table-dark-custom td { color: #cbd5e1; padding: 10px 8px; border-bottom: 1px solid #2d3748; font-size: 14px; }
+    .table-dark-custom tr:last-child td { border-bottom: none; }
+    .table-dark-custom tr:hover td { background: rgba(59,130,246,.06); }
+
+    .rank-badge { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+    .rank-1 { background: #f59e0b; color: #0f172a; }
+    .rank-2 { background: #94a3b8; color: #0f172a; }
+    .rank-3 { background: #b45309; color: #fff; }
+    .rank-other { background: #334155; color: #94a3b8; }
+
+    .progress-bar-mini { height: 6px; border-radius: 3px; background: #2d3748; overflow: hidden; margin-top: 4px; }
+    .progress-bar-mini .fill { height: 100%; border-radius: 3px; }
+
+    .text-primary-c { color: #3b82f6; }
+    .text-success-c { color: #22c55e; }
+    .text-warning-c { color: #eab308; }
+    .text-danger-c { color: #ef4444; }
+    .text-muted { color: #64748b; }
+    .export-bar { display: flex; gap: 8px; }
+    .export-bar .btn { background: #1e293b; border: 1px solid #334155; color: #cbd5e1; padding: 6px 14px; border-radius: 8px; font-size: 14px; transition: all .2s; }
+    .export-bar .btn:hover { background: #334155; color: #f1f5f9; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="page-header">
+        <h4><i class="fas fa-file-alt text-primary-c me-2"></i>自动报告</h4>
+        <div class="d-flex align-items-center gap-3">
+            <div class="toggle-group" id="reportToggle">
+                <button class="toggle-btn active" data-type="weekly" onclick="switchReport('weekly')"><i class="fas fa-calendar-week me-1"></i>周报</button>
+                <button class="toggle-btn" data-type="monthly" onclick="switchReport('monthly')"><i class="fas fa-calendar-alt me-1"></i>月报</button>
+            </div>
+            <div class="export-bar">
+                <button class="btn"><i class="fas fa-file-pdf text-danger-c me-1"></i>PDF</button>
+                <button class="btn"><i class="fas fa-file-excel text-success-c me-1"></i>Excel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4统计卡片 -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div><div class="sc-label">工单总数</div><div class="sc-value" id="statTotal">128</div></div>
+                    <div class="sc-icon text-primary-c"><i class="fas fa-clipboard-list"></i></div>
+                </div>
+                <div class="sc-change up"><i class="fas fa-arrow-up me-1"></i>较上期 +12%</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div><div class="sc-label">待处理</div><div class="sc-value" id="statPending">18</div></div>
+                    <div class="sc-icon text-warning-c"><i class="fas fa-hourglass-half"></i></div>
+                </div>
+                <div class="sc-change down"><i class="fas fa-arrow-down me-1"></i>较上期 -3%</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div><div class="sc-label">处理中</div><div class="sc-value" id="statProcessing">35</div></div>
+                    <div class="sc-icon text-primary-c"><i class="fas fa-spinner"></i></div>
+                </div>
+                <div class="sc-change up"><i class="fas fa-arrow-up me-1"></i>较上期 +5%</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div><div class="sc-label">已完成</div><div class="sc-value" id="statDone">75</div></div>
+                    <div class="sc-icon text-success-c"><i class="fas fa-check-circle"></i></div>
+                </div>
+                <div class="sc-change up"><i class="fas fa-arrow-up me-1"></i>较上期 +8%</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 中间行: 故障类型环形图 + 人员排行 + 科室排行 -->
+    <div class="row g-4">
+        <!-- 故障类型分布环形图 -->
+        <div class="col-md-4">
+            <div class="card-panel">
+                <div class="panel-title"><i class="fas fa-chart-pie"></i>故障类型分布</div>
+                <div class="donut-wrapper">
+                    <div class="donut-item">
+                        <div class="donut-ring" style="background: conic-gradient(#3b82f6 0% 35%, #2d3748 35% 100%);">
+                            <div class="donut-inner"><span class="pct">35%</span><span class="sub">设备</span></div>
+                        </div>
+                        <div class="donut-label">设备故障</div>
+                    </div>
+                    <div class="donut-item">
+                        <div class="donut-ring" style="background: conic-gradient(#22c55e 0% 25%, #2d3748 25% 100%);">
+                            <div class="donut-inner"><span class="pct">25%</span><span class="sub">网络</span></div>
+                        </div>
+                        <div class="donut-label">网络故障</div>
+                    </div>
+                    <div class="donut-item">
+                        <div class="donut-ring" style="background: conic-gradient(#eab308 0% 20%, #2d3748 20% 100%);">
+                            <div class="donut-inner"><span class="pct">20%</span><span class="sub">软件</span></div>
+                        </div>
+                        <div class="donut-label">软件异常</div>
+                    </div>
+                    <div class="donut-item">
+                        <div class="donut-ring" style="background: conic-gradient(#ef4444 0% 12%, #2d3748 12% 100%);">
+                            <div class="donut-inner"><span class="pct">12%</span><span class="sub">电力</span></div>
+                        </div>
+                        <div class="donut-label">电力故障</div>
+                    </div>
+                    <div class="donut-item">
+                        <div class="donut-ring" style="background: conic-gradient(#a78bfa 0% 8%, #2d3748 8% 100%);">
+                            <div class="donut-inner"><span class="pct">8%</span><span class="sub">其他</span></div>
+                        </div>
+                        <div class="donut-label">其他</div>
+                    </div>
+                </div>
+                <div class="donut-legend">
+                    <div class="donut-legend-item"><span class="dot" style="background:#3b82f6"></span>设备故障 35%</div>
+                    <div class="donut-legend-item"><span class="dot" style="background:#22c55e"></span>网络故障 25%</div>
+                    <div class="donut-legend-item"><span class="dot" style="background:#eab308"></span>软件异常 20%</div>
+                    <div class="donut-legend-item"><span class="dot" style="background:#ef4444"></span>电力故障 12%</div>
+                    <div class="donut-legend-item"><span class="dot" style="background:#a78bfa"></span>其他 8%</div>
+                </div>
+            </div>
+        </div>
+        <!-- 人员排行 -->
+        <div class="col-md-4">
+            <div class="card-panel">
+                <div class="panel-title"><i class="fas fa-users"></i>人员工单排行</div>
+                <table class="table-dark-custom">
+                    <thead>
+                        <tr><th style="width:32px">#</th><th>姓名</th><th>完成数</th><th>好评率</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="rank-badge rank-1">1</span></td>
+                            <td><i class="fas fa-user-circle text-primary-c me-1"></i>张工</td>
+                            <td>42</td>
+                            <td><span style="color:#22c55e">98%</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="rank-badge rank-2">2</span></td>
+                            <td><i class="fas fa-user-circle text-success-c me-1"></i>李工</td>
+                            <td>38</td>
+                            <td><span style="color:#22c55e">95%</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="rank-badge rank-3">3</span></td>
+                            <td><i class="fas fa-user-circle text-warning-c me-1"></i>王工</td>
+                            <td>35</td>
+                            <td><span style="color:#22c55e">93%</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="rank-badge rank-other">4</span></td>
+                            <td><i class="fas fa-user-circle text-muted me-1"></i>赵工</td>
+                            <td>29</td>
+                            <td><span style="color:#22c55e">91%</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="rank-badge rank-other">5</span></td>
+                            <td><i class="fas fa-user-circle text-muted me-1"></i>陈工</td>
+                            <td>24</td>
+                            <td><span style="color:#eab308">87%</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <!-- 科室排行 -->
+        <div class="col-md-4">
+            <div class="card-panel">
+                <div class="panel-title"><i class="fas fa-building"></i>科室工单排行</div>
+                <table class="table-dark-custom">
+                    <thead>
+                        <tr><th style="width:32px">#</th><th>科室</th><th>工单数</th><th>完成率</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="rank-badge rank-1">1</span></td>
+                            <td>急诊科</td>
+                            <td>96</td>
+                            <td>
+                                <span style="color:#22c55e">92%</span>
+                                <div class="progress-bar-mini"><div class="fill" style="width:92%;background:linear-gradient(90deg,#22c55e,#16a34a)"></div></div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><span class="rank-badge rank-2">2</span></td>
+                            <td>外科</td>
+                            <td>78</td>
+                            <td>
+                                <span style="color:#22c55e">88%</span>
+                                <div class="progress-bar-mini"><div class="fill" style="width:88%;background:linear-gradient(90deg,#22c55e,#16a34a)"></div></div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><span class="rank-badge rank-3">3</span></td>
+                            <td>内科</td>
+                            <td>65</td>
+                            <td>
+                                <span style="color:#22c55e">85%</span>
+                                <div class="progress-bar-mini"><div class="fill" style="width:85%;background:linear-gradient(90deg,#22c55e,#16a34a)"></div></div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><span class="rank-badge rank-other">4</span></td>
+                            <td>检验科</td>
+                            <td>52</td>
+                            <td>
+                                <span style="color:#eab308">78%</span>
+                                <div class="progress-bar-mini"><div class="fill" style="width:78%;background:linear-gradient(90deg,#eab308,#ca8a04)"></div></div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><span class="rank-badge rank-other">5</span></td>
+                            <td>放射科</td>
+                            <td>44</td>
+                            <td>
+                                <span style="color:#eab308">75%</span>
+                                <div class="progress-bar-mini"><div class="fill" style="width:75%;background:linear-gradient(90deg,#eab308,#ca8a04)"></div></div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部报告时间线/备注 -->
+    <div class="row g-4 mt-1">
+        <div class="col-12">
+            <div class="card-panel">
+                <div class="panel-title"><i class="fas fa-info-circle"></i>报告摘要</div>
+                <table class="table-dark-custom" style="max-width:600px">
+                    <tr><td style="color:#94a3b8;width:160px">报告周期</td><td id="reportPeriod">2026年第30周 (07-21 ~ 07-27)</td></tr>
+                    <tr><td style="color:#94a3b8">生成时间</td><td>2026-07-23 16:30:00</td></tr>
+                    <tr><td style="color:#94a3b8">数据来源</td><td>全院运维工单系统</td></tr>
+                    <tr><td style="color:#94a3b8">负责人</td><td>系统管理员</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+let reportType = 'weekly';
+function switchReport(type) {
+    reportType = type;
+    document.querySelectorAll('#reportToggle .toggle-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('#reportToggle .toggle-btn[data-type="' + type + '"]').classList.add('active');
+    // Update period display
+    const el = document.getElementById('reportPeriod');
+    if (type === 'weekly') el.textContent = '2026年第30周 (07-21 ~ 07-27)';
+    else el.textContent = '2026年7月 (07-01 ~ 07-31)';
+    loadReportData(type);
+}
+function loadReportData(type) {
+    console.log('Load report data for', type);
+    // TODO: AJAX load report data
+}
+</script>
+{% endblock %}

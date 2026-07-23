@@ -65,7 +65,7 @@ body {
 
 <div class="actions">
     <button class="btn-clear" onclick="clearSig()">🗑 清除</button>
-    <button class="btn-save" id="btnSave" onclick="saveSig()">✅ 提交签名</button>
+    <button class="btn-save" id="btnSave" onclick="saveSig()"><i class="fas fa-check-circle"></i> 提交签名</button>
 </div>
 
 <script>
@@ -144,18 +144,18 @@ function saveSig() {
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.onload = function() {
         if (xhr.status === 200) {
-            status.textContent = '✅ 签名已提交！页面将自动关闭...';
+            status.innerHTML = '<i class="fas fa-check-circle"></i> 签名已提交！页面将自动关闭...';
             status.className = 'status success';
-            btn.textContent = '✅ 已提交';
+            btn.innerHTML = '<i class="fas fa-check-circle"></i> 已提交';
             setTimeout(function() { window.close(); }, 1500);
         } else {
-            status.textContent = '❌ 提交失败，请重试';
-            btn.disabled = false; btn.textContent = '✅ 提交签名';
+            status.innerHTML = '<i class="fas fa-times-circle"></i> 提交失败，请重试';
+            btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle"></i> 提交签名';
         }
     };
     xhr.onerror = function() {
-        status.textContent = '❌ 网络错误，请重试';
-        btn.disabled = false; btn.textContent = '✅ 提交签名';
+        status.innerHTML = '<i class="fas fa-times-circle"></i> 网络错误，请重试';
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle"></i> 提交签名';
     };
     xhr.send('token=' + encodeURIComponent(token) + '&signature=' + encodeURIComponent(dataUrl));
 }

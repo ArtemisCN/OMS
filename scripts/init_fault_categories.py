@@ -137,7 +137,6 @@ def init_data():
             db.session.add(sub)
         db.session.flush()
 
-        # 删除旧关键词，重新插入
         FaultKeyword.query.filter_by(subcategory_id=sub.id).delete()
         for i, kw in enumerate(keywords):
             k = FaultKeyword(subcategory_id=sub.id, keyword=kw, sort_order=i)

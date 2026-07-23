@@ -261,7 +261,7 @@
   {% for h in hospitals %}
   {% set c = accent_colors[loop.index0 % accent_colors|length] %}
   {% set pcount = person_counts.get(h.id, 0) %}
-  {% set ucount = user_counts.get(h.id, 0) %}
+  {% set ucount = pcount %}
   {% set teams_data = hospital_person_teams.get(h.id, {}) %}
   {% set team_count = teams_data|length %}
 
@@ -306,7 +306,7 @@
     <div class="hm-stats">
       <div class="hm-stat">
         <div class="hm-stat-num" style="color:{{ c.stat_color }};">{{ pcount }}</div>
-        <div class="hm-stat-lbl">👤 维保人员</div>
+        <div class="hm-stat-lbl"><i class="fas fa-user"></i> 维保人员</div>
       </div>
       <div class="hm-stat">
         <div class="hm-stat-num" style="color:{{ c.stat_color }};">{{ ucount }}</div>

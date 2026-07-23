@@ -742,10 +742,10 @@ ADDRESS_LIST = parse_addresses_from_text(RAW_ADDRESS_TABLE)
 # ==================== 地址查询接口 ====================
 
 
-def get_all_buildings():
+def get_all_buildings(team=''):
     """获取所有楼区列表（含数据库新增）"""
     # 获取合并后的地址列表（硬编码+数据库覆盖）
-    merged = get_merged_addresses()
+    merged = get_merged_addresses(team=team)
     # 提取所有不重复的楼区名，按数字排序（支持中英文数字）
     buildings = set(a['楼区'] for a in merged)
     from collections import OrderedDict
@@ -762,9 +762,9 @@ def get_departments_by_building(building):
     return sorted(set(a['所属科室'] for a in merged if a['楼区'] == building))
 
 
-def get_floors_by_building(building):
+def get_floors_by_building(building, team=''):
     """查询某栋楼的所有楼层（按数字排序，含数据库新增）"""
-    merged = get_merged_addresses()
+    merged = get_merged_addresses(team=team)
     # 过滤出指定楼区楼层，按楼层数字排序（如 1F < 2F < 10F）
     floors = sorted(set(
         a['所属楼层'] for a in merged if a['楼区'] == building
@@ -777,20 +777,20 @@ def get_floors_by_building(building):
     return floors
 
 
-def get_departments_by_floor(building, floor):
+def get_departments_by_floor(building, floor, team=''):
     """查询某栋楼某楼层的所有科室（含数据库新增）"""
     # 同时按楼区和楼层过滤，返回该层所有科室
-    merged = get_merged_addresses()
+    merged = get_merged_addresses(team=team)
     return sorted(set(
         a['所属科室'] for a in merged
         if a['楼区'] == building and a['所属楼层'] == floor
     ))
 
 
-def get_locations_by_floor(building, floor):
+def get_locations_by_floor(building, floor, team=''):
     """查询某栋楼某楼层的所有物理地址（含数据库新增）"""
     # 过滤指定楼区+楼层，返回具体位置列表
-    merged = get_merged_addresses()
+    merged = get_merged_addresses(team=team)
     return [a['物理地址'] for a in merged
             if a['楼区'] == building and a['所属楼层'] == floor]
 
@@ -802,7 +802,7 @@ def get_locations_by_building_dept(building, department):
     return [a['物理地址'] for a in merged if a['楼区'] == building and a['所属科室'] == department]
 
 
-def get_merged_addresses(hospital_id=None):
+def get_merged_addresses(hospital_id=None, team=''):
     """获取当前医院的全部地址（RAW数据 + 数据库覆盖，按医院隔离）"""
     from models import AddressOverride, db
     from flask import g
@@ -820,6 +820,7 @@ def get_merged_addresses(hospital_id=None):
         entry = dict(addr)
         entry['_override_id'] = None
         entry['_base_index'] = i
+        entry['_teams'] = ''  # 基础地址默认为通用
         base_map[i] = entry
 
     # 2. 加载数据库覆盖记录
@@ -829,6 +830,11 @@ def get_merged_addresses(hospital_id=None):
     else:
         # 全量模式（admin 看全部医院）：只加载新增条目（base_index=-1），不替换基础条目
         query = query.filter(AddressOverride.base_index == -1)
+    if team and team != 'all':
+        query = query.filter(db.or_(
+            AddressOverride.teams == '',
+            AddressOverride.teams.contains(team),
+        ))
     overrides = query.order_by(AddressOverride.id).all()
 
     deleted_indices = set()
@@ -846,6 +852,7 @@ def get_merged_addresses(hospital_id=None):
             '物理地址': o.location,
             '_override_id': o.id,
             '_base_index': o.base_index if o.base_index >= 0 else -1,
+            '_teams': o.teams or '',
         }
         if o.base_index >= 0:
             base_map[o.base_index] = entry  # 替换基础条目
@@ -865,10 +872,10 @@ def get_merged_addresses(hospital_id=None):
 # ==================== 分组查询接口 ====================
 
 
-def get_addresses_grouped(building=None, keyword=None):
+def get_addresses_grouped(building=None, keyword=None, team=''):
     """获取按楼区分组的地址数据"""
     # 获取合并后的完整地址列表
-    merged = get_merged_addresses()
+    merged = get_merged_addresses(team=team)
     # 如果指定了楼区，过滤出该楼区的记录
     if building:
         merged = [a for a in merged if a['楼区'] == building]

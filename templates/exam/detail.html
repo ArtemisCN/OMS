@@ -235,7 +235,7 @@
 {% set pass_rate = (passed_count / submissions|length * 100)|round(1) if submissions else 0 %}
 <div class="stats-bar">
   <div class="stat-cell">
-    <div class="stat-icon">📝</div>
+    <div class="stat-icon"><i class="fas fa-pen"></i></div>
     <div class="stat-num">{{ total_q }}</div>
     <div class="stat-lbl">总题数</div>
   </div>
@@ -245,7 +245,7 @@
     <div class="stat-lbl">时长(分钟)</div>
   </div>
   <div class="stat-cell">
-    <div class="stat-icon">🎯</div>
+    <div class="stat-icon"><i class="fas fa-bullseye"></i></div>
     <div class="stat-num">{{ exam.pass_score }}%</div>
     <div class="stat-lbl">及格线</div>
   </div>
@@ -325,7 +325,7 @@
   </table>
   {% else %}
   <div class="empty-state-detail">
-    <span class="empty-icon">📋</span>
+    <span class="empty-icon"><i class="fas fa-clipboard-list"></i></span>
     <p>暂无考生提交答卷</p>
   </div>
   {% endif %}

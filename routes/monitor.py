@@ -1,5 +1,5 @@
 """服务器监控路由 - 仅管理员可见"""
-from flask import Blueprint, render_template, jsonify, request
+from flask import current_app,  Blueprint, render_template, jsonify, request
 from flask_login import login_required, current_user
 from models import can_access
 import psutil
@@ -94,14 +94,12 @@ def check_cron_last_run(cmd, log_path):
         try:
             mtime = os.path.getmtime(log_path)
             mt = datetime.fromtimestamp(mtime)
-            # 检查是否今天或昨天
             if mt.date() == now.date():
                 last = mt.strftime('今天 %H:%M')
             elif mt.date() == (now - timedelta(days=1)).date():
                 last = mt.strftime('昨天 %H:%M')
             else:
                 last = mt.strftime('%m-%d %H:%M')
-            # 检查文件最后几行是否有时间戳
             try:
                 result = subprocess.run(['tail', '-3', log_path], capture_output=True, text=True, timeout=3)
                 for rline in result.stdout.strip().split('\n'):
@@ -109,7 +107,7 @@ def check_cron_last_run(cmd, log_path):
                         last = last + ' ✓'
                         break
             except Exception:
-                pass
+                current_app.logger.warning('监控时间解析异常')
             return last
         except Exception:
             pass
@@ -630,7 +628,6 @@ def backup_create():
 def backup_restore():
     if not can_access('服务器监控'):
         return jsonify(success=False, msg='无权操作'), 403
-    # 验证管理员身份二次确认
     verify_user = (request.json.get('username') or '').strip()
     verify_pass = request.json.get('password') or ''
     if verify_user and verify_pass:

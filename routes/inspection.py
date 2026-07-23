@@ -2,11 +2,11 @@
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file
 from flask_login import login_required, current_user
-from models import db, InspectionTemplate, InspectionPlan, WorkOrder, Person
+from models import db, InspectionTemplate, InspectionPlan, WorkOrder, User
 from routes.auth import admin_required
 from services.address import get_all_buildings, get_floors_by_building, get_departments_by_building, get_locations_by_building_dept
+from utils.time_helpers import fmt_dt, now, fmt_date
 
-# 创建巡检管理蓝图，URL 前缀为 /inspection
 inspection_bp = Blueprint('inspection', __name__, url_prefix='/inspection')
 
 
@@ -23,7 +23,6 @@ def list_templates():
 @login_required
 def create_template_page():
     """新建巡检模板页面"""
-    # 返回模板创建表单页面
     return render_template('inspection/create_template.html')
 
 
@@ -31,21 +30,16 @@ def create_template_page():
 @admin_required
 def create_template():
     """新建巡检模板（POST 处理）"""
-    # 获取表单提交的模板名称，去除首尾空白
     name = request.form.get('name', '').strip()
-    # 获取巡检项文本，按行分割
     items_raw = request.form.get('items', '').strip()
     # 校验：模板名称不能为空
     if not name:
         flash('请输入模板名称', 'danger')
         return redirect(url_for('inspection.list_templates'))
-    # 解析巡检项：按换行符分割，过滤空行
     items = [i.strip() for i in items_raw.split('\n') if i.strip()]
-    # 校验：至少需要一项巡检内容
     if len(items) < 1:
         flash('请至少输入一项巡检内容', 'danger')
         return redirect(url_for('inspection.list_templates'))
-    # 创建模板记录并写入数据库
     tpl = InspectionTemplate(name=name, items=items)
     db.session.add(tpl)
     db.session.commit()
@@ -57,21 +51,16 @@ def create_template():
 @admin_required
 def edit_template(tid):
     """编辑巡检模板（POST 处理）"""
-    # 根据 ID 获取待编辑的模板，不存在则 404
     tpl = InspectionTemplate.query.get_or_404(tid)
-    # 获取表单数据
     name = request.form.get('name', '').strip()
     items_raw = request.form.get('items', '').strip()
-    # 校验模板名称
     if not name:
         flash('请输入模板名称', 'danger')
         return redirect(url_for('inspection.list_templates'))
-    # 解析并校验巡检项列表
     items = [i.strip() for i in items_raw.split('\n') if i.strip()]
     if len(items) < 1:
         flash('请至少输入一项巡检内容', 'danger')
         return redirect(url_for('inspection.list_templates'))
-    # 更新模板字段并保存
     tpl.name = name
     tpl.items = items
     db.session.commit()
@@ -122,7 +111,6 @@ def publish_plan():
             flash('请设定巡检时间', 'danger')
             return redirect(url_for('inspection.publish_plan'))
 
-        # 解析时间：将 HTML datetime-local 格式转换为 datetime 对象
         try:
             scheduled = scheduled.replace('T', ' ')  # datetime-local 提交的是 YYYY-MM-DDTHH:MM
             scheduled_time = datetime.strptime(scheduled, '%Y-%m-%d %H:%M')
@@ -130,7 +118,6 @@ def publish_plan():
             flash('时间格式错误，请使用 YYYY-MM-DD HH:MM', 'danger')
             return redirect(url_for('inspection.publish_plan'))
 
-        # 构造巡检计划对象
         plan = InspectionPlan(
             template_id=template_id,
             building=building,
@@ -147,7 +134,6 @@ def publish_plan():
         if scheduled_time <= datetime.now():
             _generate_inspection_order(plan)
 
-        # 保存计划到数据库
         db.session.add(plan)
         db.session.commit()
         flash(f'✅ 巡检计划已发布，时间: {scheduled}', 'success')
@@ -155,7 +141,7 @@ def publish_plan():
 
     # GET 请求：渲染发布页面，附带模板列表、活跃人员和医院地址数据
     templates = InspectionTemplate.query.order_by(InspectionTemplate.id).all()
-    persons = Person.query.filter_by(is_active=True).all()
+    persons = User.query.filter(User.is_active==True).order_by(User.sort_order, User.display_name).all()
     buildings = get_all_buildings()
     return render_template('inspection/publish.html', templates=templates, persons=persons, buildings=buildings)
 
@@ -200,7 +186,7 @@ def export_plans_csv():
             p.id, p.template.name if p.template else '',
             p.building, p.floor, p.department, p.location,
             schedule_label,
-            p.scheduled_time.strftime('%Y-%m-%d %H:%M') if p.scheduled_time else '',
+            fmt_dt(p.scheduled_time, '%Y-%m-%d %H:%M'),
             status_label, order_count, p.created_by
         ])
     data = output.getvalue()
@@ -278,13 +264,11 @@ def _generate_inspection_order(plan):
     # 如果计划已生成工单，则跳过
     if plan.status != 'pending':
         return
-    # 获取关联模板，构造工单标题
     tpl = plan.template
     title = f'🔍巡检: {tpl.name} - {plan.building} {plan.department}'.strip()
     if title.endswith('-'):
         title = title[:-2]
 
-    # 创建巡检工单，写入巡检检查项数据
     order = WorkOrder(
         title=title,
         work_type='inspection',
@@ -324,7 +308,6 @@ def api_check_due():
         count += 1
     if pending:
         db.session.commit()
-    # 返回本次生成的工单数量
     return jsonify({'generated': count})
 
 

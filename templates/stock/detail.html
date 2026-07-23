@@ -14,7 +14,7 @@
                 <h5 class="fw-bold">{{ part.name }}</h5>
                 <div style="font-size:12px; color:#6b7280; margin-bottom:12px;">{{ part.category }} · {{ part.brand }} {{ part.model_no }}</div>
                 <div style="font-size:36px; font-weight:700; color:{% if is_low %}#ef4444{% else %}var(--primary){% endif %};">{{ part.stock }}</div>
-                <div style="font-size:12px; color:#6b7280;">{{ part.unit }}{% if is_low %} ⚠️ 低于预警线({{ part.min_stock }}){% endif %}</div>
+                <div style="font-size:12px; color:#6b7280;">{{ part.unit }}{% if is_low %} <i class="fas fa-exclamation-triangle"></i> 低于预警线({{ part.min_stock }}){% endif %}</div>
                 {% if part.location %}<div style="font-size:12px; color:#6b7280; margin-top:8px;"><i class="fas fa-map-marker-alt"></i> {{ part.location }}</div>{% endif %}
                 {% if part.notes %}<div style="background:#f9fafb; border-radius:6px; padding:8px; font-size:12px; color:#6b7280; margin-top:12px;">{{ part.notes }}</div>{% endif %}
             </div>

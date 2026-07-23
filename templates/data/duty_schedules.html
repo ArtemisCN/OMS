@@ -47,6 +47,92 @@
 .preset-person-item { font-size:11px; padding:2px 8px; border-radius:12px; border:1px solid #d0d5dd; cursor:pointer; user-select:none; transition:all .1s; }
 .preset-person-item:hover { border-color:#0891b2; }
 .preset-person-item.selected { background:#0891b2; color:#fff; border-color:#0891b2; }
+
+/* 医院分组 */
+.duty-group-header {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+}
+.duty-group-header > td {
+    padding: 0 !important;
+    border: none !important;
+}
+.duty-group-header > td > div {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 10px 4px;
+    margin-top: 8px;
+}
+.duty-group-header .group-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+    font-size: 12px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(99,102,241,0.2);
+}
+.duty-group-header .group-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1e293b;
+    letter-spacing: 0.3px;
+}
+.duty-group-header .group-count {
+    font-size: 11px;
+    font-weight: 500;
+    color: #818cf8;
+    background: rgba(99,102,241,0.08);
+    padding: 1px 10px;
+    border-radius: 10px;
+}
+.duty-group-header .group-line {
+    flex: 1;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, #e0e7ff, transparent);
+}
+/* 同医院人员行交替底色 + 左侧彩色竖条 */
+.duty-group-body {
+    position: relative;
+}
+.duty-group-body td {
+    transition: background 0.15s;
+}
+.duty-group-body:nth-child(odd) td {
+    background-color: #fafbff;
+}
+.duty-group-body:nth-child(even) td {
+    background-color: #ffffff;
+}
+.duty-group-body:hover td {
+    background-color: #eef2ff !important;
+}
+.duty-group-body td.name-cell {
+    box-shadow: inset 3px 0 0 0 #6366f1;
+    font-weight: 600;
+    font-size: 12px;
+    padding: 4px 10px 4px 17px !important;
+    text-align: left;
+    white-space: nowrap;
+    min-width: 70px;
+    border: 1px solid #e2e8f0;
+}
+/* 深色模式 */
+[data-theme="dark"] .duty-group-header .group-name { color: #e2e8f0; }
+[data-theme="dark"] .duty-group-header .group-count { background: rgba(99,102,241,0.12); color: #a5b4fc; }
+[data-theme="dark"] .duty-group-header .group-line { background: linear-gradient(90deg, rgba(99,102,241,0.15), transparent); }
+[data-theme="dark"] .duty-group-body:nth-child(odd) td { background-color: #1a1f2e; }
+[data-theme="dark"] .duty-group-body:nth-child(even) td { background-color: #151923; }
+[data-theme="dark"] .duty-group-body:hover td { background-color: #1e2440 !important; }
+[data-theme="dark"] .duty-group-body td.name-cell { border-color: #2d3350; }
+[data-theme="dark"] .duty-group-body td.name-cell span { color: #e2e8f0; }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
@@ -121,8 +207,25 @@
             </tr>
         </thead>
         <tbody>
-            {% for s in staff %}
-            <tr>
+            {% for hname, hstaff in staff_groups.items() %}
+            {% if hstaff %}
+            {% if hname == '__unassigned__' %}
+            {% set hlabel = '未分配医院' %}
+            {% else %}
+            {% set hlabel = hname %}
+            {% endif %}
+            <tr class="duty-group-header">
+                <td colspan="{{ total_days + 1 }}">
+                    <div>
+                        <span class="group-icon"><i class="fas fa-hospital"></i></span>
+                        <span class="group-name">{{ hlabel }}</span>
+                        <span class="group-count">{{ hstaff|length }}人</span>
+                        <span class="group-line"></span>
+                    </div>
+                </td>
+            </tr>
+            {% for s in hstaff %}
+            <tr class="duty-group-body">
                 <td class="name-cell">
                     <span onclick="openNamePicker('{{ s.name|e }}')" title="点击选择班次填充工作日" style="cursor:pointer;font-weight:600;">{{ s.name }}</span>
                 </td>
@@ -136,6 +239,8 @@
                 </td>
                 {% endfor %}
             </tr>
+            {% endfor %}
+            {% endif %}
             {% endfor %}
         </tbody>
     </table>
@@ -256,7 +361,7 @@
                     <option value="workday">仅工作日</option>
                     <option value="weekend">仅周末</option>
                 </select>
-                <button class="btn btn-sm btn-info" onclick="applyRotate()" style="font-size:11px;">✅ 应用轮值</button>
+                <button class="btn btn-sm btn-info" onclick="applyRotate()" style="font-size:11px;"><i class="fas fa-check-circle"></i> 应用轮值</button>
             </div>
             <div id="rotatePreview" style="font-size:11px;color:#64748b;margin-top:4px;"></div>
             <div id="rotateVisualPreview" style="font-size:10px;margin-top:4px;line-height:1.6;display:none;"></div>
@@ -278,14 +383,14 @@
                     <option value="支援">支援</option>
                     <option value="×">休息</option>
                 </select>
-                <button class="btn btn-sm btn-success" onclick="presetFillWorkdays()" style="font-size:11px;">✅ 填充工作日</button>
+                <button class="btn btn-sm btn-success" onclick="presetFillWorkdays()" style="font-size:11px;"><i class="fas fa-check-circle"></i> 填充工作日</button>
                 <button class="btn btn-sm btn-outline-info" onclick="presetFillAll()" style="font-size:11px;">📌 填充全部</button>
             </div>
         </div>
 
         <!-- 周末排班 -->
         <div class="preset-section">
-            <h6>🎯 周末/节假日排班</h6>
+            <h6><i class="fas fa-bullseye"></i> 周末/节假日排班</h6>
             <div class="d-flex gap-2 align-items-center flex-wrap">
                 <select class="form-select form-select-sm" id="weekendPerson" style="width:100px;">
                     {% for s in staff %}
@@ -299,7 +404,7 @@
                     <option value="支援">支援</option>
                     <option value="×">休息</option>
                 </select>
-                <button class="btn btn-sm btn-warning" onclick="presetFillWeekends()" style="font-size:11px;">✅ 填充周末</button>
+                <button class="btn btn-sm btn-warning" onclick="presetFillWeekends()" style="font-size:11px;"><i class="fas fa-check-circle"></i> 填充周末</button>
             </div>
         </div>
     </div>
@@ -573,7 +678,7 @@ function applyRotate() {
             } else {
                 alert(d.msg || '操作失败');
                 btn.disabled = false;
-                btn.textContent = '✅ 应用轮值';
+                btn.innerHTML = '<i class="fas fa-check-circle"></i> 应用轮值';
             }
         });
 }

@@ -1,8 +1,9 @@
 """手机端路由 - 双池子模式（同步小程序）"""
-from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify
+from flask import current_app,  Blueprint, render_template, redirect, url_for, request, flash, jsonify
 from flask_login import login_required, current_user
 from datetime import datetime
 from models import db, WorkOrder, PaperForm, WorkOrderPhoto
+from utils.time_helpers import fmt_dt, now, fmt_date
 
 mobile_bp = Blueprint('mobile', __name__, url_prefix='/mobile')
 
@@ -50,7 +51,6 @@ def dashboard():
             query = query.filter(WorkOrder.hospital_id.in_(hospital_ids))
         orders = query.order_by(WorkOrder.created_at.desc()).all()
 
-    # 统计数据（一次查询4项，全部按医院过滤）
     hospital_ids = current_user.get_assigned_hospital_ids()
     base_filter = []
     if hospital_ids:
@@ -113,7 +113,6 @@ def accept_order(order_id):
         flash('工单状态不允许接单', 'warning')
         return redirect(url_for('mobile.dashboard'))
 
-    # 校验医院权限：只能接自己可访问医院的工单
     hospital_ids = current_user.get_assigned_hospital_ids()
     if hospital_ids and order.hospital_id not in hospital_ids:
         flash('无权接此医院的工单', 'danger')
@@ -215,7 +214,6 @@ def submit_inspection(order_id):
         flash('请至少完成一项巡检', 'warning')
         return redirect(url_for('mobile.order_detail', order_id=order_id))
 
-    # 构建巡检数据
     current_items = (order.inspection_data or {}).get('items', [])
     submitted = []
     for item in current_items:
@@ -291,8 +289,8 @@ def publish():
             from routes.api_mobile import send_new_order_notification, send_wecom_notification
             send_new_order_notification(order)
             send_wecom_notification(order)
-        except Exception:
-            pass
+        except Exception as e:
+            current_app.logger.error(f'移动端推送通知失败: {e}')
 
         flash('✅ 工单已发布，等待接单', 'success')
         return redirect(url_for('mobile.dashboard'))
@@ -347,7 +345,7 @@ def today_summary():
         WorkOrder.completed_at >= today_start
     ).order_by(WorkOrder.completed_at.asc()).all()
 
-    today = date.today().strftime('%Y-%m-%d')
+    today = fmt_date(date.today())
     priority_map = {'normal': '普通', 'urgent': '加急', 'emergency': '紧急'}
     lines = [f'{today} 工作总结', f'员工：{person_name}', '']
     lines.append(f'今日完成工单：{len(orders)} 项')
@@ -355,7 +353,7 @@ def today_summary():
 
     for i, o in enumerate(orders, 1):
         pri = priority_map.get(o.priority, '普通')
-        time_str = o.completed_at.strftime('%H:%M') if o.completed_at else ''
+        time_str = fmt_dt(o.completed_at, '%H:%M')
         lines.append(f'{i}. [{pri}]{o.title}')
         parts = []
         if o.building: parts.append(o.building)

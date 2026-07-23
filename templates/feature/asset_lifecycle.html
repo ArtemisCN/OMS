@@ -1,0 +1,709 @@
+{% extends "base.html" %}
+{% block title %}设备履历 · {{ asset.asset_no }}{% endblock %}
+{% block extra_head %}
+<style>
+    /* ===== 设备履历页面样式 ===== */
+    :root {
+        --lifecycle-primary: #4f46e5;
+        --lifecycle-success: #22c55e;
+        --lifecycle-warning: #eab308;
+        --lifecycle-danger: #ef4444;
+        --lifecycle-info: #3b82f6;
+        --lifecycle-purple: #a855f7;
+    }
+
+    /* ---------- 资产摘要卡片 ---------- */
+    .asset-summary-card {
+        background: rgba(255,255,255,0.7);
+        backdrop-filter: blur(20px) saturate(1.5);
+        -webkit-backdrop-filter: blur(20px) saturate(1.5);
+        border: 1px solid rgba(226,232,240,0.6);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 20px;
+        transition: box-shadow .2s;
+    }
+    [data-theme="dark"] .asset-summary-card {
+        background: rgba(15,23,42,0.8);
+        border-color: rgba(255,255,255,0.06);
+    }
+    .asset-summary-card:hover {
+        box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    }
+    [data-theme="dark"] .asset-summary-card:hover {
+        box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    }
+
+    .asset-summary-card .asset-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #1e293b;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    [data-theme="dark"] .asset-summary-card .asset-title {
+        color: #f1f5f9;
+    }
+    .asset-summary-card .asset-title .icon-wrap {
+        width: 40px; height: 40px;
+        border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(79,70,229,0.1);
+        color: var(--lifecycle-primary);
+        font-size: 18px;
+    }
+
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+    }
+    .summary-grid .item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .summary-grid .item .label {
+        font-size: 11px;
+        font-weight: 600;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    [data-theme="dark"] .summary-grid .item .label {
+        color: #64748b;
+    }
+    .summary-grid .item .value {
+        font-size: 14px;
+        font-weight: 500;
+        color: #334155;
+    }
+    [data-theme="dark"] .summary-grid .item .value {
+        color: #e2e8f0;
+    }
+
+    /* 状态徽章 */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .status-badge.in_use { background: rgba(34,197,94,0.12); color: #16a34a; }
+    .status-badge.spare  { background: rgba(234,179,8,0.12); color: #ca8a04; }
+    .status-badge.scrapped { background: rgba(239,68,68,0.12); color: #dc2626; }
+    .status-badge.lost   { background: rgba(100,116,139,0.12); color: #64748b; }
+    .status-badge .dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+    }
+    [data-theme="dark"] .status-badge.in_use { background: rgba(34,197,94,0.2); color: #4ade80; }
+    [data-theme="dark"] .status-badge.spare  { background: rgba(234,179,8,0.2); color: #facc15; }
+    [data-theme="dark"] .status-badge.scrapped { background: rgba(239,68,68,0.2); color: #f87171; }
+    [data-theme="dark"] .status-badge.lost   { background: rgba(148,163,184,0.15); color: #94a3b8; }
+
+    /* ---------- 时间线 ---------- */
+    .timeline-container {
+        position: relative;
+        padding-left: 40px;
+    }
+    .timeline-container::before {
+        content: '';
+        position: absolute;
+        left: 18px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: linear-gradient(180deg,
+            rgba(99,102,241,0.3) 0%,
+            rgba(99,102,241,0.1) 100%);
+    }
+    [data-theme="dark"] .timeline-container::before {
+        background: linear-gradient(180deg,
+            rgba(99,102,241,0.4) 0%,
+            rgba(99,102,241,0.05) 100%);
+    }
+
+    .timeline-item {
+        position: relative;
+        padding: 0 0 24px 20px;
+    }
+    .timeline-item:last-child {
+        padding-bottom: 0;
+    }
+
+    /* 时间线图标 */
+    .timeline-icon {
+        position: absolute;
+        left: -30px;
+        top: 0;
+        width: 36px; height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        color: #fff;
+        z-index: 1;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+    .timeline-icon.icon-import     { background: var(--lifecycle-success); }
+    .timeline-icon.icon-transfer   { background: var(--lifecycle-info); }
+    .timeline-icon.icon-edit       { background: var(--lifecycle-warning); }
+    .timeline-icon.icon-relocate   { background: var(--lifecycle-purple); }
+    .timeline-icon.icon-recover    { background: var(--lifecycle-primary); }
+    .timeline-icon.icon-scrap      { background: var(--lifecycle-danger); }
+    .timeline-icon.icon-inspection { background: #0ea5e9; }
+    .timeline-icon.icon-repair     { background: #f97316; }
+    .timeline-icon.icon-default    { background: var(--lifecycle-primary); }
+
+    /* 时间线内容卡片 */
+    .timeline-content {
+        background: rgba(255,255,255,0.7);
+        backdrop-filter: blur(20px) saturate(1.5);
+        -webkit-backdrop-filter: blur(20px) saturate(1.5);
+        border: 1px solid rgba(226,232,240,0.6);
+        border-radius: 12px;
+        padding: 14px 18px;
+        transition: box-shadow .2s, transform .15s;
+    }
+    .timeline-content:hover {
+        box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+        transform: translateX(2px);
+    }
+    [data-theme="dark"] .timeline-content {
+        background: rgba(15,23,42,0.7);
+        border-color: rgba(255,255,255,0.05);
+    }
+    [data-theme="dark"] .timeline-content:hover {
+        box-shadow: 0 2px 16px rgba(0,0,0,0.2);
+    }
+
+    .timeline-content .meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 6px;
+        font-size: 12px;
+        color: #94a3b8;
+    }
+    .timeline-content .meta .time {
+        font-weight: 500;
+    }
+    .timeline-content .meta .operator {
+        color: #64748b;
+    }
+    [data-theme="dark"] .timeline-content .meta .operator {
+        color: #94a3b8;
+    }
+    .timeline-content .meta .action-tag {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    .action-tag.tag-import     { background: rgba(34,197,94,0.12); color: #16a34a; }
+    .action-tag.tag-transfer   { background: rgba(59,130,246,0.12); color: #2563eb; }
+    .action-tag.tag-edit       { background: rgba(234,179,8,0.12); color: #ca8a04; }
+    .action-tag.tag-relocate   { background: rgba(168,85,247,0.12); color: #9333ea; }
+    .action-tag.tag-recover    { background: rgba(79,70,229,0.12); color: #4f46e5; }
+    .action-tag.tag-scrap      { background: rgba(239,68,68,0.12); color: #dc2626; }
+    .action-tag.tag-inspection { background: rgba(14,165,233,0.12); color: #0284c7; }
+    .action-tag.tag-repair     { background: rgba(249,115,22,0.12); color: #ea580c; }
+    .action-tag.tag-default    { background: rgba(100,116,139,0.12); color: #64748b; }
+    [data-theme="dark"] .action-tag.tag-import     { background: rgba(34,197,94,0.2); color: #4ade80; }
+    [data-theme="dark"] .action-tag.tag-transfer   { background: rgba(59,130,246,0.2); color: #60a5fa; }
+    [data-theme="dark"] .action-tag.tag-edit       { background: rgba(234,179,8,0.2); color: #facc15; }
+    [data-theme="dark"] .action-tag.tag-relocate   { background: rgba(168,85,247,0.2); color: #c084fc; }
+    [data-theme="dark"] .action-tag.tag-recover    { background: rgba(79,70,229,0.2); color: #818cf8; }
+    [data-theme="dark"] .action-tag.tag-scrap      { background: rgba(239,68,68,0.2); color: #f87171; }
+    [data-theme="dark"] .action-tag.tag-inspection { background: rgba(14,165,233,0.2); color: #38bdf8; }
+    [data-theme="dark"] .action-tag.tag-repair     { background: rgba(249,115,22,0.2); color: #fb923c; }
+    [data-theme="dark"] .action-tag.tag-default    { background: rgba(148,163,184,0.15); color: #94a3b8; }
+
+    .timeline-content .detail {
+        font-size: 13px;
+        color: #475569;
+        line-height: 1.6;
+    }
+    [data-theme="dark"] .timeline-content .detail {
+        color: #cbd5e1;
+    }
+    .timeline-content .detail .field-change {
+        display: inline-block;
+        background: rgba(226,232,240,0.5);
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-family: monospace;
+        font-size: 12px;
+    }
+    [data-theme="dark"] .timeline-content .detail .field-change {
+        background: rgba(51,65,85,0.5);
+        color: #e2e8f0;
+    }
+
+    /* ---------- 空状态 ---------- */
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #94a3b8;
+    }
+    .empty-state i {
+        font-size: 48px;
+        margin-bottom: 16px;
+        opacity: 0.4;
+    }
+    .empty-state p {
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+    [data-theme="dark"] .empty-state {
+        color: #64748b;
+    }
+
+    /* ---------- 页面头部按钮 ---------- */
+    .page-actions {
+        display: flex;
+        gap: 8px;
+    }
+    .page-actions .btn {
+        border-radius: 10px;
+        font-size: 13px;
+        padding: 6px 16px;
+    }
+
+    /* ---------- 时间线过滤器 ---------- */
+    .timeline-filter {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+    }
+    .timeline-filter .filter-btn {
+        padding: 4px 12px;
+        border-radius: 20px;
+        border: 1px solid rgba(226,232,240,0.6);
+        background: rgba(255,255,255,0.5);
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all .2s;
+    }
+    .timeline-filter .filter-btn:hover {
+        border-color: #6366f1;
+        color: #4f46e5;
+    }
+    .timeline-filter .filter-btn.active {
+        background: rgba(79,70,229,0.1);
+        border-color: #6366f1;
+        color: #4f46e5;
+    }
+    [data-theme="dark"] .timeline-filter .filter-btn {
+        background: rgba(15,23,42,0.5);
+        border-color: rgba(255,255,255,0.06);
+        color: #94a3b8;
+    }
+    [data-theme="dark"] .timeline-filter .filter-btn:hover {
+        border-color: #818cf8;
+        color: #a78bfa;
+    }
+    [data-theme="dark"] .timeline-filter .filter-btn.active {
+        background: rgba(99,102,241,0.15);
+        border-color: #818cf8;
+        color: #a78bfa;
+    }
+
+    /* ---------- 统计小标签 ---------- */
+    .lifecycle-stats {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    .lifecycle-stats .stat {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: #64748b;
+    }
+    [data-theme="dark"] .lifecycle-stats .stat {
+        color: #94a3b8;
+    }
+    .lifecycle-stats .stat i {
+        font-size: 16px;
+    }
+    .lifecycle-stats .stat .num {
+        font-weight: 700;
+        font-size: 16px;
+        color: #1e293b;
+    }
+    [data-theme="dark"] .lifecycle-stats .stat .num {
+        color: #f1f5f9;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <!-- ===== 页面标题 & 操作按钮 ===== -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">
+            <i class="fas fa-history text-primary"></i> 设备履历
+            <small class="text-muted ms-2" style="font-size:13px;font-weight:400;">
+                <i class="fas fa-chevron-right" style="font-size:10px;"></i> {{ asset.asset_no }}
+            </small>
+        </h5>
+        <div class="page-actions">
+            <a href="{{ url_for('asset.detail', asset_id=asset.id) }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> 返回详情
+            </a>
+            <a href="{{ url_for('asset.list_view') }}" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-list"></i> 资产台账
+            </a>
+        </div>
+    </div>
+
+    <!-- ===== ① 资产信息摘要卡片 ===== -->
+    <div class="asset-summary-card">
+        <div class="asset-title">
+            <div class="icon-wrap"><i class="fas fa-server"></i></div>
+            <span>{{ asset.asset_no }}</span>
+            <span class="status-badge {{ asset.status or 'in_use' }}">
+                <span class="dot"></span>
+                {% set status_map = {'in_use':'使用中','spare':'闲置','scrapped':'已报废','lost':'丢失'} %}
+                {{ status_map.get(asset.status, '未知') }}
+            </span>
+        </div>
+        <div class="summary-grid">
+            <div class="item">
+                <span class="label">设备类型</span>
+                <span class="value">{{ asset.device_type or '-' }}</span>
+            </div>
+            <div class="item">
+                <span class="label">品牌型号</span>
+                <span class="value">{{ asset.brand or '' }} {{ asset.model_no or '' }}</span>
+            </div>
+            <div class="item">
+                <span class="label">序列号</span>
+                <span class="value" style="font-family:monospace;font-size:13px;">{{ asset.sn or '-' }}</span>
+            </div>
+            <div class="item">
+                <span class="label">所属科室</span>
+                <span class="value">{{ asset.department or '-' }}</span>
+            </div>
+            <div class="item">
+                <span class="label">存放位置</span>
+                <span class="value">
+                    {%- if asset.building %}{{ asset.building }}{% endif -%}
+                    {%- if asset.floor %} / {{ asset.floor }}{% endif -%}
+                    {%- if asset.location %} / {{ asset.location }}{% endif -%}
+                    {%- if not asset.building and not asset.floor and not asset.location %}-{% endif -%}
+                </span>
+            </div>
+            <div class="item">
+                <span class="label">供应商</span>
+                <span class="value">{{ asset.vendor or '-' }}</span>
+            </div>
+            <div class="item">
+                <span class="label">购入日期</span>
+                <span class="value">{{ asset.purchase_date.strftime('%Y-%m-%d') if asset.purchase_date else '-' }}</span>
+            </div>
+            <div class="item">
+                <span class="label">价格(元)</span>
+                <span class="value">{{ '%.2f' | format(asset.price) if asset.price else '-' }}</span>
+            </div>
+            <div class="item">
+                <span class="label">质保期</span>
+                <span class="value">
+                    {%- if asset.warranty_start and asset.warranty_end -%}
+                        {{ asset.warranty_start.strftime('%Y-%m-%d') }} ~ {{ asset.warranty_end.strftime('%Y-%m-%d') }}
+                    {%- elif asset.warranty_end -%}
+                        至 {{ asset.warranty_end.strftime('%Y-%m-%d') }}
+                    {%- else -%}
+                        -
+                    {%- endif -%}
+                </span>
+            </div>
+            <div class="item">
+                <span class="label">IP地址</span>
+                <span class="value" style="font-family:monospace;font-size:13px;">{{ asset.ip_address or '-' }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== ② 时间线 ===== -->
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0 fw-bold">
+            <i class="fas fa-timeline text-primary me-1"></i> 生命周期时间线
+        </h6>
+    </div>
+
+    <!-- 统计摘要 -->
+    {% if asset_logs %}
+    <div class="lifecycle-stats">
+        {% set actions = asset_logs | map(attribute='action') | list %}
+        <div class="stat">
+            <i class="fas fa-list-ul" style="color:var(--lifecycle-primary);"></i>
+            <span class="num">{{ asset_logs | length }}</span>
+            <span>条记录</span>
+        </div>
+        {% if 'import' in actions %}
+        <div class="stat">
+            <i class="fas fa-inbox" style="color:var(--lifecycle-success);"></i>
+            <span class="num">{{ actions | select('equalto','import') | list | length }}</span>
+            <span>入库</span>
+        </div>
+        {% endif %}
+        {% if 'transfer' in actions %}
+        <div class="stat">
+            <i class="fas fa-exchange-alt" style="color:var(--lifecycle-info);"></i>
+            <span class="num">{{ actions | select('equalto','transfer') | list | length }}</span>
+            <span>调拨</span>
+        </div>
+        {% endif %}
+        {% if 'relocate' in actions %}
+        <div class="stat">
+            <i class="fas fa-map-marker-alt" style="color:var(--lifecycle-purple);"></i>
+            <span class="num">{{ actions | select('equalto','relocate') | list | length }}</span>
+            <span>移库</span>
+        </div>
+        {% endif %}
+        {% if 'edit' in actions %}
+        <div class="stat">
+            <i class="fas fa-pen" style="color:var(--lifecycle-warning);"></i>
+            <span class="num">{{ actions | select('equalto','edit') | list | length }}</span>
+            <span>编辑</span>
+        </div>
+        {% endif %}
+        {% if 'scrap' in actions or 'scrapped' in actions %}
+        <div class="stat">
+            <i class="fas fa-trash-alt" style="color:var(--lifecycle-danger);"></i>
+            <span class="num">{{ actions | select('equalto','scrap') | list | length + actions | select('equalto','scrapped') | list | length }}</span>
+            <span>报废</span>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- 操作类型过滤器 -->
+    <div class="timeline-filter" id="timelineFilter">
+        <span class="filter-btn active" data-filter="all">全部</span>
+        <span class="filter-btn" data-filter="import"><i class="fas fa-inbox"></i> 入库</span>
+        <span class="filter-btn" data-filter="transfer"><i class="fas fa-exchange-alt"></i> 调拨</span>
+        <span class="filter-btn" data-filter="relocate"><i class="fas fa-map-marker-alt"></i> 移库</span>
+        <span class="filter-btn" data-filter="edit"><i class="fas fa-pen"></i> 编辑</span>
+        <span class="filter-btn" data-filter="repair"><i class="fas fa-tools"></i> 维修</span>
+        <span class="filter-btn" data-filter="inspection"><i class="fas fa-clipboard-check"></i> 巡检</span>
+        <span class="filter-btn" data-filter="scrap"><i class="fas fa-trash-alt"></i> 报废</span>
+    </div>
+
+    {% if asset_logs %}
+    <div class="timeline-container" id="timelineContainer">
+        {% for log in asset_logs %}
+        {% set _action = log.action or 'default' %}
+        <div class="timeline-item" data-action="{{ _action }}">
+            <!-- 图标 -->
+            <div class="timeline-icon icon-{{ _action }}">
+                {% if _action == 'import' %}<i class="fas fa-inbox"></i>
+                {% elif _action == 'transfer' %}<i class="fas fa-exchange-alt"></i>
+                {% elif _action == 'relocate' %}<i class="fas fa-map-marker-alt"></i>
+                {% elif _action == 'edit' %}<i class="fas fa-pen"></i>
+                {% elif _action == 'recover' %}<i class="fas fa-undo"></i>
+                {% elif _action == 'scrap' or _action == 'scrapped' %}<i class="fas fa-trash-alt"></i>
+                {% elif _action == 'repair' %}<i class="fas fa-tools"></i>
+                {% elif _action == 'inspection' %}<i class="fas fa-clipboard-check"></i>
+                {% else %}<i class="fas fa-circle"></i>
+                {% endif %}
+            </div>
+            <!-- 内容卡片 -->
+            <div class="timeline-content">
+                <div class="meta">
+                    <span class="time">
+                        <i class="far fa-clock me-1"></i>
+                        {% if log.created_at is string %}
+                            {{ log.created_at[:19] }}
+                        {% else %}
+                            {{ log.created_at.strftime('%Y-%m-%d %H:%M') }}
+                        {% endif %}
+                    </span>
+                    <span class="operator">
+                        <i class="far fa-user me-1"></i>{{ log.operator or '系统' }}
+                    </span>
+                    <span class="action-tag tag-{{ _action }}">
+                        {% set action_name = {
+                            'import':'入库', 'transfer':'调拨', 'relocate':'移库',
+                            'edit':'编辑', 'recover':'恢复', 'scrap':'报废', 'scrapped':'报废',
+                            'repair':'维修', 'inspection':'巡检'
+                        } %}
+                        {{ action_name.get(_action, _action) }}
+                    </span>
+                </div>
+                <div class="detail">
+                    {% if _action == 'import' %}
+                        设备 <strong>{{ asset.asset_no }}</strong> 登记入库
+                        {% if log.new_value %}
+                            {% set new = log.new_value | from_json %}
+                            {% if new and new.get('department') %}
+                                ，分配至 <strong>{{ new['department'] }}</strong>
+                            {% endif %}
+                        {% endif %}
+                    {% elif _action == 'transfer' %}
+                        设备调拨
+                        {% if log.old_value and log.new_value %}
+                            {% set old = log.old_value | from_json %}
+                            {% set new = log.new_value | from_json %}
+                            {% if old and new %}
+                                {% if old.get('department') != new.get('department') %}
+                                    ：科室 <span class="field-change">{{ old.get('department','?') }}</span>
+                                    <i class="fas fa-arrow-right mx-1" style="font-size:10px;color:#94a3b8;"></i>
+                                    <span class="field-change">{{ new.get('department','?') }}</span>
+                                {% endif %}
+                                {% if old.get('location') != new.get('location') %}
+                                    {% if old.get('department') != new.get('department') %}<br>{% endif %}
+                                    位置 <span class="field-change">{{ old.get('location','?') }}</span>
+                                    <i class="fas fa-arrow-right mx-1" style="font-size:10px;color:#94a3b8;"></i>
+                                    <span class="field-change">{{ new.get('location','?') }}</span>
+                                {% endif %}
+                            {% endif %}
+                        {% else %}
+                            ：接收人 <strong>{{ log.operator }}</strong>
+                        {% endif %}
+                    {% elif _action == 'relocate' %}
+                        设备移库
+                        {% if log.old_value and log.new_value %}
+                            {% set old = log.old_value | from_json %}
+                            {% set new = log.new_value | from_json %}
+                            {% if old and new %}
+                                {% if old.get('building') != new.get('building') or old.get('floor') != new.get('floor') or old.get('location') != new.get('location') %}
+                                    ：<span class="field-change">{{ old.get('building','') }}{{ '/'+old.get('floor','') if old.get('floor') }}{{ '/'+old.get('location','') if old.get('location') }}</span>
+                                    <i class="fas fa-arrow-right mx-1" style="font-size:10px;color:#94a3b8;"></i>
+                                    <span class="field-change">{{ new.get('building','') }}{{ '/'+new.get('floor','') if new.get('floor') }}{{ '/'+new.get('location','') if new.get('location') }}</span>
+                                {% endif %}
+                            {% endif %}
+                        {% endif %}
+                    {% elif _action == 'edit' %}
+                        信息变更
+                        {% if log.old_value and log.new_value %}
+                            {% set old = log.old_value | from_json %}
+                            {% set new = log.new_value | from_json %}
+                            {% if old and new %}
+                                {% set changed_fields = [] %}
+                                {% for key in ['brand','model_no','sn','department','location','status','ip_address'] %}
+                                    {% if old.get(key) != new.get(key) %}
+                                        {% set _ = changed_fields.append(key) %}
+                                    {% endif %}
+                                {% endfor %}
+                                {% if changed_fields %}
+                                    ：修改了
+                                    {% set field_names = {
+                                        'brand':'品牌','model_no':'型号','sn':'序列号',
+                                        'department':'科室','location':'位置','status':'状态',
+                                        'ip_address':'IP地址'
+                                    } %}
+                                    {% for f in changed_fields[:4] %}
+                                        <span class="field-change">{{ field_names.get(f,f) }}</span>
+                                        {% if not loop.last %}、{% endif %}
+                                    {% endfor %}
+                                    {% if changed_fields | length > 4 %}
+                                        等 {{ changed_fields | length }} 项
+                                    {% endif %}
+                                {% else %}
+                                    ：属性已更新
+                                {% endif %}
+                            {% endif %}
+                        {% endif %}
+                    {% elif _action == 'scrap' or _action == 'scrapped' %}
+                        设备 <strong>{{ asset.asset_no }}</strong> 已报废
+                        {% if log.new_value %}
+                            {% set new = log.new_value | from_json %}
+                            {% if new and new.get('notes') %}
+                                ：{{ new['notes'] }}
+                            {% endif %}
+                        {% endif %}
+                    {% elif _action == 'recover' %}
+                        设备恢复使用
+                    {% elif _action == 'repair' %}
+                        维修记录
+                        {% if log.new_value %}
+                            {% set new = log.new_value | from_json %}
+                            {% if new %}
+                                {% if new.get('fault_desc') %}<br>故障描述：{{ new['fault_desc'] }}{% endif %}
+                                {% if new.get('repair_result') %}<br>维修结果：{{ new['repair_result'] }}{% endif %}
+                            {% endif %}
+                        {% endif %}
+                    {% elif _action == 'inspection' %}
+                        巡检记录
+                        {% if log.new_value %}
+                            {% set new = log.new_value | from_json %}
+                            {% if new %}
+                                {% if new.get('result') %}<br>巡检结果：{{ new['result'] }}{% endif %}
+                                {% if new.get('notes') %}<br>备注：{{ new['notes'] }}{% endif %}
+                            {% endif %}
+                        {% endif %}
+                    {% else %}
+                        {{ log.action }}
+                        {% if log.new_value %}
+                            {% set new = log.new_value | from_json %}
+                            {% if new and new is mapping %}
+                                {% for k,v in new.items() if v %}
+                                    {% if loop.index <= 3 %}
+                                        <br>{{ k }}: {{ v }}
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-history"></i>
+        <p>暂无生命周期记录，该资产尚未发生任何操作日志。</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+    // ===== 时间线操作类型过滤 =====
+    var filterBtns = document.querySelectorAll('#timelineFilter .filter-btn');
+    var items = document.querySelectorAll('#timelineContainer .timeline-item');
+
+    filterBtns.forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            var filter = this.dataset.filter;
+
+            // 切换按钮激活状态
+            filterBtns.forEach(function(b) { b.classList.remove('active'); });
+            this.classList.add('active');
+
+            // 过滤条目
+            items.forEach(function(item) {
+                var action = item.dataset.action || 'default';
+                if (filter === 'all') {
+                    item.style.display = '';
+                } else if (filter === 'scrap') {
+                    item.style.display = (action === 'scrap' || action === 'scrapped') ? '' : 'none';
+                } else {
+                    item.style.display = (action === filter) ? '' : 'none';
+                }
+            });
+        });
+    });
+})();
+</script>
+{% endblock %}

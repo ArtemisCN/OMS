@@ -52,9 +52,9 @@
                             {% if r.status == 'pending' %}
                             <span class="badge bg-warning text-dark status-pending">⏳ 待审批</span>
                             {% elif r.status == 'approved' %}
-                            <span class="badge bg-success status-approved">✅ 已批准</span>
+                            <span class="badge bg-success status-approved"><i class="fas fa-check-circle"></i> 已批准</span>
                             {% else %}
-                            <span class="badge bg-danger status-rejected">❌ 已拒绝</span>
+                            <span class="badge bg-danger status-rejected"><i class="fas fa-times-circle"></i> 已拒绝</span>
                             {% endif %}
                         </td>
                         <td><small class="text-muted">{{ r.created_at.strftime('%m/%d %H:%M') }}</small></td>

@@ -1,7 +1,7 @@
 """系统参数设置 + 科室字典管理"""
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required
-from models import db, SystemSetting, Department, Person
+from models import db, SystemSetting, Department
 from routes.auth import admin_required
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/settings')
@@ -245,6 +245,8 @@ def init_defaults():
         ('order_prefix', '', '工单编号前缀', '维修单编号的自定义前缀（如"七院-"），留空则不使用前缀', '工单'),
         ('default_dark_mode', 'light', '默认深色模式', '登录后默认使用的颜色主题', '界面'),
         ('upload_max_mb', '20', '上传大小限制', '单张照片最大允许上传的 MB 数', '工单'),
+        ('feature_toggle_auto_assign', 'false', '自动派单', '新工单创建后自动根据人员空闲状态+故障类型匹配度分配处理人（需先创建好人员账号）', '功能开关'),
+        ('feature_toggle_timeout_reminder', 'false', '超时催办', '工单超过设定时长未处理时自动发送企业微信催办通知', '功能开关'),
     ]
     count = 0
     for key, value, label, desc, cat in defaults:

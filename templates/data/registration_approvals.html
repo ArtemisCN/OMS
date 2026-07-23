@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}注册审批 · 数据管理{% endblock %}
+{% block content %}
+<style>
+.ra-page{padding:24px 28px}
+.ra-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px}
+.ra-header h1{font-size:20px;font-weight:700;color:var(--text);margin:0;display:flex;align-items:center;gap:10px}
+.ra-header h1 i{color:var(--primary)}
+.status-tabs{display:flex;gap:4px;background:var(--bg-card-secondary,#f1f4f8);padding:3px;border-radius:10px}
+.status-tabs a{padding:6px 16px;border-radius:8px;font-size:13px;font-weight:500;color:var(--text-muted);text-decoration:none;transition:all .2s}
+.status-tabs a.active{background:#fff;color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,0.06)}
+.status-badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600}
+.badge-pending{background:#fef3c7;color:#92400e}
+.badge-approved{background:#d1fae5;color:#065f46}
+.badge-rejected{background:#fee2e2;color:#991b1b}
+.ra-table{width:100%;border-collapse:collapse;font-size:13px}
+.ra-table th{padding:10px 12px;text-align:left;font-weight:600;color:var(--text-muted);border-bottom:1px solid var(--border);font-size:12px;text-transform:uppercase;letter-spacing:.3px}
+.ra-table td{padding:12px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
+.ra-table tr:hover{background:var(--bg-card-secondary,#f8f9fc)}
+.ra-table .actions{display:flex;gap:6px}
+.ra-table .actions form{display:inline}
+.btn-sm{font-size:12px;padding:5px 14px;border-radius:6px;border:none;cursor:pointer;font-weight:500}
+.btn-approve{background:#059669;color:#fff}
+.btn-approve:hover{background:#047857}
+.btn-reject{background:#dc2626;color:#fff}
+.btn-reject:hover{background:#b91c1c}
+.empty-state{text-align:center;padding:60px 20px;color:var(--text-muted)}
+.empty-state i{font-size:40px;margin-bottom:12px;opacity:.3}
+.reject-reason{font-size:12px;color:#991b1b;margin-top:2px}
+</style>
+<div class="ra-page">
+<div class="ra-header">
+<h1><i class="fas fa-user-check"></i> 注册审批</h1>
+<div class="status-tabs">
+<a href="{{ url_for('data.list_registration_approvals', status='pending') }}" class="{% if current_status=='pending' %}active{% endif %}">待审批</a>
+<a href="{{ url_for('data.list_registration_approvals', status='approved') }}" class="{% if current_status=='approved' %}active{% endif %}">已通过</a>
+<a href="{{ url_for('data.list_registration_approvals', status='rejected') }}" class="{% if current_status=='rejected' %}active{% endif %}">已拒绝</a>
+<a href="{{ url_for('data.list_registration_approvals', status='all') }}" class="{% if current_status=='all' %}active{% endif %}">全部</a>
+</div>
+</div>
+
+{% if pagination.items %}
+<table class="ra-table">
+<thead>
+<tr>
+<th>申请人</th>
+<th>用户名</th>
+<th>手机号</th>
+<th>院区</th>
+<th>原因</th>
+<th>申请时间</th>
+<th>状态</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody>
+{% for req in pagination.items %}
+<tr>
+<td><strong>{{ req.display_name }}</strong></td>
+<td><code>{{ req.username }}</code></td>
+<td>{{ req.phone or '-' }}</td>
+<td>{{ req.hospital.name if req.hospital else '-' }}</td>
+<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ req.reason }}">{{ req.reason or '-' }}</td>
+<td>{{ req.created_at.strftime('%m-%d %H:%M') }}</td>
+<td>
+{% if req.status=='pending' %}<span class="status-badge badge-pending">待审批</span>
+{% elif req.status=='approved' %}<span class="status-badge badge-approved">已通过</span>
+{% elif req.status=='rejected' %}<span class="status-badge badge-rejected">已拒绝</span>{% endif %}
+{% if req.reject_reason %}<div class="reject-reason">{{ req.reject_reason }}</div>{% endif %}
+</td>
+<td class="actions">
+{% if req.status=='pending' %}
+<form method="post" action="{{ url_for('data.approve_registration', rid=req.id) }}" onsubmit="return confirm('确认通过 {{ req.display_name }} 的注册申请？')">
+<button type="submit" class="btn-sm btn-approve"><i class="fas fa-check"></i> 通过</button>
+</form>
+<form method="post" action="{{ url_for('data.reject_registration', rid=req.id) }}" onsubmit="var r=prompt('拒绝原因（选填）');if(r!==null){if(r)this.querySelector('input').value=r;return true}return false">
+<input type="hidden" name="reason" value="">
+<button type="submit" class="btn-sm btn-reject"><i class="fas fa-times"></i> 拒绝</button>
+</form>
+{% endif %}
+</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+
+{% if pagination.pages > 1 %}
+<nav class="mt-3"><ul class="pagination pagination-sm justify-content-center">
+{% for p in range(1, pagination.pages+1) %}
+<li class="page-item {% if p==pagination.page %}active{% endif %}"><a class="page-link" href="{{ url_for('data.list_registration_approvals', status=current_status, page=p) }}">{{ p }}</a></li>
+{% endfor %}
+</ul></nav>
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+<i class="fas fa-inbox"></i>
+<p>暂无{{ {'pending':'待审批','approved':'已通过','rejected':'已拒绝','all':''}.get(current_status,'') }}注册申请</p>
+</div>
+{% endif %}
+</div>
+{% endblock %}

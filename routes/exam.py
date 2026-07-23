@@ -5,6 +5,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g
 from flask_login import login_required, current_user
 from models import db, Exam, ExamQuestion, ExamSubmission, can_access, get_group_name_by_id, RoleGroup
+from utils.time_helpers import fmt_dt, now, fmt_date
 
 exam_bp = Blueprint('exam', __name__, url_prefix='/exam')
 
@@ -82,16 +83,14 @@ def exam_create():
         db.session.add(exam)
         db.session.flush()
 
-        # 处理题目
         _save_questions(exam.id, request.form)
         db.session.commit()
         flash('考试创建成功', 'success')
         return redirect(url_for('exam.exam_detail', exam_id=exam.id))
 
     groups = RoleGroup.query.order_by(RoleGroup.name).all()
-    # 获取所有人员组别
-    from models import Person
-    all_teams = [t[0] for t in Person.query.with_entities(Person.team).distinct().order_by(Person.team).all() if t[0]]
+    from models import User
+    all_teams = [t[0] for t in User.query.with_entities(User.team).filter(User.team!='', User.team!=None).distinct().order_by(User.team).all() if t[0]]
     return render_template('exam/create.html', exam=None, groups=groups, teams=all_teams, now=datetime.now())
 
 
@@ -119,7 +118,6 @@ def exam_edit(exam_id):
         exam.allowed_groups = json.dumps(request.form.getlist('allowed_groups'))
         exam.allowed_teams = json.dumps(request.form.getlist('allowed_teams'))
 
-        # 删除旧题，重新添加
         ExamQuestion.query.filter_by(exam_id=exam.id).delete()
         _save_questions(exam.id, request.form)
         db.session.commit()
@@ -127,8 +125,8 @@ def exam_edit(exam_id):
         return redirect(url_for('exam.exam_detail', exam_id=exam.id))
 
     groups = RoleGroup.query.order_by(RoleGroup.name).all()
-    from models import Person
-    all_teams = [t[0] for t in Person.query.with_entities(Person.team).distinct().order_by(Person.team).all() if t[0]]
+    from models import User
+    all_teams = [t[0] for t in User.query.with_entities(User.team).filter(User.team!='', User.team!=None).distinct().order_by(User.team).all() if t[0]]
     questions = ExamQuestion.query.filter_by(exam_id=exam.id).order_by(ExamQuestion.sort_order).all()
     return render_template('exam/create.html', exam=exam, questions=questions, groups=groups, teams=all_teams, now=datetime.now())
 
@@ -171,7 +169,6 @@ def exam_review_submission(exam_id, submission_id):
     except (json.JSONDecodeError, TypeError):
         user_answers = {}
 
-    # 构建逐题数据
     review_items = []
     correct_count = 0
     wrong_count = 0
@@ -315,11 +312,9 @@ def api_exam_list():
         if not e.check_access():
             continue
         d = e.to_dict()
-        # 检查用户已提交次数
         attempt_count = ExamSubmission.query.filter_by(
             exam_id=e.id, user_id=current_user.id, status='submitted'
         ).count()
-        # 检查是否有进行中的考试
         in_progress = ExamSubmission.query.filter_by(
             exam_id=e.id, user_id=current_user.id, status='in_progress'
         ).first()
@@ -349,13 +344,11 @@ def api_exam_questions(exam_id):
     if not exam.check_access():
         return jsonify({'error': '无权参加此考试'}), 403
 
-    # 检查是否有进行中的答题
     submission = ExamSubmission.query.filter_by(
         exam_id=exam.id, user_id=current_user.id, status='in_progress'
     ).first()
 
     if not submission:
-        # 新建答题
         submission = ExamSubmission(
             exam_id=exam.id,
             user_id=current_user.id,
@@ -366,12 +359,10 @@ def api_exam_questions(exam_id):
         db.session.flush()
         submission_id = submission.id
 
-        # 获取并打乱题目
         questions = ExamQuestion.query.filter_by(exam_id=exam.id).order_by(ExamQuestion.sort_order).all()
         if exam.shuffle_questions:
             random.shuffle(questions)
 
-        # 构建题目数组（不含答案）
         qlist = []
         total_score = 0
         for q in questions:
@@ -390,7 +381,6 @@ def api_exam_questions(exam_id):
 
         submission.total_count = len(qlist)
         submission.total_possible = total_score
-        # 存储题目顺序到 answers 字段（初始化空答案）
         submission.set_answers({})
         db.session.commit()
     else:
@@ -409,10 +399,8 @@ def api_exam_questions(exam_id):
                 'score': q.score,
             })
 
-    # 返回已有答案（恢复答题时恢复）
     saved_answers = submission.get_answers()
 
-    # 计算已用时间
     elapsed = 0
     if submission.started_at:
         elapsed = int((datetime.now() - submission.started_at).total_seconds())
@@ -423,7 +411,7 @@ def api_exam_questions(exam_id):
         'questions': qlist,
         'saved_answers': saved_answers,
         'time_limit': exam.duration_minutes * 60,
-        'started_at': submission.started_at.strftime('%Y-%m-%d %H:%M:%S') if submission.started_at else '',
+        'started_at': fmt_dt(submission.started_at, '%Y-%m-%d %H:%M:%S'),
         'elapsed_seconds': elapsed,
     })
 

@@ -7,7 +7,6 @@ from routes.auth import admin_required
 from models import db, SparePart, StockRecord, StorageLocation, WorkOrder, log_audit
 from datetime import datetime
 
-# 创建备件库存管理蓝图，URL 前缀 /stock
 stock_bp = Blueprint('stock', __name__, url_prefix='/stock')
 
 
@@ -15,11 +14,9 @@ stock_bp = Blueprint('stock', __name__, url_prefix='/stock')
 @login_required
 def index():
     """备件库存总览"""
-    # 获取查询参数：分类筛选 / 仅显示低库存
     category = request.args.get('category', '').strip()
     low_only = request.args.get('low_only', '') == '1'
     q = request.args.get('q', '').strip()
-    # 构建查询，按库存量升序排列
     query = SparePart.query
     if category:
         query = query.filter_by(category=category)
@@ -38,7 +35,6 @@ def index():
     if low_only:
         parts = [p for p in parts if p.is_low]
 
-    # 统计总览数据：种类数、总库存量、低库存数量、所有分类列表
     total_types = SparePart.query.count()
     total_stock = db.session.query(db.func.sum(SparePart.stock)).scalar() or 0
     low_count = sum(1 for p in SparePart.query.all() if p.is_low)
@@ -78,7 +74,6 @@ def parts_json():
 @login_required
 def detail(part_id):
     """备件详情 + 出入库记录"""
-    # 按 ID 查询备件，不存在则 404
     part = SparePart.query.filter(SparePart.id == part_id, SparePart.hospital_id == getattr(g, 'hospital_id', None)).first()
     if not part:
         abort(404)
@@ -92,11 +87,9 @@ def detail(part_id):
 @stock_bp.route('/add', methods=['GET', 'POST'])
 @login_required
 def add():
-    # 权限校验：仅管理员可新增备件
     if not current_user.is_admin:
         flash('仅管理员可操作', 'danger')
         return redirect(url_for('stock.index'))
-    # 处理表单提交（POST）
     if request.method == 'POST':
         try:
             # 从表单构建备件对象
@@ -142,7 +135,6 @@ def add():
 @stock_bp.route('/edit/<int:part_id>', methods=['GET', 'POST'])
 @login_required
 def edit(part_id):
-    # 权限校验：仅管理员可修改
     if not current_user.is_admin:
         flash('仅管理员可操作', 'danger')
         return redirect(url_for('stock.index'))
@@ -150,10 +142,8 @@ def edit(part_id):
     part = SparePart.query.filter(SparePart.id == part_id, SparePart.hospital_id == getattr(g, 'hospital_id', None)).first()
     if not part:
         abort(404)
-    # 处理表单提交（POST）
     if request.method == 'POST':
         try:
-            # 更新备件各字段
             part.name = request.form.get('name', '')
             part.category = request.form.get('category', '其他')
             part.brand = request.form.get('brand', '')
@@ -182,7 +172,6 @@ def edit(part_id):
 @stock_bp.route('/delete/<int:part_id>', methods=['POST'])
 @login_required
 def delete(part_id):
-    # 权限校验：仅管理员可删除
     if not current_user.is_admin:
         flash('权限不足', 'danger')
         return redirect(url_for('stock.index'))
@@ -196,7 +185,6 @@ def delete(part_id):
     # 记录审计日志
     log_audit('delete', 'spare_part', current_user.display_name,
               target_id=part.id, target_desc=f'删除备件 {name}')
-    # 删除备件本身并提交
     db.session.delete(part)
     db.session.commit()
     flash(f'备件「{name}」已删除', 'success')
@@ -242,7 +230,6 @@ def out_records():
 
     records = query.order_by(StockRecord.created_at.desc()).all()
 
-    # 获取所有出库科室列表（用于筛选下拉）
     departments = [r[0] for r in
                    db.session.query(StockRecord.department)
                    .filter(StockRecord.type == 'out', StockRecord.department != '')
@@ -258,10 +245,8 @@ def out_records():
 @login_required
 def inout():
     """出入库操作"""
-    # 权限校验：仅管理员可执行出入库
     if not current_user.is_admin:
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
-    # 解析表单参数：备件ID、操作类型(in/out)、数量、备注
     part_id = request.form.get('part_id', type=int)
     action = request.form.get('action')  # in/out
     qty = request.form.get('quantity', type=int, default=0)
@@ -278,13 +263,11 @@ def inout():
     if action == 'out' and part.stock < qty:
         return jsonify({'ok': False, 'msg': f'库存不足（当前 {part.stock}{part.unit}）'}), 400
 
-    # 更新库存数量：入库增 / 出库减
     if action == 'in':
         part.stock += qty
     else:
         part.stock -= qty
 
-    # 创建出入库流水记录
     record = StockRecord(
         part_id=part_id, type=action, quantity=qty,
         balance=part.stock, operator=current_user.display_name,
@@ -359,7 +342,6 @@ def batch_out_sign_init():
     items = request.form.getlist('items[]')
     if not items:
         return jsonify({'ok': False, 'msg': '请选择出库物品'}), 400
-    # 检查库存
     for item in items:
         parts = item.split(':')
         if len(parts) != 2: continue
@@ -435,31 +417,26 @@ def batch_out_sign_execute(token):
 @login_required
 def import_stock_excel():
     """从Excel导入备件"""
-    # 权限校验
     if not current_user.is_admin:
         flash('仅管理员可操作', 'danger')
         return redirect(url_for('stock.index'))
-    # 检查服务端是否安装 openpyxl
     try:
         import openpyxl
     except ImportError:
         flash('服务端缺少 openpyxl 库', 'danger')
         return redirect(url_for('stock.index'))
-    # 验证上传文件
     file = request.files.get('file')
     if not file:
         flash('请选择文件', 'danger')
         return redirect(url_for('stock.index'))
     try:
         from models import SparePart, StorageLocation
-        # 加载工作簿并读取所有行
         wb = openpyxl.load_workbook(file, data_only=True)
         ws = wb.active
         rows = list(ws.iter_rows(values_only=True))
         if not rows:
             flash('空文件', 'danger')
             return redirect(url_for('stock.index'))
-        # 解析表头：转小写、去空格，建立列名到字段的映射
         header = [str(c or '').strip().lower() for c in rows[0]]
         data_rows = rows[1:]
         # 中英文列名映射表
@@ -495,7 +472,6 @@ def import_stock_excel():
             # 按名称查找已存在的备件：存在则更新，不存在则新建
             existing = SparePart.query.filter_by(name=name).first()
             if existing:
-                # 更新已有备件各字段
                 if row_dict.get('category'): existing.category = row_dict['category']
                 if row_dict.get('model_no'): existing.model_no = row_dict['model_no']
                 if row_dict.get('brand'): existing.brand = row_dict['brand']
@@ -510,7 +486,6 @@ def import_stock_excel():
                 if row_dict.get('notes'): existing.notes = row_dict['notes']
                 imported += 1; continue
             try:
-                # 创建新备件记录
                 loc_id = None
                 if row_dict.get('location'):
                     loc = StorageLocation.query.filter_by(name=row_dict['location']).first()
@@ -546,20 +521,16 @@ def import_stock_excel():
 @login_required
 def export_stock_template():
     """下载备件导入表头模板"""
-    # 检查 openpyxl 可用性
     try:
         import openpyxl
         from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
     except ImportError:
         flash('服务端缺少 openpyxl 库', 'danger')
         return redirect(url_for('stock.index'))
-    # 创建工作簿并命名工作表
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = '备件导入模板'
-    # 定义表头行内容
     headers = ['备件名称', '分类', '规格型号', '品牌', '库存量', '最低库存', '单位', '单价', '存放位置', '备注']
-    # 设置表头样式：加粗白色字体 + 紫色填充 + 细边框
     hf = Font(bold=True, size=11, color='FFFFFF')
     hfill = PatternFill(start_color='8B5CF6', end_color='8B5CF6', fill_type='solid')
     tb = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
@@ -568,7 +539,6 @@ def export_stock_template():
         c.font = hf; c.fill = hfill; c.alignment = Alignment(horizontal='center', vertical='center'); c.border = tb
     # 调整首列宽度便于输入
     ws.column_dimensions['A'].width = 20
-    # 写入内存流并返回文件下载响应
     output = io.BytesIO()
     wb.save(output); output.seek(0)
     return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -656,7 +626,6 @@ def request_approve(rid):
         note=f'领用审批出库：{req.requester} - {req.reason}',
     )
     db.session.add(record)
-    # 更新申请状态
     req.status = 'approved'
     req.approver = current_user.display_name or current_user.username
     req.approved_at = datetime.now()

@@ -215,7 +215,6 @@ SOLUTION_TEMPLATES = {
 
 
 # ==================== 微信小程序配置 ====================
-# 用于 wx.login 自动登录（空值则不启用该功能）
 WECHAT_APPID = os.environ.get('WECHAT_APPID', '')
 WECHAT_SECRET = os.environ.get('WECHAT_SECRET', '')
 # 微信订阅消息模板ID（需要在微信公众平台小程序后台配置）

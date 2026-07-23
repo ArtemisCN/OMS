@@ -183,7 +183,7 @@
 
         <!-- 保存/加载 -->
         <div class="editor-section" style="display:flex;gap:4px;">
-            <button class="editor-btn success" onclick="saveModel()" style="flex:1;">💾 保存模型</button>
+            <button class="editor-btn success" onclick="saveModel()" style="flex:1;"><i class="fas fa-save"></i> 保存模型</button>
             <button class="editor-btn" onclick="loadModel()" style="flex:1;">📂 加载</button>
         </div>
     </div>
@@ -898,7 +898,7 @@ function addPreset(name) {
     refreshCustomElements();
     renderElemList();
     if (added.length > 0) selectElement(editElements.indexOf(added[0]));
-    showToast(`✅ 已添加 ${preset.name}`, 'success');
+    showToast(`<i class="fas fa-check-circle"></i> 已添加 ${preset.name}`, 'success');
 }
 
 function renderElement(elem) {
@@ -953,7 +953,7 @@ function renderElemList() {
         const div = document.createElement('div');
         div.className = 'editor-elem-item' + (i === selectedElemIdx ? ' selected' : '');
         const icons = { box: '📦', cylinder: '🛢', sign: '🏷' };
-        div.innerHTML = `${icons[elem.type] || '■'} ${elem.type}<span class="del" onclick="event.stopPropagation();deleteElement(${i})">✕</span>`;
+        div.innerHTML = `${icons[elem.type] || '■'} ${elem.type}<span class="del" onclick="event.stopPropagation();deleteElement(${i})"><i class="fas fa-times"></i></span>`;
         div.onclick = () => selectElement(i);
         list.appendChild(div);
     });
@@ -1063,7 +1063,7 @@ async function saveModel() {
             body: JSON.stringify({ model })
         });
         const data = await res.json();
-        showToast(data.success ? `✅ ${editBuildingId} 模型已保存` : '保存失败', data.success ? 'success' : 'error');
+        showToast(data.success ? `<i class="fas fa-check-circle"></i> ${editBuildingId} 模型已保存` : '保存失败', data.success ? 'success' : 'error');
     } catch(e) {
         showToast('保存失败: ' + e.message, 'error');
     }
@@ -1117,7 +1117,7 @@ async function uploadTexture() {
                 customTexUrls.push(data.url);
                 updateTexSelect();
                 document.getElementById('propTex').value = data.url;
-                showToast('✅ 贴图已上传', 'success');
+                showToast('<i class="fas fa-check-circle"></i> 贴图已上传', 'success');
             } else showToast(data.error || '上传失败', 'error');
         } catch(e) { showToast('上传失败: ' + e.message, 'error'); }
     };

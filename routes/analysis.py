@@ -4,6 +4,7 @@ from flask_login import login_required, current_user
 from models import WorkOrder, db, can_access, SystemSetting
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
+from utils.time_helpers import fmt_dt, now, fmt_date
 
 analysis_bp = Blueprint('analysis', __name__, url_prefix='/analysis')
 
@@ -30,12 +31,10 @@ def api_repeats():
     week = request.args.get('week', 0, type=int)
     min_count = request.args.get('min', 2, type=int)
 
-    # 计算时间范围
     if mode == 'year':
         start = datetime(year, 1, 1)
         end = datetime(year + 1, 1, 1)
     elif mode == 'week':
-        # 计算某年某月的第N周
         month_start = datetime(year, month, 1)
         if month == 12:
             month_end = datetime(year + 1, 1, 1)
@@ -90,7 +89,6 @@ def api_repeats():
         db.desc('last_time'),
     ).all()
 
-    # 汇总统计
     total_repeats = sum(r.repeat_count for r in rows)
     total_locations = len(rows)
     max_repeat = rows[0].repeat_count if rows else 0
@@ -111,7 +109,6 @@ def api_repeats():
         parts = [p for p in [r.building, r.floor, r.location] if p]
         full_location = '-'.join(parts) if parts else '未知'
 
-        # 构造跳转链接：跳转到工单列表筛选该位置+故障的工单
         params = {}
         if r.building:
             params['building'] = r.building
@@ -133,8 +130,8 @@ def api_repeats():
             'fault_subcategory': r.fault_subcategory,
             'device_type': r.device_type,
             'count': r.repeat_count,
-            'first_time': r.first_time.strftime('%Y-%m-%d') if r.first_time else '',
-            'last_time': r.last_time.strftime('%Y-%m-%d') if r.last_time else '',
+            'first_time': fmt_date(r.first_time),
+            'last_time': fmt_date(r.last_time),
             'link_url': link_url,
         })
 

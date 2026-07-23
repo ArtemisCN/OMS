@@ -1,31 +1,112 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
+/* ===== 组选择器 ===== */
+.team-selector-bar {
+    background: var(--card-bg, #fff);
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.team-selector-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text, #1e293b);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.team-chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.team-chip-lg {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 18px;
+    border-radius: 24px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    border: 2px solid var(--border, #e2e8f0);
+    background: var(--card-bg, #fff);
+    color: var(--text, #1e293b);
+    transition: all 0.15s;
+    user-select: none;
+}
+.team-chip-lg:hover {
+    border-color: #6366f1;
+    background: rgba(99,102,241,0.04);
+}
+.team-chip-lg.active {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: #fff;
+    border-color: #6366f1;
+    box-shadow: 0 2px 8px rgba(99,102,241,0.3);
+}
+.team-chip-lg .team-count {
+    font-size: 10px;
+    font-weight: 400;
+    opacity: 0.7;
+}
+
+/* ===== 活跃组标识横幅 ===== */
+.active-team-banner {
+    background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(79,70,229,0.04));
+    border: 1px solid rgba(99,102,241,0.2);
+    border-radius: 10px;
+    padding: 8px 14px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text, #1e293b);
+}
+.active-team-banner .badge-team {
+    background: #6366f1;
+    color: #fff;
+    padding: 2px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+}
+[data-theme="dark"] .active-team-banner {
+    background: rgba(99,102,241,0.06);
+    border-color: rgba(99,102,241,0.15);
+}
+
+/* ===== 原有样式 ===== */
 .batch-step { display:flex;align-items:center;gap:8px;margin-bottom:16px; }
 .batch-step .step-num { width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff; }
 .batch-step .step-bar { flex:1;height:2px;background:#e2e8f0;border-radius:1px; }
-.batch-section { background:#fff;border-radius:10px;border:1px solid #e5e7eb;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,0.03); }
+.batch-section { background:var(--card-bg,#fff);border-radius:10px;border:1px solid var(--border,#e5e7eb);padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,0.03); }
 [data-theme="dark"] .batch-section { background:#1a1d27;border-color:#2a2e3a; }
-.batch-section-title { font-size:13px;font-weight:700;color:#1e293b;margin-bottom:10px;display:flex;align-items:center;gap:6px; }
+.batch-section-title { font-size:13px;font-weight:700;color:var(--text,#1e293b);margin-bottom:10px;display:flex;align-items:center;gap:6px; }
 [data-theme="dark"] .batch-section-title { color:#e2e8f0; }
 .person-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:4px; }
-.person-item { display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:6px;border:1px solid #f1f5f9;font-size:12px;transition:all 0.1s; }
-.person-item:hover { background:#f8fafc;border-color:#e2e8f0; }
+.person-item { display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:6px;border:1px solid var(--border,#f1f5f9);font-size:12px;transition:all 0.1s; }
+.person-item:hover { background:var(--hover-bg,#f8fafc);border-color:var(--border,#e2e8f0); }
 .person-item .form-check-input { margin:0; }
 .person-item .form-check-label { font-size:12px; }
-.person-item .weight-input { width:36px;height:20px;font-size:10px;padding:0 2px;text-align:center;border:1px solid #e2e8f0;border-radius:4px; }
-.team-chip { display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #e2e8f0;transition:all 0.15s;user-select:none; }
+.person-item .weight-input { width:36px;height:20px;font-size:10px;padding:0 2px;text-align:center;border:1px solid var(--border,#e2e8f0);border-radius:4px;background:var(--input-bg,#fff);color:var(--text,#1e293b); }
+.team-chip { display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border,#e2e8f0);transition:all 0.15s;user-select:none; }
 .team-chip:hover { border-color:#6366f1;background:rgba(99,102,241,0.04); }
 .team-chip.active { background:#6366f1;color:#fff;border-color:#6366f1; }
-.ftg-group-wrap { background:#f8f9fc;border-radius:8px;padding:10px 12px;margin-bottom:8px;border:1px solid #eef1f5; }
+.ftg-group-wrap { background:var(--bg-subtle,#f8f9fc);border-radius:8px;padding:10px 12px;margin-bottom:8px;border:1px solid var(--border,#eef1f5); }
 [data-theme="dark"] .ftg-group-wrap { background:#0f1117;border-color:#2a2e3a; }
 .ftg-group-title { font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;display:flex;align-items:center;gap:6px; }
 .ftg-item { display:flex;align-items:center;gap:8px;padding:3px 0; }
-.ftg-item label { font-size:12px;color:#1e293b;flex:1; }
-.ftg-item input[type=number] { width:60px;font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid #e2e8f0;text-align:center; }
+.ftg-item label { font-size:12px;color:var(--text,#1e293b);flex:1; }
+.ftg-item input[type=number] { width:60px;font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--border,#e2e8f0);text-align:center;background:var(--input-bg,#fff);color:var(--text,#1e293b); }
 .no-groups-hint { font-size:12px;color:#94a3b8;padding:10px;text-align:center; }
 .verify-row { display:flex;gap:8px;align-items:center;flex-wrap:wrap; }
-.verify-row input { font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid #e2e8f0; }
+.verify-row input { font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid var(--border,#e2e8f0);background:var(--input-bg,#fff);color:var(--text,#1e293b); }
 .verify-hint { font-size:11px;color:#94a3b8; }
 </style>
 
@@ -91,14 +172,39 @@
 </div>
 {% endif %}
 
+<!-- ===== 第〇步：组选择 ===== -->
+<div class="team-selector-bar">
+    <div class="team-selector-title"><i class="fas fa-tag text-primary"></i> 选择要生成的组</div>
+    <div class="team-chip-list" id="teamSelector">
+        <span class="team-chip-lg {% if selected_team == 'all' %}active{% endif %}" data-team="all" onclick="selectTeam('all')">
+            <i class="fas fa-clipboard-list"></i> 全部 <span class="team-count">{{ persons|length }}人</span>
+        </span>
+        {% for t in teams %}
+        {% set count = team_groups[t]|length %}
+        <span class="team-chip-lg {% if selected_team == t %}active{% endif %}" data-team="{{ t|e }}" onclick="selectTeam('{{ t|e }}')">
+            {{ t }} <span class="team-count">{{ count }}人</span>
+        </span>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- ===== 活跃组提示 ===== -->
+{% if selected_team and selected_team != 'all' %}
+<div class="active-team-banner">
+    🏷️ 当前配置：<span class="badge-team">{{ selected_team }}</span>
+    <span class="text-muted" style="font-weight:400;font-size:12px;">人员、故障模板、结单方案已自动切换为该组配置</span>
+</div>
+{% endif %}
+
 <!-- ===== 第一步：设置参数 ===== -->
 <div class="batch-step">
     <div class="step-num" style="background:#6366f1;">1</div><span style="font-size:13px;font-weight:600;">设置参数</span>
     <div class="step-bar"></div>
 </div>
 
-<form method="post">
+<form method="post" id="batchForm">
     <input type="hidden" name="action" value="preview">
+    <input type="hidden" name="selected_team" id="selectedTeamInput" value="{{ selected_team }}">
 
     <div class="row g-3">
         <div class="col-md-6">
@@ -126,16 +232,16 @@
             <div class="batch-section">
                 <div class="batch-section-title"><i class="fas fa-pen text-info"></i> 自定义内容 <span class="badge bg-secondary" style="font-size:10px;">选填</span></div>
                 <div class="mb-2">
-                    <label style="font-size:12px;font-weight:600;color:#475569;">工单名称 <small class="text-muted" style="font-weight:400;">（留空随机生成）</small></label>
+                    <label style="font-size:12px;font-weight:600;color:var(--text,#475569);">工单名称 <small class="text-muted" style="font-weight:400;">（留空随机生成）</small></label>
                     <input type="text" name="custom_title" class="form-control form-control-sm" placeholder="如：日常科室运维-">
                 </div>
                 <div>
-                    <label style="font-size:12px;font-weight:600;color:#475569;">结单方案 <small class="text-muted" style="font-weight:400;">（留空随机生成）</small></label>
+                    <label style="font-size:12px;font-weight:600;color:var(--text,#475569);">结单方案 <small class="text-muted" style="font-weight:400;">（留空随机生成）</small></label>
                     <div class="d-flex gap-1">
                         <select id="batchSolutionSelect" class="form-select form-select-sm" style="max-width:160px;font-size:11px;" onchange="document.getElementsByName('custom_solution')[0].value=this.value">
                             <option value="">— 选方案模板 —</option>
                             {% for t in templates %}
-                            <option value="{{ t.content }}">{{ t.title }}</option>
+                            <option value="{{ t.content }}" data-teams="{{ t.teams }}">{{ t.title }}</option>
                             {% endfor %}
                         </select>
                         <input type="text" name="custom_solution" class="form-control form-control-sm" placeholder="或手动输入方案" style="flex:1;">
@@ -148,74 +254,64 @@
             <div class="batch-section">
                 <div class="batch-section-title"><i class="fas fa-clock text-warning"></i> 时间与日期</div>
                 <div class="row g-2">
-                    <div class="col-4"><label style="font-size:12px;font-weight:600;color:#475569;">年份</label><input type="number" name="year" class="form-control form-control-sm" value="{{ now.year }}"></div>
-                    <div class="col-4"><label style="font-size:12px;font-weight:600;color:#475569;">月份</label><input type="number" name="month" class="form-control form-control-sm" value="{{ now.month }}"></div>
+                    <div class="col-4"><label style="font-size:12px;font-weight:600;color:var(--text,#475569);">年份</label><input type="number" name="year" class="form-control form-control-sm" value="{{ now.year }}"></div>
+                    <div class="col-4"><label style="font-size:12px;font-weight:600;color:var(--text,#475569);">月份</label><input type="number" name="month" class="form-control form-control-sm" value="{{ now.month }}"></div>
                 </div>
                 <div class="row g-2 mt-1">
-                    <div class="col-4"><label style="font-size:12px;font-weight:600;color:#475569;">每日最小</label><input type="number" name="min_per_day" class="form-control form-control-sm" value="20" min="1"></div>
-                    <div class="col-4"><label style="font-size:12px;font-weight:600;color:#475569;">每日最大</label><input type="number" name="max_per_day" class="form-control form-control-sm" value="45"></div>
+                    <div class="col-4"><label style="font-size:12px;font-weight:600;color:var(--text,#475569);">每日最小</label><input type="number" name="min_per_day" class="form-control form-control-sm" value="20" min="1"></div>
+                    <div class="col-4"><label style="font-size:12px;font-weight:600;color:var(--text,#475569);">每日最大</label><input type="number" name="max_per_day" class="form-control form-control-sm" value="45"></div>
                 </div>
                 <div class="mt-2" style="font-size:12px;">
                     <label class="form-check mb-1"><input type="checkbox" name="everyday" class="form-check-input" id="chkEveryday"><label class="form-check-label" for="chkEveryday">每天覆盖整个月</label></label>
                     <label class="form-check mb-1"><input type="checkbox" name="use_schedule" class="form-check-input" id="chkSchedule"><label class="form-check-label" for="chkSchedule">按排班分配人员</label></label>
-                    <div><label style="font-size:12px;font-weight:600;color:#475569;">指定日期 <small class="text-muted" style="font-weight:400;">（如 1,3,5-10）</small></label>
+                    <div><label style="font-size:12px;font-weight:600;color:var(--text,#475569);">指定日期 <small class="text-muted" style="font-weight:400;">（如 1,3,5-10）</small></label>
                     <input type="text" name="specific_dates" class="form-control form-control-sm" placeholder="留空=全月"></div>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- 人员名单 -->
-    <div class="batch-section">
-        <div class="batch-section-title">
-            <i class="fas fa-users text-success"></i> 人员名单
-            <a href="{{ url_for('data.list_persons') }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 ms-auto" style="font-size:11px;"><i class="fas fa-cog"></i> 管理</a>
-        </div>
-        <div class="d-flex flex-wrap gap-1 mb-2">
-            <span class="team-chip active" data-team="all" onclick="showTeam('all')">📋 全部</span>
-            {% for t in teams %}
-            <span class="team-chip" data-team="{{ t|e }}" onclick="showTeam('{{ t|e }}')">{{ t }}</span>
-            {% endfor %}
-        </div>
-        <div id="teamGroup_all" class="team-group" data-team="all">
-            <div class="person-grid">
-                {% for p in persons %}
-                <label class="person-item">
-                    <input type="checkbox" name="selected_names" class="form-check-input" value="{{ p.name }}" checked>
-                    <span class="form-check-label" style="flex:1;">{{ p.name }}</span>
-                    <input type="number" name="weight_{{ p.name }}" class="weight-input" value="1" min="1" max="10" title="权重">
-                </label>
-                {% else %}
-                <div class="text-muted" style="font-size:12px;">暂无人员</div>
-                {% endfor %}
+            <!-- 人员名单 -->
+            <div class="batch-section">
+                <div class="batch-section-title">
+                    <i class="fas fa-users text-success"></i> 人员名单
+                    <a href="{{ url_for('data.list_persons') }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 ms-auto" style="font-size:11px;"><i class="fas fa-cog"></i> 管理</a>
+                </div>
+                <div id="personTeamChips" class="d-flex flex-wrap gap-1 mb-2">
+                    <span class="team-chip active" data-team="all" onclick="showPersonTeam('all')"><i class="fas fa-clipboard-list"></i> 全部</span>
+                    {% for t in teams %}
+                    <span class="team-chip" data-team="{{ t|e }}" onclick="showPersonTeam('{{ t|e }}')">{{ t }}</span>
+                    {% endfor %}
+                </div>
+                <div id="personListContainer">
+                    <div id="teamGroup_all" class="team-group" data-team="all">
+                        <div class="person-grid">
+                            {% for p in persons %}
+                            <label class="person-item">
+                                <input type="checkbox" name="selected_names" class="form-check-input" value="{{ p.name }}" checked>
+                                <span class="form-check-label" style="flex:1;">{{ p.name }}</span>
+                                <input type="number" name="weight_{{ p.name }}" class="weight-input" value="1" min="1" max="10" title="权重">
+                            </label>
+                            {% else %}
+                            <div class="text-muted" style="font-size:12px;">暂无人员</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex gap-3 mt-2" style="font-size:12px;flex-wrap:wrap;">
+                    <a href="#" id="selectAllPersons" class="text-primary"><i class="fas fa-check-circle"></i> 全选全部</a>
+                    <a href="#" id="deselectAllPersons" class="text-secondary"><i class="far fa-circle"></i> 取消全部</a>
+                    <a href="#" id="selectTeamPersons" class="text-info" style="display:none;"><i class="fas fa-check-circle"></i> 全选本组</a>
+                    <a href="#" id="deselectTeamPersons" class="text-secondary" style="display:none;"><i class="far fa-circle"></i> 取消本组</a>
+                    <span class="text-muted">工作日4人轮值，休息日1人值班</span>
+                    <span id="selectedCount" class="badge bg-primary" style="font-size:10px;padding:2px 8px;">已选 {{ persons|length }} 人</span>
+                </div>
             </div>
-        </div>
-        {% for t in teams %}
-        <div id="teamGroup_{{ loop.index }}" class="team-group" data-team="{{ t|e }}" style="display:none;">
-            <div class="person-grid">
-                {% for p in team_groups[t] %}
-                <label class="person-item">
-                    <input type="checkbox" name="selected_names" class="form-check-input" value="{{ p.name }}" checked>
-                    <span class="form-check-label" style="flex:1;">{{ p.name }}</span>
-                    <input type="number" name="weight_{{ p.name }}" class="weight-input" value="1" min="1" max="10" title="权重">
-                </label>
-                {% endfor %}
-            </div>
-        </div>
-        {% endfor %}
-        <div class="d-flex gap-3 mt-2" style="font-size:12px;">
-            <a href="#" id="selectAllPersons" class="text-primary">✅ 全选全部</a>
-            <a href="#" id="deselectAllPersons" class="text-secondary">⬜ 取消全部</a>
-            <a href="#" id="selectTeamPersons" class="text-info" style="display:none;">✅ 全选本组</a>
-            <a href="#" id="deselectTeamPersons" class="text-secondary" style="display:none;">⬜ 取消本组</a>
-            <span class="text-muted">工作日4人轮值，休息日1人值班</span>
         </div>
     </div>
 
     <!-- 安全验证 + 提交 -->
     <div class="batch-section">
         <div class="d-flex align-items-center gap-3 flex-wrap">
-            <span style="font-size:12px;font-weight:600;color:#475569;"><i class="fas fa-shield-alt text-danger"></i> 验证身份</span>
+            <span style="font-size:12px;font-weight:600;color:var(--text,#475569);"><i class="fas fa-shield-alt text-danger"></i> 验证身份</span>
             <input type="text" name="verify_username" class="form-control form-control-sm" placeholder="登录账号" required style="width:140px;">
             <input type="password" name="verify_password" class="form-control form-control-sm" placeholder="密码" required style="width:140px;">
             <span class="verify-hint">需验证后方可生成</span>
@@ -230,27 +326,45 @@
 
 {% block extra_scripts %}
 <script>
-var defaultTeam = '{{ default_team|e }}';
+var defaultTeam = '{{ selected_team|e }}';
 var currentTeam = 'all';
+var currentPersonTeam = 'all';
 
-function showTeam(team) {
+// ===== 顶部队选择器（控制全局） =====
+function selectTeam(team) {
     currentTeam = team;
-    document.querySelectorAll('.team-group').forEach(function(el) { el.style.display = 'none'; });
-    document.querySelectorAll('.team-chip').forEach(function(el) { el.classList.remove('active'); });
-    var target = document.querySelector('.team-group[data-team="' + team.replace(/['"]/g, '') + '"]');
-    if (target) target.style.display = '';
-    document.querySelectorAll('.team-chip').forEach(function(el) {
-        var txt = el.getAttribute('data-team') || el.textContent.trim();
-        if (txt === team || (team === 'all' && txt === 'all')) el.classList.add('active');
+    document.getElementById('selectedTeamInput').value = team;
+    document.querySelectorAll('#teamSelector .team-chip-lg').forEach(function(el) {
+        el.classList.toggle('active', el.getAttribute('data-team') === team);
     });
-    var selTeam = document.getElementById('selectTeamPersons');
-    var deselTeam = document.getElementById('deselectTeamPersons');
-    if (selTeam && deselTeam) {
-        selTeam.style.display = team === 'all' ? 'none' : 'inline';
-        deselTeam.style.display = team === 'all' ? 'none' : 'inline';
+    // 显示/隐藏活跃组横幅
+    var banner = document.querySelector('.active-team-banner');
+    if (team === 'all') {
+        if (banner) banner.style.display = 'none';
+    } else {
+        if (!banner) {
+            var bar = document.querySelector('.team-selector-bar');
+            var newBanner = document.createElement('div');
+            newBanner.className = 'active-team-banner';
+            newBanner.id = 'activeTeamBanner';
+            newBanner.innerHTML = '🏷️ 当前配置：<span class="badge-team">' + team + '</span><span class="text-muted" style="font-weight:400;font-size:12px;">人员、故障模板、结单方案已自动切换为该组配置</span>';
+            bar.parentNode.insertBefore(newBanner, bar.nextSibling);
+        } else {
+            banner.querySelector('.badge-team').textContent = team;
+            banner.style.display = 'flex';
+        }
     }
-    // 根据选中的组过滤故障模板组
+    // 过滤故障模板组
     filterFaultGroups(team);
+    // 过滤结单方案
+    filterSolutionTemplates(team);
+    // 切换到对应人员组
+    showPersonTeam(team === 'all' ? 'all' : team);
+    // 人员组芯片联动
+    document.querySelectorAll('#personTeamChips .team-chip').forEach(function(el) {
+        var t = el.getAttribute('data-team');
+        el.classList.toggle('active', t === team || (team === 'all' && t === 'all'));
+    });
 }
 
 function filterFaultGroups(team) {
@@ -265,27 +379,78 @@ function filterFaultGroups(team) {
     });
 }
 
+function filterSolutionTemplates(team) {
+    document.getElementById('batchSolutionSelect').querySelectorAll('option').forEach(function(opt) {
+        if (!opt.value) return; // placeholder
+        var teams = opt.getAttribute('data-teams') || '';
+        if (team === 'all' || !teams) {
+            opt.style.display = '';
+        } else {
+            var teamList = teams.split(',');
+            opt.style.display = teamList.indexOf(team) >= 0 ? '' : 'none';
+        }
+    });
+}
+
+// ===== 人员组切换 =====
+function showPersonTeam(team) {
+    currentPersonTeam = team;
+    document.querySelectorAll('.team-group').forEach(function(el) { el.style.display = 'none'; });
+    document.querySelectorAll('#personTeamChips .team-chip').forEach(function(el) { el.classList.remove('active'); });
+    var target = document.querySelector('.team-group[data-team="' + team.replace(/['\"]/g, '') + '"]');
+    if (target) target.style.display = '';
+    document.querySelectorAll('#personTeamChips .team-chip').forEach(function(el) {
+        var txt = el.getAttribute('data-team') || el.textContent.trim();
+        if (txt === team || (team === 'all' && txt === 'all')) el.classList.add('active');
+    });
+    var selTeam = document.getElementById('selectTeamPersons');
+    var deselTeam = document.getElementById('deselectTeamPersons');
+    if (selTeam && deselTeam) {
+        selTeam.style.display = team === 'all' ? 'none' : 'inline';
+        deselTeam.style.display = team === 'all' ? 'none' : 'inline';
+    }
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    var cnt = document.querySelectorAll('input[name="selected_names"]:checked').length;
+    var el = document.getElementById('selectedCount');
+    if (el) el.textContent = '已选 ' + cnt + ' 人';
+}
+
+// ===== 初始化 =====
+document.addEventListener('DOMContentLoaded', function() {
+    if (defaultTeam && defaultTeam !== 'all' && defaultTeam !== '') {
+        selectTeam(defaultTeam);
+    }
+    // 监听勾选变化更新计数
+    document.querySelectorAll('input[name="selected_names"]').forEach(function(cb) {
+        cb.addEventListener('change', updateSelectedCount);
+    });
+});
+
+// ===== 全选/取消 =====
 document.getElementById('selectTeamPersons')?.addEventListener('click', function(e) {
     e.preventDefault();
-    var cbs = document.querySelector('.team-group[data-team="' + currentTeam.replace(/['"]/g, '') + '"]');
+    var cbs = document.querySelector('.team-group[data-team="' + currentPersonTeam.replace(/['\"]/g, '') + '"]');
     if (cbs) cbs.querySelectorAll('input[name="selected_names"]').forEach(function(cb) { cb.checked = true; });
+    updateSelectedCount();
 });
 document.getElementById('deselectTeamPersons')?.addEventListener('click', function(e) {
     e.preventDefault();
-    var cbs = document.querySelector('.team-group[data-team="' + currentTeam.replace(/['"]/g, '') + '"]');
+    var cbs = document.querySelector('.team-group[data-team="' + currentPersonTeam.replace(/['\"]/g, '') + '"]');
     if (cbs) cbs.querySelectorAll('input[name="selected_names"]').forEach(function(cb) { cb.checked = false; });
-});
-
-document.addEventListener('DOMContentLoaded', function() {
-    if (defaultTeam) showTeam(defaultTeam);
+    updateSelectedCount();
 });
 document.getElementById('selectAllPersons')?.addEventListener('click', function(e) {
     e.preventDefault();
     document.querySelectorAll('input[name="selected_names"]').forEach(function(cb) { cb.checked = true; });
+    updateSelectedCount();
 });
 document.getElementById('deselectAllPersons')?.addEventListener('click', function(e) {
     e.preventDefault();
     document.querySelectorAll('input[name="selected_names"]').forEach(function(cb) { cb.checked = false; });
+    updateSelectedCount();
 });
 </script>
 {% endblock %}

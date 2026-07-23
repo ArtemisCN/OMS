@@ -133,20 +133,13 @@
   <div class="section-group">
     <div class="section-title"><i class="fas fa-file-alt"></i> 业务模板</div>
     <div class="card-grid">
-   <a href="{{ url_for('data.list_solutions') }}" class="data-card c-template">
-     <div class="data-card-icon"><i class="fas fa-book"></i></div>
-     <div class="data-card-info">
-       <div class="data-card-title">方案模板</div>
-       <div class="data-card-desc">故障处理方案库</div>
-     </div>
-   </a>
-   <a href="{{ url_for('data.list_fault_template_groups') }}" class="data-card c-template">
-     <div class="data-card-icon"><i class="fas fa-layer-group"></i></div>
-     <div class="data-card-info">
-       <div class="data-card-title">故障模板组</div>
-       <div class="data-card-desc">按组别绑定的故障类型</div>
-     </div>
-   </a>
+      <a href="{{ url_for('data.list_templates') }}" class="data-card" style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;grid-column:span 2;">
+        <div class="data-card-icon"><i class="fas fa-puzzle-piece"></i></div>
+        <div class="data-card-info">
+          <div class="data-card-title" style="color:#fff;">模板管理</div>
+          <div class="data-card-desc" style="color:rgba(255,255,255,0.7);">故障模板组+方案模板 · 按组查看/新建/复制 · 一站式管理</div>
+        </div>
+      </a>
       <a href="{{ url_for('data.list_knowledge') }}" class="data-card c-template">
         <div class="data-card-icon"><i class="fas fa-graduation-cap"></i></div>
         <div class="data-card-info">
@@ -172,7 +165,7 @@
         <div class="data-card-icon"><i class="fas fa-server"></i></div>
         <div class="data-card-info">
           <div class="data-card-title">资产台账</div>
-          <div class="data-card-desc">设备资产登记</div>
+          <div class="data-card-desc">设备资产登记 & 出入库管理</div>
         </div>
       </a>
       <a href="{{ url_for('stock.index') }}" class="data-card c-asset">
@@ -189,11 +182,11 @@
           <div class="data-card-desc">设备存放地点</div>
         </div>
       </a>
-      <a href="{{ url_for('data.list_consumables') }}" class="data-card c-asset">
+      <a href="{{ url_for('stock.index') }}" class="data-card c-asset">
         <div class="data-card-icon"><i class="fas fa-tint"></i></div>
         <div class="data-card-info">
           <div class="data-card-title">耗材管理</div>
-          <div class="data-card-desc">消耗品库存管理</div>
+          <div class="data-card-desc">消耗品库存管理（已合并至备件库存）</div>
         </div>
       </a>
       <a href="{{ url_for('data.list_parts') }}" class="data-card c-asset">
@@ -203,19 +196,29 @@
           <div class="data-card-desc">维修零件报价</div>
         </div>
       </a>
-      <a href="{{ url_for('data.list_suppliers') }}" class="data-card c-asset">
-        <div class="data-card-icon"><i class="fas fa-truck"></i></div>
+      <a href="{{ url_for('feature.contracts') }}" class="data-card c-asset">
+        <div class="data-card-icon"><i class="fas fa-file-contract"></i></div>
         <div class="data-card-info">
-          <div class="data-card-title">供应商管理</div>
-          <div class="data-card-desc">供应商信息</div>
+          <div class="data-card-title">合同维保</div>
+          <div class="data-card-desc">供应商信息 & 合同管理</div>
         </div>
       </a>
-      <a href="{{ url_for('finance_asset.index') }}" class="data-card c-finance">
-        <div class="data-card-icon"><i class="fas fa-boxes"></i></div>
+    </div>
+  </div>
+
+  <!-- 注册审批 -->
+  <div class="section-group">
+    <div class="section-title"><i class="fas fa-user-check"></i> 账户管理</div>
+    <div class="card-grid">
+      <a href="{{ url_for('data.list_registration_approvals') }}" class="data-card c-system">
+        <div class="data-card-icon"><i class="fas fa-user-check"></i></div>
         <div class="data-card-info">
-          <div class="data-card-title">固定资产管理</div>
-          <div class="data-card-desc">入库/出库单统一管理</div>
+          <div class="data-card-title">注册审批</div>
+          <div class="data-card-desc">审核新用户注册申请</div>
         </div>
+        {% if pending_reg_count %}
+        <span class="data-card-count">{{ pending_reg_count }}</span>
+        {% endif %}
       </a>
     </div>
   </div>
@@ -231,6 +234,15 @@
           <div class="data-card-desc">全局系统设置</div>
         </div>
       </a>
+      {% if can_access('自动派单') or can_access('超时催办') %}
+      <a href="{{ url_for('settings.index') }}?tab=功能开关" class="data-card c-system">
+        <div class="data-card-icon"><i class="fas fa-robot"></i></div>
+        <div class="data-card-info">
+          <div class="data-card-title">智能开关</div>
+          <div class="data-card-desc">自动派单 & 超时催办</div>
+        </div>
+      </a>
+      {% endif %}
       <a href="{{ url_for('data.permissions') }}" class="data-card c-system">
         <div class="data-card-icon"><i class="fas fa-lock"></i></div>
         <div class="data-card-info">

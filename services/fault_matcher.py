@@ -3,20 +3,41 @@
 从标题中匹配关键词 → 返回 (category, subcategory)
 关键词按长度降序匹配，长词优先（更精确）
 """
-from functools import lru_cache
 from models import db, FaultCategory, FaultSubcategory, FaultKeyword
 
 
-@lru_cache(maxsize=256)
-def _load_all_keywords():
-    """加载全量关键词，按长度降序"""
-    rows = db.session.query(
+def _load_all_keywords(team=''):
+    """加载关键词，按长度降序
+    支持 team 过滤：
+      - team='' 或 None: 加载全部（兼容旧调用）
+      - team='华博': 只加载 teams=""(通用) OR teams 包含该 team 的关键词
+    """
+    query = db.session.query(
         FaultKeyword.keyword,
         FaultSubcategory.name.label('sub_name'),
         FaultCategory.name.label('cat_name')
     ).join(FaultSubcategory, FaultKeyword.subcategory_id == FaultSubcategory.id
     ).join(FaultCategory, FaultSubcategory.category_id == FaultCategory.id
-    ).all()
+    )
+
+    if team:
+        # 三级 teams 过滤: 通用("") 或 包含指定团队
+        query = query.filter(
+            db.or_(
+                FaultKeyword.teams == '',
+                FaultKeyword.teams.contains(team),
+            ),
+            db.or_(
+                FaultSubcategory.teams == '',
+                FaultSubcategory.teams.contains(team),
+            ),
+            db.or_(
+                FaultCategory.teams == '',
+                FaultCategory.teams.contains(team),
+            ),
+        )
+
+    rows = query.all()
     # 按关键词长度降序（长词优先精确匹配）
     result = sorted([
         {'keyword': r.keyword, 'subcategory': r.sub_name, 'category': r.cat_name}
@@ -25,7 +46,7 @@ def _load_all_keywords():
     return result
 
 
-def match_fault(title):
+def match_fault(title, team=''):
     """
     从标题匹配故障分类
     返回: {'category': '硬件', 'subcategory': '电脑', 'match_type': 'keyword'}
@@ -37,7 +58,7 @@ def match_fault(title):
     title_lower = title.lower()
 
     # 1. 关键词匹配（长词优先）
-    all_kw = _load_all_keywords()
+    all_kw = _load_all_keywords(team=team)
     for item in all_kw:
         if item['keyword'].lower() in title_lower:
             return {

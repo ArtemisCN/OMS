@@ -690,7 +690,7 @@ function batchRecover() {
 function showSwapModal() {
     var ids = getSelectedIds();
     document.getElementById('swapCount').textContent = ids.length;
-    document.getElementById('swapPreview').innerHTML = ids.length === 2 ? '✅ 已选中2项，可以互换' : '⚠️ 请恰好选中2项资产';
+    document.getElementById('swapPreview').innerHTML = ids.length === 2 ? '<i class="fas fa-check-circle"></i> 已选中2项，可以互换' : '<i class="fas fa-exclamation-triangle"></i> 请恰好选中2项资产';
     new bootstrap.Modal(document.getElementById('swapModal')).show();
 }
 

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}提交报修 · {{ hospital.name }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title text-center mb-3"><i class="fas fa-tools text-danger"></i> {{ hospital.name }} - 故障报修</h5>
+                {% if asset %}
+                <div class="alert alert-info py-2 px-3 mb-3" style="font-size:13px;">
+                    <i class="fas fa-qrcode me-1"></i> 资产扫码：
+                    <strong>{{ asset.asset_no }}</strong>
+                    {% if asset.device_type %} · {{ asset.device_type }}{% endif %}
+                    {% if asset.department %} · {{ asset.department }}{% endif %}
+                    <br><small class="text-muted">{{ asset.model_no or '' }} {{ asset.brand or '' }}</small>
+                </div>
+                {% endif %}
+                <p class="text-muted small text-center">填写信息后提交即可</p>
+                <hr>
+                <form method="post">
+                    <div class="mb-3">
+                        <label class="form-label">您的姓名 <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="form-control" required placeholder="">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">联系电话</label>
+                        <input type="tel" name="phone" class="form-control" placeholder="方便工程师联系您">
+                    </div>
+                    <div class="mb-3" id="deptWrapper" style="position:relative;">
+                        <label class="form-label">科室</label>
+                        <div class="input-group">
+                            <input type="text" name="department" class="form-control" id="deptInput"
+                                   placeholder="输入搜索或点击选择" autocomplete="off"
+                                   value="{{ request.args.get('dept', '') }}"
+                                   onfocus="showDeptList()" oninput="filterDeptList()">
+                            <button class="btn btn-outline-secondary" type="button" onclick="toggleDeptList()">
+                                <i class="fas fa-chevron-down"></i>
+                            </button>
+                        </div>
+                        <div id="deptDropdown" class="list-group" style="display:none; position:absolute; z-index:999; top:100%; left:0; right:0;
+                                max-height:240px; overflow-y:auto; box-shadow:0 4px 16px rgba(0,0,0,.15); border-radius:6px; background:#fff;">
+                            {% for d in departments %}
+                            <button type="button" class="list-group-item list-group-item-action dept-option"
+                                    style="font-size:13px; padding:8px 12px; border:none; border-bottom:1px solid #f0f0f0; text-align:left;"
+                                    data-value="{{ d.name }}" onclick="selectDept('{{ d.name }}')">{{ d.name }}</button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">具体位置</label>
+                        <input type="text" name="location" class="form-control" placeholder="如：3楼301室">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">设备类型</label>
+                        <select name="device_type" class="form-select">
+                            <option value="电脑">电脑</option>
+                            <option value="打印机">打印机</option>
+                            <option value="网络设备">网络设备</option>
+                            <option value="软件">软件</option>
+                            <option value="其他" selected>其他</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">故障描述 <span class="text-danger">*</span></label>
+                        <textarea name="description" class="form-control" rows="4" required placeholder="请详细描述故障现象..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-danger w-100 py-2">
+                        <i class="fas fa-paper-plane"></i> 提交报修
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+    #deptDropdown { background: var(--modal-bg, #fff); border: 1px solid var(--card-border, #e5e7eb); }
+    #deptDropdown .dept-option { background: transparent; color: var(--text, #0f172a); }
+    #deptDropdown .dept-option:hover { background: var(--primary, #6366f1); color: #fff; }
+</style>
+<script>
+var deptOptions = [];
+(function() {
+    var items = document.querySelectorAll('.dept-option');
+    items.forEach(function(item) { deptOptions.push(item.dataset.value); });
+})();
+function toggleDeptList() {
+    var dl = document.getElementById('deptDropdown');
+    if (dl.style.display === 'none' || dl.style.display === '') {
+        showDeptList();
+    } else {
+        dl.style.display = 'none';
+    }
+}
+function showDeptList() {
+    var dl = document.getElementById('deptDropdown');
+    var input = document.getElementById('deptInput');
+    dl.style.display = 'block';
+    filterDeptList();
+}
+function filterDeptList() {
+    var input = document.getElementById('deptInput');
+    var val = input.value.toLowerCase();
+    var items = document.querySelectorAll('.dept-option');
+    items.forEach(function(item) {
+        item.style.display = item.dataset.value.toLowerCase().includes(val) ? '' : 'none';
+    });
+}
+function selectDept(name) {
+    document.getElementById('deptInput').value = name;
+    document.getElementById('deptDropdown').style.display = 'none';
+}
+// 点击外部关闭下拉
+document.addEventListener('click', function(e) {
+    var container = document.getElementById('deptWrapper');
+    if (container && !container.contains(e.target)) {
+        document.getElementById('deptDropdown').style.display = 'none';
+    }
+});
+</script>
+{% endblock %}

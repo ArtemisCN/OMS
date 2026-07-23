@@ -512,9 +512,9 @@ def export_excel():
             a.ip_address, a.mac_address,
             a.department, a.building, a.floor, a.location,
             status_map.get(a.status, a.status),
-            a.purchase_date.strftime('%Y-%m-%d') if a.purchase_date else '',
-            a.price, a.warranty_start.strftime('%Y-%m-%d') if a.warranty_start else '',
-            a.warranty_end.strftime('%Y-%m-%d') if a.warranty_end else '',
+            fmt_date(a.purchase_date),
+            a.price, fmt_date(a.warranty_start),
+            fmt_date(a.warranty_end),
             a.financial_code, a.financial_name, a.notes or '',
         ]
         for col_idx, v in enumerate(vals, 1):
@@ -1192,3 +1192,4 @@ def _parse_int(val):
 
 # 确保 WorkOrder 在 detail 中可用
 from models import WorkOrder
+from utils.time_helpers import fmt_dt, now, fmt_date

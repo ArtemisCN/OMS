@@ -19,6 +19,13 @@
             <label><input type="checkbox" data-col="time" checked> 时间</label>
             <label><input type="checkbox" data-col="ops" checked> 操作</label>
         </div>
+        <a href="{{ url_for('orders.calendar_view') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-calendar-alt"></i> 工单日历
+        </a>
+        <a href="javascript:void(0)" class="btn btn-outline-secondary btn-sm"
+           onclick="var oid=prompt('输入工单ID查看历史追溯');if(oid)location.href='{{ url_for('feature.history_page', order_id=0) }}'.replace('/0','/'+oid)">
+            <i class="fas fa-history"></i> 历史追溯
+        </a>
         <a href="/mobile/" target="_blank" class="btn btn-outline-primary btn-sm">
             <i class="fas fa-mobile-alt"></i> 手机端
         </a>
@@ -34,17 +41,17 @@
     <div class="btn-group w-100" role="group">
         <a href="{{ url_for('orders.list_orders', status='pending', fault_type=fault_type, person=person_sel, keyword=keyword, date_from=date_from, date_to=date_to, sort=sort, order=order) }}"
            class="btn btn-{{ 'primary' if status == 'pending' else 'outline-secondary' }} position-relative">
-            📋 未接单
+            <i class="fas fa-clipboard-list"></i> 未接单
             <span class="badge rounded-pill bg-{{ 'light text-primary' if status == 'pending' else 'secondary' }} ms-1">{{ stats.pending }}</span>
         </a>
         <a href="{{ url_for('orders.list_orders', status='in_progress', fault_type=fault_type, person=person_sel, keyword=keyword, date_from=date_from, date_to=date_to, sort=sort, order=order) }}"
            class="btn btn-{{ 'primary' if status == 'in_progress' else 'outline-secondary' }} position-relative">
-            🔧 已接单
+            <i class="fas fa-wrench"></i> 已接单
             <span class="badge rounded-pill bg-{{ 'light text-primary' if status == 'in_progress' else 'secondary' }} ms-1">{{ stats.in_progress }}</span>
         </a>
         <a href="{{ url_for('orders.list_orders', status='completed', fault_type=fault_type, person=person_sel, keyword=keyword, date_from=date_from, date_to=date_to, sort=sort, order=order) }}"
            class="btn btn-{{ 'primary' if status == 'completed' else 'outline-secondary' }} position-relative">
-            ✅ 已完成
+            <i class="fas fa-check-circle"></i> 已完成
             <span class="badge rounded-pill bg-{{ 'light text-primary' if status == 'completed' else 'secondary' }} ms-1">{{ stats.completed }}</span>
         </a>
     </div>
@@ -192,7 +199,7 @@
                         {% else %}
                         <span class="badge bg-success me-1 priority-ball" data-id="{{ o.id }}" style="cursor:pointer" title="{% set _et = o.end_time or o.completed_at %}{% set _st = o.start_time or o.accepted_at or o.created_at %}{% if _et and _st %}{{ ((_et-_st).total_seconds()/60)|int }}分钟{% else %}普通{% endif %}">🟢</span>
                         {% endif %}
-                        {% if o.work_type == 'inspection' %}<span class="badge bg-info me-1" style="font-size:9px;">🔍巡检</span>{% endif %}
+                        {% if o.work_type == 'inspection' %}<span class="badge bg-info me-1" style="font-size:9px;"><i class="fas fa-search"></i>巡检</span>{% endif %}
                         <a href="{{ url_for('orders.detail', order_id=o.id) }}" class="text-decoration-none">{{ o.title }}</a>
                     </td>
                     <td><small>{{ o.building }} {{ o.department }}</small></td>
@@ -221,7 +228,7 @@
                     <td>
                         <div class="d-flex gap-1">
                             <a href="{{ url_for('orders.detail', order_id=o.id) }}" class="btn btn-sm btn-outline-primary" title="详情"><i class="fas fa-eye"></i></a>
-                            {% if o.person and o.person != '未指派' %}
+                            {% if o.person and o.person != '未指派' and o.status != 'completed' %}
                             <button class="btn btn-sm btn-outline-warning urge-btn" data-id="{{ o.id }}" title="催办"><i class="fas fa-bell"></i></button>
                             {% endif %}
                             <form method="post" action="{{ url_for('orders.delete_order', order_id=o.id) }}" style="display:inline;">
@@ -392,14 +399,14 @@
             .then(function(r) { return r.json(); })
             .then(function(d) {
                 if (d.success) {
-                    alert('✅ ' + d.message);
+                    alert('<i class="fas fa-check-circle"></i> ' + d.message);
                 } else {
-                    alert('❌ ' + (d.error || '发送失败'));
+                    alert('<i class="fas fa-times-circle"></i> ' + (d.error || '发送失败'));
                 }
                 self.disabled = false;
                 self.innerHTML = '<i class="fas fa-bell"></i>';
             }).catch(function() {
-                alert('❌ 催办失败');
+                alert('<i class="fas fa-times-circle"></i> 催办失败');
                 self.disabled = false;
                 self.innerHTML = '<i class="fas fa-bell"></i>';
             });
@@ -473,7 +480,7 @@
             .then(function(r) { return r.json(); })
             .then(function(d) {
                 if (d.success) {
-                    alert('✅ ' + d.message);
+                    alert('<i class="fas fa-check-circle"></i> ' + d.message);
                     // 对于删除、指派等操作刷新页面
                     if (action === 'delete' || action === 'assign' || action === 'priority') {
                         window.location.reload();
@@ -482,11 +489,11 @@
                         window.location.reload();
                     }
                 } else {
-                    alert('❌ ' + (d.error || '操作失败'));
+                    alert('<i class="fas fa-times-circle"></i> ' + (d.error || '操作失败'));
                 }
             })
             .catch(function(err) {
-                alert('❌ 操作失败: ' + err);
+                alert('<i class="fas fa-times-circle"></i> 操作失败: ' + err);
             });
         });
     });

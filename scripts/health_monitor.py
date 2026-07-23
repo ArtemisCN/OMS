@@ -109,7 +109,6 @@ if __name__ == '__main__':
     log('=== 系统健康检查结束 ===')
 
     if WARNINGS:
-        # 写入警告文件供cron或其他通知机制读取
         with open('/var/log/hospital-health.warnings', 'w') as f:
             f.write('\n'.join(WARNINGS))
         print(f'\n⚠️ 发现 {len(WARNINGS)} 个问题需要关注!')

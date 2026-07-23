@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+{% block title %}交接班日志{% endblock %}
+{% block extra_head %}
+<style>
+    .sh-card { background:#fff; border-radius:16px; border:1px solid #e2e8f0; padding:20px; margin-bottom:16px; }
+    body[data-theme="dark"] .sh-card { background:#1e293b; border-color:#334155; }
+    .sh-card .card-title { font-size:15px; font-weight:600; color:#1e293b; margin-bottom:12px; }
+    body[data-theme="dark"] .sh-card .card-title { color:#e2e8f0; }
+    .sh-stat { padding:16px; border-radius:12px; text-align:center; }
+    .sh-stat .stat-number { font-size:28px; font-weight:700; }
+    .sh-stat .stat-label { font-size:12px; color:#64748b; margin-top:4px; }
+    body[data-theme="dark"] .sh-stat .stat-label { color:#94a3b8; }
+    .handover-item { padding:14px 0; border-bottom:1px solid #e2e8f0; }
+    body[data-theme="dark"] .handover-item { border-color:#334155; }
+    .handover-item:last-child { border-bottom:none; }
+    .handover-status { font-size:11px; padding:2px 10px; border-radius:10px; font-weight:500; }
+    .modal-sh .modal-content { border-radius:16px; border:none; }
+    body[data-theme="dark"] .modal-sh .modal-content { background:#1e293b; color:#e2e8f0; }
+    body[data-theme="dark"] .modal-sh .modal-header { border-bottom-color:#334155; }
+    body[data-theme="dark"] .modal-sh .modal-footer { border-top-color:#334155; }
+    body[data-theme="dark"] .modal-sh .form-label { color:#cbd5e1; }
+    .incomplete-item { display:flex; align-items:center; gap:10px; padding:8px 10px; background:#f8fafc; border-radius:8px; margin-bottom:6px; }
+    body[data-theme="dark"] .incomplete-item { background:#0f172a; }
+    .incomplete-item:last-child { margin-bottom:0; }
+    .search-box { position:relative; }
+    .search-box .form-control { padding-left:36px; border-radius:10px; }
+    .search-box .search-icon { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:14px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+    <!-- Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold mb-0"><i class="fas fa-exchange-alt text-primary me-2"></i>交接班日志</h4>
+        <div class="d-flex gap-2">
+            <div class="search-box">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" class="form-control form-control-sm" id="searchInput" placeholder="搜索交接班记录…" style="width:200px;" oninput="filterTable()">
+            </div>
+            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#handoverModal" onclick="resetForm()">
+                <i class="fas fa-plus me-1"></i>新建交接班
+            </button>
+            <a href="{{ url_for('feature.shift_handover') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-sync"></i>
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="row g-3 mb-3">
+        <div class="col-md-3 col-6">
+            <div class="sh-card sh-stat">
+                <div class="stat-number text-primary">{{ stats.total or 0 }}</div>
+                <div class="stat-label">总交接次数</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="sh-card sh-stat">
+                <div class="stat-number text-success">{{ stats.today or 0 }}</div>
+                <div class="stat-label">今日交接</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="sh-card sh-stat">
+                <div class="stat-number text-warning">{{ stats.pending_count or 0 }}</div>
+                <div class="stat-label">未完成工单</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="sh-card sh-stat">
+                <div class="stat-number text-info">{{ stats.person_count or 0 }}</div>
+                <div class="stat-label">参与人数</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Handover Table -->
+    <div class="sh-card p-0">
+        <div class="card-title px-3 pt-3 pb-0 d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-history text-primary me-1"></i>历史记录</span>
+            <small class="text-muted">共 {{ records|length }} 条</small>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="handoverTable">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width:60px;">#</th>
+                        <th>交班人</th>
+                        <th>接班人</th>
+                        <th>交接内容</th>
+                        <th>未完成工单</th>
+                        <th>备注</th>
+                        <th>时间</th>
+                        <th>状态</th>
+                        <th style="width:80px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in records %}
+                    <tr class="handover-row">
+                        <td class="text-muted small">{{ loop.revindex }}</td>
+                        <td>
+                            <span class="badge bg-primary bg-opacity-10 text-primary px-2 py-1">
+                                <i class="fas fa-user-check me-1"></i>{{ r.handover_person }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge bg-success bg-opacity-10 text-success px-2 py-1">
+                                <i class="fas fa-user-plus me-1"></i>{{ r.receive_person }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="text-truncate d-inline-block" style="max-width:180px;" title="{{ r.content }}">
+                                {{ r.content[:40] }}{% if r.content|length > 40 %}…{% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            {% if r.pending_orders and r.pending_orders|length > 0 %}
+                            <span class="badge bg-warning text-dark">{{ r.pending_orders|length }} 项</span>
+                            {% else %}
+                            <span class="badge bg-success bg-opacity-10 text-success">无</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if r.remark %}
+                            <span class="text-truncate d-inline-block" style="max-width:120px;" title="{{ r.remark }}">
+                                <i class="fas fa-comment-dots text-muted me-1"></i>{{ r.remark[:20] }}{% if r.remark|length > 20 %}…{% endif %}
+                            </span>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small class="text-nowrap text-muted">
+                                <i class="far fa-clock me-1"></i>{{ r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '-' }}
+                            </small>
+                        </td>
+                        <td>
+                            {% if r.status == 'completed' %}
+                            <span class="handover-status" style="background:#dcfce7;color:#166534;">
+                                <i class="fas fa-check-circle me-1"></i>已完成
+                            </span>
+                            {% elif r.status == 'pending' %}
+                            <span class="handover-status" style="background:#fef9c3;color:#854d0e;">
+                                <i class="fas fa-clock me-1"></i>待确认
+                            </span>
+                            {% else %}
+                            <span class="handover-status" style="background:#f1f5f9;color:#475569;">
+                                {{ r.status or '未知' }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="viewHandover({{ r.id }})" title="查看详情">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="text-center py-5 text-muted">
+                            <i class="fas fa-inbox fa-3x mb-3" style="opacity:0.2;"></i>
+                            <div class="mb-1">暂无交接班记录</div>
+                            <small>点击「新建交接班」创建第一条记录</small>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- New Handover Modal -->
+<div class="modal fade modal-sh" id="handoverModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fas fa-exchange-alt text-primary me-1"></i><span id="modalTitle">新建交接班记录</span></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="handoverForm" onsubmit="return submitHandover(event)">
+                <div class="modal-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-medium"><i class="fas fa-user-check text-primary me-1"></i>交班人 <span class="text-danger">*</span></label>
+                            <select class="form-select" id="handoverPerson" required>
+                                <option value="">-- 请选择交班人 --</option>
+                                {% for p in persons %}
+                                <option value="{{ p.name }}" {% if p.name == current_user.display_name or p.name == current_user.username %}selected{% endif %}>
+                                    {{ p.name }}{% if p.team %} · {{ p.team }}{% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-medium"><i class="fas fa-user-plus text-success me-1"></i>接班人 <span class="text-danger">*</span></label>
+                            <select class="form-select" id="receivePerson" required>
+                                <option value="">-- 请选择接班人 --</option>
+                                {% for p in persons %}
+                                <option value="{{ p.name }}">{{ p.name }}{% if p.team %} · {{ p.team }}{% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-medium"><i class="fas fa-align-left text-info me-1"></i>交接内容 <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="handoverContent" rows="4" placeholder="请详细描述交接内容，包括设备状态、待办事项、注意事项等…" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">
+                            <i class="fas fa-clipboard-list text-warning me-1"></i>未完成工单
+                            <small class="text-muted fw-normal">（可选，勾选需交接的工单）</small>
+                        </label>
+                        <div id="pendingOrdersContainer" style="max-height:200px;overflow-y:auto;padding:4px 0;">
+                            {% if pending_orders and pending_orders|length > 0 %}
+                                {% for o in pending_orders %}
+                                <div class="incomplete-item">
+                                    <input class="form-check-input" type="checkbox" value="{{ o.id }}" id="order_{{ o.id }}">
+                                    <label class="form-check-label small flex-grow-1" for="order_{{ o.id }}">
+                                        <strong>#{{ o.id }}</strong>
+                                        <span class="text-truncate d-inline-block" style="max-width:250px;vertical-align:middle;">{{ o.title }}</span>
+                                        {% if o.priority == 'emergency' %}
+                                        <span class="badge bg-danger ms-1" style="font-size:9px;">紧急</span>
+                                        {% elif o.priority == 'urgent' %}
+                                        <span class="badge bg-warning text-dark ms-1" style="font-size:9px;">加急</span>
+                                        {% endif %}
+                                    </label>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                            <div class="text-center py-3 text-muted small">
+                                <i class="fas fa-check-circle text-success me-1"></i>暂无未完成工单需要交接
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-medium"><i class="fas fa-sticky-note text-secondary me-1"></i>备注</label>
+                        <textarea class="form-control" id="handoverRemark" rows="2" placeholder="其他需要说明的事项（可选）"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i>取消
+                    </button>
+                    <button type="submit" class="btn btn-primary btn-sm" id="btnSubmit">
+                        <i class="fas fa-paper-plane me-1"></i>提交交接班
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+var handoverRecords = {{ records_json | safe }};
+
+function resetForm() {
+    document.getElementById('modalTitle').textContent = '新建交接班记录';
+    document.getElementById('handoverPerson').value = '';
+    document.getElementById('receivePerson').value = '';
+    document.getElementById('handoverContent').value = '';
+    document.getElementById('handoverRemark').value = '';
+    document.querySelectorAll('#pendingOrdersContainer input[type="checkbox"]').forEach(function(cb) {
+        cb.checked = false;
+    });
+    document.getElementById('handoverForm').onsubmit = function(e) { return submitHandover(e); };
+}
+
+function filterTable() {
+    var q = document.getElementById('searchInput').value.toLowerCase().trim();
+    var rows = document.querySelectorAll('.handover-row');
+    rows.forEach(function(row) {
+        var text = row.textContent.toLowerCase();
+        row.style.display = (!q || text.indexOf(q) > -1) ? '' : 'none';
+    });
+}
+
+async function submitHandover(e) {
+    e.preventDefault();
+    var handoverPerson = document.getElementById('handoverPerson').value;
+    var receivePerson = document.getElementById('receivePerson').value;
+    var content = document.getElementById('handoverContent').value.trim();
+    var remark = document.getElementById('handoverRemark').value.trim();
+
+    if (!handoverPerson || !receivePerson) {
+        showToast('<i class="fas fa-exclamation-triangle"></i> 请选择交班人和接班人', 'warning');
+        return;
+    }
+    if (handoverPerson === receivePerson) {
+        showToast('<i class="fas fa-exclamation-triangle"></i> 交班人和接班人不能相同', 'warning');
+        return;
+    }
+    if (!content) {
+        showToast('<i class="fas fa-exclamation-triangle"></i> 请填写交接内容', 'warning');
+        return;
+    }
+
+    var selectedOrders = [];
+    document.querySelectorAll('#pendingOrdersContainer input[type="checkbox"]:checked').forEach(function(cb) {
+        selectedOrders.push(parseInt(cb.value));
+    });
+
+    var btn = document.getElementById('btnSubmit');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>提交中…';
+
+    try {
+        var resp = await fetch('/feature/shift_handover/create', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                handover_person: handoverPerson,
+                receive_person: receivePerson,
+                content: content,
+                remark: remark,
+                pending_order_ids: selectedOrders
+            })
+        });
+        var data = await resp.json();
+        if (data.success) {
+            showToast('<i class="fas fa-check-circle"></i> ' + (data.message || '交接班记录创建成功'), 'success');
+            setTimeout(function() { location.reload(); }, 1200);
+        } else {
+            showToast('<i class="fas fa-times-circle"></i> ' + (data.error || '提交失败'), 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-paper-plane me-1"></i>提交交接班';
+        }
+    } catch(e) {
+        showToast('<i class="fas fa-times-circle"></i> 网络错误，请重试', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane me-1"></i>提交交接班';
+    }
+}
+
+function viewHandover(id) {
+    var r = handoverRecords.find(function(x) { return x.id == id; });
+    if (!r) {
+        showToast('<i class="fas fa-exclamation-triangle"></i> 记录不存在', 'warning');
+        return;
+    }
+    document.getElementById('modalTitle').textContent = '交接班详情 #' + r.id;
+    document.getElementById('handoverPerson').value = r.handover_person || '';
+    document.getElementById('receivePerson').value = r.receive_person || '';
+    document.getElementById('handoverContent').value = r.content || '';
+    document.getElementById('handoverRemark').value = r.remark || '';
+    document.querySelectorAll('#pendingOrdersContainer input[type="checkbox"]').forEach(function(cb) {
+        cb.checked = r.pending_order_ids && r.pending_order_ids.indexOf(parseInt(cb.value)) > -1;
+        cb.disabled = true;
+    });
+    document.getElementById('handoverForm').onsubmit = function() { return false; };
+    new bootstrap.Modal(document.getElementById('handoverModal')).show();
+}
+</script>
+{% endblock %}

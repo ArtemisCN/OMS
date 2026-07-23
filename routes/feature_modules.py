@@ -6,16 +6,19 @@ import json
 import os
 from datetime import datetime, date, timedelta
 
-from flask import Blueprint, render_template, jsonify, request, send_file, g
+from flask import current_app,  Blueprint, render_template, jsonify, request, send_file, g
 from flask_login import login_required, current_user
 from sqlalchemy import func
 
+from utils.time_helpers import fmt_dt, now, fmt_date
 from models import (
     db, WorkOrder, WorkOrderTransferLog, WorkOrderChatMessage,
-    Asset, User, Person, SystemSetting, RoleGroup,
+    Asset, User, SystemSetting, RoleGroup,
     SparePart, StockRecord, Consumable, ConsumableRecord,
     Supplier, MaintenanceContract, InspectionPlan, InspectionCheckin,
-    Department, FaultType, SmsLog,
+    Department, FaultType, SmsLog, SolutionTemplate,
+    ShiftHandover, RepairRating, Complaint, StockRequest,
+    InspectionRoute, SparePartAlert,
 )
 
 feature_bp = Blueprint('feature', __name__, url_prefix='/feature')
@@ -51,7 +54,6 @@ def transfer_order(order_id):
     )
     db.session.add(log)
 
-    # 更新工单处理人
     order.person = to_person
     db.session.commit()
 
@@ -66,7 +68,7 @@ def transfer_page(order_id):
     if not order:
         return render_template('errors/404.html'), 404
 
-    persons = Person.query.filter_by(is_active=True).order_by(Person.sort_order, Person.name).all()
+    persons = User.query.filter(User.is_active==True).order_by(User.sort_order, User.display_name).all()
     return render_template('feature/transfer_page.html', order=order, persons=persons)
 
 
@@ -102,8 +104,8 @@ def history_data(order_id):
             'fault_type': wo.fault_type,
             'priority': wo.priority,
             'solution': wo.solution[:200] if wo.solution else '',
-            'created_at': wo.created_at.strftime('%Y-%m-%d %H:%M') if wo.created_at else '',
-            'completed_at': wo.completed_at.strftime('%Y-%m-%d %H:%M') if wo.completed_at else '',
+            'created_at': fmt_dt(wo.created_at, '%Y-%m-%d %H:%M'),
+            'completed_at': fmt_dt(wo.completed_at, '%Y-%m-%d %H:%M'),
             'cost_hours': cost_hours,
         })
 
@@ -171,7 +173,7 @@ def personnel_data():
     team_person_names = None
     if team:
         p_rows = db.session.execute(text(
-            "SELECT name FROM persons WHERE team = :team"
+            "SELECT display_name FROM users WHERE team = :team"
         ), {'team': team}).fetchall()
         team_person_names = {r[0] for r in p_rows}
         if team_person_names:
@@ -183,9 +185,8 @@ def personnel_data():
     group_person_names = None
     if group_id:
         rows = db.session.execute(text(
-            "SELECT p.name FROM persons p "
-            "JOIN users u ON u.id = p.user_id "
-            "WHERE u.group_id = :gid"
+            "SELECT display_name FROM users "
+            "WHERE group_id = :gid"
         ), {'gid': group_id}).fetchall()
         group_person_names = {r[0] for r in rows}
         if group_person_names:
@@ -196,7 +197,7 @@ def personnel_data():
     rows = base_q.group_by(WorkOrder.person).all()
 
     # 在岗人员名单（同条件过滤）
-    active_q = "SELECT name FROM persons WHERE is_active = 1"
+    active_q = "SELECT display_name FROM users WHERE is_active = 1"
     active_params = {}
     if hid:
         active_q += " AND hospital_id = :hid"
@@ -246,7 +247,6 @@ def personnel_data():
 
     stats.sort(key=lambda x: x['total_orders'], reverse=True)
 
-    # 返回角色组列表供前端下拉
     groups = RoleGroup.query.order_by(RoleGroup.name).all()
     group_list = [{'id': rg.id, 'name': rg.name} for rg in groups]
 
@@ -324,7 +324,7 @@ def sla_data():
                 'status': wo.status,
                 'person': wo.person,
                 'department': wo.department,
-                'created_at': wo.created_at.strftime('%Y-%m-%d %H:%M') if wo.created_at else '',
+                'created_at': fmt_dt(wo.created_at, '%Y-%m-%d %H:%M'),
                 'cost_hours': cost_hours,
                 'display_time': display_time,
             })
@@ -447,7 +447,6 @@ def consumable_forecast():
     today = date.today()
     thirty_days_ago = today - timedelta(days=30)
 
-    # 获取所有耗材
     consumables = Consumable.query.order_by(Consumable.name).all()
 
     forecasts = []
@@ -546,7 +545,6 @@ def stock_link_to_order():
     # 扣减库存
     part.stock -= quantity
 
-    # 创建出库记录
     record = StockRecord(
         part_id=part.id,
         type='out',
@@ -571,11 +569,9 @@ def suppliers():
     """供应商列表"""
     supplier_list = Supplier.query.order_by(Supplier.sort_order, Supplier.name).all()
 
-    # 序列化为 JSON 供前端弹窗编辑使用
     suppliers_json = []
     for s in supplier_list:
         d = {c.name: getattr(s, c.name) for c in s.__table__.columns}
-        # 处理 date 类型
         for k, v in d.items():
             if isinstance(v, (date, datetime)):
                 d[k] = v.isoformat() if v else None
@@ -648,7 +644,6 @@ def contracts():
     today = date.today()
     expiring = [c for c in contract_list if c.expiring_soon]
 
-    # 序列化
     contracts_json = []
     for c in contract_list:
         d = {col.name: getattr(c, col.name) for col in c.__table__.columns}
@@ -730,7 +725,6 @@ def asset_depreciation():
     """设备折旧计算页面"""
     today = date.today()
 
-    # 获取所有有原值和购入日期的资产
     assets = Asset.query.filter(
         Asset.purchase_price.isnot(None),
         Asset.purchase_date.isnot(None),
@@ -754,7 +748,6 @@ def asset_depreciation():
         # 年折旧（直线法）
         annual_dep = purchase_price / lifespan if lifespan > 0 else 0
 
-        # 当前净值
         current_value = purchase_price * max(0, (1 - age_years / lifespan)) if lifespan > 0 else 0
 
         # 折旧率
@@ -766,7 +759,7 @@ def asset_depreciation():
             'device_type': a.device_type,
             'brand': a.brand,
             'purchase_price': purchase_price,
-            'purchase_date_str': purchase_date_val.strftime('%Y-%m-%d') if purchase_date_val else '',
+            'purchase_date_str': fmt_date(purchase_date_val),
             'purchase_date': purchase_date_val,
             'lifespan_years': lifespan,
             'age_years': round(age_years, 1),
@@ -825,10 +818,9 @@ def inspection_checkin_do(task_id):
         return jsonify(success=False, error='巡检计划不存在'), 404
 
     data = request.get_json(silent=True) or {}
-    # 检查是否已签到
     existing = InspectionCheckin.query.filter_by(inspection_plan_id=task_id).first()
     if existing:
-        return jsonify(success=True, message='已签到', data={'checkin_time': existing.checkin_time.strftime('%Y-%m-%d %H:%M:%S') if existing.checkin_time else ''})
+        return jsonify(success=True, message='已签到', data={'checkin_time': fmt_dt(existing.checkin_time, '%Y-%m-%d %H:%M:%S')})
 
     checkin = InspectionCheckin(
         inspection_plan_id=task_id,
@@ -837,7 +829,6 @@ def inspection_checkin_do(task_id):
         remark=data.get('remark', ''),
     )
     db.session.add(checkin)
-    # 更新巡检计划状态
     plan.status = 'completed'
     db.session.commit()
 
@@ -854,7 +845,7 @@ def inspection_checkin_status(task_id):
     checkin = InspectionCheckin.query.filter_by(inspection_plan_id=task_id).first()
     if checkin:
         return jsonify(success=True, checked_in=True, data={
-            'checkin_time': checkin.checkin_time.strftime('%Y-%m-%d %H:%M:%S') if checkin.checkin_time else '',
+            'checkin_time': fmt_dt(checkin.checkin_time, '%Y-%m-%d %H:%M:%S'),
             'location': checkin.location or '',
             'remark': checkin.remark or '',
         })
@@ -978,7 +969,7 @@ def ops_screen_data():
             'priority': priority_map.get(wo.priority, wo.priority),
             'department': wo.department,
             'person': wo.person,
-            'created_at': wo.created_at.strftime('%H:%M') if wo.created_at else '',
+            'created_at': fmt_dt(wo.created_at, '%H:%M'),
         })
 
     # 今日优先级分布
@@ -1000,7 +991,7 @@ def ops_screen_data():
             'id': wo.id,
             'title': (wo.title[:24] + '…') if len(wo.title) > 24 else wo.title,
             'person': wo.person,
-            'completed_at': wo.completed_at.strftime('%H:%M') if wo.completed_at else '',
+            'completed_at': fmt_dt(wo.completed_at, '%H:%M'),
         })
 
     # 今日涉及科室数
@@ -1094,8 +1085,7 @@ def ops_screen_data():
         WorkOrder.person,
         func.count(WorkOrder.id).label('cnt')
     ).select_from(WorkOrder
-    ).join(Person, Person.name == WorkOrder.person
-    ).join(User, User.id == Person.user_id
+    ).join(User, User.display_name == WorkOrder.person
     ).join(RoleGroup, RoleGroup.id == User.group_id
     ).filter(
         WorkOrder.person != '',
@@ -1114,7 +1104,6 @@ def ops_screen_data():
         grouped_map[r.group_name].append({'name': r.person, 'count': r.cnt})
     grouped_workers_list = [{'group': g, 'workers': w} for g, w in grouped_map.items()]
 
-    # 读取运维大屏分组显示配置
     ops_display = SystemSetting.query.filter_by(key='ops_display_groups', hospital_id=1).first()
     ops_display_config = {}
     if ops_display and ops_display.value:
@@ -1271,7 +1260,7 @@ def leadership_dashboard_data():
             'status': status_map.get(wo.status, wo.status),
             'priority': wo.priority,
             'person': wo.person,
-            'created_at': wo.created_at.strftime('%m-%d %H:%M') if wo.created_at else '',
+            'created_at': fmt_dt(wo.created_at, '%m-%d %H:%M'),
         })
 
     return jsonify(
@@ -1419,7 +1408,6 @@ def report_builder_generate():
         ).group_by(dim_col).order_by(func.avg(
             func.julianday(WorkOrder.completed_at) - func.julianday(WorkOrder.created_at)
         ).desc()).all()
-        # 转为小时
         query = [(r.label, round((r.value or 0) * 24, 1)) for r in query]
     elif metric == 'overdue_count':
         query = db.session.query(
@@ -1613,7 +1601,6 @@ def digital_twin_data():
 
     hid = request.args.get('hospital_id', type=int)
 
-    # 按 building 统计工单
     query = """
         SELECT building, COUNT(*) as fault_count,
                SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress
@@ -1645,7 +1632,6 @@ def digital_twin_data():
             top_count = r[1]
             top_building = r[0]
 
-    # 读取已保存的位置
     pos_setting = SystemSetting.query.filter_by(key='digital_twin_positions').first()
     positions = {}
     if pos_setting and pos_setting.value:
@@ -1752,7 +1738,6 @@ def digital_twin_upload_map():
     os.makedirs(upload_dir, exist_ok=True)
     file.save(os.path.join(upload_dir, filename))
 
-    # 删除旧地图文件
     old_setting = SystemSetting.query.filter_by(key='digital_twin_map_url').first()
     if old_setting and old_setting.value:
         old_val = old_setting.value
@@ -1764,7 +1749,6 @@ def digital_twin_upload_map():
                 except:
                     pass
 
-    # 保存新 URL
     map_url = f'/static/hospital_maps/{filename}'
     setting = old_setting or SystemSetting(key='digital_twin_map_url', value='')
     if not old_setting:
@@ -1829,3 +1813,1045 @@ def upload_dt_texture():
     file.save(os.path.join(upload_dir, filename))
     file_url = f'/static/dt_textures/{filename}'
     return jsonify(success=True, url=file_url)
+# ==================== 新功能路由 ====================
+
+# ==== 1. 自动派单 + 超时催办 快捷开关 ====
+
+def _get_feature_toggle(key, default='false'):
+    """获取功能开关状态"""
+    s = SystemSetting.query.filter_by(key=f'feature_toggle_{key}').first()
+    if s:
+        return s.value
+    return default
+
+def _set_feature_toggle(key, value):
+    """设置功能开关"""
+    SystemSetting.set(f'feature_toggle_{key}', value,
+                      label=key, category='功能开关')
+
+@feature_bp.route('/auto-assign/check', methods=['POST'])
+@login_required
+def auto_assign_check():
+    """自动派单检查：检查订单是否应自动分配"""
+    data = request.get_json(silent=True) or {}
+    order_id = data.get('order_id')
+    if not order_id:
+        return jsonify(success=False, error='缺少工单ID'), 400
+    if _get_feature_toggle('auto_assign') != 'true':
+        return jsonify(success=True, assigned=False, reason='自动派单未启用')
+    
+    order = db.session.get(WorkOrder, order_id)
+    if not order:
+        return jsonify(success=False, error='工单不存在'), 404
+    
+    # 找最闲的匹配人员：同故障类型待处理最少的
+    available = User.query.filter(
+        User.is_active == True,
+        User.display_name != ''
+    ).all()
+    
+    best_person = None
+    min_load = 999
+    for u in available:
+        load = WorkOrder.query.filter(
+            WorkOrder.person == u.display_name,
+            WorkOrder.status.in_(['pending', 'in_progress'])
+        ).count()
+        if load < min_load:
+            # 优先匹配同故障类型的处理经验
+            same_type_count = WorkOrder.query.filter(
+                WorkOrder.person == u.display_name,
+                WorkOrder.fault_type == order.fault_type
+            ).count()
+            weighted = load - same_type_count * 0.3  # 有经验的人权重更轻
+            if weighted < min_load:
+                min_load = weighted
+                best_person = u.display_name
+    
+    if best_person:
+        order.person = best_person
+        db.session.commit()
+        return jsonify(success=True, assigned=True, person=best_person)
+    return jsonify(success=True, assigned=False, reason='无可用人员')
+
+
+@feature_bp.route('/timeout-reminder/check', methods=['POST'])
+@login_required
+def timeout_reminder_check():
+    """超时催办检查：检查超时工单并推送"""
+    if _get_feature_toggle('timeout_reminder') != 'true':
+        return jsonify(success=True, notified=0, reason='超时催办未启用')
+    
+    timeout_hours_setting = SystemSetting.query.filter_by(key='wecom_timeout_hours').first()
+    timeout_hours = float(timeout_hours_setting.value) if timeout_hours_setting and timeout_hours_setting.value else 4.0
+    
+    now = datetime.now()
+    threshold_time = now - timedelta(hours=timeout_hours)
+    
+    # 查找超时未处理工单
+    overdue_orders = WorkOrder.query.filter(
+        WorkOrder.status.in_(['pending', 'in_progress']),
+        WorkOrder.created_at < threshold_time,
+        WorkOrder.wecom_timeout_notified == False
+    ).all()
+    
+    notified = 0
+    for order in overdue_orders:
+        try:
+            from routes.api_mobile import send_wecom_notification
+            send_wecom_notification(order)
+            order.wecom_timeout_notified = True
+            notified += 1
+        except Exception as e:
+            current_app.logger.error(f'超时催办通知失败: {e}')
+    
+    if notified > 0:
+        db.session.commit()
+    
+    return jsonify(success=True, notified=notified)
+
+
+@feature_bp.route('/feature-toggles', methods=['GET'])
+@login_required
+def get_feature_toggles():
+    """获取所有功能开关状态"""
+    return jsonify(success=True, toggles={
+        'auto_assign': _get_feature_toggle('auto_assign'),
+        'timeout_reminder': _get_feature_toggle('timeout_reminder'),
+    })
+
+
+@feature_bp.route('/feature-toggle/save', methods=['POST'])
+@login_required
+def save_feature_toggle():
+    """保存功能开关"""
+    if not current_user.is_admin:
+        return jsonify(success=False, error='仅管理员可操作'), 403
+    key = request.form.get('key', '')
+    value = request.form.get('value', 'false')
+    if key not in ('auto_assign', 'timeout_reminder'):
+        return jsonify(success=False, error='无效的开关'), 400
+    _set_feature_toggle(key, value)
+    return jsonify(success=True)
+
+
+# ==== 2. 交接班日志 ====
+
+@feature_bp.route('/shift-handover', methods=['GET'])
+@login_required
+def shift_handover():
+    """交接班日志列表页"""
+    handovers = ShiftHandover.query.order_by(ShiftHandover.created_at.desc()).all()
+    # 未完成工单列表
+    pending_orders = WorkOrder.query.filter(
+        WorkOrder.status.in_(['pending', 'in_progress'])
+    ).order_by(WorkOrder.created_at.desc()).all()
+    # 人员列表
+    persons = User.query.filter(User.is_active == True).order_by(User.display_name).all()
+    return render_template('feature/shift_handover.html',
+                           stats={
+                               'total': len(handovers),
+                               'today': sum(1 for h in handovers if h.created_at and h.created_at.date() == datetime.now().date()),
+                               'unfinished': len(pending_orders),
+                               'staff_count': len(set(h.handover_person for h in handovers) | set(h.receive_person for h in handovers)),
+                           },
+                           handovers=handovers,
+                           handovers_json=json.dumps([{
+                               'id': h.id,
+                               'handover_person': h.handover_person,
+                               'receive_person': h.receive_person,
+                               'content': h.content,
+                               'unfinished_orders': h.unfinished_orders or [],
+                               'notes': h.notes,
+                               'status': h.status,
+                               'created_at': fmt_dt(h.created_at, '%Y-%m-%d %H:%M'),
+                           } for h in handovers], ensure_ascii=False),
+                           pending_orders=pending_orders,
+                           pending_orders_json=json.dumps([{
+                               'id': o.id, 'title': o.title,
+                               'status': o.status, 'priority': o.priority,
+                               'department': o.department, 'person': o.person,
+                           } for o in pending_orders], ensure_ascii=False),
+                           persons=persons)
+
+
+@feature_bp.route('/shift-handover/save', methods=['POST'])
+@login_required
+def shift_handover_save():
+    """保存交接班记录"""
+    if not current_user.is_admin:
+        return jsonify(success=False, error='仅管理员可操作'), 403
+    data = request.get_json(silent=True) or {}
+    handover_person = data.get('handover_person', '').strip()
+    receive_person = data.get('receive_person', '').strip()
+    content = data.get('content', '').strip()
+    unfinished_order_ids = data.get('unfinished_order_ids', [])
+    notes = data.get('notes', '').strip()
+    if not handover_person or not receive_person:
+        return jsonify(success=False, error='交班人和接班人不能为空'), 400
+    orders_summary = []
+    if unfinished_order_ids:
+        orders = WorkOrder.query.filter(WorkOrder.id.in_(unfinished_order_ids)).all()
+        for o in orders:
+            orders_summary.append({
+                'id': o.id, 'title': o.title,
+                'department': o.department, 'priority': o.priority
+            })
+    handover = ShiftHandover(
+        handover_person=handover_person,
+        receive_person=receive_person,
+        content=content,
+        unfinished_orders=orders_summary,
+        notes=notes,
+        status='completed',
+    )
+    db.session.add(handover)
+    db.session.commit()
+    return jsonify(success=True, id=handover.id)
+
+
+@feature_bp.route('/shift-handover/<int:hid>', methods=['GET'])
+@login_required
+def shift_handover_detail(hid):
+    """获取交接班记录详情"""
+    h = db.session.get(ShiftHandover, hid)
+    if not h:
+        return jsonify(success=False, error='记录不存在'), 404
+    return jsonify(success=True, data={
+        'id': h.id,
+        'handover_person': h.handover_person,
+        'receive_person': h.receive_person,
+        'content': h.content,
+        'unfinished_orders': h.unfinished_orders or [],
+        'notes': h.notes,
+        'status': h.status,
+        'created_at': fmt_dt(h.created_at, '%Y-%m-%d %H:%M'),
+    })
+
+
+# ==== 3. 维修评价 ====
+
+@feature_bp.route('/repair-ratings', methods=['GET'])
+@login_required
+def repair_ratings():
+    """维修评价列表页"""
+    page = request.args.get('page', 1, type=int)
+    rating_filter = request.args.get('rating', type=int)
+    q = RepairRating.query.order_by(RepairRating.created_at.desc())
+    if rating_filter:
+        q = q.filter(RepairRating.rating == rating_filter)
+    pagination = q.paginate(page=page, per_page=20, error_out=False)
+    ratings = pagination.items
+    stats = {
+        'total': RepairRating.query.count(),
+        'avg': db.session.query(func.avg(RepairRating.rating)).scalar() or 0,
+        'five_star': RepairRating.query.filter(RepairRating.rating == 5).count(),
+        'low_score': RepairRating.query.filter(RepairRating.rating <= 2).count(),
+    }
+    return render_template('feature/repair_ratings.html',
+                           ratings=ratings, pagination=pagination, stats=stats)
+
+
+@feature_bp.route('/repair-rating/save', methods=['POST'])
+@login_required
+def repair_rating_save():
+    """提交维修评价"""
+    data = request.get_json(silent=True) or {}
+    order_id = data.get('order_id')
+    rating = data.get('rating', 5)
+    comment = data.get('comment', '').strip()
+    if not order_id:
+        return jsonify(success=False, error='缺少工单ID'), 400
+    existing = RepairRating.query.filter_by(work_order_id=order_id).first()
+    if existing:
+        existing.rating = rating
+        existing.comment = comment
+        existing.created_by = current_user.display_name or current_user.username
+    else:
+        rr = RepairRating(
+            work_order_id=order_id,
+            rating=rating,
+            comment=comment,
+            created_by=current_user.display_name or current_user.username,
+        )
+        db.session.add(rr)
+    db.session.commit()
+    return jsonify(success=True)
+
+
+@feature_bp.route('/repair-rating/<int:oid>/detail', methods=['GET'])
+@login_required
+def repair_rating_detail(oid):
+    """评价详情"""
+    rr = RepairRating.query.filter_by(work_order_id=oid).first()
+    if not rr:
+        return jsonify(success=False, error='未找到评价'), 404
+    wo = db.session.get(WorkOrder, oid)
+    return jsonify(success=True, data={
+        'id': rr.id,
+        'order_id': rr.work_order_id,
+        'order_title': wo.title if wo else '',
+        'rating': rr.rating,
+        'comment': rr.comment,
+        'reviewer': rr.created_by,
+        'created_at': fmt_dt(rr.created_at, '%Y-%m-%d %H:%M'),
+    })
+
+
+# ==== 4. 投诉管理 ====
+
+@feature_bp.route('/complaints', methods=['GET'])
+@login_required
+def complaints():
+    """投诉管理列表页"""
+    complaints = Complaint.query.order_by(Complaint.created_at.desc()).all()
+    stats = {
+        'pending': Complaint.query.filter_by(status='pending').count(),
+        'processing': Complaint.query.filter_by(status='processing').count(),
+        'resolved': Complaint.query.filter_by(status='resolved').count(),
+        'closed': Complaint.query.filter_by(status='closed').count(),
+    }
+    return render_template('feature/complaints.html',
+                           complaints=complaints,
+                           complaints_json=json.dumps([{
+                               'id': c.id, 'title': c.title,
+                               'description': c.description,
+                               'complainant': c.complainant,
+                               'department': c.department,
+                               'handler': c.handler,
+                               'status': c.status,
+                               'resolution': c.resolution,
+                               'resolved_at': fmt_dt(c.resolved_at, '%Y-%m-%d %H:%M'),
+                               'created_at': fmt_dt(c.created_at, '%Y-%m-%d %H:%M'),
+                           } for c in complaints], ensure_ascii=False),
+                           stats=stats)
+
+
+@feature_bp.route('/complaint/save', methods=['POST'])
+@login_required
+def complaint_save():
+    """保存投诉"""
+    data = request.get_json(silent=True) or {}
+    cid = data.get('id')
+    title = data.get('title', '').strip()
+    description = data.get('description', '').strip()
+    complainant = data.get('complainant', '').strip()
+    department = data.get('department', '').strip()
+    if not title or not complainant:
+        return jsonify(success=False, error='标题和投诉人不能为空'), 400
+    if cid:
+        c = db.session.get(Complaint, cid)
+        if not c:
+            return jsonify(success=False, error='投诉不存在'), 404
+        c.title = title
+        c.description = description
+        c.complainant = complainant
+        c.department = department
+    else:
+        c = Complaint(title=title, description=description,
+                      complainant=complainant, department=department)
+        db.session.add(c)
+    db.session.commit()
+    return jsonify(success=True)
+
+
+@feature_bp.route('/complaint/handle', methods=['POST'])
+@login_required
+def complaint_handle():
+    """处理投诉"""
+    data = request.get_json(silent=True) or {}
+    cid = data.get('id')
+    handler = data.get('handler', '').strip()
+    resolution = data.get('resolution', '').strip()
+    new_status = data.get('status', 'processing')
+    c = db.session.get(Complaint, cid)
+    if not c:
+        return jsonify(success=False, error='投诉不存在'), 404
+    c.handler = handler or current_user.display_name or current_user.username
+    c.resolution = resolution
+    c.status = new_status
+    if new_status == 'resolved':
+        c.resolved_at = datetime.now()
+    db.session.commit()
+    return jsonify(success=True)
+
+
+@feature_bp.route('/complaint/close', methods=['POST'])
+@login_required
+def complaint_close():
+    """关闭投诉"""
+    data = request.get_json(silent=True) or {}
+    cid = data.get('id')
+    c = db.session.get(Complaint, cid)
+    if not c:
+        return jsonify(success=False, error='投诉不存在'), 404
+    c.status = 'closed'
+    db.session.commit()
+    return jsonify(success=True)
+
+
+@feature_bp.route('/complaint/reopen', methods=['POST'])
+@login_required
+def complaint_reopen():
+    """重新打开投诉"""
+    data = request.get_json(silent=True) or {}
+    cid = data.get('id')
+    c = db.session.get(Complaint, cid)
+    if not c:
+        return jsonify(success=False, error='投诉不存在'), 404
+    c.status = 'processing'
+    db.session.commit()
+    return jsonify(success=True)
+
+
+# ==== 5. 领用审批 ====
+
+@feature_bp.route('/stock-requests', methods=['GET'])
+@login_required
+def stock_requests():
+    """领用审批列表页"""
+    page = request.args.get('page', 1, type=int)
+    status_filter = request.args.get('status', '')
+    q = StockRequest.query.order_by(StockRequest.created_at.desc())
+    if status_filter:
+        q = q.filter(StockRequest.status == status_filter)
+    pagination = q.paginate(page=page, per_page=20, error_out=False)
+    requests = pagination.items
+    parts = SparePart.query.order_by(SparePart.name).all()
+    departments = [d.name for d in Department.query.filter(Department.is_active == True).order_by(Department.name).all()]
+    stats = {
+        'pending': StockRequest.query.filter_by(status='pending').count(),
+        'approved': StockRequest.query.filter_by(status='approved').count(),
+        'rejected': StockRequest.query.filter_by(status='rejected').count(),
+        'total': StockRequest.query.count(),
+    }
+    return render_template('feature/stock_requests.html',
+                           requests=requests,
+                           requests_json=json.dumps([{
+                               'id': r.id, 'applicant': r.applicant,
+                               'department': r.department,
+                               'items': r.items or [],
+                               'reason': r.reason,
+                               'status': r.status,
+                               'approver': r.approver,
+                               'created_at': fmt_dt(r.created_at, '%Y-%m-%d %H:%M'),
+                               'approved_at': fmt_dt(r.approved_at, '%Y-%m-%d %H:%M'),
+                           } for r in requests], ensure_ascii=False),
+                           parts=parts,
+                           parts_json=json.dumps([{
+                               'id': p.id, 'name': p.name,
+                               'model_no': p.model_no or '',
+                               'quantity': p.stock or 0,
+                               'unit': p.unit or '个',
+                           } for p in parts], ensure_ascii=False),
+                           departments=departments,
+                           stats=stats)
+
+
+@feature_bp.route('/stock-request/save', methods=['POST'])
+@login_required
+def stock_request_save():
+    """保存领用申请"""
+    data = request.get_json(silent=True) or {}
+    applicant = data.get('applicant', '').strip()
+    department = data.get('department', '').strip()
+    reason = data.get('reason', '').strip()
+    items = data.get('items', [])
+    if not applicant or not items:
+        return jsonify(success=False, error='申请人和领用备件不能为空'), 400
+    sr = StockRequest(
+        applicant=applicant,
+        department=department,
+        items=items,
+        reason=reason,
+    )
+    db.session.add(sr)
+    db.session.commit()
+    return jsonify(success=True, id=sr.id)
+
+
+@feature_bp.route('/stock-request/approve', methods=['POST'])
+@login_required
+def stock_request_approve():
+    """审批通过领用申请"""
+    data = request.get_json(silent=True) or {}
+    rid = data.get('id')
+    sr = db.session.get(StockRequest, rid)
+    if not sr:
+        return jsonify(success=False, error='申请不存在'), 404
+    sr.status = 'approved'
+    sr.approver = current_user.display_name or current_user.username
+    sr.approved_at = datetime.now()
+    # 自动扣减库存
+    if sr.items:
+        for item in sr.items:
+            part_id = item.get('part_id')
+            qty = item.get('quantity', 1)
+            if part_id:
+                part = db.session.get(SparePart, part_id)
+                if part and part.stock:
+                    part.stock = max(0, (part.stock or 0) - qty)
+    db.session.commit()
+    return jsonify(success=True)
+
+
+@feature_bp.route('/stock-request/reject', methods=['POST'])
+@login_required
+def stock_request_reject():
+    """拒绝领用申请"""
+    data = request.get_json(silent=True) or {}
+    rid = data.get('id')
+    sr = db.session.get(StockRequest, rid)
+    if not sr:
+        return jsonify(success=False, error='申请不存在'), 404
+    sr.status = 'rejected'
+    sr.approver = current_user.display_name or current_user.username
+    db.session.commit()
+    return jsonify(success=True)
+
+
+# ==== 6. 备件库存预警 ====
+
+@feature_bp.route('/spare-part-alerts', methods=['GET'])
+@login_required
+def spare_part_alerts():
+    """备件预警列表页"""
+    alerts = SparePartAlert.query.order_by(SparePartAlert.id).all()
+    stats = {
+        'total': len(alerts),
+        'triggered': sum(1 for a in alerts if a.enabled and a.part and (a.part.stock or 0) <= a.min_threshold),
+        'normal': sum(1 for a in alerts if not a.enabled or not a.part or (a.part.stock or 0) > a.min_threshold),
+        'disabled': sum(1 for a in alerts if not a.enabled),
+    }
+    return render_template('feature/spare_part_alerts.html',
+                           alerts=alerts,
+                           alerts_json=json.dumps([{
+                               'id': a.id, 'part_id': a.part_id,
+                               'part_name': a.part.name if a.part else '已删除',
+                               'part_model': a.part.model_no if a.part else '',
+                               'current_qty': a.part.stock if a.part else 0,
+                               'min_threshold': a.min_threshold,
+                               'enabled': a.enabled,
+                               'last_notified': fmt_dt(a.last_notified_at, '%Y-%m-%d %H:%M'),
+                               'status': 'triggered' if (a.enabled and a.part and (a.part.stock or 0) <= a.min_threshold)
+                                        else 'normal' if a.enabled else 'disabled',
+                           } for a in alerts], ensure_ascii=False),
+                           parts=SparePart.query.order_by(SparePart.name).all(),
+                           stats=stats)
+
+
+@feature_bp.route('/spare-part-alert/save', methods=['POST'])
+@login_required
+def spare_part_alert_save():
+    """保存预警配置"""
+    data = request.get_json(silent=True) or {}
+    aid = data.get('id')
+    part_id = data.get('part_id')
+    min_threshold = data.get('min_threshold', 5)
+    enabled = data.get('enabled', True)
+    if not part_id:
+        return jsonify(success=False, error='请选择备件'), 400
+    if aid:
+        a = db.session.get(SparePartAlert, aid)
+        if a:
+            a.part_id = part_id
+            a.min_threshold = min_threshold
+            a.enabled = enabled
+    else:
+        existing = SparePartAlert.query.filter_by(part_id=part_id).first()
+        if existing:
+            existing.min_threshold = min_threshold
+            existing.enabled = enabled
+        else:
+            a = SparePartAlert(part_id=part_id, min_threshold=min_threshold, enabled=enabled)
+            db.session.add(a)
+    db.session.commit()
+    return jsonify(success=True)
+
+
+@feature_bp.route('/spare-part-alert/toggle', methods=['POST'])
+@login_required
+def spare_part_alert_toggle():
+    """切换预警开关"""
+    data = request.get_json(silent=True) or {}
+    aid = data.get('id')
+    a = db.session.get(SparePartAlert, aid)
+    if not a:
+        return jsonify(success=False, error='预警配置不存在'), 404
+    a.enabled = not a.enabled
+    db.session.commit()
+    return jsonify(success=True, enabled=a.enabled)
+
+
+@feature_bp.route('/spare-part-alert-get', methods=['GET'])
+@login_required
+def spare_part_alert_get():
+    """获取单条预警配置"""
+    aid = request.args.get('id', type=int)
+    a = db.session.get(SparePartAlert, aid)
+    if not a:
+        return jsonify(success=False, error='预警配置不存在'), 404
+    return jsonify(success=True, data={
+        'id': a.id, 'part_id': a.part_id,
+        'part_name': a.part.name if a.part else '',
+        'part_model': a.part.model_no if a.part else '',
+        'current_qty': a.part.quantity if a.part else 0,
+        'min_threshold': a.min_threshold, 'enabled': a.enabled,
+    })
+
+
+@feature_bp.route('/spare-part-alert/<int:aid>/delete', methods=['POST'])
+@login_required
+def spare_part_alert_delete(aid):
+    """删除预警配置"""
+    a = db.session.get(SparePartAlert, aid)
+    if not a:
+        return jsonify(success=False, error='预警配置不存在'), 404
+    db.session.delete(a)
+    db.session.commit()
+    return jsonify(success=True)
+
+
+@feature_bp.route('/spare-part-alert/check', methods=['GET'])
+@login_required
+def spare_part_alert_check():
+    """检查所有预警并返回触发列表"""
+    triggered = []
+    alerts = SparePartAlert.query.filter_by(enabled=True).all()
+    for a in alerts:
+        part = a.part
+        if part and (part.stock or 0) <= a.min_threshold:
+            triggered.append({
+                'id': a.id, 'part_id': part.id,
+                'part_name': part.name,
+                'current_qty': part.stock or 0,
+                'min_threshold': a.min_threshold,
+            })
+    return jsonify(success=True, triggered=triggered, count=len(triggered))
+
+
+# ==== 7. 巡检路线规划 ====
+
+@feature_bp.route('/inspection-routes', methods=['GET'])
+@login_required
+def inspection_routes():
+    """巡检路线列表页"""
+    routes = InspectionRoute.query.order_by(InspectionRoute.created_at.desc()).all()
+    buildings = sorted(set(
+        r[0] for r in db.session.query(Department.building).filter(
+            Department.building != '', Department.building.isnot(None)
+        ).distinct().all()
+    ))
+    floors = sorted(set(
+        r[0] for r in db.session.query(Department.floor).filter(
+            Department.floor != '', Department.floor.isnot(None)
+        ).distinct().all()
+    ))
+    departments = [d.name for d in Department.query.filter(Department.is_active == True).order_by(Department.name).all()]
+    return render_template('feature/inspection_routes.html', routes=routes,
+                           routes_json=json.dumps([{
+                               'id': r.id, 'name': r.name,
+                               'points': r.points or [],
+                               'is_active': r.is_active,
+                               'created_by': r.created_by,
+                               'created_at': fmt_dt(r.created_at, '%Y-%m-%d %H:%M'),
+                           } for r in routes], ensure_ascii=False),
+                           buildings=buildings, floors=floors, departments=departments)
+
+
+@feature_bp.route('/inspection-route/save', methods=['POST'])
+@login_required
+def inspection_route_save():
+    """保存巡检路线"""
+    data = request.get_json(silent=True) or {}
+    rid = data.get('id')
+    name = data.get('name', '').strip()
+    points = data.get('points', [])
+    if not name:
+        return jsonify(success=False, error='路线名称不能为空'), 400
+    if rid:
+        r = db.session.get(InspectionRoute, rid)
+        if r:
+            r.name = name
+            r.points = points
+    else:
+        r = InspectionRoute(name=name, points=points,
+                            created_by=current_user.display_name or current_user.username)
+        db.session.add(r)
+    db.session.commit()
+    return jsonify(success=True)
+
+
+@feature_bp.route('/inspection-route/toggle', methods=['POST'])
+@login_required
+def inspection_route_toggle():
+    """切换路线启用状态"""
+    data = request.get_json(silent=True) or {}
+    rid = data.get('id') or data.get('rid')
+    r = db.session.get(InspectionRoute, rid)
+    if not r:
+        return jsonify(success=False, error='路线不存在'), 404
+    r.is_active = not r.is_active
+    db.session.commit()
+    return jsonify(success=True, active=r.is_active)
+
+
+@feature_bp.route('/inspection-route/delete', methods=['POST'])
+@login_required
+def inspection_route_delete():
+    """删除巡检路线"""
+    rid = request.form.get('rid', type=int) or request.args.get('rid', type=int)
+    r = db.session.get(InspectionRoute, rid)
+    if not r:
+        return jsonify(success=False, error='路线不存在'), 404
+    db.session.delete(r)
+    db.session.commit()
+    return jsonify(success=True)
+
+
+@feature_bp.route('/inspection-route/<int:rid>/data', methods=['GET'])
+@login_required
+def inspection_route_data(rid):
+    """获取单条路线数据"""
+    r = db.session.get(InspectionRoute, rid)
+    if not r:
+        return jsonify(success=False, error='路线不存在'), 404
+    return jsonify(success=True, data={
+        'id': r.id, 'name': r.name,
+        'points': r.points or [],
+        'is_active': r.is_active,
+    })
+
+
+# ==== 8. 维保日历 ====
+
+@feature_bp.route('/maintenance-calendar', methods=['GET'])
+@login_required
+def maintenance_calendar():
+    """维保日历页面"""
+    now = datetime.now()
+    year = request.args.get('year', now.year, type=int)
+    month = request.args.get('month', now.month, type=int)
+    contracts = MaintenanceContract.query.all()
+    import calendar
+    cal = calendar.monthcalendar(year, month)
+    calendar_grid = []
+    for week in cal:
+        week_data = []
+        for day in week:
+            if day == 0:
+                week_data.append({'day': 0, 'is_today': False, 'other_month': True, 'contracts': []})
+            else:
+                date_str = f'{year}-{month:02d}-{day:02d}'
+                is_today = (now.year == year and now.month == month and now.day == day)
+                day_contracts = []
+                for c in contracts:
+                    if c.end_date:
+                        flag = 'expired' if c.end_date < now.date() else ('expiring' if (c.end_date - now.date()).days <= 30 else 'active')
+                        if c.end_date.month == month and c.end_date.year == year and c.end_date.day == day:
+                            day_contracts.append({
+                                'id': c.id, 'contract_name': c.contract_name,
+                                'supplier_name': c.supplier.name if c.supplier else '',
+                                'end_date': c.end_date.strftime('%Y-%m-%d'),
+                                'status_flag': flag,
+                            })
+                week_data.append({
+                    'day': day, 'date_str': date_str,
+                    'is_today': is_today, 'other_month': False,
+                    'contracts': day_contracts[:5],
+                })
+        calendar_grid.append(week_data)
+    # 当月合同列表
+    month_contracts = []
+    for c in contracts:
+        if c.end_date and c.end_date.month == month and c.end_date.year == year:
+            flag = 'expired' if c.end_date < now.date() else ('expiring' if (c.end_date - now.date()).days <= 30 else 'active')
+            month_contracts.append({
+                'id': c.id, 'contract_name': c.contract_name,
+                'contract_no': c.contract_no or '',
+                'supplier_name': c.supplier.name if c.supplier else '',
+                'end_date': c.end_date.strftime('%Y-%m-%d'),
+                'status_flag': flag,
+            })
+    stats = {
+        'active': sum(1 for c in contracts if c.end_date and c.end_date >= now.date()),
+        'expiring': sum(1 for c in contracts if c.end_date and (c.end_date - now.date()).days <= 30 and c.end_date >= now.date()),
+        'expired': sum(1 for c in contracts if c.end_date and c.end_date < now.date()),
+        'total': len(contracts),
+    }
+    return render_template('feature/maintenance_calendar.html',
+                           year=year, month=month,
+                           years=list(range(now.year - 5, now.year + 3)),
+                           stats=stats,
+                           calendar_grid=calendar_grid,
+                           month_contracts=month_contracts,
+                           contracts_json=json.dumps([{
+                               'id': c.id, 'contract_name': c.contract_name,
+                               'contract_no': c.contract_no or '',
+                               'supplier_name': c.supplier.name if c.supplier else '',
+                               'start_date': fmt_date(c.start_date),
+                               'end_date': fmt_date(c.end_date),
+                               'contract_amount': str(c.contract_amount) if c.contract_amount else '',
+                               'payment_type': c.payment_type or '',
+                               'contact_person': c.contact_person or '',
+                               'contact_phone': c.contact_phone or '',
+                               'remark': c.remark or '',
+                               'status_flag': 'expired' if (c.end_date and c.end_date < now.date())
+                                              else 'expiring' if (c.end_date and (c.end_date - now.date()).days <= 30)
+                                              else 'active',
+                           } for c in contracts], ensure_ascii=False))
+
+
+# ==== 9. 设备履历 ====
+
+@feature_bp.route('/asset-lifecycle', methods=['GET'])
+@login_required
+def asset_lifecycle():
+    """设备履历页面"""
+    asset_id = request.args.get('asset_id', type=int)
+    if not asset_id:
+        asset_id = request.args.get('id', type=int)
+    asset = db.session.get(Asset, asset_id) if asset_id else None
+    if not asset:
+        return render_template('errors/404.html'), 404
+    logs = AssetLog.query.filter_by(asset_id=asset.id).order_by(AssetLog.created_at.desc()).all()
+    # 关联的工单
+    work_orders = WorkOrder.query.filter(
+        WorkOrder.device_type == asset.device_type,
+        WorkOrder.department == asset.department,
+        WorkOrder.created_at >= (asset.purchase_date or date(2000, 1, 1))
+    ).order_by(WorkOrder.created_at.desc()).limit(20).all()
+    # 合并时间线
+    timeline = []
+    for log in logs:
+        timeline.append({
+            'type': log.action, 'time': log.created_at,
+            'operator': log.operator,
+            'detail': f"{log.old_value or ''} → {log.new_value or ''}" if log.old_value or log.new_value else '',
+            'source': 'asset_log',
+        })
+    for wo in work_orders:
+        timeline.append({
+            'type': 'repair' if wo.status == 'completed' else ('pending' if wo.status == 'pending' else 'processing'),
+            'time': wo.created_at,
+            'operator': wo.person or wo.created_by,
+            'detail': f"工单#{wo.id}: {wo.title} ({wo.status})",
+            'source': 'work_order',
+        })
+    timeline.sort(key=lambda x: x['time'], reverse=True)
+    return render_template('feature/asset_lifecycle.html',
+                           asset=asset, timeline=timeline,
+                           asset_logs=logs)
+
+
+# ==== 10. AI知识库问答 ====
+
+@feature_bp.route('/ai-kb-qa', methods=['GET'])
+@login_required
+def ai_kb_qa():
+    """AI知识库问答页面"""
+    hot_questions = SolutionTemplate.query.order_by(SolutionTemplate.id.desc()).limit(8).all()
+    return render_template('feature/ai_kb_qa.html',
+                           hot_questions=hot_questions,
+                           hot_questions_json=json.dumps([{
+                               'id': q.id, 'title': q.title,
+                           } for q in hot_questions], ensure_ascii=False))
+
+
+@feature_bp.route('/ai-kb-search', methods=['POST'])
+@login_required
+def ai_kb_search():
+    """AI知识库搜索"""
+    data = request.get_json(silent=True) or {}
+    query = data.get('query', '').strip()
+    if not query:
+        return jsonify(success=False, error='请输入搜索内容'), 400
+    # 关键词匹配搜索
+    solutions = SolutionTemplate.query.filter(
+        (SolutionTemplate.title.ilike(f'%{query}%')) |
+        (SolutionTemplate.content.ilike(f'%{query}%')) |
+        (SolutionTemplate.keywords.ilike(f'%{query}%'))
+    ).order_by(SolutionTemplate.updated_at.desc()).limit(10).all()
+    result = []
+    for s in solutions:
+        # 简单置信度计算
+        score = 0
+        if query.lower() in s.title.lower():
+            score += 30
+        if s.keywords:
+            kw_list = [k.strip() for k in s.keywords.split(',')]
+            match_count = sum(1 for kw in kw_list if kw.lower() in query.lower())
+            score += match_count * 15
+        if query.lower() in s.content.lower():
+            score += 20
+        score = min(score, 99)
+        if len(query) > 4:
+            score = min(score + 10, 99)
+        result.append({
+            'id': s.id, 'title': s.title,
+            'content': s.content[:300] + ('...' if len(s.content) > 300 else ''),
+            'keywords': s.keywords,
+            'device_type': s.device_type,
+            'fault_type': s.fault_type,
+            'confidence': score,
+        })
+    result.sort(key=lambda x: x['confidence'], reverse=True)
+    summary = f'找到 {len(result)} 个相关解决方案'
+    if result and result[0]['confidence'] > 60:
+        summary = result[0]['title']
+    return jsonify(success=True, solutions=result, summary=summary)
+
+
+# ==== 11. 运维成本核算 ====
+
+@feature_bp.route('/cost-accounting', methods=['GET'])
+@login_required
+def cost_accounting():
+    """运维成本核算页面"""
+    now = datetime.now()
+    year = request.args.get('year', now.year, type=int)
+    month = request.args.get('month', now.month, type=int)
+    
+    first_day = date(year, month, 1)
+    if month == 12:
+        last_day = date(year + 1, 1, 1)
+    else:
+        last_day = date(year, month + 1, 1)
+    
+    # 当月完成的工单
+    completed_orders = WorkOrder.query.filter(
+        WorkOrder.completed_at >= first_day,
+        WorkOrder.completed_at < last_day,
+        WorkOrder.status == 'completed',
+    ).all()
+    
+    # 当月出库（备件出库数量）
+    stock_out = db.session.query(
+        func.count(StockRecord.id)
+    ).filter(
+        StockRecord.created_at >= first_day,
+        StockRecord.created_at < last_day,
+        StockRecord.type == 'out'
+    ).scalar() or 0
+    
+    # 按科室统计
+    dept_stats = {}
+    for wo in completed_orders:
+        dept = wo.department or '未知'
+        if dept not in dept_stats:
+            dept_stats[dept] = {'order_count': 0, 'total_hours': 0}
+        dept_stats[dept]['order_count'] += 1
+        if wo.accepted_at and wo.completed_at:
+            hours = (wo.completed_at - wo.accepted_at).total_seconds() / 3600
+            dept_stats[dept]['total_hours'] += hours
+    
+    # 按故障类型统计
+    type_stats = {}
+    for wo in completed_orders:
+        ft = wo.fault_type or '未知'
+        if ft not in type_stats:
+            type_stats[ft] = {'count': 0}
+        type_stats[ft]['count'] += 1
+    
+    total_orders = len(completed_orders)
+    total_hours = sum(
+        (wo.completed_at - wo.accepted_at).total_seconds() / 3600
+        for wo in completed_orders if wo.accepted_at and wo.completed_at
+    )
+    
+    return render_template('feature/cost_accounting.html',
+                           year=year, month=month,
+                           years=list(range(now.year - 3, now.year + 1)),
+                           months=list(range(1, 13)),
+                           total_orders=total_orders,
+                           total_hours=round(total_hours, 1),
+                           stock_cost=float(stock_out),
+                           dept_stats=dept_stats,
+                           type_stats=type_stats,
+                           completed_orders=completed_orders[:50])
+
+
+# ==== 12. 多院区协同 ====
+
+@feature_bp.route('/multi-hospital-collab', methods=['GET'])
+@login_required
+def multi_hospital_collab():
+    """多院区协同页面"""
+    hospitals = []
+    try:
+        from models import Hospital
+        hospitals = Hospital.query.filter_by(is_active=True).all()
+    except Exception as e:
+        current_app.logger.error(f'查询医院列表失败: {e}')
+    # 跨医院工单（已转交过来的）
+    cross_orders = WorkOrder.query.filter(
+        WorkOrder.transfer_from_hospital.isnot(None),
+        WorkOrder.transfer_from_hospital != ''
+    ).order_by(WorkOrder.created_at.desc()).limit(50).all()
+    return render_template('feature/multi_hospital_collab.html',
+                           hospitals=hospitals, cross_orders=cross_orders)
+
+
+# ==== 13. 运维周报月报 ====
+
+@feature_bp.route('/report-auto', methods=['GET'])
+@login_required
+def report_auto():
+    """运维周报月报页面"""
+    now = datetime.now()
+    year = request.args.get('year', now.year, type=int)
+    month = request.args.get('month', now.month, type=int)
+    mode = request.args.get('mode', 'month')
+    
+    import calendar
+    if mode == 'week':
+        # 本周
+        week_start = now - timedelta(days=now.weekday())
+        week_end = week_start + timedelta(days=7)
+        orders = WorkOrder.query.filter(
+            WorkOrder.created_at >= week_start,
+            WorkOrder.created_at < week_end,
+        ).all()
+        period_label = f"第{now.isocalendar()[1]}周周报"
+    else:
+        first_day = date(year, month, 1)
+        last_day = date(year, month, calendar.monthrange(year, month)[1])
+        orders = WorkOrder.query.filter(
+            WorkOrder.created_at >= first_day,
+            WorkOrder.created_at < last_day + timedelta(days=1),
+        ).all()
+        period_label = f"{year}年{month}月月报"
+    
+    total = len(orders)
+    pending = sum(1 for o in orders if o.status == 'pending')
+    in_progress = sum(1 for o in orders if o.status == 'in_progress')
+    completed = sum(1 for o in orders if o.status == 'completed')
+    
+    # 故障类型分布
+    type_dist = {}
+    for o in orders:
+        ft = o.fault_type or '未知'
+        type_dist[ft] = type_dist.get(ft, 0) + 1
+    type_dist = dict(sorted(type_dist.items(), key=lambda x: -x[1])[:10])
+    
+    # 人员排行
+    person_stats = {}
+    for o in orders:
+        if o.person:
+            person_stats[o.person] = person_stats.get(o.person, 0) + 1
+    person_stats = dict(sorted(person_stats.items(), key=lambda x: -x[1])[:10])
+    
+    # 科室排行
+    dept_stats = {}
+    for o in orders:
+        dept = o.department or '未知'
+        dept_stats[dept] = dept_stats.get(dept, 0) + 1
+    dept_stats = dict(sorted(dept_stats.items(), key=lambda x: -x[1])[:10])
+    
+    return render_template('feature/report_auto.html',
+                           year=year, month=month, mode=mode,
+                           period_label=period_label,
+                           total=total, pending=pending,
+                           in_progress=in_progress, completed=completed,
+                           type_dist=type_dist, person_stats=person_stats,
+                           dept_stats=dept_stats, orders=orders[:20])

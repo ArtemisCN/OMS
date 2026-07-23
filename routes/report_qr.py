@@ -20,7 +20,6 @@ def scan_department(hospital_id):
     hospital = db.session.get(Hospital, hospital_id)
     if not hospital:
         return "医院不存在", 404
-    # 获取该医院有工单的科室列表
     depts = db.session.query(WorkOrder.department).filter(
         WorkOrder.hospital_id == hospital_id,
         WorkOrder.department != '',
@@ -52,8 +51,8 @@ def scan_submit(hospital_id):
         description = request.form.get('description', '').strip()
         device_type = request.form.get('device_type', '其他').strip()
 
-        if not name or not description:
-            flash('请填写姓名和故障描述', 'danger')
+        if not description:
+            flash('请填写故障描述', 'danger')
             return render_template('scan/submit.html', hospital=hospital, departments=departments, asset=asset)
 
         order = WorkOrder(
@@ -86,7 +85,12 @@ def scan_submit(hospital_id):
     departments = Department.query.filter_by(
         hospital_id=hospital_id, is_active=True
     ).order_by(Department.sort_order, Department.name).all()
-    return render_template('scan/submit.html', hospital=hospital, departments=departments, asset=asset)
+    # 默认科室：资产扫码优先取资产科室，其次 URL 参数
+    default_dept = request.args.get('dept', '')
+    if not default_dept and asset and asset.department:
+        default_dept = asset.department
+    return render_template('scan/submit.html', hospital=hospital, departments=departments,
+                           asset=asset, default_dept=default_dept)
 
 
 @scan_bp.route('/qr/<int:hospital_id>')

@@ -1,16 +1,18 @@
 """工单管理路由（薄路由版 —— 业务逻辑委托给 services/order_service）"""
 import io
 import os
+import uuid
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, jsonify, session
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from openpyxl import Workbook
 
-from models import db, WorkOrder, Person, SystemSetting, WorkOrderStar
+from models import db, WorkOrder, SystemSetting, WorkOrderChatMessage, WorkOrderPhoto
 from services import order_service as svc
 from services.fault_matcher import match_fault
 from routes.auth import admin_required
+from utils.time_helpers import fmt_dt, now, fmt_date
 
 orders_bp = Blueprint('orders', __name__, url_prefix='/orders')
 
@@ -36,21 +38,19 @@ def list_orders():
         'floor': request.args.get('floor', ''),
         'location': request.args.get('location', ''),
         'team': request.args.get('team', ''),
-        'sort': request.args.get('sort', ''),
-        'order': request.args.get('order', 'desc'),
     }
 
-    # 已完成池子默认只看当天，需要看其他日期再手动输入日期筛选
-    if filters['status'] == 'completed' and not filters['date_from'] and not filters['date_to']:
-        today_str = datetime.now().strftime('%Y-%m-%d')
-        filters['date_from'] = today_str
-
-    # 未指定组时按用户自身 Person.team 过滤（非管理员）
+    # 未指定组时按用户自身 User.team 过滤（非管理员）
     if not filters['team']:
         if not current_user.is_admin:
-            person = Person.query.filter_by(user_id=current_user.id).first()
+            person = User.query.filter_by(id=current_user.id).first()
             if person and person.team:
                 filters['team'] = person.team
+
+    sort = request.args.get('sort', '')
+    order = request.args.get('order', '')
+    filters['sort'] = sort
+    filters['order'] = order
 
     query = svc.build_order_query(filters, current_user)
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -59,26 +59,19 @@ def list_orders():
     persons, buildings, teams = svc.get_filter_data()
     stats = svc.get_order_stats()
 
-    # 星标状态
-    starred_ids = set()
-    stars = WorkOrderStar.query.filter_by(user_id=current_user.id).all()
-    starred_ids = {s.order_id for s in stars}
-
-    # 计算工单球的颜色（按处理时长）
-    from datetime import timedelta
+    from datetime import datetime
     ball_map = {}
-    for o in pagination.items:
-        et = o.end_time or getattr(o, 'completed_at', None)
-        st = o.start_time or getattr(o, 'accepted_at', None) or getattr(o, 'created_at', None)
-        if et and st:
-            delta = et - st
-            mins = delta.total_seconds() / 60
-            if mins <= 30:
-                ball_map[o.id] = 'normal'      # 🟢
-            elif mins <= 60:
-                ball_map[o.id] = 'urgent'      # 🟡
+    for o in filtered_all:
+        end_t = o.end_time or o.completed_at
+        start_t = o.start_time or o.accepted_at or o.created_at
+        if o.status == 'completed' and start_t and end_t:
+            duration = (end_t - start_t).total_seconds() / 60
+            if duration < 30:
+                ball_map[o.id] = 'normal'
+            elif duration < 60:
+                ball_map[o.id] = 'urgent'
             else:
-                ball_map[o.id] = 'emergency'   # 🔴
+                ball_map[o.id] = 'emergency'
         else:
             ball_map[o.id] = o.priority or 'normal'
 
@@ -96,8 +89,8 @@ def list_orders():
                            floor_sel=filters['floor'],
                            location_sel=filters['location'],
                            team_sel=filters['team'], teams=teams,
-                           sort=filters['sort'], order=filters['order'],
-                           starred_ids=starred_ids, ball_map=ball_map)
+                           ball_map=ball_map, sort=sort, order=order,
+                           starred_ids=current_user.get_pref('starred_ids', []))
 
 
 # ==================== 新建工单 ====================
@@ -106,6 +99,7 @@ def list_orders():
 @login_required
 def create_order():
     from services.address import get_merged_addresses, get_all_buildings
+    team = request.args.get('team', '')
 
     if request.method == 'POST':
         try:
@@ -117,15 +111,21 @@ def create_order():
             return redirect(url_for('orders.list_orders'))
         except ValueError as e:
             flash(str(e), 'danger')
+            from services.data_service import get_team_options
+            all_teams = get_team_options()
             return render_template('orders/create.html',
-                                   addr_list=get_merged_addresses(),
-                                   buildings=get_all_buildings())
+                                   addr_list=get_merged_addresses(team=team),
+                                   buildings=get_all_buildings(team=team),
+                                   team=team, all_teams=all_teams)
 
     persons, templates = svc.get_create_page_data(current_user)
+    from services.data_service import get_team_options
+    all_teams = get_team_options()
     return render_template('orders/create.html',
-                           addr_list=get_merged_addresses(),
+                           addr_list=get_merged_addresses(team=team),
                            persons=persons, templates=templates,
-                           buildings=get_all_buildings())
+                           buildings=get_all_buildings(team=team),
+                           team=team, all_teams=all_teams)
 
 
 # ==================== 发布工单（匿名/登录通用） ====================
@@ -151,7 +151,10 @@ def publish_order():
         except ValueError as e:
             flash(str(e), 'danger')
 
-    return render_template('orders/publish.html')
+    from services.data_service import get_team_options
+    all_teams = get_team_options()
+    team = request.args.get('team', '')
+    return render_template('orders/publish.html', all_teams=all_teams, team=team)
 
 
 # ==================== API 辅助 ====================
@@ -159,7 +162,7 @@ def publish_order():
 @orders_bp.route('/api/guess')
 @login_required
 def api_guess_fault():
-    return jsonify(svc.api_guess_fault(request.args.get('title', '')))
+    return jsonify(svc.api_guess_fault(request.args.get('title', ''), team=request.args.get('team', '')))
 
 
 @orders_bp.route('/api/solution_suggest')
@@ -173,7 +176,7 @@ def api_solution_suggest():
 @orders_bp.route('/api/address/all')
 @login_required
 def api_address_all():
-    return jsonify(svc.api_address_all())
+    return jsonify(svc.api_address_all(team=request.args.get('team', '')))
 
 
 @orders_bp.route('/api/address/options')
@@ -182,6 +185,7 @@ def api_address_options():
     return jsonify(svc.api_address_options(
         request.args.get('building', ''),
         request.args.get('floor', ''),
+        team=request.args.get('team', ''),
     ))
 
 
@@ -190,8 +194,9 @@ def api_address_options():
 @orders_bp.route('/batch', methods=['GET', 'POST'])
 @admin_required
 def batch_create():
+    selected_team = request.args.get('team', 'all')
     persons, templates, fault_groups, fault_group_items, team_groups, teams, default_team = \
-        svc.get_batch_form_data(current_user)
+        svc.get_batch_form_data(current_user, selected_team=selected_team)
 
     if request.method == 'POST' and request.form.get('action') == 'preview':
         try:
@@ -202,6 +207,7 @@ def batch_create():
             return render_template('orders/batch.html',
                                    persons=persons, team_groups=team_groups,
                                    teams=teams, default_team=default_team,
+                                   selected_team=selected_team,
                                    preview_json=preview_json_obj,
                                    preview_orders=serialized,
                                    preview_total=total,
@@ -222,6 +228,7 @@ def batch_create():
             return render_template('orders/batch.html', persons=persons,
                                    team_groups=team_groups, teams=teams,
                                    default_team=default_team,
+                                   selected_team=selected_team,
                                    templates=templates, fault_groups=fault_groups,
                                    fault_group_items=fault_group_items)
         except Exception as e:
@@ -229,6 +236,7 @@ def batch_create():
             return render_template('orders/batch.html', persons=persons,
                                    team_groups=team_groups, teams=teams,
                                    default_team=default_team,
+                                   selected_team=selected_team,
                                    templates=templates, fault_groups=fault_groups,
                                    fault_group_items=fault_group_items)
 
@@ -267,6 +275,7 @@ def batch_create():
     return render_template('orders/batch.html', persons=persons,
                            team_groups=team_groups, teams=teams,
                            default_team=default_team,
+                           selected_team=selected_team,
                            can_undo=can_undo, undo_count=undo_count,
                            templates=templates, fault_groups=fault_groups,
                            fault_group_items=fault_group_items)
@@ -296,8 +305,30 @@ def batch_undo():
 @login_required
 def detail(order_id):
     order = svc.get_order_or_404(order_id)
-    photos = []
-    return render_template('orders/detail.html', order=order, photos=photos)
+    photos = svc.get_order_photos(order_id)
+    from models import SparePart, PartUsageRecord
+    spare_parts = SparePart.query.filter(SparePart.is_active == True).order_by(SparePart.name).all()
+    linked_parts = PartUsageRecord.query.filter_by(work_order_id=order_id).order_by(PartUsageRecord.created_at.desc()).all()
+    return render_template('orders/detail.html', order=order, photos=photos,
+                           spare_parts=spare_parts, linked_parts=linked_parts)
+
+
+@orders_bp.route('/<int:order_id>/solution', methods=['POST'])
+@login_required
+def update_solution(order_id):
+    """更新工单解决方案（AJAX）"""
+    order = WorkOrder.query.get_or_404(order_id)
+    solution = request.form.get('solution', '').strip()
+    order.solution = solution
+    if solution and order.status == 'in_progress':
+        order.status = 'completed'
+        order.completed_at = datetime.now()
+        order.end_time = datetime.now()
+    db.session.commit()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'ok': True, 'solution': solution, 'status': order.status})
+    flash('✅ 解决方案已更新', 'success')
+    return redirect(url_for('orders.detail', order_id=order.id))
 
 
 @orders_bp.route('/<int:order_id>/edit', methods=['GET', 'POST'])
@@ -308,8 +339,10 @@ def edit_order(order_id):
         svc.update_order(order_id, request.form)
         flash('✅ 工单已更新', 'success')
         return redirect(url_for('orders.detail', order_id=order.id))
-    persons = Person.query.filter_by(is_active=True).all()
-    return render_template('orders/edit.html', order=order, persons=persons)
+    persons = User.query.filter(User.is_active == True).all()
+    from services.data_service import get_team_options
+    all_teams = get_team_options()
+    return render_template('orders/edit.html', order=order, persons=persons, all_teams=all_teams)
 
 
 @orders_bp.route('/<int:order_id>/delete', methods=['POST'])
@@ -330,157 +363,6 @@ def toggle_priority(order_id):
     except ValueError as e:
         order = svc.get_order_or_404(order_id)
         return jsonify({'error': str(e), 'priority': order.priority}), 403
-
-
-# ==================== 星标 ====================
-
-@orders_bp.route('/<int:order_id>/star', methods=['POST'])
-@login_required
-def toggle_star(order_id):
-    """切换星标"""
-    star = WorkOrderStar.query.filter_by(
-        user_id=current_user.id, order_id=order_id
-    ).first()
-    if star:
-        db.session.delete(star)
-        db.session.commit()
-        return jsonify({'starred': False})
-    else:
-        star = WorkOrderStar(user_id=current_user.id, order_id=order_id)
-        db.session.add(star)
-        db.session.commit()
-        return jsonify({'starred': True})
-
-
-# ==================== 催办 ====================
-
-@orders_bp.route('/<int:order_id>/urge', methods=['POST'])
-@login_required
-def urge_order(order_id):
-    """催办工单 -> 推送企业微信"""
-    order = svc.get_order_or_404(order_id)
-    try:
-        from routes.api_mobile import send_wecom_notification, send_new_order_notification
-        # 用催办专用消息
-        title = f'🔔 工单催办通知'
-        msg = f'工单 #{order.id}「{order.title}」已被催办！\n'
-        msg += f'负责人：{order.person or "未指派"} | 状态：{order.status}\n'
-        if order.building:
-            msg += f'位置：{order.building}'
-            if order.department:
-                msg += f' - {order.department}'
-            msg += '\n'
-        msg += f'催办人：{current_user.display_name or current_user.username}\n'
-        msg += f'请尽快处理！'
-
-        # 推送到企业微信
-        wecom_webhook = SystemSetting.get('wecom_webhook', '')
-        if wecom_webhook:
-            import requests
-            payload = {"msgtype": "text", "text": {"content": msg}}
-            try:
-                requests.post(wecom_webhook, json=payload, timeout=5)
-            except Exception:
-                pass
-        return jsonify({'success': True, 'message': '催办通知已发送'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-# ==================== 批量操作 ====================
-
-@orders_bp.route('/api/batch', methods=['POST'])
-@login_required
-def batch_operations():
-    """批量操作：assign / priority / star / unstar / delete"""
-    data = request.get_json() or {}
-    action = data.get('action', '')
-    ids = data.get('ids', [])
-    if not ids:
-        return jsonify({'success': False, 'error': '请选择工单'}), 400
-    if not action:
-        return jsonify({'success': False, 'error': '请指定操作类型'}), 400
-
-    try:
-        if action == 'delete':
-            count = 0
-            for oid in ids:
-                order = WorkOrder.query.get(oid)
-                if order:
-                    db.session.delete(order)
-                    count += 1
-            db.session.commit()
-            return jsonify({'success': True, 'message': f'已删除 {count} 条工单'})
-
-        elif action == 'star':
-            count = 0
-            for oid in ids:
-                if not WorkOrderStar.query.filter_by(user_id=current_user.id, order_id=oid).first():
-                    s = WorkOrderStar(user_id=current_user.id, order_id=oid)
-                    db.session.add(s)
-                    count += 1
-            db.session.commit()
-            return jsonify({'success': True, 'message': f'已标星 {count} 条工单'})
-
-        elif action == 'unstar':
-            count = WorkOrderStar.query.filter(
-                WorkOrderStar.user_id == current_user.id,
-                WorkOrderStar.order_id.in_(ids)
-            ).delete(synchronize_session=False)
-            db.session.commit()
-            return jsonify({'success': True, 'message': f'已取消星标 {count} 条工单'})
-
-        elif action == 'assign':
-            person = data.get('person', '')
-            if not person:
-                return jsonify({'success': False, 'error': '请选择人员'}), 400
-            count = WorkOrder.query.filter(
-                WorkOrder.id.in_(ids)
-            ).update({'person': person}, synchronize_session=False)
-            # 有指派视为接单
-            now = datetime.now()
-            for oid in ids:
-                order = WorkOrder.query.get(oid)
-                if order and order.status == 'pending':
-                    order.status = 'in_progress'
-                    order.accepted_at = now
-            db.session.commit()
-            return jsonify({'success': True, 'message': f'已指派 {count} 条工单给 {person}'})
-
-        elif action == 'priority':
-            priority = data.get('priority', 'normal')
-            if priority not in ('normal', 'urgent', 'emergency'):
-                return jsonify({'success': False, 'error': '无效优先级'}), 400
-            count = WorkOrder.query.filter(
-                WorkOrder.id.in_(ids)
-            ).update({'priority': priority, 'original_priority': priority}, synchronize_session=False)
-            db.session.commit()
-            return jsonify({'success': True, 'message': f'已修改 {count} 条工单优先级为 {priority}'})
-
-        else:
-            return jsonify({'success': False, 'error': f'未知操作: {action}'}), 400
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-# ==================== 列配置 ====================
-
-@orders_bp.route('/api/column_config', methods=['GET', 'POST'])
-@login_required
-def column_config():
-    """保存/获取用户列配置"""
-    if request.method == 'POST':
-        data = request.get_json() or {}
-        columns = data.get('columns', [])
-        session['order_columns'] = columns
-        return jsonify({'success': True})
-    else:
-        columns = session.get('order_columns')
-        if columns:
-            return jsonify({'columns': columns})
-        return jsonify({'columns': None})
 
 
 # ==================== 导出 Excel ====================
@@ -511,12 +393,12 @@ def export_excel():
         ws.append([
             o.id, o.title, o.device_type, o.fault_type, o.description,
             o.building, o.floor, o.department, o.location, o.person,
-            o.start_time.strftime('%Y-%m-%d %H:%M') if o.start_time else '',
-            o.end_time.strftime('%Y-%m-%d %H:%M') if o.end_time else '',
+            fmt_dt(o.start_time, '%Y-%m-%d %H:%M'),
+            fmt_dt(o.end_time, '%Y-%m-%d %H:%M'),
             {'pending': '待接单', 'in_progress': '处理中', 'completed': '已完成'}.get(o.status, o.status),
             o.solution,
             o.created_by,
-            o.created_at.strftime('%Y-%m-%d %H:%M') if o.created_at else '',
+            fmt_dt(o.created_at, '%Y-%m-%d %H:%M'),
         ])
 
     filename = f'工单导出_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
@@ -535,7 +417,6 @@ def anonymous_publish():
     verification = session.get('publish_verified', False)
 
     if request.method == 'POST':
-        # 验证码防刷
         if not verification:
             code = request.form.get('verify_code', '').strip()
             if code != '4567':
@@ -712,13 +593,13 @@ def calendar_view():
     # 组别筛选
     team = ''
     if not current_user.is_admin:
-        _person = Person.query.filter_by(user_id=current_user.id).first()
+        _person = User.query.filter_by(id=current_user.id).first()
         if _person and _person.team:
             team = _person.team
     team_persons = set()
     if team:
-        tp = Person.query.filter(Person.team == team, Person.is_active == True).all()
-        team_persons = {p.name for p in tp if p.name}
+        tp = User.query.filter(User.team == team, User.is_active == True).all()
+        team_persons = {p.display_name for p in tp if p.display_name}
 
     orders = WorkOrder.query.filter(
         WorkOrder.created_at >= month_start,
@@ -766,12 +647,12 @@ def calendar_day_api():
         WorkOrder.created_at < next_dt,
     )
     if not current_user.is_admin:
-        _person = Person.query.filter_by(user_id=current_user.id).first()
+        _person = User.query.filter_by(id=current_user.id).first()
         if _person and _person.team:
-            tp = Person.query.filter(
-                Person.team == _person.team, Person.is_active == True
+            tp = User.query.filter(
+                User.team == _person.team, User.is_active == True
             ).all()
-            team_names = {p.name for p in tp if p.name}
+            team_names = {p.display_name for p in tp if p.display_name}
             if team_names:
                 orders = orders.filter(WorkOrder.person.in_(team_names))
     orders = orders.order_by(WorkOrder.created_at).all()
@@ -781,7 +662,7 @@ def calendar_day_api():
         'status': o.status,
         'priority': o.priority,
         'person': o.person,
-        'start_time': o.start_time.strftime('%H:%M') if o.start_time else '',
+        'start_time': fmt_dt(o.start_time, '%H:%M'),
         'detail_url': url_for('orders.detail', order_id=o.id),
     } for o in orders])
 
@@ -816,6 +697,7 @@ def upload_photo(order_id):
             count += 1
         except Exception:
             pass
+
     db.session.commit()
     flash(f'✅ 上传成功 {count} 张图片', 'success')
     return redirect(url_for('orders.detail', order_id=order.id))
@@ -865,3 +747,134 @@ def search_orders_api():
         'floor': o.floor or '',
         'status': o.status,
     } for o in orders])
+
+
+# ==================== 工单讨论（聊天） ====================
+
+WO_CHAT_UPLOAD_FOLDER = '/var/www/static/uploads/wochat'
+os.makedirs(WO_CHAT_UPLOAD_FOLDER, exist_ok=True)
+ALLOWED_WO_CHAT_EXT = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'}
+
+
+@orders_bp.route('/<int:order_id>/chat')
+@login_required
+def wo_chat_messages(order_id):
+    """获取工单聊天消息"""
+    order = WorkOrder.query.get_or_404(order_id)
+    before_id = request.args.get('before_id', type=int)
+    after_id = request.args.get('after_id', type=int)
+    limit = min(request.args.get('limit', 50, type=int), 100)
+    query = WorkOrderChatMessage.query.filter_by(work_order_id=order.id)
+    if after_id:
+        query = query.filter(WorkOrderChatMessage.id > after_id)
+        msgs = query.order_by(WorkOrderChatMessage.id.asc()).limit(limit).all()
+    else:
+        if before_id:
+            query = query.filter(WorkOrderChatMessage.id < before_id)
+        msgs = query.order_by(WorkOrderChatMessage.id.desc()).limit(limit).all()
+        msgs.reverse()
+    return jsonify([{
+        'id': m.id,
+        'sender_id': m.sender_id,
+        'sender_name': m.sender_name,
+        'content': m.content,
+        'msg_type': m.msg_type,
+        'created_at': m.created_at.isoformat() if m.created_at else '',
+        'is_self': m.sender_id == current_user.id
+    } for m in msgs])
+
+
+@orders_bp.route('/<int:order_id>/chat/send', methods=['POST'])
+@login_required
+def wo_chat_send(order_id):
+    """发送工单聊天消息"""
+    order = WorkOrder.query.get_or_404(order_id)
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': '无效请求'}), 400
+    content = (data.get('content') or '').strip()
+    if not content:
+        return jsonify({'error': '不能发送空消息'}), 400
+    msg = WorkOrderChatMessage(
+        work_order_id=order.id,
+        sender_id=current_user.id,
+        sender_name=current_user.display_name or current_user.username,
+        content=content,
+        msg_type=data.get('msg_type', 'text')
+    )
+    db.session.add(msg)
+    db.session.commit()
+    return jsonify({
+        'id': msg.id,
+        'sender_id': msg.sender_id,
+        'sender_name': msg.sender_name,
+        'content': msg.content,
+        'msg_type': msg.msg_type,
+        'created_at': msg.created_at.isoformat() if msg.created_at else '',
+        'is_self': True
+    }), 201
+
+
+@orders_bp.route('/<int:order_id>/chat/upload', methods=['POST'])
+@login_required
+def wo_chat_upload(order_id):
+    """上传工单聊天文件（图片）"""
+    order = WorkOrder.query.get_or_404(order_id)
+    if 'file' not in request.files:
+        return jsonify({'error': '没有上传文件'}), 400
+    file = request.files['file']
+    if file.filename == '' or not file:
+        return jsonify({'error': '文件为空'}), 400
+    ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+    if ext not in ALLOWED_WO_CHAT_EXT:
+        return jsonify({'error': '不支持的文件类型，仅支持图片'}), 400
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    filepath = os.path.join(WO_CHAT_UPLOAD_FOLDER, filename)
+    file.save(filepath)
+    return jsonify({
+        'url': f'/static/uploads/wochat/{filename}',
+        'filename': filename,
+        'is_image': True
+    })
+
+
+# ==================== 星标切换 ====================
+
+@orders_bp.route('/<int:order_id>/star', methods=['POST'])
+@login_required
+def toggle_star(order_id):
+    """切换工单星标状态"""
+    starred = current_user.get_pref('starred_ids', [])
+    if order_id in starred:
+        starred.remove(order_id)
+        is_starred = False
+    else:
+        starred.append(order_id)
+        is_starred = True
+    current_user.set_pref('starred_ids', starred)
+    db.session.commit()
+    return jsonify({'starred': is_starred})
+
+@orders_bp.route('/<int:order_id>/urge', methods=['POST'])
+@login_required
+def urge_order(order_id):
+    """催单：发送企业微信通知"""
+    order = WorkOrder.query.get_or_404(order_id)
+    
+    # 检查催单间隔
+    interval_setting = SystemSetting.query.filter_by(key='order_remind_interval').first()
+    min_interval = int(interval_setting.value) if interval_setting and interval_setting.value else 30
+    
+    if order.last_urged_at:
+        elapsed = (now() - order.last_urged_at).total_seconds() / 60
+        if elapsed < min_interval:
+            remain = int(min_interval - elapsed)
+            return jsonify({'success': False, 'error': f'距上次催单仅{int(elapsed)}分钟，请{remain}分钟后再试'})
+    
+    from routes.api_mobile import send_wecom_notification
+    send_wecom_notification(order, skip_time_check=True)
+    
+    order.last_urged_at = now()
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': '催办通知已发送 ✅'})

@@ -48,43 +48,56 @@
 
 <!-- 详细表格 -->
 <div class="card">
-    <div class="card-header">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span><i class="fas fa-table text-primary"></i> 详细折旧数据</span>
+        <div class="d-flex gap-2 align-items-center">
+            <input type="text" id="depSearch" class="form-control form-control-sm" style="width:160px;font-size:12px;" placeholder="🔍 搜索资产编号…" oninput="filterDepTable()">
+            <select id="depTypeFilter" class="form-select form-select-sm" style="width:auto;font-size:12px;" onchange="filterDepTable()">
+                <option value="">全部类型</option>
+                {% set _seen = namespace(types=[]) %}
+                {% for item in items %}
+                    {% if item.device_type not in _seen.types %}
+                        {% set _seen.types = _seen.types + [item.device_type] %}
+                        <option value="{{ item.device_type }}">{{ item.device_type }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+        </div>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover mb-0" id="depreciationTable">
                 <thead class="table-light">
                     <tr>
-                        <th>资产编号</th>
-                        <th>资产名称</th>
-                        <th>原值(元)</th>
-                        <th>购入日期</th>
-                        <th>使用年限</th>
-                        <th>已用年数</th>
-                        <th>年折旧(元)</th>
-                        <th>当前净值(元)</th>
-                        <th>折旧率</th>
+                        <th onclick="sortDepTable(0)" style="cursor:pointer;user-select:none;">资产编号 <span class="sort-icon"></span></th>
+                        <th onclick="sortDepTable(1)" style="cursor:pointer;user-select:none;">资产名称 <span class="sort-icon"></span></th>
+                        <th onclick="sortDepTable(2)" style="cursor:pointer;user-select:none;" class="text-end">原值(元) <span class="sort-icon"></span></th>
+                        <th onclick="sortDepTable(3)" style="cursor:pointer;user-select:none;">购入日期 <span class="sort-icon"></span></th>
+                        <th onclick="sortDepTable(4)" style="cursor:pointer;user-select:none;" class="text-center">使用年限 <span class="sort-icon"></span></th>
+                        <th onclick="sortDepTable(5)" style="cursor:pointer;user-select:none;" class="text-center">已用年数 <span class="sort-icon"></span></th>
+                        <th onclick="sortDepTable(6)" style="cursor:pointer;user-select:none;" class="text-end">年折旧(元) <span class="sort-icon"></span></th>
+                        <th onclick="sortDepTable(7)" style="cursor:pointer;user-select:none;" class="text-end">当前净值(元) <span class="sort-icon"></span></th>
+                        <th onclick="sortDepTable(8)" style="cursor:pointer;user-select:none;">折旧率 <span class="sort-icon"></span></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in items %}
-                    <tr>
-                        <td>{{ item.asset_no }}</td>
-                        <td>{{ item.device_type }}</td>
-                        <td>{{ '%.2f' | format(item.purchase_price) }}</td>
-                        <td>{{ item.purchase_date_str }}</td>
-                        <td>{{ item.lifespan_years }}</td>
-                        <td>{{ '%.1f' | format(item.age_years) }}</td>
-                        <td>{{ '%.2f' | format(item.annual_depreciation) }}</td>
-                        <td>
+                    <tr onclick="window.location.href='{{ url_for('asset.detail', asset_id=item.id) }}'" style="cursor:pointer;">
+                        <td data-sort="{{ item.asset_no }}">{{ item.asset_no }}</td>
+                        <td data-sort="{{ item.device_type }}">{{ item.device_type }}</td>
+                        <td data-sort="{{ item.purchase_price }}" class="text-end">{{ '%.2f' | format(item.purchase_price) }}</td>
+                        <td data-sort="{{ item.purchase_date_str }}">{{ item.purchase_date_str }}</td>
+                        <td data-sort="{{ item.lifespan_years }}" class="text-center">{{ item.lifespan_years }}</td>
+                        <td data-sort="{{ '%06.2f' | format(item.age_years) }}" class="text-center">{{ '%.1f' | format(item.age_years) }}</td>
+                        <td data-sort="{{ '%010.2f' | format(item.annual_depreciation) }}" class="text-end">{{ '%.2f' | format(item.annual_depreciation) }}</td>
+                        <td data-sort="{{ '%010.2f' | format(item.current_value) }}" class="text-end">
                             {% if item.current_value > 0 %}
                             <span class="fw-bold text-success">{{ '%.2f' | format(item.current_value) }}</span>
                             {% else %}
                             <span class="text-muted">0.00</span>
                             {% endif %}
                         </td>
-                        <td>
+                        <td data-sort="{{ '%06.2f' | format(item.depreciation_rate) }}">
                             {% set rate = (item.depreciation_rate * 100) %}
                             <div class="progress" style="height:16px;width:100px;">
                                 <div class="progress-bar {% if rate >= 80 %}bg-danger{% elif rate >= 50 %}bg-warning{% else %}bg-success{% endif %}"
@@ -107,6 +120,46 @@
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
+var _sortCol = -1;
+var _sortAsc = true;
+
+function sortDepTable(col) {
+    var tbody = document.querySelector('#depreciationTable tbody');
+    var rows = Array.from(tbody.querySelectorAll('tr'));
+    if (rows.length === 0 || (rows.length === 1 && rows[0].querySelector('td[colspan]'))) return;
+    
+    // Toggle direction
+    if (_sortCol === col) { _sortAsc = !_sortAsc; }
+    else { _sortCol = col; _sortAsc = true; }
+    
+    rows.sort(function(a, b) {
+        var va = (a.cells[col].getAttribute('data-sort') || a.cells[col].textContent).trim();
+        var vb = (b.cells[col].getAttribute('data-sort') || b.cells[col].textContent).trim();
+        var cmp = va.localeCompare(vb, 'zh-CN', {numeric: true});
+        return _sortAsc ? cmp : -cmp;
+    });
+    
+    rows.forEach(function(row) { tbody.appendChild(row); });
+    
+    // Update sort icons
+    document.querySelectorAll('#depreciationTable thead .sort-icon').forEach(function(icon) {
+        icon.textContent = '';
+    });
+    var icon = document.querySelectorAll('#depreciationTable thead .sort-icon')[col];
+    if (icon) icon.textContent = _sortAsc ? ' ▲' : ' ▼';
+}
+
+function filterDepTable() {
+    var search = document.getElementById('depSearch').value.toLowerCase();
+    var type = document.getElementById('depTypeFilter').value;
+    var rows = document.querySelectorAll('#depreciationTable tbody tr');
+    rows.forEach(function(row) {
+        var assetNo = row.cells[0].textContent.toLowerCase();
+        var deviceType = row.cells[1].textContent;
+        var match = (!search || assetNo.includes(search)) && (!type || deviceType === type);
+        row.style.display = match ? '' : 'none';
+    });
+}
 document.addEventListener('DOMContentLoaded', function() {
     var ctx = document.getElementById('depreciationChart').getContext('2d');
     new Chart(ctx, {

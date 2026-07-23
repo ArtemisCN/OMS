@@ -1,5 +1,28 @@
 {% extends "base.html" %}
 {% block content %}
+<style>
+.tmpl-team-bar {
+    background:var(--card-bg,#fff); border:1px solid var(--border,#e5e7eb);
+    border-radius:12px; padding:14px 18px; margin-bottom:16px;
+}
+.tmpl-team-list { display:flex; flex-wrap:wrap; gap:6px; }
+.tmpl-team-chip {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:7px 18px; border-radius:24px; font-size:13px; font-weight:700;
+    cursor:pointer; border:2px solid var(--border,#e2e8f0);
+    background:var(--card-bg,#fff); color:var(--text,#1e293b);
+    transition:all 0.15s; user-select:none;
+}
+.tmpl-team-chip:hover { border-color:#6366f1;background:rgba(99,102,241,0.04); }
+.tmpl-team-chip.active {
+    background:linear-gradient(135deg,#6366f1,#4f46e5);
+    color:#fff; border-color:#6366f1; box-shadow:0 2px 8px rgba(99,102,241,0.3);
+}
+.team-section[data-team] { display:none; }
+.team-section[data-team="all"] { display:block; }
+.section-label { font-size:11px; font-weight:600; margin-bottom:4px; }
+</style>
+
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0"><i class="fas fa-tag text-primary"></i> 故障类型管理</h5>
     <div>
@@ -12,51 +35,158 @@
     </div>
 </div>
 
-{% if types %}
-<div class="row g-3">
-    {% for ft in types %}
-    <div class="col-md-6 col-lg-4">
-        <div class="card h-100 border-0 shadow-sm" style="border-radius:10px;">
-            <div class="card-body p-3">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <div>
-                        <span class="badge bg-primary fs-6 px-3 py-2">{{ ft.name }}</span>
+<!-- ===== 组选择器 ===== -->
+<div class="tmpl-team-bar">
+    <div class="tmpl-team-list" id="teamSelector">
+        <span class="tmpl-team-chip active" data-team="all" onclick="selectTeam('all')"><i class="fas fa-clipboard-list"></i> 全部</span>
+        {% for t in all_teams %}
+        <span class="tmpl-team-chip" data-team="{{ t|e }}" onclick="selectTeam('{{ t|e }}')">{{ t }}</span>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- ===== 全部组模式 ===== -->
+<div class="team-section" data-team="all">
+    {% if types %}
+    <div class="row g-3">
+        {% for ft in types %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 border-0 shadow-sm" style="border-radius:10px;">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <span class="badge bg-primary fs-6 px-3 py-2">{{ ft.name }}</span>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal{{ ft.id }}">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            {% if ft.teams %}
+                            <form method="post" action="{{ url_for('data.delete_fault_type', fid=ft.id) }}" style="display:inline;"
+                                  onsubmit="return confirm('确定删除故障类型「{{ ft.name }}」？')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                            </form>
+                            {% endif %}
+                        </div>
                     </div>
-                    <div class="d-flex gap-1">
-                        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal{{ ft.id }}">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <form method="post" action="{{ url_for('data.delete_fault_type', fid=ft.id) }}" style="display:inline;"
-                              onsubmit="return confirm('确定删除故障类型「{{ ft.name }}」？')">
-                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
-                        </form>
+                    <div class="mt-2 pt-2 border-top">
+                        {% if ft.keywords %}
+                        <small class="text-muted d-block mb-1">关键词：</small>
+                        <div>
+                            {% for kw in ft.keywords.split(',') %}
+                            <span class="badge bg-light text-dark me-1 mb-1">{{ kw.strip() }}</span>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <small class="text-muted"><i class="far fa-circle text-warning"></i> 未设置关键词</small>
+                        {% endif %}
                     </div>
-                </div>
-                <div class="mt-2 pt-2 border-top">
-                    {% if ft.keywords %}
-                    <small class="text-muted d-block mb-1">关键词：</small>
-                    <div>
-                        {% for kw in ft.keywords.split(',') %}
-                        <span class="badge bg-light text-dark me-1 mb-1">{{ kw.strip() }}</span>
-                        {% endfor %}
+                    <div class="mt-1">
+                        <small class="text-muted">{% if ft.teams %}({{ ft.teams }}){% else %}全组通用{% endif %}</small>
                     </div>
-                    {% else %}
-                    <small class="text-muted"><i class="far fa-circle text-warning"></i> 未设置关键词</small>
-                    {% endif %}
                 </div>
             </div>
         </div>
+        {% endfor %}
     </div>
-    {% endfor %}
+    {% else %}
+    <div class="text-center text-muted py-5">
+        <i class="fas fa-tag fa-3x mb-3 d-block"></i>
+        暂无故障类型，点击右上角「新增类型」添加
+    </div>
+    {% endif %}
 </div>
-{% else %}
-<div class="text-center text-muted py-5">
-    <i class="fas fa-tag fa-3x mb-3 d-block"></i>
-    暂无故障类型，点击右上角「新增类型」添加
-</div>
-{% endif %}
 
-<!-- 新增弹窗 -->
+<!-- ===== 按组展示 ===== -->
+{% for t in all_teams %}
+{% set team_types = types|selectattr('teams', 'equalto', t)|list %}
+{% set gen_types = types|selectattr('teams', 'equalto', '')|list %}
+<div class="team-section" data-team="{{ t|e }}">
+    {% if team_types or gen_types %}
+    <div class="row g-3">
+        {% if team_types %}
+        <div class="col-12"><div class="section-label" style="color:#6366f1;">📌 本组专属 · {{ t }}</div></div>
+        {% for ft in team_types %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 border-0 shadow-sm" style="border-radius:10px;">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <span class="badge bg-primary fs-6 px-3 py-2">{{ ft.name }}</span>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal{{ ft.id }}">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <form method="post" action="{{ url_for('data.delete_fault_type', fid=ft.id) }}" style="display:inline;"
+                                  onsubmit="return confirm('确定删除故障类型「{{ ft.name }}」？')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="mt-2 pt-2 border-top">
+                        {% if ft.keywords %}
+                        <small class="text-muted d-block mb-1">关键词：</small>
+                        <div>
+                            {% for kw in ft.keywords.split(',') %}
+                            <span class="badge bg-light text-dark me-1 mb-1">{{ kw.strip() }}</span>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <small class="text-muted"><i class="far fa-circle text-warning"></i> 未设置关键词</small>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {% if gen_types %}
+        <div class="col-12"><div class="section-label" style="color:#94a3b8;margin-top:{% if team_types %}10{% else %}0{% endif %}px;"><i class="fas fa-clipboard-list"></i> 全组通用</div></div>
+        {% for ft in gen_types %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 border-0 shadow-sm" style="border-radius:10px;">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <span class="badge bg-secondary fs-6 px-3 py-2">{{ ft.name }}</span>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal{{ ft.id }}">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <!-- 通用类型不可删除 -->
+                        </div>
+                    </div>
+                    <div class="mt-2 pt-2 border-top">
+                        {% if ft.keywords %}
+                        <small class="text-muted d-block mb-1">关键词：</small>
+                        <div>
+                            {% for kw in ft.keywords.split(',') %}
+                            <span class="badge bg-light text-dark me-1 mb-1">{{ kw.strip() }}</span>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <small class="text-muted"><i class="far fa-circle text-warning"></i> 未设置关键词</small>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-5">
+        <i class="fas fa-tag fa-3x mb-3 d-block"></i>
+        「{{ t }}」暂无故障类型
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+
+<!-- ===== 新增弹窗 ===== -->
 <div class="modal fade" id="addModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content" style="border-radius:12px;">
@@ -79,6 +209,15 @@
                         <input type="hidden" name="keywords" id="addKeywordsInput" value="">
                         <div class="form-text mt-2">输入关键词后按 <kbd>Enter</kbd> 添加，点击气泡上的 × 删除</div>
                     </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-medium">归属组</label>
+                        <select name="teams" class="form-select">
+                            <option value="">全组通用</option>
+                            {% for t in all_teams %}
+                            <option value="{{ t }}">{{ t }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
                 </div>
                 <div class="modal-footer border-0 pt-0">
                     <button type="button" class="btn btn-light px-4" data-bs-dismiss="modal">取消</button>
@@ -89,7 +228,7 @@
     </div>
 </div>
 
-<!-- 编辑弹窗 -->
+<!-- ===== 编辑弹窗 ===== -->
 {% for ft in types %}
 <div class="modal fade" id="editModal{{ ft.id }}" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
@@ -126,6 +265,15 @@
                         </div>
                         <input type="hidden" name="keywords" id="editKeywordsInput{{ ft.id }}" value="{{ ft.keywords or '' }}">
                         <div class="form-text mt-2">输入关键词后按 <kbd>Enter</kbd> 添加，点击气泡上的 × 删除</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-medium">归属组</label>
+                        <select name="teams" class="form-select">
+                            <option value="" {% if not ft.teams %}selected{% endif %}>全组通用</option>
+                            {% for t in all_teams %}
+                            <option value="{{ t }}" {% if ft.teams == t %}selected{% endif %}>{{ t }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
                 <div class="modal-footer border-0 pt-0">
@@ -167,14 +315,11 @@ function handleTagInputKey(e, mode, id) {
 }
 
 function collectKeywords(form) {
-    const list = form.querySelector('.tag-bubble') ? form.querySelector('.tag-bubble').closest('.d-flex') || form.querySelector('[id$="TagList"]') : null;
-    // Find the tag list container in this form
     const tagLists = form.querySelectorAll('[id$="TagList"]');
     const hiddenInputs = form.querySelectorAll('input[type="hidden"][name="keywords"]');
     let tagList, hiddenInput;
 
     for (let tl of tagLists) {
-        // Only get the one inside this form
         if (form.contains(tl)) {
             tagList = tl;
             break;
@@ -192,18 +337,25 @@ function collectKeywords(form) {
     const keywords = [];
     const bubbles = tagList.querySelectorAll('.tag-bubble');
     for (let b of bubbles) {
-        // Get text content excluding the × button
         const text = b.childNodes[0].textContent.trim();
         if (text) keywords.push(text);
     }
     hiddenInput.value = keywords.join(',');
 }
 
+function selectTeam(team) {
+    document.querySelectorAll('.team-section').forEach(function(el) {
+        el.style.display = el.getAttribute('data-team') === team ? '' : 'none';
+    });
+    document.querySelectorAll('.tmpl-team-chip').forEach(function(el) {
+        el.classList.toggle('active', el.getAttribute('data-team') === team);
+    });
+}
+
 // Init edit modals: sync hidden input on modal show
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('[id^="editModal"]').forEach(modal => {
         modal.addEventListener('shown.bs.modal', function() {
-            // Sync hidden input from current tag bubbles
             const form = this.querySelector('form');
             if (form) collectKeywords(form);
         });

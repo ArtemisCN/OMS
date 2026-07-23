@@ -1,10 +1,10 @@
-<!-- 人员管理（按组卡片版） -->
+<!-- 人员管理（按组卡片版 + 批量操作） -->
 {% extends "base.html" %}
 {% block content %}
 <style>
 .team-card {
     border-radius: 10px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border, #e5e7eb);
     box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     margin-bottom: 16px;
     overflow: hidden;
@@ -14,76 +14,127 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 16px;
-    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-    border-bottom: 1px solid #e5e7eb;
+    background: linear-gradient(135deg, var(--bg-subtle, #f8fafc), var(--bg-hover, #f1f5f9));
+    border-bottom: 1px solid var(--border, #e5e7eb);
     cursor: pointer;
     user-select: none;
 }
-.team-card-header .team-name {
-    font-size: 14px;
-    font-weight: 700;
-    color: #1e293b;
-}
-.team-card-header .team-count {
-    font-size: 12px;
-    color: #94a3b8;
-}
-.team-card-body {
-    padding: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease;
-}
-.team-card-body.collapsed {
-    max-height: 0 !important;
-}
+.team-card-header .team-name { font-size: 14px; font-weight: 700; color: var(--text, #1e293b); }
+.team-card-header .team-count { font-size: 12px; color: #94a3b8; }
+.team-card-body { padding: 0; overflow: hidden; transition: max-height 0.3s ease; }
+.team-card-body.collapsed { max-height: 0 !important; }
+
 .person-item {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px;
-    border-bottom: 1px solid #f1f5f9;
+    padding: 6px 16px;
+    border-bottom: 1px solid var(--border, #f1f5f9);
     font-size: 13px;
-    transition: background 0.15s;
+    transition: background 0.1s;
 }
-.person-item:hover {
-    background: #f8fafc;
-}
-.person-item:last-child {
-    border-bottom: none;
-}
+.person-item:hover { background: var(--hover-bg, #f8fafc); }
+.person-item:last-child { border-bottom: none; }
+.person-item.selected { background: rgba(99,102,241,0.06); }
+
 .person-avatar {
-    width: 28px;
-    height: 28px;
+    width: 28px; height: 28px;
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: #fff;
+    flex-shrink: 0;
+}
+.person-info { flex: 1; min-width: 0; }
+.person-name { font-weight: 600; color: var(--text, #1e293b); }
+.person-detail { font-size: 11px; color: #94a3b8; }
+.person-actions { display: flex; gap: 4px; flex-shrink: 0; align-items: center; }
+.person-actions .btn { font-size: 11px; padding: 2px 8px; }
+
+/* 批量操作栏 */
+.batch-bar {
+    display: none;
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
     color: #fff;
-    flex-shrink: 0;
+    padding: 8px 16px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    animation: fadeIn 0.2s ease;
 }
-.person-info {
-    flex: 1;
-    min-width: 0;
+.batch-bar.show { display: flex; flex-wrap: wrap; }
+.batch-bar .batch-count {
+    background: rgba(255,255,255,0.2);
+    padding: 1px 10px;
+    border-radius: 12px;
+    font-size: 12px;
 }
-.person-name {
-    font-weight: 600;
-    color: #1e293b;
+.batch-bar .batch-btn {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
 }
-.person-detail {
-    font-size: 11px;
-    color: #94a3b8;
+.batch-bar .batch-btn:hover { background: rgba(255,255,255,0.25); }
+
+/* 更多菜单 */
+/* 更多菜单 - fixed定位避开overflow:hidden */
+.more-menu {
+    position: relative;
+    display: inline-block;
 }
-.person-actions {
+.more-menu .dropdown-content {
+    display: none;
+    position: fixed;
+    background: var(--card-bg, #fff);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    z-index: 9999;
+    min-width: 120px;
+    padding: 4px 0;
+}
+.more-menu .dropdown-content.show { display: block; }
+.more-menu .dropdown-item {
+    display: block;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text, #1e293b);
+    cursor: pointer;
+    white-space: nowrap;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+}
+.more-menu .dropdown-item:hover { background: var(--hover-bg, #f1f5f9); }
+.more-menu .dropdown-item.text-danger:hover { background: rgba(239,68,68,0.08); }
+
+.person-checkbox { margin: 0; cursor: pointer; }
+
+/* 搜索栏 */
+.search-bar {
     display: flex;
-    gap: 4px;
-    flex-shrink: 0;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
 }
-.person-actions .btn {
-    font-size: 11px;
-    padding: 2px 8px;
+.search-bar input {
+    flex: 1;
+    max-width: 280px;
+    font-size: 13px;
+    padding: 5px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border, #e2e8f0);
+    background: var(--input-bg, #fff);
+    color: var(--text, #1e293b);
 }
+.search-bar input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.15); }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -104,71 +155,132 @@
     </div>
 </div>
 
-<!-- 组别列：全部折叠/展开 -->
-<div class="d-flex flex-wrap gap-1 mb-3">
-    <span class="badge bg-primary team-toggle-all" style="cursor:pointer;font-size:12px;padding:5px 12px;" onclick="toggleAllTeams()">📋 全部展开</span>
+<!-- ===== 搜索栏 + 组别筛选 ===== -->
+<div class="search-bar">
+    <i class="fas fa-search text-muted" style="font-size:13px;"></i>
+    <input type="text" id="personSearch" placeholder="搜索姓名、手机号、组别…" oninput="filterPersons()">
+    <span class="badge bg-secondary" style="font-size:10px;padding:3px 8px;cursor:pointer;" onclick="document.getElementById('personSearch').value='';filterPersons();"><i class="fas fa-times"></i> 清除</span>
+    <select name="team" onchange="window.location.href='?team='+encodeURIComponent(this.value)" style="width:auto;min-width:100px;font-size:13px;border-radius:8px;border:1px solid #d0d5dd;padding:4px 10px;margin-left:auto;">
+        <option value="">全部组</option>
+        {% for t in team_options %}
+        <option value="{{ t }}" {% if team_sel==t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+    </select>
 </div>
 
-<!-- ===== 按组卡片 ===== -->
-{% for t in team_list %}
-<div class="team-card">
-    <div class="team-card-header" onclick="toggleTeam('teamBody_{{ loop.index }}')">
+<!-- ===== 批量操作栏 ===== -->
+<div class="batch-bar" id="batchBar">
+    <i class="fas fa-check-square"></i>
+    <span>已选 <strong id="batchCount">0</strong> 人</span>
+    <span class="batch-count" id="batchCountBadge">0</span>
+    <button class="batch-btn" onclick="batchAction('enable')"><i class="fas fa-play"></i> 批量启用</button>
+    <button class="batch-btn" onclick="batchAction('disable')"><i class="fas fa-pause"></i> 批量禁用</button>
+    <button class="batch-btn" onclick="batchTeamAction()"><i class="fas fa-users-cog"></i> 批量改组分</button>
+    <button class="batch-btn" onclick="batchAction('delete')" style="background:rgba(239,68,68,0.25);border-color:rgba(239,68,68,0.3);"><i class="fas fa-trash"></i> 批量删除</button>
+    <button class="batch-btn" style="background:transparent;border-color:rgba(255,255,255,0.15);" onclick="clearBatchSelection()"><i class="fas fa-times"></i> 取消</button>
+    <form id="batchForm" method="post" style="display:none;">
+        <input type="hidden" name="batch_action" id="batchActionInput">
+        <input type="hidden" name="batch_ids" id="batchIdsInput">
+        <input type="hidden" name="batch_value" id="batchValueInput">
+    </form>
+</div>
+
+<!-- ===== 组别列 + 全部折叠/展开 ===== -->
+<div class="d-flex flex-wrap gap-1 mb-3">
+    <span class="badge bg-primary team-toggle-all" style="cursor:pointer;font-size:12px;padding:5px 12px;" onclick="toggleAllTeams()"><i class="fas fa-clipboard-list"></i> 全部收起</span>
+    <span class="badge bg-secondary" style="cursor:pointer;font-size:12px;padding:5px 12px;" onclick="document.querySelectorAll('.person-checkbox').forEach(function(cb){cb.checked=true;});updateBatchBar();"><i class="fas fa-check-circle"></i> 全选可见</span>
+    <span class="badge bg-secondary" style="cursor:pointer;font-size:12px;padding:5px 12px;" onclick="document.querySelectorAll('.person-checkbox').forEach(function(cb){cb.checked=false;});updateBatchBar();"><i class="far fa-circle"></i> 取消全部</span>
+</div>
+
+<!-- ===== 医院 → 组分二层 ===== -->
+{% for h_name, h_data in hospital_groups.items() %}
+{% if h_data %}
+<!-- 医院分组标题 -->
+<div style="display:flex;align-items:center;gap:10px;padding:8px 10px 2px;margin-top:10px;">
+    <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:12px;flex-shrink:0;box-shadow:0 2px 6px rgba(99,102,241,0.2);">
+        <i class="fas fa-hospital"></i>
+    </span>
+    <span style="font-size:14px;font-weight:700;color:var(--text,#1e293b);letter-spacing:0.3px;">{{ h_name }}</span>
+    {% set ns = namespace(total=0) %}
+    {% for __tp in h_data.values() %}{% set ns.total = ns.total + __tp|length %}{% endfor %}
+    <span style="font-size:11px;font-weight:500;color:#818cf8;background:rgba(99,102,241,0.08);padding:1px 10px;border-radius:10px;">{{ ns.total }} 人</span>
+    <span style="flex:1;height:2px;border-radius:2px;background:linear-gradient(90deg,#e0e7ff,transparent);"></span>
+</div>
+{% for t, team_persons in h_data.items() %}
+<div class="team-card" data-team="{{ t|e }}">
+    <div class="team-card-header" onclick="toggleTeam('teamBody_{{ h_name|replace(' ','_') }}_{{ loop.index }}')">
         <div>
             <span class="team-name">{{ t }}</span>
-            <span class="team-count ms-2">{{ team_groups[t]|length }} 人</span>
+            <span class="team-count ms-2">{{ team_persons|length }} 人</span>
         </div>
-        <i class="fas fa-chevron-down" style="font-size:12px;color:#94a3b8;transition:transform 0.2s;" id="chevron_{{ loop.index }}"></i>
+        <i class="fas fa-chevron-down" style="font-size:12px;color:#94a3b8;transition:transform 0.2s;" id="chevron_{{ h_name|replace(' ','_') }}_{{ loop.index }}"></i>
     </div>
-    <div class="team-card-body" id="teamBody_{{ loop.index }}">
-        {% for p in team_groups[t] %}
-        {% set account = user_map.get(p.name) %}
-        <div class="person-item">
+    <div class="team-card-body" id="teamBody_{{ h_name|replace(' ','_') }}_{{ loop.index }}">
+        {% for p in team_persons %}
+        <div class="person-item" data-name="{{ p.name|e }}" data-phone="{{ p.phone|e }}" data-team="{{ p.team|e }}">
+            <!-- 批次勾选框 -->
+            <input type="checkbox" class="person-checkbox" value="{{ p.id }}" onchange="updateBatchBar()" title="勾选后可使用批量操作">
+            <!-- 头像 -->
             <div class="person-avatar" style="background:{{ ['#6366f1','#06b6d4','#8b5cf6','#f59e0b','#10b981','#ef4444','#ec4899','#14b8a6'][loop.index0 % 8] }};">
                 {{ p.name[0] }}
             </div>
             <div class="person-info">
                 <div class="person-name">
                     {{ p.name }}
-                    {% if account %}
-                    <span class="badge bg-success" style="font-size:9px;font-weight:500;" title="用户名: {{ account.username }}">有账号</span>
-                    {% else %}
-                    <span class="badge bg-secondary" style="font-size:9px;font-weight:500;">无账号</span>
-                    {% endif %}
+                    <span class="badge bg-info" style="font-size:9px;font-weight:500;" title="用户名: {{ p.username }}"><i class="fas fa-user"></i> {{ p.username }}</span>
                     {% if not p.is_active %}
                     <span class="badge bg-secondary" style="font-size:9px;font-weight:500;">已禁用</span>
                     {% endif %}
                 </div>
                 <div class="person-detail">
-                    {% if p.phone %}📞 {{ p.phone }}{% endif %}
+                    {% if p.phone %}<i class="fas fa-phone" style="color:#94a3b8;width:14px;"></i> {{ p.phone }}{% endif %}
                     {% if p.notes %} · {{ p.notes }}{% endif %}
                 </div>
             </div>
             <div class="person-actions">
-                <!-- 组别编辑 -->
+                <!-- 组别下拉（快速切换） -->
                 <form method="post" action="{{ url_for('data.edit_person_field', pid=p.id) }}" style="display:inline;">
                     <input type="hidden" name="field" value="team">
-                    <select name="value" class="form-select form-select-sm" style="width:auto;font-size:11px;padding:1px 6px;height:26px;" onchange="this.form.submit()">
+                    <select name="value" class="form-select form-select-sm" style="width:auto;font-size:11px;padding:1px 6px;height:26px;max-width:90px;" onchange="this.form.submit()">
                         <option value="">—</option>
                         {% for opt in team_options %}
                         <option value="{{ opt }}" {% if p.team == opt %}selected{% endif %}>{{ opt }}</option>
                         {% endfor %}
                     </select>
                 </form>
-                <!-- 账号 -->
-                <button type="button" class="btn btn-outline-primary btn-sm py-0" onclick="editAccount({{ p.id }}, '{{ p.name|e }}')" title="账号设置"><i class="fas fa-user-cog"></i></button>
                 <!-- 启用/禁用 -->
                 <form method="post" action="{{ url_for('data.toggle_person', pid=p.id) }}" style="display:inline;">
                     <button type="submit" class="btn btn-outline-{{ 'warning' if p.is_active else 'success' }} btn-sm py-0" title="{{ '停用' if p.is_active else '启用' }}">
                         <i class="fas fa-{{ 'pause' if p.is_active else 'play' }}"></i>
                     </button>
                 </form>
-                <!-- 删除 -->
-                <form method="post" action="{{ url_for('data.delete_person', pid=p.id) }}" style="display:inline;"
-                      onsubmit="return confirm('确定删除 {{ p.name }}？')">
-                    <button type="submit" class="btn btn-outline-danger btn-sm py-0" title="删除"><i class="fas fa-trash"></i></button>
-                </form>
-                <!-- 姓名/电话行内编辑 -->
-                <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="quickEdit({{ p.id }}, '{{ p.name|e }}')" title="编辑姓名"><i class="fas fa-edit"></i></button>
+                <!-- ⋮ 更多 -->
+                <div class="more-menu">
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0" style="padding:2px 6px;font-size:13px;line-height:1;" onclick="toggleMoreMenu(this)" title="更多操作">⋮</button>
+                    <div class="dropdown-content">
+                        <button class="dropdown-item" onclick="editAccount({{ p.id }}, '{{ p.name|e }}')"><i class="fas fa-user-cog"></i> 编辑账号</button>
+                        <button class="dropdown-item" onclick="quickEdit({{ p.id }}, '{{ p.name|e }}')"><i class="fas fa-edit"></i> 编辑姓名</button>
+                        <form method="post" action="{{ url_for('data.edit_person_field', pid=p.id) }}" style="display:inline;">
+                            <input type="hidden" name="field" value="phone">
+                            <input type="hidden" name="value" id="phoneInput_{{ p.id }}" value="{{ p.phone }}">
+                            <button class="dropdown-item" type="button" onclick="editPhone({{ p.id }}, '{{ p.phone|e }}')"><i class="fas fa-phone"></i> 编辑电话</button>
+                        </form>
+                        <div class="dropdown-divider" style="border-top:1px solid var(--border,#e2e8f0);margin:2px 0;"></div>
+                        {% if order_counts.get(p.id, 0) > 0 and not p.is_admin %}
+                        <button class="dropdown-item" type="button" onclick="reassignOrders({{ p.id }}, '{{ p.name|e }}', {{ order_counts[p.id] }})">
+                          <i class="fas fa-exchange-alt"></i> 转移工单 ({{ order_counts[p.id] }})
+                        </button>
+                        {% endif %}
+                        {% if not p.is_admin %}
+                        <form method="post" action="{{ url_for('data.delete_person', pid=p.id) }}" style="display:inline;"
+                              onsubmit="return confirm('确定删除 {{ p.name }}？')">
+                            <button type="submit" class="dropdown-item text-danger"><i class="fas fa-trash"></i> 删除</button>
+                        </form>
+                        {% else %}
+                        <span class="dropdown-item text-muted" style="cursor:default;"><i class="fas fa-lock"></i> 管理员账号不可删除</span>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
         {% else %}
@@ -176,6 +288,8 @@
         {% endfor %}
     </div>
 </div>
+{% endfor %}
+{% endif %}
 {% else %}
 <div class="text-center text-muted py-5" style="font-size:14px;">暂无人员数据</div>
 {% endfor %}
@@ -201,6 +315,55 @@
                     <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-save"></i> 保存</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- ===== 编辑电话弹窗 ===== -->
+<div class="modal fade" id="phoneEditModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content" style="border-radius:12px;">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title fw-bold"><i class="fas fa-phone"></i> 编辑电话</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" id="phoneEditForm">
+                <div class="modal-body">
+                    <input type="text" name="value" id="pePhone" class="form-control" placeholder="输入电话号码">
+                    <input type="hidden" name="field" value="phone">
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-save"></i> 保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ===== 批量改组分弹窗 ===== -->
+<div class="modal fade" id="batchTeamModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content" style="border-radius:12px;">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title fw-bold"><i class="fas fa-users-cog"></i> 批量改组分</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label small fw-medium">移动到组</label>
+                    <select id="batchTeamSelect" class="form-select">
+                        <option value="">— 选择组 —</option>
+                        {% for opt in team_options %}
+                        <option value="{{ opt }}">{{ opt }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-sm btn-primary" onclick="doBatchTeam()"><i class="fas fa-save"></i> 执行</button>
+            </div>
         </div>
     </div>
 </div>
@@ -233,7 +396,7 @@
                     <div class="mb-3">
                         <label class="form-label fw-medium">所属医院 <small class="text-muted">（可多选）</small></label>
                         <div id="acctHospitalList" style="max-height:200px;overflow-y:auto;border:1px solid var(--border,#e2e8f0);border-radius:6px;padding:8px;">
-                            {% for h in all_hospitals %}
+                            {% for h in hospitals %}
                             <label style="display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:4px;cursor:pointer;font-size:13px;">
                                 <input type="checkbox" name="hospital_ids" value="{{ h.id }}" class="form-check-input" style="margin:0;">
                                 {{ h.name }}
@@ -242,10 +405,20 @@
                         </div>
                         <small class="text-muted">勾选后该用户可查看所选医院的数据并切换查看</small>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">角色组 <small class="text-muted">（控制页面访问权限）</small></label>
+                        <select name="group_id" class="form-select">
+                            <option value="">— 无角色组（仅管理员权限） —</option>
+                            {% for rg in role_groups %}
+                            <option value="{{ rg.id }}">{{ rg.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">对应的权限在「数据管理 → 系统设置 → 权限管理」中配置</small>
+                    </div>
                     <div class="form-check mb-2">
                         <input type="checkbox" name="is_admin" id="acctIsAdmin" class="form-check-input">
                         <label class="form-check-label" for="acctIsAdmin">管理员权限</label>
-                        <small class="text-muted d-block">勾选后可登录 PC 端使用批量生成、数据管理等功能</small>
+                        <small class="text-muted d-block">勾选后可不受角色组限制，访问所有页面</small>
                     </div>
                 </div>
                 <div class="modal-footer border-0 pt-0">
@@ -260,6 +433,7 @@
 
 {% block extra_scripts %}
 <script>
+var allExpanded = true;
 // ===== 组卡片折叠 =====
 function toggleTeam(id) {
     var body = document.getElementById(id);
@@ -272,37 +446,151 @@ function toggleTeam(id) {
     } else {
         body.style.maxHeight = body.scrollHeight + 'px';
         if (chevron) chevron.style.transform = 'rotate(180deg)';
-        // 动画完成后重置
         setTimeout(function() {
-            if (body.style.maxHeight !== '0px') {
-                body.style.maxHeight = 'none';
-            }
+            if (body.style.maxHeight !== '0px') body.style.maxHeight = 'none';
         }, 300);
     }
 }
 // 初始化：全部展开
 document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.team-card-body').forEach(function(el) {
-        el.style.maxHeight = 'none';
-    });
-    document.querySelectorAll('.team-card-header .fa-chevron-down').forEach(function(el) {
-        el.style.transform = 'rotate(180deg)';
+    document.querySelectorAll('.team-card-body').forEach(function(el) { el.style.maxHeight = 'none'; });
+    document.querySelectorAll('.team-card-header .fa-chevron-down').forEach(function(el) { el.style.transform = 'rotate(180deg)'; });
+    // 关闭所有下拉菜单
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.more-menu')) {
+            document.querySelectorAll('.dropdown-content.show').forEach(function(el) { el.classList.remove('show'); });
+        }
     });
 });
-var allExpanded = true;
 function toggleAllTeams() {
     var bodies = document.querySelectorAll('.team-card-body');
     var chevrons = document.querySelectorAll('.team-card-header .fa-chevron-down');
     if (allExpanded) {
         bodies.forEach(function(el) { el.style.maxHeight = '0px'; });
         chevrons.forEach(function(el) { el.style.transform = 'rotate(0deg)'; });
-        document.querySelector('.team-toggle-all').textContent = '📋 全部展开';
+        document.querySelector('.team-toggle-all').innerHTML = '<i class="fas fa-clipboard-list"></i> 全部展开';
     } else {
         bodies.forEach(function(el) { el.style.maxHeight = 'none'; });
         chevrons.forEach(function(el) { el.style.transform = 'rotate(180deg)'; });
-        document.querySelector('.team-toggle-all').textContent = '📋 全部收起';
+        document.querySelector('.team-toggle-all').innerHTML = '<i class="fas fa-clipboard-list"></i> 全部收起';
     }
     allExpanded = !allExpanded;
+}
+
+// ===== 搜索过滤 =====
+function filterPersons() {
+    var q = document.getElementById('personSearch').value.trim().toLowerCase();
+    document.querySelectorAll('.person-item').forEach(function(el) {
+        var name = (el.getAttribute('data-name') || '').toLowerCase();
+        var phone = (el.getAttribute('data-phone') || '').toLowerCase();
+        var team = (el.getAttribute('data-team') || '').toLowerCase();
+        if (!q || name.indexOf(q) >= 0 || phone.indexOf(q) >= 0 || team.indexOf(q) >= 0) {
+            el.style.display = '';
+        } else {
+            el.style.display = 'none';
+        }
+    });
+    // 隐藏空组
+    document.querySelectorAll('.team-card').forEach(function(card) {
+        var visible = card.querySelectorAll('.person-item[style*=\"display: none\"]');
+        var total = card.querySelectorAll('.person-item');
+        card.style.display = (visible.length === total.length && total.length > 0 && q) ? 'none' : '';
+    });
+}
+
+// ===== 批量操作 =====
+function updateBatchBar() {
+    var checked = document.querySelectorAll('.person-checkbox:checked');
+    var bar = document.getElementById('batchBar');
+    var count = document.getElementById('batchCount');
+    var badge = document.getElementById('batchCountBadge');
+    if (checked.length > 0) {
+        bar.classList.add('show');
+        count.textContent = checked.length;
+        if (badge) badge.textContent = checked.length;
+    } else {
+        bar.classList.remove('show');
+    }
+}
+
+function getSelectedIds() {
+    return Array.from(document.querySelectorAll('.person-checkbox:checked')).map(function(cb) { return cb.value; });
+}
+
+function clearBatchSelection() {
+    document.querySelectorAll('.person-checkbox:checked').forEach(function(cb) { cb.checked = false; });
+    updateBatchBar();
+}
+
+function batchAction(action) {
+    var ids = getSelectedIds();
+    if (ids.length === 0) { showToast('请先勾选人员', 'warning'); return; }
+    var confirmMsg = {
+        'enable': '确定启用选中的 ' + ids.length + ' 人？',
+        'disable': '确定禁用选中的 ' + ids.length + ' 人？禁用后将无法在批量生成中显示',
+        'delete': '确定删除选中的 ' + ids.length + ' 人？此操作不可撤销！'
+    };
+    if (!confirm(confirmMsg[action])) return;
+    document.getElementById('batchActionInput').value = action;
+    document.getElementById('batchIdsInput').value = ids.join(',');
+    document.getElementById('batchForm').submit();
+}
+
+function batchTeamAction() {
+    var ids = getSelectedIds();
+    if (ids.length === 0) { showToast('请先勾选人员', 'warning'); return; }
+    new bootstrap.Modal(document.getElementById('batchTeamModal')).show();
+}
+
+function doBatchTeam() {
+    var team = document.getElementById('batchTeamSelect').value;
+    if (!team) { showToast('请选择目标组', 'warning'); return; }
+    var ids = getSelectedIds();
+    document.getElementById('batchActionInput').value = 'change_team';
+    document.getElementById('batchIdsInput').value = ids.join(',');
+    document.getElementById('batchValueInput').value = team;
+    bootstrap.Modal.getInstance(document.getElementById('batchTeamModal')).hide();
+    document.getElementById('batchForm').submit();
+}
+
+// ===== 更多菜单 =====
+function toggleMoreMenu(btn) {
+    // 关闭其他
+    document.querySelectorAll('.dropdown-content.show').forEach(function(el) { el.classList.remove('show'); });
+    var menu = btn.nextElementSibling;
+    if (!menu) return;
+    
+    // fixed定位：根据按钮实时坐标计算
+    var rect = btn.getBoundingClientRect();
+    var dropH = 160; // 预估高度
+    var spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceBelow >= dropH) {
+        menu.style.top = rect.bottom + 'px';
+        menu.style.left = Math.max(4, rect.right - 130) + 'px';
+    } else {
+        menu.style.top = Math.max(4, rect.top - dropH) + 'px';
+        menu.style.left = Math.max(4, rect.right - 130) + 'px';
+    }
+    
+    menu.classList.toggle('show');
+    if (menu.classList.contains('show')) {
+        var closeHandler = function(e) {
+            if (!e.target.closest('.more-menu')) {
+                menu.classList.remove('show');
+                menu.style.top = '';
+                menu.style.left = '';
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+        setTimeout(function() { document.addEventListener('click', closeHandler); }, 10);
+    }
+}
+
+// ===== 编辑电话 =====
+function editPhone(pid, phone) {
+    document.getElementById('pePhone').value = phone || '';
+    document.getElementById('phoneEditForm').action = '/data/persons/' + pid + '/edit-field';
+    new bootstrap.Modal(document.getElementById('phoneEditModal')).show();
 }
 
 // ===== 账号编辑 =====
@@ -320,18 +608,22 @@ function editAccount(pid, name) {
                 document.getElementById('acctUsername').value = data.username;
                 document.getElementById('acctDisplayName').value = data.display_name;
                 document.getElementById('acctIsAdmin').checked = data.is_admin;
+                // 回显角色组
+                var groupSelect = document.querySelector('select[name="group_id"]');
+                if (groupSelect) {
+                    groupSelect.value = data.group_id || '';
+                }
                 var checkboxes = document.querySelectorAll('#acctHospitalList input[type=checkbox]');
                 var ids = data.hospital_ids || [];
-                checkboxes.forEach(function(cb) {
-                    cb.checked = ids.indexOf(parseInt(cb.value)) !== -1;
-                });
+                checkboxes.forEach(function(cb) { cb.checked = ids.indexOf(parseInt(cb.value)) !== -1; });
                 document.getElementById('pwdHint').textContent = '（留空不修改密码）';
             } else {
                 document.getElementById('acctUsername').value = '';
                 document.getElementById('acctDisplayName').value = name;
                 document.getElementById('acctIsAdmin').checked = false;
-                var checkboxes = document.querySelectorAll('#acctHospitalList input[type=checkbox]');
-                checkboxes.forEach(function(cb) { cb.checked = false; });
+                var groupSelect = document.querySelector('select[name="group_id"]');
+                if (groupSelect) groupSelect.value = '';
+                document.querySelectorAll('#acctHospitalList input[type=checkbox]').forEach(function(cb) { cb.checked = false; });
                 document.getElementById('pwdHint').textContent = '（新建账号必须设置密码）';
             }
         });
@@ -343,6 +635,20 @@ function quickEdit(pid, name) {
     document.getElementById('qeName').value = name;
     document.getElementById('quickEditForm').action = '/data/persons/' + pid + '/edit-field';
     new bootstrap.Modal(document.getElementById('quickEditModal')).show();
+}
+function reassignOrders(pid, name, count) {
+    var target = prompt("u201c" + name + "u201d u6709 " + count + " u6761u5de5u5355u8bb0u5f55uff0cu8f93u5165u63a5u6536u4ebau59d3u540du8fdbu884cu8f6cu79fbuff1a");
+    if (!target) return;
+    var form = document.createElement("form");
+    form.method = "post";
+    form.action = "/data/persons/" + pid + "/reassign-orders";
+    var input = document.createElement("input");
+    input.type = "hidden";
+    input.name = "target_name";
+    input.value = target;
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
 }
 </script>
 {% endblock %}

@@ -1,0 +1,637 @@
+{% extends "base.html" %}
+{% block title %}维修评价管理{% endblock %}
+{% block extra_head %}
+<style>
+    /* ===== 评价页面样式 ===== */
+    .rating-card {
+        background: rgba(255,255,255,0.7);
+        backdrop-filter: blur(20px) saturate(1.5);
+        -webkit-backdrop-filter: blur(20px) saturate(1.5);
+        border: 1px solid rgba(226,232,240,0.6);
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 16px;
+        transition: box-shadow .2s;
+    }
+    [data-theme="dark"] .rating-card {
+        background: rgba(15,23,42,0.8);
+        border-color: rgba(255,255,255,0.06);
+    }
+    .rating-card:hover {
+        box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    }
+    [data-theme="dark"] .rating-card:hover {
+        box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    }
+
+    /* 筛选区域 */
+    .filter-card {
+        background: rgba(255,255,255,0.7);
+        backdrop-filter: blur(20px) saturate(1.5);
+        -webkit-backdrop-filter: blur(20px) saturate(1.5);
+        border: 1px solid rgba(226,232,240,0.6);
+        border-radius: 16px;
+        padding: 16px 20px;
+        margin-bottom: 16px;
+    }
+    [data-theme="dark"] .filter-card {
+        background: rgba(15,23,42,0.8);
+        border-color: rgba(255,255,255,0.06);
+    }
+    .filter-card .form-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #64748b;
+        margin-bottom: 4px;
+    }
+    [data-theme="dark"] .filter-card .form-label {
+        color: #94a3b8;
+    }
+    .filter-card .form-control,
+    .filter-card .form-select {
+        background: rgba(241,245,249,0.7);
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        font-size: 13px;
+        padding: 8px 12px;
+        color: #1e293b;
+    }
+    [data-theme="dark"] .filter-card .form-control,
+    [data-theme="dark"] .filter-card .form-select {
+        background: rgba(30,41,59,0.7);
+        border-color: #334155;
+        color: #e2e8f0;
+    }
+    .filter-card .form-control:focus,
+    .filter-card .form-select:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+    }
+    [data-theme="dark"] .filter-card .form-control::placeholder {
+        color: #475569;
+    }
+
+    /* 星级显示 */
+    .star-display {
+        font-size: 18px;
+        letter-spacing: 2px;
+        color: #f59e0b;
+    }
+    .star-display .star-empty {
+        color: #cbd5e1;
+    }
+    [data-theme="dark"] .star-display .star-empty {
+        color: #334155;
+    }
+
+    /* 星级过滤按钮 */
+    .star-filter-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+        background: transparent;
+        color: #94a3b8;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all .15s;
+        text-decoration: none;
+    }
+    [data-theme="dark"] .star-filter-btn {
+        border-color: #334155;
+        color: #475569;
+    }
+    .star-filter-btn:hover {
+        border-color: #6366f1;
+        color: #6366f1;
+        background: rgba(99,102,241,0.06);
+    }
+    .star-filter-btn.active {
+        border-color: #f59e0b;
+        background: rgba(245,158,11,0.12);
+        color: #f59e0b;
+    }
+    [data-theme="dark"] .star-filter-btn.active {
+        background: rgba(245,158,11,0.15);
+    }
+    .star-filter-btn.active .star-empty {
+        color: rgba(245,158,11,0.25);
+    }
+
+    /* 评价列表表格 */
+    .rating-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .rating-table thead th {
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #64748b;
+        padding: 12px 16px;
+        border-bottom: 1px solid #e2e8f0;
+        background: rgba(241,245,249,0.4);
+    }
+    [data-theme="dark"] .rating-table thead th {
+        color: #94a3b8;
+        border-bottom-color: rgba(255,255,255,0.06);
+        background: rgba(30,41,59,0.3);
+    }
+    .rating-table tbody tr {
+        border-bottom: 1px solid #f1f5f9;
+        transition: background .15s;
+    }
+    [data-theme="dark"] .rating-table tbody tr {
+        border-bottom-color: rgba(255,255,255,0.03);
+    }
+    .rating-table tbody tr:hover {
+        background: rgba(99,102,241,0.03);
+    }
+    [data-theme="dark"] .rating-table tbody tr:hover {
+        background: rgba(255,255,255,0.02);
+    }
+    .rating-table tbody tr:last-child {
+        border-bottom: none;
+    }
+    .rating-table tbody td {
+        padding: 14px 16px;
+        font-size: 13px;
+        color: #1e293b;
+        vertical-align: middle;
+    }
+    [data-theme="dark"] .rating-table tbody td {
+        color: #e2e8f0;
+    }
+
+    /* 工单ID 链接样式 */
+    .order-id-link {
+        color: #6366f1;
+        font-weight: 600;
+        text-decoration: none;
+    }
+    .order-id-link:hover {
+        color: #4f46e5;
+        text-decoration: underline;
+    }
+    [data-theme="dark"] .order-id-link {
+        color: #818cf8;
+    }
+    [data-theme="dark"] .order-id-link:hover {
+        color: #a5b4fc;
+    }
+
+    /* 评价内容气泡 */
+    .rating-content {
+        max-width: 320px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        background: rgba(241,245,249,0.5);
+        border-radius: 8px;
+        padding: 4px 10px;
+        font-size: 12px;
+        color: #475569;
+    }
+    [data-theme="dark"] .rating-content {
+        background: rgba(30,41,59,0.5);
+        color: #94a3b8;
+    }
+
+    /* 评价人信息 */
+    .reviewer-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .reviewer-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        background: linear-gradient(135deg, #6366f1, #818cf8);
+        color: #fff;
+        flex-shrink: 0;
+    }
+    .reviewer-name {
+        font-weight: 500;
+        font-size: 13px;
+    }
+    .reviewer-time {
+        font-size: 11px;
+        color: #94a3b8;
+    }
+
+    /* 统计摘要卡片 */
+    .stat-summary {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+    .stat-item {
+        flex: 1;
+        min-width: 100px;
+        background: rgba(255,255,255,0.7);
+        backdrop-filter: blur(20px) saturate(1.5);
+        -webkit-backdrop-filter: blur(20px) saturate(1.5);
+        border: 1px solid rgba(226,232,240,0.6);
+        border-radius: 14px;
+        padding: 14px 18px;
+        text-align: center;
+    }
+    [data-theme="dark"] .stat-item {
+        background: rgba(15,23,42,0.8);
+        border-color: rgba(255,255,255,0.06);
+    }
+    .stat-item .stat-number {
+        font-size: 24px;
+        font-weight: 700;
+        color: #1e293b;
+        line-height: 1.2;
+    }
+    [data-theme="dark"] .stat-item .stat-number {
+        color: #f1f5f9;
+    }
+    .stat-item .stat-label {
+        font-size: 11px;
+        font-weight: 500;
+        color: #94a3b8;
+        margin-top: 2px;
+    }
+    .stat-item .stat-star {
+        font-size: 14px;
+        color: #f59e0b;
+        margin-top: 2px;
+    }
+
+    /* 空状态 */
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+    }
+    .empty-state i {
+        font-size: 48px;
+        color: #cbd5e1;
+        margin-bottom: 12px;
+    }
+    [data-theme="dark"] .empty-state i {
+        color: #334155;
+    }
+    .empty-state .empty-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #64748b;
+        margin-bottom: 4px;
+    }
+    [data-theme="dark"] .empty-state .empty-title {
+        color: #94a3b8;
+    }
+    .empty-state .empty-desc {
+        font-size: 13px;
+        color: #94a3b8;
+    }
+
+    /* 分页 */
+    .pagination-info {
+        font-size: 12px;
+        color: #94a3b8;
+        padding: 12px 16px;
+        text-align: center;
+    }
+
+    /* 清除筛选按钮 */
+    .btn-clear-filter {
+        font-size: 12px;
+        color: #94a3b8;
+        text-decoration: none;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition: all .15s;
+    }
+    .btn-clear-filter:hover {
+        color: #6366f1;
+        background: rgba(99,102,241,0.06);
+    }
+
+    /* 分页底部 */
+    .pagination-footer {
+        border-color: #e2e8f0;
+    }
+    [data-theme="dark"] .pagination-footer {
+        border-color: rgba(255,255,255,0.06) !important;
+    }
+
+    /* 评价详情弹窗 */
+    [data-theme="dark"] .modal-content.rating-modal-content {
+        background: rgba(15,23,42,0.95) !important;
+        border: 1px solid rgba(255,255,255,0.06);
+    }
+    [data-theme="dark"] .rating-modal-header {
+        border-bottom-color: rgba(255,255,255,0.06) !important;
+    }
+    [data-theme="dark"] .rating-modal-footer {
+        border-top-color: rgba(255,255,255,0.06) !important;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+    <!-- 页面标题 -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">
+            <i class="fas fa-star text-primary me-2"></i>维修评价管理
+        </h5>
+        <div>
+            <button class="btn btn-sm btn-outline-secondary" onclick="location.reload()">
+                <i class="fas fa-sync me-1"></i>刷新
+            </button>
+        </div>
+    </div>
+
+    <!-- 统计摘要 -->
+    <div class="stat-summary">
+        <div class="stat-item">
+            <div class="stat-number">{{ stats.total or 0 }}</div>
+            <div class="stat-label">评价总数</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-number">{{ stats.avg_score or '0.0' }}</div>
+            <div class="stat-label">平均评分</div>
+            <div class="stat-star">
+                {% set avg = stats.avg_score|default(0)|float %}
+                {% for i in range(5) %}
+                    {% if i < avg|int %}
+                        ★
+                    {% elif i < avg|int and avg - avg|int >= 0.5 %}
+                        ★
+                    {% else %}
+                        ☆
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-number" style="color:#22c55e;">{{ stats.five_star or 0 }}</div>
+            <div class="stat-label">五星好评</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-number" style="color:#ef4444;">{{ stats.low_score or 0 }}</div>
+            <div class="stat-label">低分评价 (≤2星)</div>
+        </div>
+    </div>
+
+    <!-- 筛选区 -->
+    <div class="filter-card">
+        <form method="get" action="{{ url_for('feature.repair_ratings') }}" id="filterForm">
+            <div class="row g-2 align-items-end">
+                <!-- 日期范围 -->
+                <div class="col-md-3">
+                    <label class="form-label"><i class="fas fa-calendar-alt me-1"></i>开始日期</label>
+                    <input type="date" class="form-control" name="date_from" id="dateFrom"
+                           value="{{ request.args.get('date_from', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><i class="fas fa-calendar-alt me-1"></i>结束日期</label>
+                    <input type="date" class="form-control" name="date_to" id="dateTo"
+                           value="{{ request.args.get('date_to', '') }}">
+                </div>
+                <!-- 星级过滤 -->
+                <div class="col-md-4">
+                    <label class="form-label"><i class="fas fa-star me-1"></i>星级过滤</label>
+                    <div class="d-flex gap-1 align-items-center">
+                        <a href="{{ url_for('feature.repair_ratings', date_from=request.args.get('date_from', ''), date_to=request.args.get('date_to', '')) }}"
+                           class="star-filter-btn {% if not request.args.get('min_star') %}active{% endif %}"
+                           title="全部">
+                            <i class="fas fa-bars" style="font-size:12px;"></i>
+                        </a>
+                        {% for s in range(1, 6) %}
+                        <a href="{{ url_for('feature.repair_ratings', min_star=s, date_from=request.args.get('date_from', ''), date_to=request.args.get('date_to', '')) }}"
+                           class="star-filter-btn {% if request.args.get('min_star')|int == s %}active{% endif %}"
+                           title="{{ s }}星及以上">
+                            {% for i in range(s) %}★{% endfor %}
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                <!-- 操作按钮 -->
+                <div class="col-md-2 d-flex gap-1">
+                    <button type="submit" class="btn btn-sm btn-primary flex-fill">
+                        <i class="fas fa-search me-1"></i>筛选
+                    </button>
+                    <a href="{{ url_for('feature.repair_ratings') }}" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-undo"></i>
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- 评价列表 -->
+    <div class="rating-card p-0 overflow-hidden">
+        {% if ratings and ratings|length > 0 %}
+        <div class="table-responsive">
+            <table class="rating-table">
+                <thead>
+                    <tr>
+                        <th>工单ID</th>
+                        <th>评分</th>
+                        <th>评价内容</th>
+                        <th>评价人</th>
+                        <th>时间</th>
+                        <th style="width:80px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in ratings %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('orders.order_detail', id=r.order_id) }}" class="order-id-link" target="_blank">
+                                <i class="fas fa-hashtag" style="font-size:10px;opacity:0.5;"></i>
+                                {{ r.order_no or r.order_id }}
+                            </a>
+                        </td>
+                        <td>
+                            <div class="star-display">
+                                {% for i in range(5) %}
+                                    {% if i < r.stars|int %}
+                                        ★
+                                    {% else %}
+                                        <span class="star-empty">★</span>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="rating-content" title="{{ r.content or '' }}">
+                                {% if r.content %}
+                                    {{ r.content }}
+                                {% else %}
+                                    <span style="color:#94a3b8;font-style:italic;">无评价内容</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="reviewer-info">
+                                <div class="reviewer-avatar">{{ (r.reviewer_name or '匿')[:1] }}</div>
+                                <div>
+                                    <div class="reviewer-name">{{ r.reviewer_name or '匿名用户' }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="reviewer-time">
+                                <i class="far fa-clock me-1" style="font-size:10px;"></i>
+                                {{ r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '-' }}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-sm btn-outline-primary" style="padding:2px 8px;font-size:11px;"
+                                        onclick="viewRatingDetail({{ r.id }})"
+                                        title="查看详情">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                {% if can_access('评价删除') %}
+                                <form method="post" action="{{ url_for('feature.repair_rating_delete', id=r.id) }}"
+                                      class="d-inline"
+                                      onsubmit="return confirm('确定删除该评价？')">
+                                    <button class="btn btn-sm btn-outline-danger" style="padding:2px 8px;font-size:11px;"
+                                            title="删除">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <!-- 分页 -->
+        {% if pagination and pagination.pages > 1 %}
+        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top pagination-footer">
+            <div class="pagination-info">
+                共 {{ pagination.total }} 条，第 {{ pagination.page }} / {{ pagination.pages }} 页
+            </div>
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if pagination.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('feature.repair_ratings', page=pagination.prev_num, date_from=request.args.get('date_from', ''), date_to=request.args.get('date_to', ''), min_star=request.args.get('min_star', '')) }}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if p %}
+                        <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('feature.repair_ratings', page=p, date_from=request.args.get('date_from', ''), date_to=request.args.get('date_to', ''), min_star=request.args.get('min_star', '')) }}">{{ p }}</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled"><span class="page-link">…</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    {% if pagination.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('feature.repair_ratings', page=pagination.next_num, date_from=request.args.get('date_from', ''), date_to=request.args.get('date_to', ''), min_star=request.args.get('min_star', '')) }}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+        {% else %}
+        <!-- 空状态 -->
+        <div class="empty-state">
+            <i class="fas fa-star"></i>
+            <div class="empty-title">暂无评价记录</div>
+            <div class="empty-desc">当前筛选条件下没有找到维修评价，请调整筛选条件</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 评价详情弹窗 -->
+<div class="modal fade" id="ratingDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rating-modal-content" style="border-radius:16px;border:none;background:rgba(255,255,255,0.95);backdrop-filter:blur(24px);">
+            <div class="modal-header rating-modal-header" style="border-bottom:1px solid #e2e8f0;padding:16px 20px;">
+                <h6 class="modal-title"><i class="fas fa-star text-primary me-1"></i>评价详情</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="padding:20px;">
+                <div id="ratingDetailContent">
+                    <div class="text-center text-muted py-3">
+                        <i class="fas fa-spinner fa-spin me-1"></i> 加载中...
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer rating-modal-footer" style="border-top:1px solid #e2e8f0;padding:12px 20px;">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function viewRatingDetail(ratingId) {
+    var modal = new bootstrap.Modal(document.getElementById('ratingDetailModal'));
+    var content = document.getElementById('ratingDetailContent');
+    content.innerHTML = '<div class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin me-1"></i> 加载中...</div>';
+    modal.show();
+
+    fetch('/feature/repair_rating/' + ratingId + '/detail')
+        .then(function(resp) { return resp.json(); })
+        .then(function(data) {
+            if (data.error) {
+                content.innerHTML = '<div class="text-center text-danger py-3"><i class="fas fa-exclamation-circle me-1"></i>' + data.error + '</div>';
+                return;
+            }
+            var stars = '';
+            for (var i = 0; i < 5; i++) {
+                stars += i < data.stars ? '★' : '<span class="star-empty">★</span>';
+            }
+            content.innerHTML =
+                '<div class="mb-3">' +
+                    '<label class="small fw-medium text-muted mb-1">工单</label>' +
+                    '<div><a href="/orders/detail/' + data.order_id + '" class="order-id-link" target="_blank"><i class="fas fa-hashtag" style="font-size:10px;opacity:0.5;"></i> ' + (data.order_no || data.order_id) + '</a></div>' +
+                '</div>' +
+                '<div class="mb-3">' +
+                    '<label class="small fw-medium text-muted mb-1">评分</label>' +
+                    '<div class="star-display">' + stars + '</div>' +
+                '</div>' +
+                '<div class="mb-3">' +
+                    '<label class="small fw-medium text-muted mb-1">评价内容</label>' +
+                    '<div style="background:rgba(241,245,249,0.5);border-radius:10px;padding:12px;font-size:13px;color:#1e293b;">' +
+                        (data.content || '<span style="color:#94a3b8;font-style:italic;">无评价内容</span>') +
+                    '</div>' +
+                '</div>' +
+                '<div class="mb-3">' +
+                    '<label class="small fw-medium text-muted mb-1">评价人</label>' +
+                    '<div class="reviewer-info">' +
+                        '<div class="reviewer-avatar">' + (data.reviewer_name || '匿').charAt(0) + '</div>' +
+                        '<div class="reviewer-name">' + (data.reviewer_name || '匿名用户') + '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div>' +
+                    '<label class="small fw-medium text-muted mb-1">评价时间</label>' +
+                    '<div class="reviewer-time"><i class="far fa-clock me-1" style="font-size:10px;"></i>' + (data.created_at || '-') + '</div>' +
+                '</div>';
+        })
+        .catch(function() {
+            content.innerHTML = '<div class="text-center text-danger py-3"><i class="fas fa-exclamation-circle me-1"></i> 加载失败，请重试</div>';
+        });
+}
+</script>
+{% endblock %}

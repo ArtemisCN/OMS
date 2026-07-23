@@ -321,7 +321,7 @@
 
         {% elif s.key == 'default_dashboard_team' %}
         <select class="set-select" onchange="saveSetting({{ s.id }}, this)" data-key="{{ s.key }}">
-          <option value="" {% if not s.value %}selected{% endif %}>📋 全部组</option>
+          <option value="" {% if not s.value %}selected{% endif %}><i class="fas fa-clipboard-list"></i> 全部组</option>
           {% for t in team_list %}
           <option value="{{ t }}" {% if s.value == t %}selected{% endif %}>{{ t }}</option>
           {% endfor %}
@@ -361,17 +361,17 @@
           <div class="set-toggle-opt {% if s.value == 'dark' %}active{% endif %}"
                onclick="saveSettingVal({{ s.id }}, this, 'dark')">🌙 深色</div>
           <div class="set-toggle-opt {% if s.value == 'auto' %}active{% endif %}"
-               onclick="saveSettingVal({{ s.id }}, this, 'auto')">🔄 跟随系统</div>
+               onclick="saveSettingVal({{ s.id }}, this, 'auto')"><i class="fas fa-sync"></i> 跟随系统</div>
         </div>
 
         {% elif s.key == 'table_density' %}
         <div class="set-toggle-group">
           <div class="set-toggle-opt {% if s.value == 'compact' %}active{% endif %}"
-               onclick="saveSettingVal({{ s.id }}, this, 'compact')">📋 紧凑</div>
+               onclick="saveSettingVal({{ s.id }}, this, 'compact')"><i class="fas fa-clipboard-list"></i> 紧凑</div>
           <div class="set-toggle-opt {% if s.value == 'comfortable' %}active{% endif %}"
-               onclick="saveSettingVal({{ s.id }}, this, 'comfortable')">📋 适中</div>
+               onclick="saveSettingVal({{ s.id }}, this, 'comfortable')"><i class="fas fa-clipboard-list"></i> 适中</div>
           <div class="set-toggle-opt {% if s.value == 'loose' %}active{% endif %}"
-               onclick="saveSettingVal({{ s.id }}, this, 'loose')">📋 宽松</div>
+               onclick="saveSettingVal({{ s.id }}, this, 'loose')"><i class="fas fa-clipboard-list"></i> 宽松</div>
         </div>
 
         {% elif s.key == 'default_order_sort' %}
@@ -383,13 +383,13 @@
           <div class="set-toggle-opt {% if s.value == 'urgent' %}active{% endif %}"
                onclick="saveSettingVal({{ s.id }}, this, 'urgent')">🔴 紧急优先</div>
           <div class="set-toggle-opt {% if s.value == 'updated' %}active{% endif %}"
-               onclick="saveSettingVal({{ s.id }}, this, 'updated')">📝 最近更新</div>
+               onclick="saveSettingVal({{ s.id }}, this, 'updated')"><i class="fas fa-pen"></i> 最近更新</div>
         </div>
 
         {% elif s.key == 'default_export_format' %}
         <div class="set-toggle-group">
           <div class="set-toggle-opt {% if s.value == 'excel' %}active{% endif %}"
-               onclick="saveSettingVal({{ s.id }}, this, 'excel')">📊 Excel</div>
+               onclick="saveSettingVal({{ s.id }}, this, 'excel')"><i class="fas fa-chart-bar"></i> Excel</div>
           <div class="set-toggle-opt {% if s.value == 'csv' %}active{% endif %}"
                onclick="saveSettingVal({{ s.id }}, this, 'csv')">📄 CSV</div>
           <div class="set-toggle-opt {% if s.value == 'pdf' %}active{% endif %}"
@@ -401,14 +401,14 @@
           <div class="set-toggle-opt {% if s.value == 'team' %}active{% endif %}"
                onclick="saveSettingVal({{ s.id }}, this, 'team')">👥 按组别</div>
           <div class="set-toggle-opt {% if s.value == 'name' %}active{% endif %}"
-               onclick="saveSettingVal({{ s.id }}, this, 'name')">👤 按姓名</div>
+               onclick="saveSettingVal({{ s.id }}, this, 'name')"><i class="fas fa-user"></i> 按姓名</div>
           <div class="set-toggle-opt {% if s.value == 'employee_id' %}active{% endif %}"
                onclick="saveSettingVal({{ s.id }}, this, 'employee_id')">🆔 按工号</div>
         </div>
 
         {% elif s.key == 'person_default_team' %}
         <select class="set-select" onchange="saveSetting({{ s.id }}, this)" data-key="{{ s.key }}">
-          <option value="" {% if not s.value %}selected{% endif %}>📋 不自动选择</option>
+          <option value="" {% if not s.value %}selected{% endif %}><i class="fas fa-clipboard-list"></i> 不自动选择</option>
           {% for t in team_list %}
           <option value="{{ t }}" {% if s.value == t %}selected{% endif %}>{{ t }}</option>
           {% endfor %}

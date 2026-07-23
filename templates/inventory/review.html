@@ -215,7 +215,7 @@
   <!-- 顶部 -->
   <div class="r-header">
     <div>
-      <h4>📋 盘点核对：{{ task.name }}</h4>
+      <h4><i class="fas fa-clipboard-list"></i> 盘点核对：{{ task.name }}</h4>
       <small>{{ task.task_no }} · 对比档案与扫码数据，逐条确认</small>
     </div>
     <a href="{{ url_for('inventory.detail', task_id=task.id) }}" class="btn btn-outline-secondary btn-sm">← 返回详情</a>
@@ -229,9 +229,9 @@
 
   <!-- 统计条 -->
   <div class="r-stats" id="statsBar">
-    <div class="r-stat ok" data-filter="all" onclick="setFilter('all')">📋 全部 <span id="totalCount">0</span></div>
-    <div class="r-stat ok" data-filter="normal" onclick="setFilter('normal')">✅ 正常 <span id="okCount">0</span></div>
-    <div class="r-stat issue" data-filter="issue" onclick="setFilter('issue')">⚠️ 异常 <span id="issueCount">0</span></div>
+    <div class="r-stat ok" data-filter="all" onclick="setFilter('all')"><i class="fas fa-clipboard-list"></i> 全部 <span id="totalCount">0</span></div>
+    <div class="r-stat ok" data-filter="normal" onclick="setFilter('normal')"><i class="fas fa-check-circle"></i> 正常 <span id="okCount">0</span></div>
+    <div class="r-stat issue" data-filter="issue" onclick="setFilter('issue')"><i class="fas fa-exclamation-triangle"></i> 异常 <span id="issueCount">0</span></div>
     <div class="r-stat new" data-filter="new" onclick="setFilter('new')">🆕 新盘 <span id="newCount">0</span></div>
   </div>
 
@@ -244,7 +244,7 @@
   <!-- 底部固定栏 -->
   <div class="r-footer" id="footerBar" style="display:none;">
     <span class="pending-count" id="pendingMsg"></span>
-    <button class="btn btn-success" id="finishBtn" onclick="finishTask()">✅ 确认本次盘点</button>
+    <button class="btn btn-success" id="finishBtn" onclick="finishTask()"><i class="fas fa-check-circle"></i> 确认本次盘点</button>
   </div>
 </div>
 
@@ -330,23 +330,23 @@ function renderAll(data) {
 
   // 筛选标签
   html += '<div class="filter-tabs" id="filterTabs">';
-  html += '<span class="filter-tab' + (activeFilter === 'all' ? ' active' : '') + '" onclick="setFilter(\'all\')">📋 全部 (' + (data.total || 0) + ')</span>';
-  html += '<span class="filter-tab' + (activeFilter === 'normal' ? ' active' : '') + '" onclick="setFilter(\'normal\')">✅ 正常 (' + (data.normal_count || 0) + ')</span>';
-  html += '<span class="filter-tab' + (activeFilter === 'issue' ? ' active' : '') + '" onclick="setFilter(\'issue\')">⚠️ 异常 (' + (data.issue_count || 0) + ')</span>';
+  html += '<span class="filter-tab' + (activeFilter === 'all' ? ' active' : '') + '" onclick="setFilter(\'all\')"><i class="fas fa-clipboard-list"></i> 全部 (' + (data.total || 0) + ')</span>';
+  html += '<span class="filter-tab' + (activeFilter === 'normal' ? ' active' : '') + '" onclick="setFilter(\'normal\')"><i class="fas fa-check-circle"></i> 正常 (' + (data.normal_count || 0) + ')</span>';
+  html += '<span class="filter-tab' + (activeFilter === 'issue' ? ' active' : '') + '" onclick="setFilter(\'issue\')"><i class="fas fa-exclamation-triangle"></i> 异常 (' + (data.issue_count || 0) + ')</span>';
   html += '<span class="filter-tab' + (activeFilter === 'new' ? ' active' : '') + '" onclick="setFilter(\'new\')">🆕 新盘 (' + (data.new_count || 0) + ')</span>';
   html += '</div>';
 
   if ((activeFilter === 'all' || activeFilter === 'normal') && data.normal.length > 0) {
     html += '<div class="item-section" data-section="normal">' +
       '<div class="section-title" style="cursor:pointer;" onclick="var c=this.nextElementSibling;c.style.display=c.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.toggle-arrow\').textContent=c.style.display===\'none\'?\'▶\':\'▼\';">' +
-      '<span class="toggle-arrow">▶</span> ✅ 正常项 <small>已核对，无差异（' + data.normal.length + '项）</small><button class="btn btn-sm btn-outline-success ms-auto" style="font-size:11px;padding:1px 8px;" onclick="event.stopPropagation();batchConfirmNormal()">一键全部确认</button></div>' +
+      '<span class="toggle-arrow">▶</span> <i class="fas fa-check-circle"></i> 正常项 <small>已核对，无差异（' + data.normal.length + '项）</small><button class="btn btn-sm btn-outline-success ms-auto" style="font-size:11px;padding:1px 8px;" onclick="event.stopPropagation();batchConfirmNormal()">一键全部确认</button></div>' +
       '<div style="display:none;">';
     data.normal.forEach(function(item) { html += renderNormalCard(item); });
     html += '</div></div>';
   }
 
   if ((activeFilter === 'all' || activeFilter === 'issue') && data.issue.length > 0) {
-    html += '<div class="item-section" data-section="issue"><div class="section-title">⚠️ 异常项 <small>需逐条选择正确值并确认</small></div>';
+    html += '<div class="item-section" data-section="issue"><div class="section-title"><i class="fas fa-exclamation-triangle"></i> 异常项 <small>需逐条选择正确值并确认</small></div>';
     data.issue.forEach(function(item) { html += renderIssueCard(item); });
     html += '</div>';
   }
@@ -382,7 +382,7 @@ function renderNormalCard(item) {
     preview = parts.join(' · ');
   }
   return '<div class="item-card" id="card-' + item.id + '">' +
-    '<div class="card-hd"><span class="code">' + esc(item.asset_no) + '</span><span class="badge-result normal">✅ 正常</span></div>' +
+    '<div class="card-hd"><span class="code">' + esc(item.asset_no) + '</span><span class="badge-result normal"><i class="fas fa-check-circle"></i> 正常</span></div>' +
     '<div class="card-bd"><div class="normal-card-body">' +
     '<div class="normal-summary"><span style="color:#10b981;font-weight:700;">✓</span> 数据一致</div>' +
     (preview ? '<div class="fields-preview">' + esc(preview) + '</div>' : '') +
@@ -393,7 +393,7 @@ function renderNormalCard(item) {
 function renderIssueCard(item) {
   var asset = item.asset;
   var confirmed = confirmedItemIds[item.id] || item.confirmed;
-  var confirmedHtml = confirmed ? '<span class="confirmed-badge">✅ 已确认</span>' : '';
+  var confirmedHtml = confirmed ? '<span class="confirmed-badge"><i class="fas fa-check-circle"></i> 已确认</span>' : '';
 
   var diffCount = item.diff_fields ? item.diff_fields.length : 0;
   var diffSummary = diffCount > 0 ? '<span class="diff-summary">' + diffCount + '项不一致</span>' : '';
@@ -426,7 +426,7 @@ function renderIssueCard(item) {
 
       rows += '<tr><td colspan="3" style="padding:0;">';
       rows += '<div class="diff-row">';
-      rows += '<div class="df-label">⚠️ ' + label + ' 不一致' +
+      rows += '<div class="df-label"><i class="fas fa-exclamation-triangle"></i> ' + label + ' 不一致' +
         ' <span class="diff-badge">档案≠扫码</span></div>';
       rows += '<div class="df-opts">';
       rows += '<div class="df-opt ' + archSelected + '" onclick="pickValue(' + item.id + ',\'' + key + '\',\'' + escAttr(archVal) + '\')">' +
@@ -434,7 +434,7 @@ function renderIssueCard(item) {
       rows += '<div class="df-opt ' + scanSelected + '" onclick="pickValue(' + item.id + ',\'' + key + '\',\'' + escAttr(scanVal) + '\')">' +
         '<span class="src-tag">📱扫码</span> ' + esc(scanVal || '-') + '</div>';
       rows += '</div>';
-      rows += '<div class="df-adopt"><span class="adopt-label">✅ 采纳</span>' +
+      rows += '<div class="df-adopt"><span class="adopt-label"><i class="fas fa-check-circle"></i> 采纳</span>' +
         '<input type="text" value="' + escAttr(selVal) + '" oninput="editValue(' + item.id + ',\'' + key + '\',this.value)" ' +
         'onfocus="this.select()"></div>';
       rows += '</div>';
@@ -451,9 +451,9 @@ function renderIssueCard(item) {
         '<button class="btn-batch" onclick="acceptAll(' + item.id + ',\'arch\')" title="全部采纳档案值">📁 全用档案</button>' +
         '<button class="btn-batch" onclick="acceptAll(' + item.id + ',\'scan\')" title="全部采纳扫码值">📱 全用扫码</button>' : '') +
       '<button class="btn btn-outline-secondary btn-sm" onclick="showDetail(' + item.id + ')">👁 详情</button>' +
-      '<button class="btn btn-success btn-sm confirm-btn" onclick="confirmItem(' + item.id + ',false)">✅ 确认</button></div>';
+      '<button class="btn btn-success btn-sm confirm-btn" onclick="confirmItem(' + item.id + ',false)"><i class="fas fa-check-circle"></i> 确认</button></div>';
   } else {
-    actionsHtml = '<div class="card-ft"><span class="confirmed-badge">✅ 已确认</span></div>';
+    actionsHtml = '<div class="card-ft"><span class="confirmed-badge"><i class="fas fa-check-circle"></i> 已确认</span></div>';
   }
 
   return '<div class="item-card' + (confirmed ? '' : ' pending-highlight') + '" id="card-' + item.id + '">' +
@@ -469,7 +469,7 @@ function renderIssueCard(item) {
 // ==================== 渲染新盘卡片 ====================
 function renderNewCard(item) {
   var confirmed = confirmedItemIds[item.id] || item.confirmed;
-  var confirmedHtml = confirmed ? '<span class="confirmed-badge">✅ 已确认</span>' : '';
+  var confirmedHtml = confirmed ? '<span class="confirmed-badge"><i class="fas fa-check-circle"></i> 已确认</span>' : '';
 
   var fields = [['device_type','设备类型'],['brand','品牌'],['model_no','型号'],['sn','序列号'],
                 ['department','科室'],['building','楼区'],['floor','楼层'],['location','位置']];
@@ -485,9 +485,9 @@ function renderNewCard(item) {
     actionsHtml = '<div class="card-ft">' +
       '<span style="font-size:11px;color:#9ca3af;margin-right:auto;">编辑字段后确认，自动入库</span>' +
       '<button class="btn btn-outline-secondary btn-sm" onclick="showDetail(' + item.id + ')">👁 详情</button>' +
-      '<button class="btn btn-success btn-sm confirm-btn" onclick="confirmItem(' + item.id + ',true)">✅ 确认并入库</button></div>';
+      '<button class="btn btn-success btn-sm confirm-btn" onclick="confirmItem(' + item.id + ',true)"><i class="fas fa-check-circle"></i> 确认并入库</button></div>';
   } else {
-    actionsHtml = '<div class="card-ft"><span class="confirmed-badge">✅ 已确认</span></div>';
+    actionsHtml = '<div class="card-ft"><span class="confirmed-badge"><i class="fas fa-check-circle"></i> 已确认</span></div>';
   }
 
   return '<div class="item-card' + (confirmed ? '' : ' pending-highlight') + '" id="card-' + item.id + '">' +
@@ -573,18 +573,18 @@ function confirmItem(itemId, isNew) {
       renderAll(reviewData);
       updateFooter();
       updateProgress(reviewData);
-      showToast(isNew ? '✅ 已确认并入账' : '✅ 已确认，已更新资产台账');
+      showToast(isNew ? '<i class="fas fa-check-circle"></i> 已确认并入账' : '<i class="fas fa-check-circle"></i> 已确认，已更新资产台账');
       addUndoBtn(itemId);
       // 自动滚到下一个
       scrollToNext();
     } else {
       alert('确认失败: ' + (res.msg || '未知错误'));
-      if (btn) { btn.disabled = false; btn.textContent = '✅ 确认'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle"></i> 确认'; }
     }
   })
   .catch(function(e) {
     alert('请求失败: ' + e.message);
-    if (btn) { btn.disabled = false; btn.textContent = '✅ 确认'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle"></i> 确认'; }
   });
 }
 
@@ -627,7 +627,7 @@ function batchConfirmNormal() {
     .then(function(res) {
       if (res.ok) {
         reviewData.normal.forEach(function(item) { confirmedItemIds[item.id] = true; });
-        showToast('✅ 已确认 ' + res.count + ' 项正常资产');
+        showToast('<i class="fas fa-check-circle"></i> 已确认 ' + res.count + ' 项正常资产');
         renderAll(reviewData);
         updateFooter();
         updateProgress(reviewData);
@@ -676,12 +676,12 @@ function updateFooter() {
   var btn = document.getElementById('finishBtn');
   var msg = document.getElementById('pendingMsg');
   if (pending > 0) {
-    msg.textContent = '⚠️ 还有 ' + pending + ' 条待确认';
+    msg.innerHTML = '<i class="fas fa-exclamation-triangle"></i> 还有 ' + pending + ' 条待确认';
     msg.style.color = '#dc2626';
     btn.disabled = true;
     btn.className = 'btn btn-secondary';
   } else {
-    msg.textContent = '✅ 全部已确认，可以结束盘点';
+    msg.innerHTML = '<i class="fas fa-check-circle"></i> 全部已确认，可以结束盘点';
     msg.style.color = '#059669';
     btn.disabled = false;
     btn.className = 'btn btn-success';
@@ -703,13 +703,13 @@ function finishTask() {
       } else {
         alert(res.msg || '操作失败');
         btn.disabled = false;
-        btn.textContent = '✅ 确认本次盘点';
+        btn.innerHTML = '<i class="fas fa-check-circle"></i> 确认本次盘点';
       }
     })
     .catch(function(e) {
       alert('请求失败: ' + e.message);
       btn.disabled = false;
-      btn.textContent = '✅ 确认本次盘点';
+      btn.innerHTML = '<i class="fas fa-check-circle"></i> 确认本次盘点';
     });
 }
 

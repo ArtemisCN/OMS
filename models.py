@@ -3,6 +3,7 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
 import json
+import threading
 from flask import g
 from sqlalchemy import orm
 
@@ -42,6 +43,7 @@ HOSPITAL_FILTERED_MODELS = {
     'InventoryTask', 'InventoryItem', 'InspectionCheckin',
     'MaintenanceContract',
     'FinanceReceipt', 'FinanceReceiptItem', 'FinanceDelivery', 'FinanceDeliveryItem',
+    'ShiftHandover', 'RepairRating', 'Complaint', 'StockRequest', 'InspectionRoute', 'SparePartAlert',
 }
 
 # 全院区共享模型（hospital_id=0，不参与自动过滤）
@@ -77,7 +79,6 @@ def auto_hospital_filter(query):
         if name and name in HOSPITAL_FILTERED_MODELS:
             if hasattr(model, 'hospital_id'):
                 if has_limit or has_offset:
-                    # 创建不带断言的新查询再 filter
                     q = query._generate()
                     q._enable_assertions = False
                     q = q.filter(model.hospital_id == hid)
@@ -151,6 +152,7 @@ def auto_set_hospital_id(mapper, connection, target):
 
 
 class FaultType(HospitalMixin, db.Model):
+    """故障类型：按组绑定，teams=""=通用"""
     __tablename__ = 'fault_types'
     __table_args__ = (
         db.UniqueConstraint('hospital_id', 'name', name='uq_ft_hospital_name'),
@@ -158,18 +160,20 @@ class FaultType(HospitalMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
     keywords = db.Column(db.Text, nullable=True)
+    teams = db.Column(db.String(500), default='')  # ""=通用, "华博"=专属
     sort_order = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.now)
 
 
 class FaultCategory(HospitalMixin, db.Model):
-    """故障一级分类：硬件/软件/打印机/协助"""
+    """故障一级分类：硬件/软件/打印机/协助，按组绑定"""
     __tablename__ = 'fault_categories'
     __table_args__ = (
         db.UniqueConstraint('hospital_id', 'name', name='uq_fc_hospital_name'),
     )
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
+    teams = db.Column(db.String(500), default='')  # ""=通用
     sort_order = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.now)
     subcategories = db.relationship('FaultSubcategory', backref='category', lazy='dynamic',
@@ -177,11 +181,12 @@ class FaultCategory(HospitalMixin, db.Model):
 
 
 class FaultSubcategory(HospitalMixin, db.Model):
-    """故障二级分类：电脑故障、键盘鼠标、Office..."""
+    """故障二级分类，按组绑定"""
     __tablename__ = 'fault_subcategories'
     id = db.Column(db.Integer, primary_key=True)
     category_id = db.Column(db.Integer, db.ForeignKey('fault_categories.id'), nullable=False)
     name = db.Column(db.String(100), nullable=False)
+    teams = db.Column(db.String(500), default='')  # ""=通用
     sort_order = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.now)
     keywords = db.relationship('FaultKeyword', backref='subcategory', lazy='dynamic',
@@ -189,11 +194,12 @@ class FaultSubcategory(HospitalMixin, db.Model):
 
 
 class FaultKeyword(HospitalMixin, db.Model):
-    """故障关键词：每个二级分类下的匹配词"""
+    """故障关键词，按组绑定"""
     __tablename__ = 'fault_keywords'
     id = db.Column(db.Integer, primary_key=True)
     subcategory_id = db.Column(db.Integer, db.ForeignKey('fault_subcategories.id'), nullable=False)
     keyword = db.Column(db.String(100), nullable=False)
+    teams = db.Column(db.String(500), default='')  # ""=通用
     sort_order = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.now)
 
@@ -218,6 +224,20 @@ class User(UserMixin, db.Model):
     hospital_id = db.Column(db.Integer, db.ForeignKey('hospitals.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now)
     preferences = db.Column(db.Text, default='{}')  # JSON 个人偏好设置
+    is_active = db.Column(db.Boolean, default=True)
+    employee_id = db.Column(db.String(50), default='')
+    team = db.Column(db.String(50), default='')
+    notes = db.Column(db.Text, default='')
+    sort_order = db.Column(db.Integer, default=0)
+
+    @property
+    def name(self):
+        """兼容 Person 的 name 字段，实际映射到 display_name"""
+        return self.display_name or self.username
+
+    @name.setter
+    def name(self, value):
+        self.display_name = value
 
     # 多医院关联
     hospitals = db.relationship('Hospital', secondary=user_hospitals,
@@ -298,6 +318,8 @@ class WorkOrder(HospitalMixin, db.Model):
     inspection_data = db.Column(db.JSON, nullable=True)  # inspection items & results
     fault_subcategory = db.Column(db.String(100), nullable=False, default='')
     wecom_timeout_notified = db.Column(db.Boolean, default=False)
+    last_urged_at = db.Column(db.DateTime, nullable=True)  # 最后催单时间
+    transfer_from_hospital = db.Column(db.String(100), default='')  # 跨院区转交来源医院
 
     @property
     def is_overdue(self):
@@ -368,7 +390,7 @@ class InspectionPlan(HospitalMixin, db.Model):
 
 
 class Person(HospitalMixin, db.Model):
-    """维护人员名单"""
+    """维护人员名单（已废弃，功能由 User 替代）"""
     __tablename__ = 'persons'
     __table_args__ = (
         db.UniqueConstraint('hospital_id', 'name', name='uq_person_hospital_name'),
@@ -406,12 +428,13 @@ class Department(HospitalMixin, db.Model):
 
 # 所有模块的完整定义（按类别分组）—— 与 base.html 侧边栏完全对应
 ALL_MODULES_DEFINITION = [
-    ('工单管理', ['仪表盘', '工单列表', '发布工单', '新建工单', '批量生成', '工单转交', 'SLA监控', '历史追溯']),
-    ('业务管理', ['巡检管理', '知识库', '电子表单', '维修管理', '巡检签到']),
-    ('数据中心', ['数据管理', '资产台账', '资产二维码', '供应商管理', '合同维保', '设备折旧', '备件库存', '备件联动', '耗材管理', '耗材预测', '值班排班', '固定资产入库', '固定资产出库']),
-    ('运维分析', ['效能看板', '运维大屏', '领导驾驶舱', '数字孪生', '自定义报表', '短信通知', '重复单分析']),
+    ('工单管理', ['仪表盘', '工单列表', '发布工单', '新建工单', '批量生成', '工单转交', 'SLA监控', '历史追溯', '自动派单', '超时催办']),
+    ('业务管理', ['巡检管理', '知识库', '电子表单', '维修管理', '巡检签到', '投诉管理', '交接班日志']),
+    ('数据中心', ['数据管理', '资产台账', '资产二维码', '供应商管理', '合同维保', '设备折旧', '备件库存', '备件联动', '备件预警', '耗材管理', '耗材预测', '值班排班', '固定资产入库', '固定资产出库', '领用审批', '维保日历', '设备履历']),
+    ('运维分析', ['效能看板', '运维大屏', '领导驾驶舱', '数字孪生', '自定义报表', '短信通知', '重复单分析', '维修评价', '运维成本核算', 'AI知识库问答', '多院区协同']),
+    ('运维报表', ['PDF导出', '周报月报', '巡检路线规划']),
     ('财务做账', ['维修做账']),
-    ('系统管理', ['审计日志', '月度报表', '权限管理', '服务器监控']),
+    ('系统管理', ['审计日志', '月度报表', '权限管理', '服务器监控', '注册审批']),
     ('教育培训', ['考试系统']),
 ]
 
@@ -425,20 +448,27 @@ DEFAULT_GROUPS = {
         '仪表盘': True, '工单列表': True, '发布工单': True, '新建工单': True,
         '批量生成': False,
         '工单转交': False, 'SLA监控': False, '历史追溯': True,
+        '自动派单': False, '超时催办': False,
         '巡检管理': True, '知识库': True, '电子表单': False, '维修管理': False,
-        '巡检签到': True,
+        '巡检签到': True, '投诉管理': False, '交接班日志': False,
         '数据管理': False, '资产台账': False, '资产二维码': False,
         '供应商管理': False, '合同维保': False, '设备折旧': False,
         '备件库存': False, '备件联动': False,
+        '备件预警': False,
         '耗材管理': False, '耗材预测': False, '值班排班': False,
+        '固定资产入库': False, '固定资产出库': False,
+        '领用审批': False, '维保日历': False, '设备履历': False,
         '效能看板': False, '运维大屏': False, '领导驾驶舱': False,
         '数字孪生': False, '自定义报表': False, '短信通知': False,
+        '维修评价': False, '运维成本核算': False, 'AI知识库问答': False, '多院区协同': False,
         '审计日志': False, '月度报表': False, '权限管理': False,
         '考试系统': True,
         '重复单分析': False,
+        'PDF导出': False, '周报月报': False, '巡检路线规划': False,
     },
 }
 _PERM_CACHE = {}  # hospital_id → data
+_PERM_LOCK = threading.Lock()
 
 
 def _migrate_old_perms(data):
@@ -463,8 +493,9 @@ def get_module_permissions(refresh=False):
     global _PERM_CACHE
     HID_GLOBAL = 0  # 全局统一缓存标记
 
-    if not refresh and HID_GLOBAL in _PERM_CACHE:
-        return _PERM_CACHE[HID_GLOBAL]
+    with _PERM_LOCK:
+        if not refresh and HID_GLOBAL in _PERM_CACHE:
+            return _PERM_CACHE[HID_GLOBAL]
 
     # 所有医院共用一条配置记录（hospital_id=1）
     setting = SystemSetting.query.filter_by(key='module_permissions', hospital_id=1).first()
@@ -534,8 +565,10 @@ def get_module_permissions(refresh=False):
                 seen.add(cat_name)
     data['categories'] = merged
 
-    _PERM_CACHE[HID_GLOBAL] = data
+    with _PERM_LOCK:
+        _PERM_CACHE[HID_GLOBAL] = data
     return data
+
 
 def save_module_permissions(data):
     """保存模块权限配置（全局统一）"""
@@ -548,7 +581,8 @@ def save_module_permissions(data):
                                 hospital_id=1)
         db.session.add(setting)
     setting.value = json.dumps(data)
-    _PERM_CACHE[HID_GLOBAL] = data
+    with _PERM_LOCK:
+        _PERM_CACHE[HID_GLOBAL] = data
     db.session.commit()
 
 
@@ -625,7 +659,7 @@ class SolutionTemplate(HospitalMixin, db.Model):
 
 
 class AddressOverride(HospitalMixin, db.Model):
-    """地址数据覆盖/新增（优先于 address.py 中的硬编码数据）"""
+    """地址数据覆盖/新增（按组绑定，teams=""=通用）"""
     __tablename__ = 'address_overrides'
     id = db.Column(db.Integer, primary_key=True)
     base_index = db.Column(db.Integer, default=-1, nullable=False)
@@ -633,6 +667,7 @@ class AddressOverride(HospitalMixin, db.Model):
     floor = db.Column(db.String(20), nullable=False, default='')
     department = db.Column(db.String(100), nullable=False, default='')
     location = db.Column(db.String(200), nullable=False, default='')
+    teams = db.Column(db.String(500), default='')  # ""=通用
     is_deleted = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.now)
 
@@ -1282,6 +1317,28 @@ class SmsLog(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now)
 
 
+# ==================== 注册审批 ====================
+
+class RegistrationRequest(db.Model):
+    __tablename__ = 'registration_requests'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(256), nullable=False)
+    display_name = db.Column(db.String(100), nullable=False)
+    phone = db.Column(db.String(20))
+    hospital_id = db.Column(db.Integer, db.ForeignKey('hospitals.id'))
+    group_id = db.Column(db.Integer, db.ForeignKey('role_groups.id'))
+    reason = db.Column(db.Text)
+    status = db.Column(db.String(20), default='pending', index=True)  # pending, approved, rejected
+    reject_reason = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    reviewed_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    reviewed_at = db.Column(db.DateTime)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+
 # ==================== 角色组（权限组，用 ID 关联） ====================
 
 class RoleGroup(db.Model):
@@ -1404,7 +1461,6 @@ class ChatToken(db.Model):
         import secrets
         token_str = secrets.token_hex(48)
         record = cls(user_id=user.id, token=token_str)
-        # 清理旧 token
         cls.query.filter_by(user_id=user.id).delete()
         db.session.add(record)
         db.session.commit()
@@ -1603,8 +1659,7 @@ class Exam(db.Model):
         # 人员组别检查
         teams = self.get_allowed_teams()
         if teams:
-            from models import Person
-            person = Person.query.filter_by(user_id=u.id).first()
+            person = db.session.get(User, u.id)
             if not person or person.team not in teams:
                 return False
 
@@ -1845,4 +1900,84 @@ class FinanceDeliveryItem(HospitalMixin, db.Model):
     delivery = db.relationship('FinanceDelivery',
         backref=db.backref('items', lazy='dynamic', cascade='all, delete-orphan', order_by='FinanceDeliveryItem.sort_order'),
         foreign_keys=[delivery_id])
+
+
+# ==================== 新功能模型 ====================
+
+class ShiftHandover(HospitalMixin, db.Model):
+    """交接班日志"""
+    __tablename__ = 'shift_handovers'
+    id = db.Column(db.Integer, primary_key=True)
+    handover_person = db.Column(db.String(80), nullable=False)   # 交班人
+    receive_person = db.Column(db.String(80), nullable=False)    # 接班人
+    content = db.Column(db.Text, default='')                     # 交接内容
+    unfinished_orders = db.Column(db.JSON, default=list)         # 未完成工单列表
+    notes = db.Column(db.Text, default='')                       # 备注
+    status = db.Column(db.String(20), default='pending')         # pending/completed
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+
+class RepairRating(HospitalMixin, db.Model):
+    """维修评价"""
+    __tablename__ = 'repair_ratings'
+    id = db.Column(db.Integer, primary_key=True)
+    work_order_id = db.Column(db.Integer, db.ForeignKey('work_orders.id'), nullable=False)
+    rating = db.Column(db.Integer, nullable=False, default=5)     # 1-5 星
+    comment = db.Column(db.Text, default='')
+    created_by = db.Column(db.String(80), default='')
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    work_order = db.relationship('WorkOrder', backref=db.backref('ratings', lazy='dynamic'))
+
+
+class Complaint(HospitalMixin, db.Model):
+    """投诉管理"""
+    __tablename__ = 'complaints'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, default='')
+    complainant = db.Column(db.String(80), default='')            # 投诉人
+    department = db.Column(db.String(100), default='')            # 投诉人科室
+    handler = db.Column(db.String(80), default='')                # 处理人
+    status = db.Column(db.String(20), default='pending')          # pending/processing/resolved/closed
+    resolution = db.Column(db.Text, default='')                   # 处理结果
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class StockRequest(HospitalMixin, db.Model):
+    """领用申请单"""
+    __tablename__ = 'stock_requests'
+    id = db.Column(db.Integer, primary_key=True)
+    applicant = db.Column(db.String(80), nullable=False)           # 申请人
+    department = db.Column(db.String(100), default='')            # 申请科室
+    items = db.Column(db.JSON, default=list)                      # [{part_id, name, quantity, unit}]
+    reason = db.Column(db.Text, default='')                       # 申请理由
+    status = db.Column(db.String(20), default='pending')          # pending/approved/rejected
+    approver = db.Column(db.String(80), default='')               # 审批人
+    approved_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+
+class InspectionRoute(HospitalMixin, db.Model):
+    """巡检路线"""
+    __tablename__ = 'inspection_routes'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    points = db.Column(db.JSON, default=list)                      # [{building, floor, department, location, order}]
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    created_by = db.Column(db.String(80), default='')
+
+
+class SparePartAlert(HospitalMixin, db.Model):
+    """备件库存预警"""
+    __tablename__ = 'spare_part_alerts'
+    id = db.Column(db.Integer, primary_key=True)
+    part_id = db.Column(db.Integer, db.ForeignKey('spare_parts.id'), nullable=False)
+    min_threshold = db.Column(db.Integer, default=5)               # 最低库存阈值
+    enabled = db.Column(db.Boolean, default=True)                  # 是否启用预警
+    last_notified_at = db.Column(db.DateTime, nullable=True)       # 上次通知时间
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    part = db.relationship('SparePart', backref=db.backref('alerts', lazy='dynamic'))
 

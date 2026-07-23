@@ -603,12 +603,12 @@
   <!-- ====== HEADER ====== -->
   <div class="pipeline-header">
     <h2>
-      📋 维修流程管道
+      <i class="fas fa-clipboard-list"></i> 维修流程管道
       <span class="subtitle">共 {{ total_count }} 单</span>
     </h2>
     <div class="header-actions">
       <a href="{{ url_for('repair.order_stats') }}" class="btn btn-stats">
-        <i class="fas fa-chart-bar"></i> 📊 统计报表
+        <i class="fas fa-chart-bar"></i> <i class="fas fa-chart-bar"></i> 统计报表
       </a>
     </div>
   </div>
@@ -618,7 +618,7 @@
     <!-- Stage 1: Draft -->
     <div class="pipeline-stage">
       <div class="stage-icon draft"><i class="fas fa-pen"></i></div>
-      <div class="stage-label">📝 草稿</div>
+      <div class="stage-label"><i class="fas fa-pen"></i> 草稿</div>
       <div class="stage-count draft">
         <span class="count-up d1">{{ draft_count }}</span>
       </div>
@@ -662,7 +662,7 @@
     <!-- Stage 3: Approved -->
     <div class="pipeline-stage">
       <div class="stage-icon approved"><i class="fas fa-check-circle"></i></div>
-      <div class="stage-label">✅ 已审核</div>
+      <div class="stage-label"><i class="fas fa-check-circle"></i> 已审核</div>
       <div class="stage-count approved">
         <span class="count-up d3">{{ approved_count }}</span>
       </div>
@@ -684,7 +684,7 @@
     <!-- Stage 4: Rejected -->
     <div class="pipeline-stage">
       <div class="stage-icon rejected"><i class="fas fa-times-circle"></i></div>
-      <div class="stage-label">❌ 已驳回</div>
+      <div class="stage-label"><i class="fas fa-times-circle"></i> 已驳回</div>
       <div class="stage-count rejected">
         <span class="count-up d4">{{ rejected_count }}</span>
       </div>

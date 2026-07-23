@@ -50,7 +50,7 @@
     {% for t in templates %}
     <div class="ip-card" style="animation:khFadeUp 0.3s ease both;animation-delay:{{ loop.index0*0.05 }}s;">
       <div class="ip-card-top">
-        <span class="ip-card-name">🔍 {{ t.name }}</span>
+        <span class="ip-card-name"><i class="fas fa-search"></i> {{ t.name }}</span>
       </div>
       <div class="ip-card-items">
         {% for item in t.items[:8] %}

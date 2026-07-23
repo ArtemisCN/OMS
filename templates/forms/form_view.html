@@ -191,9 +191,9 @@
             {% elif form.status == 'submitted' %}
             <span class="status-badge" style="font-size:12px;padding:3px 10px;border-radius:20px;font-weight:500;background:#fef3c7;color:#92400e;margin-left:8px">⏳ 待审批</span>
             {% elif form.status == 'active' %}
-            <span class="status-badge status-active" style="font-size:12px;padding:3px 10px;border-radius:20px;font-weight:500;background:#dbeafe;color:#1e40af;margin-left:8px">🔄 进行中</span>
+            <span class="status-badge status-active" style="font-size:12px;padding:3px 10px;border-radius:20px;font-weight:500;background:#dbeafe;color:#1e40af;margin-left:8px"><i class="fas fa-sync"></i> 进行中</span>
             {% elif form.status == 'completed' %}
-            <span class="status-badge status-completed" style="font-size:12px;padding:3px 10px;border-radius:20px;font-weight:500;background:#d1fae5;color:#065f46;margin-left:8px">✅ 已完成</span>
+            <span class="status-badge status-completed" style="font-size:12px;padding:3px 10px;border-radius:20px;font-weight:500;background:#d1fae5;color:#065f46;margin-left:8px"><i class="fas fa-check-circle"></i> 已完成</span>
             {% endif %}
             {% if form.work_order_id %}
             <a href="{{ url_for('orders.detail', order_id=form.work_order_id) }}" class="btn btn-sm btn-outline-info ms-2">
@@ -202,7 +202,7 @@
             {% endif %}
         </h4>
         <div>
-            <span class="save-indicator me-2" id="saveIndicator2">💾 已保存</span>
+            <span class="save-indicator me-2" id="saveIndicator2"><i class="fas fa-save"></i> 已保存</span>
             {% if form.status == 'draft' %}
             <button class="btn btn-sm btn-primary me-1" onclick="saveAllFields()"><i class="fas fa-save me-1"></i>保存全部</button>
             {% endif %}
@@ -279,7 +279,7 @@
             {% if sig_data and sig_data.startswith('data:image') %}
             <div class="sig-signed" data-field-id="{{ fid }}" style="text-align:center;padding:2px;">
                 <img src="{{ sig_data }}" alt="签名" style="max-height:{{ qr_size }}px;">
-                <div style="font-size:10px;color:#16a34a;">✅ 已签名</div>
+                <div style="font-size:10px;color:#16a34a;"><i class="fas fa-check-circle"></i> 已签名</div>
             </div>
             {% else %}
             <div class="sig-qrcode" data-field-id="{{ fid }}" data-token="{{ sign_token }}" style="display:none;align-items:center;gap:4px;padding:2px;">
@@ -438,13 +438,13 @@ function showSaved() {
     var ind = document.getElementById('saveIndicator2');
     if (!ind) return;
     ind.className = 'save-indicator saved';
-    ind.innerHTML = '💾 已保存';
+    ind.innerHTML = '<i class="fas fa-save"></i> 已保存';
 }
 function showError() {
     var ind = document.getElementById('saveIndicator2');
     if (!ind) return;
     ind.className = 'save-indicator error';
-    ind.innerHTML = '❌ 保存失败';
+    ind.innerHTML = '<i class="fas fa-times-circle"></i> 保存失败';
 }
 
 // ===== Save single field =====
@@ -500,10 +500,10 @@ function saveAllFields() {
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.onload = function() {
         isSaving = false;
-        if (xhr.status === 200) { showSaved(); alert('✅ 全部字段已保存'); }
-        else { showError(); alert('❌ 保存失败，请重试'); }
+        if (xhr.status === 200) { showSaved(); alert('<i class="fas fa-check-circle"></i> 全部字段已保存'); }
+        else { showError(); alert('<i class="fas fa-times-circle"></i> 保存失败，请重试'); }
     };
-    xhr.onerror = function() { isSaving = false; showError(); alert('❌ 网络错误，请重试'); };
+    xhr.onerror = function() { isSaving = false; showError(); alert('<i class="fas fa-times-circle"></i> 网络错误，请重试'); };
     xhr.send(JSON.stringify({field_values: values}));
 }
 
@@ -573,7 +573,7 @@ function saveSignature(fid) {
             var preview = wrapper.querySelector('.sig-preview');
             if (preview) { preview.querySelector('img').src = dataUrl; preview.style.display = 'block'; }
             var status = wrapper.querySelector('.sig-status');
-            if (status) status.textContent = '✅ 已签名';
+            if (status) status.innerHTML = '<i class="fas fa-check-circle"></i> 已签名';
         } else { showError(); alert('保存签名失败'); }
     };
     xhr.onerror = function() { showError(); alert('网络错误'); };
@@ -696,10 +696,10 @@ function toggleSigQR(btn) {
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     if (data.signed) {
-                        statusEl.textContent = '✅ 已签名';
+                        statusEl.innerHTML = '<i class="fas fa-check-circle"></i> 已签名';
                         statusEl.style.color = '#16a34a';
                         // Replace QR with signature image
-                        el.innerHTML = '<img src="' + data.signature + '" alt="签名" style="max-height:60px;"><div style="font-size:11px;color:#16a34a;margin-top:2px;">✅ 已签名</div>';
+                        el.innerHTML = '<img src="' + data.signature + '" alt="签名" style="max-height:60px;"><div style="font-size:11px;color:#16a34a;margin-top:2px;"><i class="fas fa-check-circle"></i> 已签名</div>';
                         // Auto-show signature on PC
                         el.style.display = 'flex';
                         if (btn) { btn.style.display = 'none'; }

@@ -163,10 +163,10 @@
 
 <!-- 考生信息 -->
 <div class="student-card">
-  <div class="sc-item"><span class="sc-lbl">👤 考生</span><span class="sc-val">{{ submission.user.display_name if submission.user else '未知' }}</span></div>
-  <div class="sc-item"><span class="sc-lbl">📊 得分</span><span class="sc-val">{{ submission.score|int }} / {{ submission.total_possible|int }}</span></div>
+  <div class="sc-item"><span class="sc-lbl"><i class="fas fa-user"></i> 考生</span><span class="sc-val">{{ submission.user.display_name if submission.user else '未知' }}</span></div>
+  <div class="sc-item"><span class="sc-lbl"><i class="fas fa-chart-bar"></i> 得分</span><span class="sc-val">{{ submission.score|int }} / {{ submission.total_possible|int }}</span></div>
   <div class="sc-item"><span class="sc-lbl">⏱ 用时</span><span class="sc-val">{{ m }}分{{ sec }}秒</span></div>
-  <div class="sc-item"><span class="sc-lbl">🎯 正确率</span><span class="sc-val">{{ pct }}%</span></div>
+  <div class="sc-item"><span class="sc-lbl"><i class="fas fa-bullseye"></i> 正确率</span><span class="sc-val">{{ pct }}%</span></div>
   <div class="sc-item">
     <span class="sc-lbl">🏆 结果</span>
     <span class="sc-val {{ 'passed' if submission.is_passed(exam.pass_score) else 'failed' }}">
@@ -235,7 +235,7 @@
 
       {% if q.question_type == 'fill' %}
       <div class="opt-row">
-        <span class="opt-label">📝</span>
+        <span class="opt-label"><i class="fas fa-pen"></i></span>
         <span class="opt-text"><span style="color:var(--text-tertiary);">你的答案：</span>{{ item.user_answer if item.user_answer else '（未作答）' }}</span>
       </div>
       {% endif %}

@@ -14,9 +14,12 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0 fw-bold" style="font-size:15px;">
-        <i class="fas fa-boxes" style="color:#f59e0b;"></i> 固定资产管理
+        <i class="fas fa-boxes" style="color:#f59e0b;"></i> 出入库管理
     </h5>
     <div>
+        <a href="{{ url_for('asset.list_view') }}" class="btn btn-sm btn-outline-secondary me-1">
+            <i class="fas fa-arrow-left"></i> 返回资产台账
+        </a>
         <a href="{{ url_for('finance_asset.receipt_create') }}" class="btn btn-warning btn-sm">
             <i class="fas fa-plus"></i> 新建入库单
         </a>

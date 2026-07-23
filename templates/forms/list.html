@@ -60,9 +60,9 @@
                                 {% elif r.status == 'submitted' %}
                                 <span class="status-badge" style="background:#fef3c7;color:#92400e;">⏳ 待审批</span>
                                 {% elif r.status == 'active' %}
-                                <span class="status-badge status-active">🔄 进行中</span>
+                                <span class="status-badge status-active"><i class="fas fa-sync"></i> 进行中</span>
                                 {% elif r.status == 'completed' %}
-                                <span class="status-badge status-completed">✅ 已完成</span>
+                                <span class="status-badge status-completed"><i class="fas fa-check-circle"></i> 已完成</span>
                                 {% endif %}
                             </td>
                             <td>{{ r.created_by }}</td>

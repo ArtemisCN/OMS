@@ -6,6 +6,7 @@ from flask_login import login_required, current_user
 from models import db, InventoryTask, InventoryItem, Asset, AssetLog, log_audit
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from utils.time_helpers import fmt_dt, now, fmt_date
 
 inv_bp = Blueprint('inventory', __name__, url_prefix='/inventory')
 
@@ -45,12 +46,10 @@ def create():
             flash('请输入盘点名称', 'danger')
             return render_template('inventory/create.html')
 
-        # 生成盘点编号
         now = datetime.now()
         count = InventoryTask.query.count() + 1
         task_no = f'PD{now.strftime("%Y%m%d")}-{count:03d}'
 
-        # 统计应盘数量（按当前医院）
         total = Asset.query.count()
 
         task = InventoryTask(
@@ -169,10 +168,10 @@ def review_data(task_id):
             'asset_no': item.asset_no,
             'result': item.result,
             'confirmed': item.confirmed,
-            'confirmed_at': item.confirmed_at.strftime('%m-%d %H:%M') if item.confirmed_at else '',
+            'confirmed_at': fmt_dt(item.confirmed_at, '%m-%d %H:%M'),
             'confirmed_by': item.confirmed_by or '',
             'scanned_by': item.scanned_by or '',
-            'scanned_at': item.scanned_at.strftime('%m-%d %H:%M') if item.scanned_at else '',
+            'scanned_at': fmt_dt(item.scanned_at, '%m-%d %H:%M'),
             'notes': item.notes or '',
             'fields': {},
         }
@@ -335,7 +334,6 @@ def finish(task_id):
     if task.status == 'completed':
         return jsonify({'ok': False, 'msg': '该盘点已结束'}), 400
 
-# 检查未确认的异常/新盘
     pending = InventoryItem.query.filter(
         InventoryItem.task_id == task_id,
         InventoryItem.result.in_(['issue', 'new']),
@@ -458,7 +456,7 @@ def dashboard_stats():
         total = (t.normal_count or 0) + (t.issue_count or 0) + (t.new_asset_count or 0)
         result.append({
             'id': t.id, 'name': t.name, 'task_no': t.task_no,
-            'end_time': t.end_time.strftime('%m-%d %H:%M') if t.end_time else '',
+            'end_time': fmt_dt(t.end_time, '%m-%d %H:%M'),
             'total': total,
             'normal': t.normal_count or 0,
             'issue': t.issue_count or 0,
@@ -501,7 +499,6 @@ def export_excel(task_id):
     ws['A2'] = f'任务编号: {task.task_no}    操作人: {task.operator}    开始: {task.start_time.strftime("%%Y-%%m-%%d %%H:%%M") if task.start_time else "-"}'
     ws['A3'] = f'结束时间: {task.end_time.strftime("%%Y-%%m-%%d %%H:%%M") if task.end_time else "-"}    状态: {"已完成" if task.status == "completed" else "进行中"}'
     
-    # 统计
     ws['A5'] = '统计项'
     ws['B5'] = '数量'
     for cell in [ws['A5'], ws['B5']]:
@@ -530,7 +527,7 @@ def export_excel(task_id):
             item.asset_no, item.device_type, item.brand,
             item.model_no, item.department, item.building,
             item.floor, item.location,
-            item.scanned_by, item.scanned_at.strftime('%m-%d %H:%M') if item.scanned_at else '',
+            item.scanned_by, fmt_dt(item.scanned_at, '%m-%d %H:%M'),
         ])
 
     # ===== 异常项 =====
@@ -556,7 +553,7 @@ def export_excel(task_id):
                     item.asset_no, label, arch_val, scan_val,
                     scan_val or arch_val,
                     item.confirmed_by or '',
-                    item.confirmed_at.strftime('%m-%d %H:%M') if item.confirmed_at else '',
+                    fmt_dt(item.confirmed_at, '%m-%d %H:%M'),
                 ])
         if not item.asset_id:
             ws3.append([item.asset_no, '(资产已删除)', '', '', '', item.confirmed_by or '', ''])
@@ -575,7 +572,7 @@ def export_excel(task_id):
             item.model_no, item.department, item.building,
             item.floor, item.location,
             item.scanned_by, item.confirmed_by or '',
-            item.confirmed_at.strftime('%m-%d %H:%M') if item.confirmed_at else '',
+            fmt_dt(item.confirmed_at, '%m-%d %H:%M'),
         ])
 
     output = io.BytesIO()

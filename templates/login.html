@@ -1,229 +1,367 @@
-{% extends "base.html" %}
-{% block title %}登录 · {{ system_name }}{% endblock %}
-{% block content %}
-<style>
-/* ====== 登录页专属样式 ====== */
-.login-wrapper {
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    display: flex; align-items: center; justify-content: center;
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 30%, #0f172a 60%, #1a1f3a 100%);
-    background-size: 400% 400%;
-    animation: gradient-shift 12s ease infinite;
-    overflow: hidden;
-}
-
-/* 浮动装饰图标 */
-.login-float-icon {
-    position: absolute;
-    font-size: 28px;
-    opacity: 0.06;
-    animation: float 6s ease-in-out infinite;
-    pointer-events: none;
-}
-.login-float-icon:nth-child(1) { top: 12%; left: 10%; font-size: 42px; animation-delay: 0s; opacity: 0.07; }
-.login-float-icon:nth-child(2) { top: 25%; right: 15%; font-size: 34px; animation-delay: 1s; opacity: 0.05; }
-.login-float-icon:nth-child(3) { bottom: 30%; left: 8%; font-size: 30px; animation-delay: 2s; opacity: 0.06; }
-.login-float-icon:nth-child(4) { bottom: 15%; right: 20%; font-size: 38px; animation-delay: 0.5s; opacity: 0.04; }
-.login-float-icon:nth-child(5) { top: 45%; left: 22%; font-size: 22px; animation-delay: 3s; opacity: 0.05; }
-.login-float-icon:nth-child(6) { top: 55%; right: 25%; font-size: 26px; animation-delay: 1.5s; opacity: 0.04; }
-.login-float-icon:nth-child(7) { top: 18%; left: 45%; font-size: 18px; animation-delay: 4s; opacity: 0.05; }
-.login-float-icon:nth-child(8) { bottom: 40%; right: 8%; font-size: 32px; animation-delay: 2.5s; opacity: 0.04; }
-
-/* 网格背景 */
-.login-grid {
-    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-    background-image:
-        linear-gradient(rgba(99,102,241,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(99,102,241,0.03) 1px, transparent 1px);
-    background-size: 60px 60px;
-    pointer-events: none;
-}
-
-/* 光晕效果 */
-.login-glow {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(100px);
-    pointer-events: none;
-    animation: pulse-soft 4s ease-in-out infinite;
-}
-.login-glow:nth-child(1) {
-    width: 400px; height: 400px;
-    background: rgba(99,102,241,0.08);
-    top: -150px; left: -100px;
-}
-.login-glow:nth-child(2) {
-    width: 350px; height: 350px;
-    background: rgba(6,182,212,0.06);
-    bottom: -100px; right: -80px;
-    animation-delay: 2s;
-}
-
-/* 登录卡片 - 毛玻璃 */
-.login-card {
-    position: relative; z-index: 10;
-    width: 400px; max-width: 90vw;
-    background: rgba(255,255,255,0.06);
-    backdrop-filter: blur(40px) saturate(1.8);
-    -webkit-backdrop-filter: blur(40px) saturate(1.8);
-    border-radius: 20px;
-    border: 1px solid rgba(255,255,255,0.08);
-    box-shadow:
-        0 24px 64px rgba(0,0,0,0.3),
-        0 8px 20px rgba(0,0,0,0.15),
-        inset 0 1px 0 rgba(255,255,255,0.1);
-    animation: scaleIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-    padding: 40px 36px 36px;
-}
-
-.login-card .brand-icon {
-    width: 56px; height: 56px; margin: 0 auto 16px;
-    background: linear-gradient(135deg, var(--primary), #8b5cf6, var(--accent));
-    border-radius: 16px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 26px; color: #fff;
-    box-shadow: 0 8px 24px rgba(99,102,241,0.3);
-    animation: float 4s ease-in-out infinite;
-}
-
-.login-card h4 {
-    color: rgba(255,255,255,0.9);
-    font-weight: 700; font-size: 20px;
-    text-align: center; margin-bottom: 4px;
-}
-.login-card .subtitle {
-    color: rgba(255,255,255,0.4);
-    font-size: 13px; text-align: center; margin-bottom: 28px;
-    font-weight: 400;
-}
-
-.login-card .form-label {
-    color: rgba(255,255,255,0.6);
-    font-size: 12px; font-weight: 500;
-    margin-bottom: 6px;
-}
-.login-card .form-control {
-    background: rgba(255,255,255,0.06);
-    border: 1.5px solid rgba(255,255,255,0.08);
-    color: rgba(255,255,255,0.85);
-    padding: 11px 14px;
-    font-size: 14px;
-    border-radius: 12px;
-    transition: all 0.3s ease;
-}
-.login-card .form-control:focus {
-    background: rgba(255,255,255,0.1);
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(99,102,241,0.15), 0 4px 12px rgba(0,0,0,0.1);
-}
-.login-card .form-control::placeholder {
-    color: rgba(255,255,255,0.25);
-}
-.login-card .form-control:-webkit-autofill {
-    -webkit-text-fill-color: rgba(255,255,255,0.85) !important;
-    -webkit-box-shadow: 0 0 0 30px rgba(255,255,255,0.06) inset !important;
-    transition: background-color 5000s;
-}
-.login-card .input-group-text {
-    background: rgba(255,255,255,0.06);
-    border: 1.5px solid rgba(255,255,255,0.08);
-    color: rgba(255,255,255,0.4);
-    border-radius: 12px 0 0 12px !important;
-}
-
-.login-card .btn-login {
-    width: 100%; padding: 11px;
-    background: linear-gradient(135deg, var(--primary), #4f46e5, #7c3aed);
-    background-size: 200% 100%;
-    border: none; border-radius: 12px;
-    color: #fff; font-size: 15px; font-weight: 600;
-    transition: all 0.3s ease;
-    cursor: pointer;
-    box-shadow: 0 4px 16px rgba(99,102,241,0.3);
-    position: relative; overflow: hidden;
-}
-.login-card .btn-login:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 28px rgba(99,102,241,0.4);
-    background-position: 100% 0;
-}
-.login-card .btn-login:active { transform: translateY(0); }
-.login-card .btn-login i { margin-right: 6px; }
-
-.login-divider {
-    text-align: center; margin-top: 20px;
-    color: rgba(255,255,255,0.2);
-    font-size: 11px;
-}
-
-/* 表单错误动画 */
-.login-card .form-control.error {
-    border-color: #ef4444;
-    box-shadow: 0 0 0 3px rgba(239,68,68,0.15);
-}
-
-@media (max-width: 768px) {
-    .login-card { padding: 28px 24px 24px; }
-    .login-card h4 { font-size: 18px; }
-    .login-card .brand-icon { width: 48px; height: 48px; font-size: 22px; }
-}
-</style>
-
-<div class="login-wrapper">
-    <!-- 光晕 -->
-    <div class="login-glow"></div>
-    <div class="login-glow"></div>
-
-    <!-- 网格背景 -->
-    <div class="login-grid"></div>
-
-    <!-- 浮动图标 -->
-    <div class="login-float-icon"><i class="fas fa-hospital"></i></div>
-    <div class="login-float-icon"><i class="fas fa-heartbeat"></i></div>
-    <div class="login-float-icon"><i class="fas fa-ambulance"></i></div>
-    <div class="login-float-icon"><i class="fas fa-stethoscope"></i></div>
-    <div class="login-float-icon"><i class="fas fa-pills"></i></div>
-    <div class="login-float-icon"><i class="fas fa-thermometer"></i></div>
-    <div class="login-float-icon"><i class="fas fa-syringe"></i></div>
-    <div class="login-float-icon"><i class="fas fa-brain"></i></div>
-
-    <!-- 登录卡片 -->
-    <div class="login-card">
-        <div class="brand-icon"><i class="fas fa-hospital"></i></div>
-        <h4>{{ login_page_title }}</h4>
-        <div class="subtitle">医院智慧工单管理系统</div>
-
-        <form method="post">
-            <div class="mb-3">
-                <label class="form-label"><i class="fas fa-user" style="margin-right:4px;opacity:0.5;"></i> 用户名</label>
-                <input type="text" name="username" class="form-control" required autofocus placeholder="请输入用户名">
-            </div>
-            <div class="mb-3">
-                <label class="form-label"><i class="fas fa-lock" style="margin-right:4px;opacity:0.5;"></i> 密码</label>
-                <input type="password" name="password" class="form-control" required placeholder="请输入密码">
-            </div>
-            <button type="submit" class="btn-login">
-                <i class="fas fa-sign-in-alt"></i> 登 录
-            </button>
-        </form>
-
-        <div class="login-divider">{{ system_subtitle }}</div>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>登录 · {{ system_name }}</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=4">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  {% raw %}<style>
+    *,*::after,*::before{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:"Inter",-apple-system,BlinkMacSystemFont,sans-serif;background:#1a1a2e;overflow:hidden;height:100vh}
+    #login-page{display:grid;grid-template-columns:1fr 1fr;height:100vh}
+    .left-panel{position:relative;display:flex;flex-direction:column;justify-content:space-between;background:linear-gradient(135deg,#d4d0dc 0%,#c8c4d0 50%,#bbb7c5 100%);padding:40px 48px;overflow:hidden}
+    .left-panel .logo{display:flex;align-items:center;gap:12px;font-size:17px;font-weight:700;color:#fff;z-index:10;position:relative;letter-spacing:0.3px}
+    .left-panel .logo svg{width:34px;height:34px;flex-shrink:0}
+    .left-panel .logo .logo-bg{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,rgba(255,255,255,0.2),rgba(255,255,255,0.05));backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(0,0,0,0.06)}
+    .left-panel .logo .logo-text{display:flex;flex-direction:column;line-height:1.2}
+    .left-panel .logo .logo-text .brand{font-size:17px;font-weight:700;color:#fff;letter-spacing:0.5px}
+    .left-panel .logo .logo-text .sub{font-size:11px;font-weight:400;color:rgba(255,255,255,0.5);letter-spacing:0.2px}
+    .characters-wrapper{position:relative;z-index:10;display:flex;align-items:flex-end;justify-content:center;height:420px}
+    .left-panel .footer-links{display:flex;gap:28px;font-size:13px;color:rgba(80,70,90,0.7);z-index:10;position:relative}
+    .left-panel .footer-links a{color:inherit;text-decoration:none;transition:color .2s}
+    .left-panel .footer-links a:hover{color:#333}
+    .left-panel::after{content:"";position:absolute;top:20%;right:15%;width:260px;height:260px;background:rgba(180,170,200,0.25);border-radius:50%;filter:blur(80px)}
+    .left-panel::before{content:"";position:absolute;bottom:15%;left:10%;width:350px;height:350px;background:rgba(200,195,210,0.2);border-radius:50%;filter:blur(100px)}
+    .right-panel{display:flex;align-items:center;justify-content:center;background:#fff;padding:40px}
+    .form-container{width:100%;max-width:400px}
+    .form-header{text-align:center;margin-bottom:36px}
+    .form-header h1{font-size:28px;font-weight:700;color:#1a1a2e;letter-spacing:-0.5px;margin-bottom:6px}
+    .form-header p{font-size:14px;color:#888}
+    .form-group{margin-bottom:20px}
+    .form-group label{display:block;font-size:13px;font-weight:500;color:#333;margin-bottom:8px}
+    .form-group .iw{position:relative}
+    .form-group input{width:100%;height:48px;border:none;border-bottom:1.5px solid #e0e0e0;padding:0 40px 0 0;font-size:15px;font-family:inherit;color:#1a1a2e;background:transparent;outline:none;transition:border-color .3s}
+    .form-group input:focus{border-bottom-color:#1a5c8a}
+    .form-group input::placeholder{color:#ccc}
+    .tog{position:absolute;right:0;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#666;padding:6px;transition:color .2s}
+    .tog:hover{color:#333}
+    .form-options{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+    .remember-me{display:flex;align-items:center;gap:8px;font-size:13px;color:#555;cursor:pointer}
+    .remember-me input[type="checkbox"]{width:16px;height:16px;accent-color:#1a5c8a;cursor:pointer}
+    .forgot-link{font-size:13px;color:#1a5c8a;text-decoration:none;font-weight:500;transition:opacity .2s}
+    .forgot-link:hover{opacity:.8}
+    .btn{position:relative;width:100%;height:50px;border-radius:25px;border:1.5px solid #1a1a2e;background:#1a1a2e;color:#fff;font-size:15px;font-weight:600;font-family:inherit;cursor:pointer;overflow:hidden;margin-bottom:14px;transition:all .3s}
+    .btn .tx{display:inline-block;transition:all .3s}
+    .btn .hv{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:8px;background:#1a5c8a;color:#fff;opacity:0;transition:all .3s;border-radius:25px}
+    .btn:hover .tx{transform:translateX(40px);opacity:0}
+    .btn:hover .hv{opacity:1}
+    .err{display:none;padding:10px 14px;font-size:13px;color:#dc2626;background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.2);border-radius:10px;margin-bottom:16px}
+    .form-group input.err{border-bottom-color:#dc2626}
+    .form-group label.err{color:#dc2626}
+    .su{text-align:center;font-size:13px;color:#888;margin-top:32px}
+    .su a{color:#1a1a2e;font-weight:600;text-decoration:none;transition:opacity .2s}
+    .su a:hover{text-decoration:underline}
+    .characters-scene{position:relative;width:480px;height:360px}
+    .character{position:absolute;bottom:0;transition:all .7s ease-in-out;transform-origin:bottom center}
+    .char-purple{left:60px;width:170px;height:370px;background:#6c3ff5;border-radius:10px 10px 0 0;z-index:1}
+    .char-black{left:220px;width:115px;height:290px;background:#2d2d2d;border-radius:8px 8px 0 0;z-index:2}
+    .char-orange{left:0;width:230px;height:190px;background:#ff9b6b;border-radius:115px 115px 0 0;z-index:3}
+    .char-yellow{left:290px;width:135px;height:215px;background:#e8d754;border-radius:68px 68px 0 0;z-index:4}
+    .eyes{position:absolute;display:flex;transition:all .7s ease-in-out}
+    .eyeball{border-radius:50%;background:white;display:flex;align-items:center;justify-content:center;transition:height .15s ease;overflow:hidden}
+    .pupil{border-radius:50%;background:#2d2d2d;transition:transform .1s ease-out}
+    .bare-pupil{width:12px;height:12px;border-radius:50%;background:#2d2d2d;transition:transform .7s ease-in-out}
+    .yellow-mouth{position:absolute;width:50px;height:4px;background:#2d2d2d;border-radius:2px;transition:all .7s ease-in-out}
+    @keyframes shakeHead{0%,100%{translate:0 0}10%{translate:-9px 0}20%{translate:7px 0}30%{translate:-6px 0}40%{translate:5px 0}50%{translate:-4px 0}60%{translate:3px 0}70%{translate:-2px 0}80%{translate:1px 0}90%{translate:-0.5px 0}}
+    .eyes.shake-head,.yellow-mouth.shake-head,.orange-mouth.shake-head{animation:shakeHead .8s cubic-bezier(.36,.07,.19,.97) both}
+    .orange-mouth{position:absolute;width:28px;height:14px;border:3px solid #2d2d2d;border-top:none;border-radius:0 0 14px 14px;opacity:0;transition:all .7s ease-in-out}
+    .orange-mouth.visible{opacity:1}
+    /* flash消息 -- 与JS错误样式统一 */
+    .flash-msg{display:block;padding:10px 14px;font-size:13px;color:#dc2626;background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.2);border-radius:10px;margin-bottom:16px}
+    @media (max-width:900px){#login-page{grid-template-columns:1fr}.left-panel{display:none}}
+    /* ====== 账号切换 ====== */
+    .acct-switch{margin-top:20px;padding-top:16px;border-top:1px solid #eee}
+    .acct-switch-label{font-size:11px;color:#aaa;margin-bottom:8px;text-align:center}
+    .acct-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+    .acct-btn{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;border:none;background:none;padding:4px;transition:all .2s;min-width:48px}
+    .acct-btn:hover{transform:translateY(-2px)}
+    .acct-btn:active{transform:scale(.95)}
+    .acct-avatar{width:40px;height:40px;border-radius:50%;background:#eef1ff;color:#4f46e5;
+      display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;
+      transition:all .2s;border:2px solid transparent}
+    .acct-btn.active .acct-avatar{border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,0.12)}
+    .acct-btn .acct-name{font-size:11px;color:#666;max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .acct-btn .acct-del{position:absolute;top:-4px;right:-4px;width:16px;height:16px;border-radius:50%;
+      background:#ddd;color:#fff;font-size:9px;display:none;align-items:center;justify-content:center;
+      border:none;cursor:pointer;transition:all .2s;line-height:1;padding:0}
+    .acct-btn:hover .acct-del{display:flex;background:#ccc}
+    .acct-btn .acct-del:hover{background:#dc2626;transform:scale(1.15)}
+  </style>{% endraw %}
+</head>
+<body>
+<div id="login-page">
+  <div class="left-panel">
+    <div class="logo">
+      <div class="logo-bg">
+        <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" width="34" height="34">
+          <defs>
+            <linearGradient id="lg" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#fff" stop-opacity="0.95"/>
+              <stop offset="1" stop-color="#fff" stop-opacity="0.7"/>
+            </linearGradient>
+          </defs>
+          <!-- 盾牌轮廓 -->
+          <path d="M18 3L5 9v7c0 7.5 5.5 14.5 13 17 7.5-2.5 13-9.5 13-17V9L18 3z" fill="url(#lg)" fill-opacity="0.15" stroke="#fff" stroke-width="1.2" stroke-opacity="0.4"/>
+          <!-- 十字 -->
+          <rect x="16" y="12" width="4" height="12" rx="1" fill="#fff" fill-opacity="0.8"/>
+          <rect x="12" y="16" width="12" height="4" rx="1" fill="#fff" fill-opacity="0.8"/>
+          <!-- 中心亮点 -->
+          <circle cx="18" cy="18" r="2" fill="#fff" fill-opacity="0.3"/>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <span class="brand">智维工控</span>
+        <span class="sub">医院工单管理系统</span>
+      </div>
     </div>
+    <div class="characters-wrapper">
+      <div class="characters-scene" id="characters-scene">
+        <div class="character char-purple" id="char-purple">
+          <div class="eyes" id="purple-eyes" style="left:45px;top:40px;gap:28px">
+            <div class="eyeball" id="purple-eye-l" style="width:18px;height:18px"><div class="pupil" id="purple-pupil-l" style="width:7px;height:7px"></div></div>
+            <div class="eyeball" id="purple-eye-r" style="width:18px;height:18px"><div class="pupil" id="purple-pupil-r" style="width:7px;height:7px"></div></div>
+          </div>
+        </div>
+        <div class="character char-black" id="char-black">
+          <div class="eyes" id="black-eyes" style="left:26px;top:32px;gap:20px">
+            <div class="eyeball" id="black-eye-l" style="width:16px;height:16px"><div class="pupil" id="black-pupil-l" style="width:6px;height:6px"></div></div>
+            <div class="eyeball" id="black-eye-r" style="width:16px;height:16px"><div class="pupil" id="black-pupil-r" style="width:6px;height:6px"></div></div>
+          </div>
+        </div>
+        <div class="character char-orange" id="char-orange">
+          <div class="eyes" id="orange-eyes" style="left:82px;top:90px;gap:28px">
+            <div class="bare-pupil" id="orange-pupil-l"></div>
+            <div class="bare-pupil" id="orange-pupil-r"></div>
+          </div>
+          <div class="orange-mouth" id="orange-mouth" style="left:90px;top:120px"></div>
+        </div>
+        <div class="character char-yellow" id="char-yellow">
+          <div class="eyes" id="yellow-eyes" style="left:52px;top:40px;gap:20px">
+            <div class="bare-pupil" id="yellow-pupil-l"></div>
+            <div class="bare-pupil" id="yellow-pupil-r"></div>
+          </div>
+          <div class="yellow-mouth" id="yellow-mouth" style="left:40px;top:88px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="footer-links">
+      <a href="#">隐私政策</a>
+      <a href="#">服务条款</a>
+      <a href="#">联系我们</a>
+    </div>
+  </div>
+  <div class="right-panel">
+    <div class="form-container">
+      <div class="form-header">
+        <h1>欢迎回来</h1>
+        <p>{{ system_subtitle }}</p>
+      </div>
+      <form method="post" action="{{ url_for('auth.login') }}" id="login-form">
+        <div class="err" id="error-msg" style="display:none"></div>
+        {% set msgs = get_flashed_messages(with_categories=true) %}
+        {% if msgs %}
+          {% for cat, msg in msgs %}
+            <div class="flash-msg" id="flash-err">{{ msg }}</div>
+          {% endfor %}
+        {% endif %}
+        <div class="form-group">
+          <label id="user-label">用户名</label>
+          <div class="iw">
+            <input type="text" name="username" id="username" placeholder="请输入用户名" autocomplete="off" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label id="pwd-label">密码</label>
+          <div class="iw">
+            <input type="password" name="password" id="password" placeholder="******" required />
+            <button type="button" class="tog" id="toggle-password">
+              <svg id="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <svg id="eye-off-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="form-options">
+          <label class="remember-me"><input type="checkbox" name="remember" checked /> 记住密码</label>
+          <a href="#" class="forgot-link">忘记密码？</a>
+        </div>
+        <button type="submit" class="btn" id="btn-login">
+          <span class="tx">登 录</span>
+          <div class="hv">
+            <span>登 录</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+            </svg>
+          </div>
+        </button>
+      </form>
+      <div class="acct-switch" id="acct-switch" style="display:none">
+        <div class="acct-switch-label">切换账号</div>
+        <div class="acct-row" id="acct-row"></div>
+      </div>
+      <div class="su">没有账号？<a href="{{ url_for('auth.register') }}">注册新账号</a></div>
+    </div>
+  </div>
 </div>
-
 <script>
-// ===== 登录表单动效 =====
-document.addEventListener('DOMContentLoaded', function() {
-    var inputs = document.querySelectorAll('.login-card .form-control');
-    inputs.forEach(function(input) {
-        // 聚焦时小幅上浮
-        input.addEventListener('focus', function() {
-            this.closest('.mb-3').style.transform = 'translateX(4px)';
-        });
-        input.addEventListener('blur', function() {
-            this.closest('.mb-3').style.transform = '';
-        });
-    });
+var P=document.getElementById("password"),U=document.getElementById("username"),TB=document.getElementById("toggle-password"),EI=document.getElementById("eye-icon"),EO=document.getElementById("eye-off-icon"),FM=document.getElementById("login-form"),EM=document.getElementById("error-msg"),FL=document.getElementById("flash-err");
+var show=false,err=false,mx=0,my=0,typing=false,looking=false,blinkP=false,blinkB=false,peek=false,pwdFocus=false,tyT=null;
+TB.addEventListener("click",function(){show=!show;P.type=show?"text":"password";EI.style.display=show?"none":"block";EO.style.display=show?"block":"none";up()});
+document.addEventListener("mousemove",function(e){mx=e.clientX;my=e.clientY;if(!typing&&!err)up()});
+U.addEventListener("focus",function(){typing=true;looking=true;clearTimeout(tyT);tyT=setTimeout(function(){looking=false;up()},800);up()});
+U.addEventListener("blur",function(){typing=false;looking=false;up()});
+U.addEventListener("input",function(){up()});
+P.addEventListener("focus",function(){pwdFocus=true;up()});
+P.addEventListener("blur",function(){pwdFocus=false;up()});
+P.addEventListener("input",function(){up()});
+function schP(){setTimeout(function(){blinkP=true;up();setTimeout(function(){blinkP=false;up();schP()},150)},Math.random()*4000+3000)}
+function schB(){setTimeout(function(){blinkB=true;up();setTimeout(function(){blinkB=false;up();schB()},150)},Math.random()*4000+3000)}
+schP();schB();
+function schPeek(){if(P.value.length>0&&show){setTimeout(function(){if(P.value.length>0&&show){peek=true;up();setTimeout(function(){peek=false;up();schPeek()},800)}},Math.random()*3000+2000)}}
+TB.addEventListener("click",function(){if(show)schPeek()});
+function pos(el){var r=el.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/3,dx=mx-cx,dy=my-cy;return{fx:Math.max(-15,Math.min(15,dx/20)),fy:Math.max(-10,Math.min(10,dy/30)),sk:Math.max(-6,Math.min(6,-dx/120))}}
+function pup(el,d){var r=el.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,dx=mx-cx,dy=my-cy,di=Math.min(Math.sqrt(dx*dx+dy*dy),d),an=Math.atan2(dy,dx);return{x:Math.cos(an)*di,y:Math.sin(an)*di}}
+function up(){
+  var P1=document.getElementById("char-purple"),P2=document.getElementById("char-black"),P3=document.getElementById("char-orange"),P4=document.getElementById("char-yellow");
+  var p1=pos(P1),p2=pos(P2),p3=pos(P3),p4=pos(P4),pL=P.value.length,sP=pL>0&&show,lA=pwdFocus&&!show;
+  if(sP){P1.style.transform="skewX(0deg)";P1.style.height="370px"}else if(lA){P1.style.transform="skewX(-14deg) translateX(-20px)";P1.style.height="410px"}else if(typing){P1.style.transform="skewX("+(p1.sk-12)+"deg) translateX(40px)";P1.style.height="410px"}else{P1.style.transform="skewX("+p1.sk+"deg)";P1.style.height="370px"}
+  var E1=document.getElementById("purple-eyes"),L1=document.getElementById("purple-eye-l"),R1=document.getElementById("purple-eye-r"),PL1=document.getElementById("purple-pupil-l"),PR1=document.getElementById("purple-pupil-r");
+  L1.style.height=blinkP?"2px":"18px";R1.style.height=blinkP?"2px":"18px";
+  if(err){E1.style.left="30px";E1.style.top="55px";PL1.style.transform="translate(-3px,4px)";PR1.style.transform="translate(-3px,4px)"}else if(lA){E1.style.left="20px";E1.style.top="25px";PL1.style.transform="translate(-5px,-5px)";PR1.style.transform="translate(-5px,-5px)"}else if(sP){E1.style.left="20px";E1.style.top="35px";var px=peek?4:-4,py=peek?5:-4;PL1.style.transform="translate("+px+"px,"+py+"px)";PR1.style.transform="translate("+px+"px,"+py+"px)"}else if(looking){E1.style.left="55px";E1.style.top="65px";PL1.style.transform="translate(3px,4px)";PR1.style.transform="translate(3px,4px)"}else{E1.style.left=(45+p1.fx)+"px";E1.style.top=(40+p1.fy)+"px";var po=pup(L1,5);PL1.style.transform="translate("+po.x+"px,"+po.y+"px)";PR1.style.transform="translate("+po.x+"px,"+po.y+"px)"}
+  if(sP){P2.style.transform="skewX(0deg)"}else if(lA){P2.style.transform="skewX(12deg) translateX(-10px)"}else if(looking){P2.style.transform="skewX("+(p2.sk*1.5+10)+"deg) translateX(20px)"}else if(typing){P2.style.transform="skewX("+(p2.sk*1.5)+"deg)"}else{P2.style.transform="skewX("+p2.sk+"deg)"}
+  var E2=document.getElementById("black-eyes"),L2=document.getElementById("black-eye-l"),R2=document.getElementById("black-eye-r"),PL2=document.getElementById("black-pupil-l"),PR2=document.getElementById("black-pupil-r");
+  L2.style.height=blinkB?"2px":"16px";R2.style.height=blinkB?"2px":"16px";
+  if(err){E2.style.left="15px";E2.style.top="40px";PL2.style.transform="translate(-3px,4px)";PR2.style.transform="translate(-3px,4px)"}else if(lA){E2.style.left="10px";E2.style.top="20px";PL2.style.transform="translate(-4px,-5px)";PR2.style.transform="translate(-4px,-5px)"}else if(sP){E2.style.left="10px";E2.style.top="28px";PL2.style.transform="translate(-4px,-4px)";PR2.style.transform="translate(-4px,-4px)"}else if(looking){E2.style.left="32px";E2.style.top="12px";PL2.style.transform="translate(0px,-4px)";PR2.style.transform="translate(0px,-4px)"}else{E2.style.left=(26+p2.fx)+"px";E2.style.top=(32+p2.fy)+"px";var bo=pup(L2,4);PL2.style.transform="translate("+bo.x+"px,"+bo.y+"px)";PR2.style.transform="translate("+bo.x+"px,"+bo.y+"px)"}
+  if(sP){P3.style.transform="skewX(0deg)"}else{P3.style.transform="skewX("+p3.sk+"deg)"}
+  var E3=document.getElementById("orange-eyes"),M3=document.getElementById("orange-mouth"),PL3=document.getElementById("orange-pupil-l"),PR3=document.getElementById("orange-pupil-r");
+  if(err){E3.style.left="60px";E3.style.top="95px";PL3.style.transform="translate(-3px,4px)";PR3.style.transform="translate(-3px,4px)";M3.style.left=(80+p3.fx)+"px";M3.style.top="130px"}else if(lA){E3.style.left="50px";E3.style.top="75px";PL3.style.transform="translate(-5px,-5px)";PR3.style.transform="translate(-5px,-5px)"}else if(sP){E3.style.left="50px";E3.style.top="85px";PL3.style.transform="translate(-5px,-4px)";PR3.style.transform="translate(-5px,-4px)"}else{E3.style.left=(82+p3.fx)+"px";E3.style.top=(90+p3.fy)+"px";var oo=pup(PL3,5);PL3.style.transform="translate("+oo.x+"px,"+oo.y+"px)";PR3.style.transform="translate("+oo.x+"px,"+oo.y+"px)"}
+  if(sP){P4.style.transform="skewX(0deg)"}else{P4.style.transform="skewX("+p4.sk+"deg)"}
+  var E4=document.getElementById("yellow-eyes"),PL4=document.getElementById("yellow-pupil-l"),PR4=document.getElementById("yellow-pupil-r"),M4=document.getElementById("yellow-mouth");
+  if(err){E4.style.left="35px";E4.style.top="45px";PL4.style.transform="translate(-3px,4px)";PR4.style.transform="translate(-3px,4px)";M4.style.left="30px";M4.style.top="92px";M4.style.transform="rotate(-8deg)"}else if(lA){E4.style.left="20px";E4.style.top="30px";PL4.style.transform="translate(-5px,-5px)";PR4.style.transform="translate(-5px,-5px)";M4.style.left="15px";M4.style.top="78px";M4.style.transform="rotate(0deg)"}else if(sP){E4.style.left="20px";E4.style.top="35px";PL4.style.transform="translate(-5px,-4px)";PR4.style.transform="translate(-5px,-4px)";M4.style.left="10px";M4.style.top="88px";M4.style.transform="rotate(0deg)"}else{E4.style.left=(52+p4.fx)+"px";E4.style.top=(40+p4.fy)+"px";var yo=pup(PL4,5);PL4.style.transform="translate("+yo.x+"px,"+yo.y+"px)";PR4.style.transform="translate("+yo.x+"px,"+yo.y+"px)";M4.style.left=(40+p4.fx)+"px";M4.style.top=(88+p4.fy)+"px";M4.style.transform="rotate(0deg)"}
+}
+var eT=null;var sI=["purple-eyes","black-eyes","orange-eyes","yellow-eyes","yellow-mouth","orange-mouth"];
+function doErr(errMsg){
+  if(eT){clearTimeout(eT);eT=null}
+  EM.textContent=errMsg||'用户名或密码错误';EM.style.display='block';
+  var el=sI.map(function(id){return document.getElementById(id)});el.forEach(function(e){e.classList.remove("shake-head")});
+  void document.body.offsetHeight;
+  err=true;pwdFocus=false;up();document.getElementById("orange-mouth").classList.add("visible");
+  setTimeout(function(){el.forEach(function(e){e.classList.add("shake-head")})},350);
+  eT=setTimeout(function(){err=false;eT=null;document.getElementById("orange-mouth").classList.remove("visible");el.forEach(function(e){e.classList.remove("shake-head")});up()},2500)
+}
+// ===== 表单提交保存账号（常规提交，无AJAX）=====
+FM.addEventListener('submit',function(e){
+  // 不阻止默认提交，让Flask正常处理
+  // 只是在提交前保存账号
+  var u=U.value.trim();
+  if(u && window.saveAccount) window.saveAccount(u);
+  // 按钮禁用防重复提交
+  var btn=document.getElementById('btn-login'),tx=btn.querySelector('.tx');
+  tx.textContent='登录中…';btn.disabled=true;
 });
+/* 如果有后端flash错误，自动触发摇头 */
+(function(){if(FL){setTimeout(function(){FL.style.display='none';doErr(FL.textContent)},500)}})();
+
+// ===== 账号切换 =====
+(function(){
+  var KEY='login_accounts',MAX=5;
+  function getAccounts(){
+    try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return []}
+  }
+  function saveAccounts(arr){
+    try{localStorage.setItem(KEY,JSON.stringify(arr))}catch(e){}
+  }
+  function _saveAccount(username){
+    // 只通过API确认后保存，避免保存错误的值
+    var xhr=new XMLHttpRequest();
+    xhr.open('GET','/api/user-brief?username='+encodeURIComponent(username),true);
+    xhr.onload=function(){
+      if(xhr.status===200){
+        try{
+          var info=JSON.parse(xhr.responseText);
+          var accts=getAccounts().filter(function(a){return a.username!==info.username});
+          accts.unshift({username:info.username,display:info.display_name||info.username});
+          if(accts.length>MAX)accts=accts.slice(0,MAX);
+          saveAccounts(accts);
+          renderAccounts();
+        }catch(e){}
+      }
+    };
+    xhr.send();
+  }
+  window.saveAccount=_saveAccount;
+  function renderAccounts(){
+    var accts=getAccounts();
+    var container=document.getElementById('acct-switch');
+    var row=document.getElementById('acct-row');
+    if(!container||!row)return;
+    if(!accts.length){container.style.display='none';return}
+    container.style.display='block';
+    row.innerHTML='';
+    accts.forEach(function(a,i){
+      var btn=document.createElement('button');
+      btn.className='acct-btn'+(a.username===U.value?' active':'');
+      btn.type='button';
+      btn.title='切换至 '+a.username;
+      var initial=(a.display||a.username).charAt(0).toUpperCase();
+      btn.innerHTML='<div class="acct-avatar">'+initial+'</div>'
+        +'<div class="acct-name">'+(a.display||a.username)+'</div>'
+        +'<button class="acct-del" data-idx="'+i+'">×</button>';
+      btn.addEventListener('click',function(e){
+        if(e.target.classList.contains('acct-del'))return;
+        U.value=a.username;P.value='';P.focus();
+        clearErr();
+        document.querySelectorAll('.acct-btn').forEach(function(b){b.classList.remove('active')});
+        btn.classList.add('active');
+      });
+      btn.querySelector('.acct-del').addEventListener('click',function(e){
+        e.stopPropagation();
+        accts.splice(i,1);
+        saveAccounts(accts);
+        renderAccounts();
+      });
+      row.appendChild(btn);
+    });
+  }
+  // 自动清理无效账号（旧代码可能存了中文名等非用户名的脏数据）
+  function validateAccounts(){
+    var VER='login_accounts_v',CUR=2;
+    try{if(localStorage.getItem(VER)==''+CUR)return}catch(e){}
+    // 逐账号校验
+    var accts=getAccounts(),pending=accts.length,changed=false,next=[];
+    if(!pending)return;
+    accts.forEach(function(a,i){
+      var xhr=new XMLHttpRequest();
+      xhr.open('GET','/api/user-brief?username='+encodeURIComponent(a.username),true);
+      xhr.onload=function(){
+        if(xhr.status===200){
+          try{
+            var info=JSON.parse(xhr.responseText);
+            next.push({username:info.username,display:info.display_name||info.username});
+          }catch(e){next.push(a)}
+        }else{
+          changed=true; // 无效账号，丢弃
+        }
+        pending--;
+        if(pending===0){
+          if(changed){saveAccounts(next);renderAccounts()}
+          try{localStorage.setItem(VER,''+CUR)}catch(e){}
+        }
+      };
+      xhr.onerror=function(){pending--;if(pending===0){try{localStorage.setItem(VER,''+CUR)}catch(e){}}};
+      xhr.send();
+    });
+  }
+  renderAccounts();
+  validateAccounts();
+})();
+
+up();
 </script>
-{% endblock %}
+</body>
+</html>

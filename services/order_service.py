@@ -10,7 +10,7 @@ import random
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-from models import db, WorkOrder, Person, SolutionTemplate, User
+from models import db, WorkOrder, SolutionTemplate, User, WorkOrderPhoto
 from models import log_audit
 from services.address import get_merged_addresses, get_all_buildings
 from services.fault_matcher import match_fault
@@ -79,39 +79,33 @@ def build_order_query(filters, user=None):
     # 组别筛选
     team = filters.get('team', '')
     if team and status != 'pending':
-        team_persons = Person.query.filter(
-            Person.team == team, Person.is_active == True
+        team_persons = User.query.filter(
+            User.team == team, User.is_active == True
         ).all()
-        team_names = [p.name for p in team_persons if p.name]
+        team_names = [p.display_name for p in team_persons if p.display_name]
         if team_names:
             query = query.filter(WorkOrder.person.in_(team_names))
         else:
             query = query.filter(db.text('1=0'))  # 该组无人返回空
 
-    # 排序：优先级优先（紧急→加急→普通），其次按时间
     from sqlalchemy import case
-    priority_case = case(
+    priority_order = case(
         (WorkOrder.priority == 'emergency', 0),
         (WorkOrder.priority == 'urgent', 1),
         else_=2
     )
-    
-    # 支持列排序
-    ALLOWED_SORT_COLS = ['id', 'title', 'building', 'department', 'fault_type', 'person', 'status', 'start_time', 'end_time', 'priority']
-    sort = filters.get('sort', '')
-    sort_dir = filters.get('order', 'desc')
-    
-    if sort in ALLOWED_SORT_COLS:
-        col = getattr(WorkOrder, sort, None)
-        if col is not None:
-            if sort_dir == 'desc':
-                query = query.order_by(priority_case, col.desc())
-            else:
-                query = query.order_by(priority_case, col.asc())
-        else:
-            query = query.order_by(priority_case, WorkOrder.start_time.desc())
-    else:
-        query = query.order_by(priority_case, WorkOrder.start_time.desc())
+
+    # 排序
+    sort_field = filters.get('sort', '')
+    sort_order = filters.get('order', '')
+    if sort_field and sort_order in ('asc', 'desc'):
+        col = getattr(WorkOrder, sort_field, None)
+        if col:
+            order_fn = getattr(col, sort_order)
+            query = query.order_by(order_fn())
+            return query
+
+    query = query.order_by(priority_order, WorkOrder.start_time.desc())
     return query
 
 
@@ -120,27 +114,39 @@ def get_order_or_404(order_id):
     return WorkOrder.query.get_or_404(order_id)
 
 
+def get_order_photos(order_id):
+    """获取工单关联照片"""
+    return WorkOrderPhoto.query.filter_by(
+        work_order_id=order_id
+    ).order_by(WorkOrderPhoto.created_at.desc()).all()
+
+
 # ==================== 筛选辅助数据 ====================
 
 def get_filter_data():
     """获取工单列表页所需的下拉数据"""
-    persons = Person.query.filter_by(is_active=True).all()
+    persons = User.query.filter(User.is_active==True).order_by(User.sort_order, User.display_name).all()
     buildings = get_all_buildings()
     teams = [
         t[0] for t in
-        Person.query.with_entities(Person.team)
-        .filter(Person.team != '', Person.team.isnot(None))
-        .distinct().order_by(Person.team).all()
+        User.query.with_entities(User.team)
+        .filter(User.team != '', User.team.isnot(None))
+        .distinct().order_by(User.team).all()
     ]
     return persons, buildings, teams
 
 
 def get_order_stats():
-    """三个池子的数量统计"""
+    """三个池子的数量统计（按当前医院过滤）"""
+    from flask import g
+    hid = getattr(g, 'hospital_id', None)
+    base = WorkOrder.query
+    if hid and hid != 0:
+        base = base.filter(WorkOrder.hospital_id == hid)
     return {
-        'pending': WorkOrder.query.filter_by(status='pending').count(),
-        'in_progress': WorkOrder.query.filter_by(status='in_progress').count(),
-        'completed': WorkOrder.query.filter_by(status='completed').count(),
+        'pending': base.filter_by(status='pending').count(),
+        'in_progress': base.filter_by(status='in_progress').count(),
+        'completed': base.filter_by(status='completed').count(),
     }
 
 
@@ -202,10 +208,12 @@ def publish_order(form_data, created_by, user_person=None):
     if not title:
         raise ValueError('请输入工单名称')
 
+    team = form_data.get('team', '')
+
     # 自动匹配
     from services.keyword_config import get_fault_keywords, get_device_keywords
     fault, device = _guess_fault_type(title, get_fault_keywords(), get_device_keywords())
-    fm = match_fault(title)
+    fm = match_fault(title, team=team)
     auto_fault = fm['category'] if fm['match_type'] == 'keyword' else fault
 
     # 自动提取地址（表单手动选择的优先）
@@ -318,16 +326,27 @@ def toggle_priority(order_id):
 
 # ==================== 批量生成 ====================
 
-def get_batch_form_data(user):
+def get_batch_form_data(user, selected_team=None):
     """批量生成页面的表单辅助数据"""
-    persons = Person.query.filter_by(is_active=True).all()
-    _person = Person.query.filter_by(user_id=user.id).first()
-    query = SolutionTemplate.query
-    if _person and _person.team:
-        query = query.filter(db.or_(
-            SolutionTemplate.teams == '',
-            SolutionTemplate.teams.contains(_person.team),
-        ))
+    persons = User.query.filter(User.is_active==True).order_by(User.sort_order, User.display_name).all()
+    _person = User.query.filter_by(id=user.id).first()
+    
+    # 如果指定了组，过滤人员和方案
+    if selected_team and selected_team != 'all':
+        query = SolutionTemplate.query.filter(
+            db.or_(
+                SolutionTemplate.teams == '',
+                SolutionTemplate.teams.contains(selected_team),
+            )
+        )
+        persons = [p for p in persons if p.team == selected_team]
+    else:
+        query = SolutionTemplate.query
+        if _person and _person.team:
+            query = query.filter(db.or_(
+                SolutionTemplate.teams == '',
+                SolutionTemplate.teams.contains(_person.team),
+            ))
     templates = query.order_by(SolutionTemplate.title).all()
 
     # 故障模板组
@@ -562,7 +581,7 @@ def _parse_dates(dates_str):
 
 # ==================== API 辅助 ====================
 
-def api_guess_fault(title):
+def api_guess_fault(title, team=''):
     """根据工单名称猜测故障类型+设备类型+地址"""
     if not title:
         return {
@@ -571,7 +590,7 @@ def api_guess_fault(title):
         }
     from services.keyword_config import get_fault_keywords, get_device_keywords
     fault, device = _guess_fault_type(title, get_fault_keywords(), get_device_keywords())
-    fm = match_fault(title)
+    fm = match_fault(title, team=team)
     from services.address import extract_address_from_title
     addr = extract_address_from_title(title)
     return {
@@ -589,7 +608,7 @@ def api_solution_suggest(query, user):
     """根据关键字返回方案模板候选"""
     if not query or len(query) < 1:
         return []
-    _person = Person.query.filter_by(user_id=user.id).first()
+    _person = User.query.filter_by(id=user.id).first()
     q = SolutionTemplate.query.filter(
         SolutionTemplate.title.contains(query)
     )
@@ -608,9 +627,9 @@ def api_solution_suggest(query, user):
     return result
 
 
-def api_address_all():
+def api_address_all(team=''):
     """返回所有地址数据"""
-    merged = get_merged_addresses()
+    merged = get_merged_addresses(team=team)
     seen = set()
     result = []
     for a in merged:
@@ -630,30 +649,30 @@ def api_address_all():
     return {'locations': result}
 
 
-def api_address_options(building, floor):
+def api_address_options(building, floor, team=''):
     """返回级联下拉框选项"""
     from services.address import (
         get_floors_by_building, get_departments_by_floor,
         get_locations_by_floor, get_all_buildings,
     )
     if building == 'all':
-        return {'buildings': get_all_buildings()}
+        return {'buildings': get_all_buildings(team=team)}
     if not building:
         return []
     if floor:
         return {
-            'departments': get_departments_by_floor(building, floor),
-            'locations': get_locations_by_floor(building, floor),
+            'departments': get_departments_by_floor(building, floor, team=team),
+            'locations': get_locations_by_floor(building, floor, team=team),
         }
-    return {'floors': get_floors_by_building(building)}
+    return {'floors': get_floors_by_building(building, team=team)}
 
 
 # ==================== 创建页辅助 ====================
 
 def get_create_page_data(user):
     """获取新建工单页面的辅助数据"""
-    persons = Person.query.filter_by(is_active=True).all()
-    _person = Person.query.filter_by(user_id=user.id).first()
+    persons = User.query.filter(User.is_active==True).order_by(User.sort_order, User.display_name).all()
+    _person = User.query.filter_by(id=user.id).first()
     query = SolutionTemplate.query
     if _person and _person.team:
         query = query.filter(db.or_(

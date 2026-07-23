@@ -100,7 +100,6 @@ def index():
     date_from = request.args.get('date_from', '')
     date_to = request.args.get('date_to', '')
 
-    # 解析日期
     def _parse_date(s):
         try:
             return datetime.strptime(s, '%Y-%m-%d')
@@ -360,7 +359,6 @@ def receipt_edit(receipt_id):
             receipt.purchaser = request.form.get('purchaser', '')
             receipt.remark = request.form.get('remark', '')
 
-            # 删除旧明细重新添加
             FinanceReceiptItem.query.filter_by(receipt_id=receipt.id).delete()
             total = 0
             items_data = request.form.getlist('item_name[]')

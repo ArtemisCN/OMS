@@ -58,7 +58,6 @@
                 <div class="text-muted small mb-2">创建: {{ h.created_at.strftime('%Y-%m-%d') }}</div>
                 <div class="d-flex gap-3 small mb-2">
                     <span><i class="fas fa-users text-primary" style="width:14px;"></i> {{ person_counts.get(h.id, 0) }} 人</span>
-                    <span><i class="fas fa-user-cog text-info" style="width:14px;"></i> {{ user_counts.get(h.id, 0) }} 个账号</span>
                 </div>
                 <div class="d-flex gap-1 mt-auto">
                     <button class="btn btn-sm btn-outline-primary" onclick="editHospital({{ h.id }}, '{{ h.name|e }}', '{{ h.code|e }}', '{{ h.address|e }}', '{{ h.phone|e }}')">

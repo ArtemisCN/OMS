@@ -117,16 +117,16 @@ function saveSettings() {
     })
     .then(r => r.json())
     .then(res => {
-        if (res.success) showToast('✅ ' + res.message, 'success');
-        else showToast('❌ ' + (res.error || '保存失败'), 'error');
+        if (res.success) showToast('<i class="fas fa-check-circle"></i> ' + res.message, 'success');
+        else showToast('<i class="fas fa-times-circle"></i> ' + (res.error || '保存失败'), 'error');
     })
-    .catch(() => showToast('❌ 网络错误', 'error'));
+    .catch(() => showToast('<i class="fas fa-times-circle"></i> 网络错误', 'error'));
 }
 
 function testSms() {
     const phone = document.getElementById('testPhone').value.trim();
     if (!phone) {
-        showToast('⚠️ 请输入测试手机号', 'warning');
+        showToast('<i class="fas fa-exclamation-triangle"></i> 请输入测试手机号', 'warning');
         return;
     }
     fetch('/feature/sms/test', {
@@ -137,13 +137,13 @@ function testSms() {
     .then(r => r.json())
     .then(res => {
         if (res.success) {
-            showToast('✅ ' + res.message, 'success');
+            showToast('<i class="fas fa-check-circle"></i> ' + res.message, 'success');
             setTimeout(() => location.reload(), 1500);
         } else {
-            showToast('❌ ' + (res.message || '发送失败'), 'error');
+            showToast('<i class="fas fa-times-circle"></i> ' + (res.message || '发送失败'), 'error');
         }
     })
-    .catch(() => showToast('❌ 网络错误', 'error'));
+    .catch(() => showToast('<i class="fas fa-times-circle"></i> 网络错误', 'error'));
 }
 </script>
 {% endblock %}

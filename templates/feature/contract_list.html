@@ -4,6 +4,9 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0"><i class="fas fa-file-contract text-primary"></i> 合同维保管理</h5>
     <div>
+        <a href="{{ url_for('data.list_suppliers') }}" class="btn btn-outline-secondary btn-sm me-1">
+            <i class="fas fa-truck"></i> 供应商管理
+        </a>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#contractModal" onclick="resetContractForm()">
             <i class="fas fa-plus"></i> 新增合同
         </button>
@@ -18,7 +21,7 @@
 <div class="alert alert-danger d-flex align-items-center gap-2 mb-3">
     <i class="fas fa-exclamation-circle fs-5"></i>
     <span>
-        ⚠️ 以下 <strong>{{ expiring_contracts | length }}</strong> 份合同即将到期（30天内）：
+        <i class="fas fa-exclamation-triangle"></i> 以下 <strong>{{ expiring_contracts | length }}</strong> 份合同即将到期（30天内）：
         {% for c in expiring_contracts %}
         <a href="#" class="alert-link" onclick="scrollToContract({{ c.id }})">{{ c.contract_name }}</a>{% if not loop.last %}、{% endif %}
         {% endfor %}

@@ -100,7 +100,6 @@ NEW_CONSUMABLES = [
 
 def run():
     with app.app_context():
-        # 检查是否已存在相同数据
         existing = set()
         for c in Consumable.query.all():
             key = (c.name, c.spec)

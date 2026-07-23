@@ -42,6 +42,27 @@
     order: 3;
     margin-left: 6px !important;
 }
+
+/* 组选择器样式 */
+.tmpl-team-bar {
+    background:var(--card-bg,#fff); border:1px solid var(--border,#e5e7eb);
+    border-radius:12px; padding:14px 18px; margin-bottom:16px;
+}
+.tmpl-team-list { display:flex; flex-wrap:wrap; gap:6px; }
+.tmpl-team-chip {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:7px 18px; border-radius:24px; font-size:13px; font-weight:700;
+    cursor:pointer; border:2px solid var(--border,#e2e8f0);
+    background:var(--card-bg,#fff); color:var(--text,#1e293b);
+    transition:all 0.15s; user-select:none;
+}
+.tmpl-team-chip:hover { border-color:#6366f1;background:rgba(99,102,241,0.04); }
+.tmpl-team-chip.active {
+    background:linear-gradient(135deg,#6366f1,#4f46e5);
+    color:#fff; border-color:#6366f1; box-shadow:0 2px 8px rgba(99,102,241,0.3);
+}
+.team-section[data-team] { display:none; }
+.team-section[data-team="all"] { display:block; }
 </style>
 {% endblock %}
 {% block content %}
@@ -55,25 +76,37 @@
     </div>
 </div>
 
+<!-- ===== 组选择器 ===== -->
+<div class="tmpl-team-bar">
+    <div class="tmpl-team-list" id="teamSelector">
+        <span class="tmpl-team-chip active" data-team="all" onclick="selectTeam('all')"><i class="fas fa-clipboard-list"></i> 全部</span>
+        {% for t in all_teams %}
+        <span class="tmpl-team-chip" data-team="{{ t|e }}" onclick="selectTeam('{{ t|e }}')">{{ t }}</span>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- ===== 全部组模式 ===== -->
+<div class="team-section" data-team="all">
 {% if categories %}
 <div class="card" style="border-radius:10px;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
     <div class="page-header">
         <i class="fas fa-folder-tree" style="color:#6366f1;"></i> 分类列表
     </div>
     <div class="page-body">
-        <div class="accordion" id="categoryAccordion">
+        <div class="accordion" id="categoryAccordionAll">
             {% for cat in categories %}
             <div class="accordion-item mb-2 border rounded-3" style="overflow:hidden;border:1px solid #e2e8f0 !important;">
-                <h2 class="accordion-header" id="heading{{ cat.id }}">
+                <h2 class="accordion-header" id="headingAll{{ cat.id }}">
                     <button class="accordion-button fw-bold {% if not loop.first %}collapsed{% endif %}" type="button"
-                            data-bs-toggle="collapse" data-bs-target="#collapse{{ cat.id }}"
+                            data-bs-toggle="collapse" data-bs-target="#collapseAll{{ cat.id }}"
                             style="font-size:14px;background:#f8fafc;padding:12px 16px;">
                         <i class="fas fa-folder-open" style="color:#6366f1;margin-right:8px;"></i> {{ cat.name }}
                         <span class="cat-badge">{{ cat.subcategories.count() }} 个子分类</span>
                     </button>
                 </h2>
-                <div id="collapse{{ cat.id }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
-                     data-bs-parent="#categoryAccordion">
+                <div id="collapseAll{{ cat.id }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+                     data-bs-parent="#categoryAccordionAll">
                     <div class="accordion-body p-3">
                         {% set subs = cat.subcategories.all() %}
                         {% if subs %}
@@ -144,10 +177,16 @@
 
                         <!-- 添加子分类表单 -->
                         <hr class="my-3">
-                        <form method="post" action="{{ url_for('data.add_fault_subcategory') }}" class="d-flex align-items-center gap-2">
+                        <form method="post" action="{{ url_for('data.add_fault_subcategory') }}" class="d-flex align-items-center gap-2 flex-wrap">
                             <input type="hidden" name="category_id" value="{{ cat.id }}">
                             <input type="text" name="name" class="form-control form-control-sm"
                                    style="max-width:300px;font-size:13px;" placeholder="输入新子分类名称" required>
+                            <select name="teams" class="form-select form-select-sm" style="max-width:120px;font-size:12px;">
+                                <option value="">全组通用</option>
+                                {% for t in all_teams %}
+                                <option value="{{ t }}">{{ t }}</option>
+                                {% endfor %}
+                            </select>
                             <button type="submit" class="btn btn-sm btn-primary">
                                 <i class="fas fa-plus"></i> 添加子分类
                             </button>
@@ -171,8 +210,152 @@
     </div>
 </div>
 {% endif %}
+</div>
+
+<!-- ===== 按组展示 ===== -->
+{% for t in all_teams %}
+<div class="team-section" data-team="{{ t|e }}">
+{% if categories %}
+<div class="card" style="border-radius:10px;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+    <div class="page-header">
+        <i class="fas fa-folder-tree" style="color:#6366f1;"></i> 分类列表 · {{ t }}
+    </div>
+    <div class="page-body">
+        <div class="accordion" id="categoryAccordion{{ t|replace(' ','_') }}">
+            {% for cat in categories %}
+            {% set all_subs = cat.subcategories.all() %}
+            {# 过滤子分类：本组专属 + 通用 #}
+            {% set cat_team_subs = [] %}
+            {% set cat_gen_subs = [] %}
+            {% for sub in all_subs %}
+                {% if sub.teams and t in sub.teams %}
+                    {% set _ = cat_team_subs.append(sub) %}
+                {% elif not sub.teams %}
+                    {% set _ = cat_gen_subs.append(sub) %}
+                {% endif %}
+            {% endfor %}
+            {% if cat_team_subs or cat_gen_subs %}
+            <div class="accordion-item mb-2 border rounded-3" style="overflow:hidden;border:1px solid #e2e8f0 !important;">
+                <h2 class="accordion-header" id="heading{{ t|replace(' ','_') }}{{ cat.id }}">
+                    <button class="accordion-button fw-bold {% if not loop.first %}collapsed{% endif %}" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#collapse{{ t|replace(' ','_') }}{{ cat.id }}"
+                            style="font-size:14px;background:#f8fafc;padding:12px 16px;">
+                        <i class="fas fa-folder-open" style="color:#6366f1;margin-right:8px;"></i> {{ cat.name }}
+                        <span class="cat-badge">{{ (cat_team_subs|length + cat_gen_subs|length) }} 个子分类</span>
+                    </button>
+                </h2>
+                <div id="collapse{{ t|replace(' ','_') }}{{ cat.id }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+                     data-bs-parent="#categoryAccordion{{ t|replace(' ','_') }}">
+                    <div class="accordion-body p-3">
+                        {% if cat_team_subs %}
+                        <div style="font-size:11px;font-weight:600;color:#6366f1;margin-bottom:4px;">📌 本组专属</div>
+                        {% for sub in cat_team_subs %}
+                        <div style="margin-bottom:12px;{% if not loop.last %}border-bottom:1px solid #f1f5f9;padding-bottom:8px;{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="fw-medium" style="font-size:13px;">{{ sub.name }}</span>
+                                <form method="post" action="{{ url_for('data.delete_fault_subcategory', sub_id=sub.id) }}"
+                                      onsubmit="return confirm('确定删除子分类「{{ sub.name }}」及其所有关键词？')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2"><i class="fas fa-trash"></i></button>
+                                </form>
+                            </div>
+                            {% set keywords = sub.keywords.all() %}
+                            {% if keywords %}
+                            <div class="d-flex flex-wrap gap-1 mb-1">
+                                {% for kw in keywords %}
+                                <span class="badge bg-light text-dark d-inline-flex align-items-center gap-1 px-2 py-1" style="font-size:12px;border:1px solid #dee2e6;">
+                                    {{ kw.keyword }}
+                                    <form method="post" action="{{ url_for('data.delete_fault_keyword', kw_id=kw.id) }}"
+                                          style="display:inline;" onsubmit="return confirm('确定删除关键词「{{ kw.keyword }}」？')">
+                                        <button type="submit" class="btn btn-sm p-0 text-danger border-0 bg-transparent"
+                                                style="font-size:14px;line-height:1;opacity:0.7;">&times;</button>
+                                    </form>
+                                </span>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <small class="text-muted"><i class="far fa-circle text-warning me-1"></i>未设置关键词</small>
+                            {% endif %}
+                            <!-- 添加关键词表单 -->
+                            <form method="post" action="{{ url_for('data.add_fault_keyword') }}"
+                                  class="mt-1 d-flex align-items-center gap-2">
+                                <input type="hidden" name="subcategory_id" value="{{ sub.id }}">
+                                <input type="hidden" name="teams" value="{{ t }}">
+                                <input type="text" name="keywords" class="form-control form-control-sm"
+                                       style="max-width:240px;font-size:12px;"
+                                       placeholder="输入关键词，多个用逗号分隔" required>
+                                <button type="submit" class="btn btn-sm btn-outline-success flex-shrink-0">
+                                    <i class="fas fa-plus"></i> 添加
+                                </button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                        {% endif %}
+
+                        {% if cat_gen_subs %}
+                        <div style="font-size:11px;font-weight:600;color:#94a3b8;margin-top:{% if cat_team_subs %}10{% else %}0{% endif %}px;margin-bottom:4px;"><i class="fas fa-clipboard-list"></i> 全组通用</div>
+                        {% for sub in cat_gen_subs %}
+                        <div style="margin-bottom:12px;{% if not loop.last %}border-bottom:1px solid #f1f5f9;padding-bottom:8px;{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="fw-medium" style="font-size:13px;color:#64748b;">{{ sub.name }}</span>
+                                <!-- 通用子分类只读，不显示删除按钮 -->
+                            </div>
+                            {% set keywords = sub.keywords.all() %}
+                            {% if keywords %}
+                            <div class="d-flex flex-wrap gap-1 mb-1">
+                                {% for kw in keywords %}
+                                <span class="badge bg-light text-dark d-inline-flex align-items-center gap-1 px-2 py-1" style="font-size:12px;border:1px solid #dee2e6;">
+                                    {{ kw.keyword }}
+                                </span>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <small class="text-muted"><i class="far fa-circle text-warning me-1"></i>未设置关键词</small>
+                            {% endif %}
+                            <!-- 通用子分类不能添加关键词 -->
+                        </div>
+                        {% endfor %}
+                        {% endif %}
+
+                        <!-- 添加子分类表单 -->
+                        <hr class="my-3">
+                        <form method="post" action="{{ url_for('data.add_fault_subcategory') }}" class="d-flex align-items-center gap-2 flex-wrap">
+                            <input type="hidden" name="category_id" value="{{ cat.id }}">
+                            <input type="hidden" name="teams" value="{{ t }}">
+                            <input type="text" name="name" class="form-control form-control-sm"
+                                   style="max-width:300px;font-size:13px;" placeholder="输入新子分类名称" required>
+                            <button type="submit" class="btn btn-sm btn-primary">
+                                <i class="fas fa-plus"></i> 添加子分类（{{ t }}）
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card" style="border-radius:10px;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+    <div class="page-body text-center text-muted py-5">
+        <i class="fas fa-sitemap fa-3x mb-3 d-block"></i>
+        <p>「{{ t }}」暂无分类数据</p>
+    </div>
+</div>
+{% endif %}
+</div>
+{% endfor %}
 
 <script>
+function selectTeam(team) {
+    document.querySelectorAll('.team-section').forEach(function(el) {
+        el.style.display = el.getAttribute('data-team') === team ? '' : 'none';
+    });
+    document.querySelectorAll('.tmpl-team-chip').forEach(function(el) {
+        el.classList.toggle('active', el.getAttribute('data-team') === team);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
     const expand = urlParams.get('expand');

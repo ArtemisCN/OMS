@@ -470,7 +470,7 @@ async function savePositions() {
             body: JSON.stringify({positions})
         });
         const data = await res.json();
-        showToast(data.success ? '保存成功 ✅' : '保存失败', data.success ? 'success' : 'error');
+        showToast(data.success ? '保存成功 <i class="fas fa-check-circle"></i>' : '保存失败', data.success ? 'success' : 'error');
     } catch(e) {
         showToast('保存失败: ' + e.message, 'error');
     }
@@ -504,7 +504,7 @@ async function saveMapUrl() {
         const data = await res.json();
         if (data.success) {
             setMapBg(url || '');
-            showToast('地图已更新 ✅', 'success');
+            showToast('地图已更新 <i class="fas fa-check-circle"></i>', 'success');
         } else {
             showToast('保存失败', 'error');
         }
@@ -530,7 +530,7 @@ async function uploadMapFile() {
             setMapBg(data.map_url);
             document.getElementById('mapUrlInput').value = data.map_url;
             fileInput.value = '';
-            showToast('图片上传成功 ✅', 'success');
+            showToast('图片上传成功 <i class="fas fa-check-circle"></i>', 'success');
         } else {
             showToast(data.error || '上传失败', 'error');
         }
@@ -561,7 +561,7 @@ function isolateBuilding(b) {
     
     const shape = getShape(b.building);
     showToast(
-        `🔍 ${b.building} · ${b.fault_count}次故障 · ${shape.roof === '#8B4513' ? '红褐' : '金属'}屋顶`,
+        `<i class="fas fa-search"></i> ${b.building} · ${b.fault_count}次故障 · ${shape.roof === '#8B4513' ? '红褐' : '金属'}屋顶`,
         'info'
     );
 }

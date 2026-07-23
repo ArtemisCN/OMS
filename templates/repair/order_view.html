@@ -257,7 +257,7 @@ function doPrint() {
   {% set step_data = [
     {'label':'已创建', 'timeline_icon':'🆕'},
     {'label':'已提交', 'timeline_icon':'📤'},
-    {'label':'已审核', 'timeline_icon':'✅'},
+    {'label':'已审核', 'timeline_icon':'<i class="fas fa-check-circle"></i>'},
     {'label':'已完成', 'timeline_icon':'🏁'}
   ] %}
   {% set status_idx = {'draft':0, 'pending':1, 'approved':3, 'rejected':2} %}
@@ -425,7 +425,7 @@ function doPrint() {
 
   <!-- Timeline Card -->
   <div class="timeline-card">
-    <h5>📋 处理时间线</h5>
+    <h5><i class="fas fa-clipboard-list"></i> 处理时间线</h5>
     <div class="timeline-list">
       <div class="timeline-item">
         <div class="timeline-dot created"></div>
@@ -450,7 +450,7 @@ function doPrint() {
       {% if order.status == 'approved' %}
       <div class="timeline-item">
         <div class="timeline-dot approved"></div>
-        <div class="timeline-item-title">✅ 审核通过</div>
+        <div class="timeline-item-title"><i class="fas fa-check-circle"></i> 审核通过</div>
         <div class="timeline-item-desc">
           {{ order.approved_at.strftime('%Y-%m-%d %H:%M') if order.approved_at else '—' }}
           {% if order.approved_by %} · {{ order.approved_by }}{% endif %}
@@ -459,7 +459,7 @@ function doPrint() {
       {% elif order.status == 'rejected' %}
       <div class="timeline-item">
         <div class="timeline-dot" style="background:#d97706"></div>
-        <div class="timeline-item-title">🔄 已驳回·返回草稿</div>
+        <div class="timeline-item-title"><i class="fas fa-sync"></i> 已驳回·返回草稿</div>
         <div class="timeline-item-desc">
           {{ order.updated_at.strftime('%Y-%m-%d %H:%M') if order.updated_at else '—' }}
         </div>
@@ -476,7 +476,7 @@ function doPrint() {
 
   <!-- Stats Mini-card -->
   <div class="stats-card">
-    <h5>📊 工单统计</h5>
+    <h5><i class="fas fa-chart-bar"></i> 工单统计</h5>
     <div class="stats-row">
       <span class="stats-label">⏱ 处理时长</span>
       <span class="stats-value">

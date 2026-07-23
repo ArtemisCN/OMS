@@ -14,7 +14,7 @@ def _fuzzy_match(title):
         config.SOLUTION_TEMPLATES.keys(),
         scorer=fuzz.token_sort_ratio
     )
-    if best_match and best_match[1] >= 55:
+    if best_match and best_match[1] >= 70:
         return config.SOLUTION_TEMPLATES[best_match[0]]
     return None
 

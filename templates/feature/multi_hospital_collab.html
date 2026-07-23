@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}多院区协同{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="/static/vendor/fontawesome/all.min.css">
+<style>
+    :root { --bg-card: #1e293b; --border-card: #334155; --text-heading: #e2e8f0; --text-body: #cbd5e1; --text-muted-c: #94a3b8; }
+    body[data-theme="dark"] { background: #0f172a; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+    .page-header h4 { color: #e2e8f0; font-weight: 700; margin: 0; }
+
+    /* 医院信息卡片 */
+    .hospital-card { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 1px solid #334155; border-radius: 14px; padding: 18px 20px; transition: transform .2s, box-shadow .2s; height: 100%; position: relative; overflow: hidden; }
+    .hospital-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.3); }
+    .hospital-card .hc-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .hospital-card .hc-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+    .hospital-card .hc-name { font-size: 16px; font-weight: 700; color: #e2e8f0; }
+    .hospital-card .hc-addr { font-size: 12px; color: #64748b; margin-top: 1px; }
+    .hospital-card .hc-stats { display: flex; gap: 16px; margin-top: 8px; flex-wrap: wrap; }
+    .hospital-card .hc-stat { text-align: center; flex: 1; min-width: 50px; }
+    .hospital-card .hc-stat .num { font-size: 20px; font-weight: 800; color: #e2e8f0; }
+    .hospital-card .hc-stat .lbl { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: .3px; }
+    .hospital-card .status-dot { position: absolute; top: 14px; right: 14px; width: 10px; height: 10px; border-radius: 50%; }
+    .hospital-card .status-dot.online { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.5); }
+    .hospital-card .status-dot.offline { background: #ef4444; box-shadow: 0 0 8px rgba(239,68,68,.5); }
+    .hc-bg-1 { background: linear-gradient(135deg, rgba(59,130,246,.15), rgba(59,130,246,.05)); }
+    .hc-bg-2 { background: linear-gradient(135deg, rgba(34,197,94,.15), rgba(34,197,94,.05)); }
+    .hc-bg-3 { background: linear-gradient(135deg, rgba(234,179,8,.15), rgba(234,179,8,.05)); }
+    .hc-bg-4 { background: linear-gradient(135deg, rgba(168,85,247,.15), rgba(168,85,247,.05)); }
+    .hc-bg-5 { background: linear-gradient(135deg, rgba(236,72,153,.15), rgba(236,72,153,.05)); }
+
+    /* 工单表格卡片 */
+    .card-panel { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 20px; }
+    .card-panel .panel-title { font-size: 15px; font-weight: 600; color: #e2e8f0; margin-bottom: 14px; }
+    .card-panel .panel-title i { margin-right: 8px; color: #3b82f6; }
+
+    .table-dark-custom { width: 100%; border-collapse: collapse; }
+    .table-dark-custom th { color: #94a3b8; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .3px; padding: 10px 8px; border-bottom: 1px solid #334155; text-align: left; }
+    .table-dark-custom td { color: #cbd5e1; padding: 10px 8px; border-bottom: 1px solid #2d3748; font-size: 14px; }
+    .table-dark-custom tr:last-child td { border-bottom: none; }
+    .table-dark-custom tr:hover td { background: rgba(59,130,246,.06); }
+
+    .badge-status { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .badge-pending { background: rgba(234,179,8,.15); color: #eab308; }
+    .badge-processing { background: rgba(59,130,246,.15); color: #60a5fa; }
+    .badge-done { background: rgba(34,197,94,.15); color: #22c55e; }
+    .badge-transfer { background: rgba(168,85,247,.15); color: #a78bfa; }
+
+    .text-primary-c { color: #3b82f6; }
+    .text-muted { color: #64748b; }
+    .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; }
+    .filter-bar select { background: #1e293b; border: 1px solid #334155; color: #cbd5e1; padding: 6px 12px; border-radius: 8px; font-size: 14px; outline: none; }
+    .filter-bar select:focus { border-color: #3b82f6; }
+    .filter-bar .btn-filter { background: #3b82f6; border: none; color: #fff; padding: 6px 16px; border-radius: 8px; font-size: 14px; }
+    .filter-bar .btn-filter:hover { background: #2563eb; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="page-header">
+        <h4><i class="fas fa-hospital-alt text-primary-c me-2"></i>多院区协同</h4>
+        <div class="filter-bar">
+            <select id="filterHospital"><option value="">全部医院</option><option value="1">总院</option><option value="2">东院区</option><option value="3">西院区</option><option value="4">南院区</option><option value="5">北院区</option></select>
+            <select id="filterStatus"><option value="">全部状态</option><option value="pending">待处理</option><option value="processing">处理中</option><option value="transfer">已转交</option><option value="done">已完成</option></select>
+            <button class="btn-filter" onclick="filterOrders()"><i class="fas fa-search me-1"></i>筛选</button>
+        </div>
+    </div>
+
+    <!-- 医院信息卡片 -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4 col-xl-">
+            <div class="hospital-card">
+                <span class="status-dot online"></span>
+                <div class="hc-header">
+                    <div class="hc-icon hc-bg-1 text-primary"><i class="fas fa-building"></i></div>
+                    <div><div class="hc-name">总院</div><div class="hc-addr"><i class="fas fa-map-marker-alt me-1" style="font-size:10px"></i>中心城区 · 解放路100号</div></div>
+                </div>
+                <div class="hc-stats">
+                    <div class="hc-stat"><div class="num">87</div><div class="lbl">本月工单</div></div>
+                    <div class="hc-stat"><div class="num">12</div><div class="lbl">待处理</div></div>
+                    <div class="hc-stat"><div class="num">6</div><div class="lbl">跨院区</div></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-xl-">
+            <div class="hospital-card">
+                <span class="status-dot online"></span>
+                <div class="hc-header">
+                    <div class="hc-icon hc-bg-2 text-success"><i class="fas fa-ambulance"></i></div>
+                    <div><div class="hc-name">东院区</div><div class="hc-addr"><i class="fas fa-map-marker-alt me-1" style="font-size:10px"></i>东部新区 · 滨河路200号</div></div>
+                </div>
+                <div class="hc-stats">
+                    <div class="hc-stat"><div class="num">62</div><div class="lbl">本月工单</div></div>
+                    <div class="hc-stat"><div class="num">8</div><div class="lbl">待处理</div></div>
+                    <div class="hc-stat"><div class="num">10</div><div class="lbl">跨院区</div></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-xl-">
+            <div class="hospital-card">
+                <span class="status-dot online"></span>
+                <div class="hc-header">
+                    <div class="hc-icon hc-bg-3 text-warning"><i class="fas fa-clinic-medical"></i></div>
+                    <div><div class="hc-name">西院区</div><div class="hc-addr"><i class="fas fa-map-marker-alt me-1" style="font-size:10px"></i>西城区 · 建设路55号</div></div>
+                </div>
+                <div class="hc-stats">
+                    <div class="hc-stat"><div class="num">45</div><div class="lbl">本月工单</div></div>
+                    <div class="hc-stat"><div class="num">3</div><div class="lbl">待处理</div></div>
+                    <div class="hc-stat"><div class="num">4</div><div class="lbl">跨院区</div></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-xl-">
+            <div class="hospital-card">
+                <span class="status-dot online"></span>
+                <div class="hc-header">
+                    <div class="hc-icon hc-bg-4 text-purple"><i class="fas fa-leaf"></i></div>
+                    <div><div class="hc-name">南院区</div><div class="hc-addr"><i class="fas fa-map-marker-alt me-1" style="font-size:10px"></i>南部新城 · 学府路88号</div></div>
+                </div>
+                <div class="hc-stats">
+                    <div class="hc-stat"><div class="num">38</div><div class="lbl">本月工单</div></div>
+                    <div class="hc-stat"><div class="num">5</div><div class="lbl">待处理</div></div>
+                    <div class="hc-stat"><div class="num">2</div><div class="lbl">跨院区</div></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-xl-">
+            <div class="hospital-card">
+                <span class="status-dot offline"></span>
+                <div class="hc-header">
+                    <div class="hc-icon hc-bg-5 text-pink"><i class="fas fa-flask"></i></div>
+                    <div><div class="hc-name">北院区</div><div class="hc-addr"><i class="fas fa-map-marker-alt me-1" style="font-size:10px"></i>北部高新区 · 科技路66号</div></div>
+                </div>
+                <div class="hc-stats">
+                    <div class="hc-stat"><div class="num">24</div><div class="lbl">本月工单</div></div>
+                    <div class="hc-stat"><div class="num">9</div><div class="lbl">待处理</div></div>
+                    <div class="hc-stat"><div class="num">1</div><div class="lbl">跨院区</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 跨院区工单表格 -->
+    <div class="card-panel">
+        <div class="panel-title"><i class="fas fa-arrows-alt-h"></i>跨院区工单列表</div>
+        <table class="table-dark-custom" id="crossOrderTable">
+            <thead>
+                <tr>
+                    <th style="width:32px">#</th>
+                    <th>来源医院</th>
+                    <th>目标医院</th>
+                    <th>工单标题</th>
+                    <th>处理人</th>
+                    <th>状态</th>
+                    <th>时间</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1</td>
+                    <td><i class="fas fa-building text-primary me-1" style="font-size:12px"></i>东院区</td>
+                    <td><i class="fas fa-arrow-right text-muted me-1" style="font-size:12px"></i>总院</td>
+                    <td><a href="#" style="color:#60a5fa;text-decoration:none">CT设备故障报修</a></td>
+                    <td>张工</td>
+                    <td><span class="badge-status badge-processing">处理中</span></td>
+                    <td class="text-muted" style="font-size:13px">2026-07-22 14:30</td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td><i class="fas fa-building text-success me-1" style="font-size:12px"></i>西院区</td>
+                    <td><i class="fas fa-arrow-right text-muted me-1" style="font-size:12px"></i>东院区</td>
+                    <td><a href="#" style="color:#60a5fa;text-decoration:none">UPS电源维护申请</a></td>
+                    <td>李工</td>
+                    <td><span class="badge-status badge-pending">待处理</span></td>
+                    <td class="text-muted" style="font-size:13px">2026-07-21 09:15</td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td><i class="fas fa-building text-warning me-1" style="font-size:12px"></i>总院</td>
+                    <td><i class="fas fa-arrow-right text-muted me-1" style="font-size:12px"></i>南院区</td>
+                    <td><a href="#" style="color:#60a5fa;text-decoration:none">HIS系统数据迁移</a></td>
+                    <td>王工</td>
+                    <td><span class="badge-status badge-transfer">已转交</span></td>
+                    <td class="text-muted" style="font-size:13px">2026-07-20 16:45</td>
+                </tr>
+                <tr>
+                    <td>4</td>
+                    <td><i class="fas fa-building text-purple me-1" style="font-size:12px"></i>南院区</td>
+                    <td><i class="fas fa-arrow-right text-muted me-1" style="font-size:12px"></i>西院区</td>
+                    <td><a href="#" style="color:#60a5fa;text-decoration:none">中央空调制冷维修</a></td>
+                    <td>赵工</td>
+                    <td><span class="badge-status badge-done">已完成</span></td>
+                    <td class="text-muted" style="font-size:13px">2026-07-19 10:00</td>
+                </tr>
+                <tr>
+                    <td>5</td>
+                    <td><i class="fas fa-building text-pink me-1" style="font-size:12px"></i>北院区</td>
+                    <td><i class="fas fa-arrow-right text-muted me-1" style="font-size:12px"></i>总院</td>
+                    <td><a href="#" style="color:#60a5fa;text-decoration:none">网络交换机更换</a></td>
+                    <td>陈工</td>
+                    <td><span class="badge-status badge-processing">处理中</span></td>
+                    <td class="text-muted" style="font-size:13px">2026-07-18 11:20</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<script>
+function filterOrders() {
+    const h = document.getElementById('filterHospital').value;
+    const s = document.getElementById('filterStatus').value;
+    console.log('Filter:', { hospital: h, status: s });
+    // TODO: AJAX filter cross-hospital orders
+}
+</script>
+{% endblock %}

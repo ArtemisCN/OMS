@@ -6,6 +6,7 @@ from flask_login import login_required, current_user
 from sqlalchemy import func, case
 from models import AuditLog, db, WorkOrder, ConsumableRecord, StockRecord, Consumable, SparePart, RepairOrder, Asset, AssetLog, FormTemplate
 from models import log_audit
+from utils.time_helpers import fmt_dt, now, fmt_date
 
 report_bp = Blueprint('report', __name__, url_prefix='/report')
 
@@ -389,7 +390,6 @@ def _get_report_data(year, month):
             'operator': r.operator,
             'note': r.note,
         })
-    # 统计
     con_in = sum(1 for r in rows if r.ConsumableRecord.type == 'in')
     con_out = sum(1 for r in rows if r.ConsumableRecord.type == 'out')
     con_qty_in = sum(r.ConsumableRecord.quantity for r in rows if r.ConsumableRecord.type == 'in')
@@ -580,7 +580,6 @@ def _get_report_data(year, month):
             else:
                 chart_data.append(type('row', (), {'mon': r.mon, 'fault_type': '其他', 'cnt': r.cnt})())
 
-    # 构建图表数据集
     month_labels = [f'{m}月' for m in range(1, 13)]
     colors = ['#4f46e5','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#94a3b8']
     chart_types = [t for t in top_types if t != '其他'] + (['其他'] if any(c.fault_type == '其他' for c in chart_data) else [])
@@ -747,7 +746,7 @@ def _get_report_data(year, month):
             'fault_type': r.fault_type,
             'subcategory': r.fault_subcategory or '',
             'count': r.cnt,
-            'last_time': r.last_time.strftime('%m-%d') if r.last_time else '',
+            'last_time': fmt_dt(r.last_time, '%m-%d'),
         })
 
     # 6. 🖥️ 设备故障排行
@@ -794,7 +793,6 @@ def _get_report_data(year, month):
 
     # 8. 📈 工单状态耗时（各阶段平均时长）
     stage_times = {}
-    # 创建→接单
     t1 = db.session.query(
         func.avg((WorkOrder.accepted_at - WorkOrder.created_at) * 24 * 60)
     ).filter(
@@ -815,7 +813,6 @@ def _get_report_data(year, month):
         WorkOrder.completed_at.isnot(None),
     ).scalar() or 0
     stage_times['accept_to_complete'] = round(float(t2), 1) if t2 else 0
-    # 创建→完成（总耗时）
     stage_times['total'] = round(stage_times['to_accept'] + stage_times['accept_to_complete'], 1)
 
     # 9. 🏆 人员工作量对比（已存在 person_stats，前端复用）
@@ -839,7 +836,7 @@ def _get_report_data(year, month):
         'priority': priority_label.get(o.priority, o.priority),
         'fault_type': o.fault_type,
         'department': o.department,
-        'created_at': o.created_at.strftime('%m-%d %H:%M') if o.created_at else '',
+        'created_at': fmt_dt(o.created_at, '%m-%d %H:%M'),
     } for o in order_list]
 
     stock_outbound = _get_stock_outbound_data(first, last)

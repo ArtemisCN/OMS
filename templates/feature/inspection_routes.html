@@ -1,0 +1,525 @@
+{% extends "base.html" %}
+{% block title %}巡检路线规划{% endblock %}
+{% block extra_head %}
+<style>
+/* ── 页面容器 ── */
+.ir-wrap { max-width:1060px; margin:0 auto; }
+.ir-topbar { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+.ir-topbar h4 { margin:0; font-size:20px; font-weight:800; display:flex; align-items:center; gap:10px; letter-spacing:-0.3px; }
+.ir-topbar h4 i { background:linear-gradient(135deg,#667eea,#764ba2); -webkit-background-clip:text; -webkit-text-fill-color:transparent; font-size:19px; }
+
+/* ── 统计卡片 ── */
+.ir-stats { display:flex; gap:4px; margin-bottom:18px; flex-wrap:wrap; }
+.ir-stat { flex:1; min-width:90px; padding:10px 14px; border-radius:12px; text-align:center; font-size:11px; font-weight:500; background:var(--card-bg,rgba(255,255,255,0.5)); backdrop-filter:blur(8px); border:1px solid var(--card-border,rgba(229,231,235,0.3)); color:var(--text-muted,#94a3b8); line-height:1.3; }
+.ir-stat strong { display:block; font-size:24px; font-weight:800; color:var(--text,#1e293b); letter-spacing:-0.5px; }
+
+/* ── 路线卡片列表 ── */
+.ir-card-wrap { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; }
+.ir-card { border-radius:14px; overflow:hidden; background:var(--card-bg,rgba(255,255,255,0.6)); backdrop-filter:blur(8px); border:1px solid var(--card-border,rgba(229,231,235,0.4)); transition:all .2s; position:relative; }
+.ir-card:hover { border-color:var(--primary,#4f46e5); box-shadow:0 4px 20px rgba(79,70,229,0.08); }
+.ir-card-header { padding:14px 16px 6px; display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+.ir-card-title { font-size:15px; font-weight:700; color:var(--text,#1e293b); display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.ir-card-body { padding:4px 16px 8px; display:flex; flex-wrap:wrap; gap:2px 14px; font-size:12px; color:var(--text-muted,#94a3b8); }
+.ir-card-body span { display:inline-flex; align-items:center; gap:4px; }
+.ir-card-body .ir-point-preview { font-size:11px; color:var(--text-muted,#94a3b8); display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; width:100%; }
+.ir-card-body .ir-point-tag { display:inline-flex; align-items:center; gap:3px; padding:2px 8px; border-radius:6px; background:var(--tag-bg,rgba(79,70,229,0.06)); border:1px solid var(--tag-border,rgba(79,70,229,0.1)); font-size:10px; color:var(--primary,#4f46e5); max-width:100%; }
+[data-theme="dark"] .ir-card-body .ir-point-tag { background:rgba(79,70,229,0.12); border-color:rgba(79,70,229,0.2); }
+.ir-card-ft { padding:8px 16px; border-top:1px solid var(--card-border,#e5e7eb); display:flex; justify-content:space-between; align-items:center; gap:6px; }
+[data-theme="dark"] .ir-card-ft { border-top-color:#2a2e3a; }
+.ir-card-ft .ft-left { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--text-muted,#94a3b8); }
+.ir-card-ft .ft-right { display:flex; gap:4px; }
+.ir-card-ft .ft-right a, .ir-card-ft .ft-right button { font-size:12px; padding:3px 10px; border-radius:7px; border:1px solid transparent; cursor:pointer; transition:all .12s; text-decoration:none; display:inline-flex; align-items:center; gap:4px; }
+.ir-card-ft .ft-btn { background:transparent; color:var(--text-muted,#94a3b8); border-color:var(--card-border,#e5e7eb); }
+.ir-card-ft .ft-btn:hover { border-color:var(--primary,#4f46e5); color:var(--primary,#4f46e5); }
+.ir-card-ft .ft-del:hover { border-color:#ef4444; color:#ef4444; }
+
+/* ── 空状态 ── */
+.ir-empty { text-align:center; padding:60px 20px; }
+.ir-empty-icon { width:72px; height:72px; margin:0 auto 16px; background:linear-gradient(135deg,#667eea12,#764ba212); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--text-muted,#94a3b8); }
+
+/* ── 开关 ── */
+.form-switch.ir-toggle { padding-left:2.8em; }
+.form-switch.ir-toggle .form-check-input { width:2.4em; height:1.3em; cursor:pointer; }
+.form-switch.ir-toggle .form-check-input:checked { background-color:var(--primary,#4f46e5); border-color:var(--primary,#4f46e5); }
+
+/* ── 弹窗 ── */
+.ir-modal .modal-content { border-radius:16px; border:none; }
+[data-theme="dark"] .ir-modal .modal-content { background:#1e293b; color:#e2e8f0; }
+[data-theme="dark"] .ir-modal .modal-header { border-bottom-color:#334155; }
+[data-theme="dark"] .ir-modal .modal-footer { border-top-color:#334155; }
+[data-theme="dark"] .ir-modal .form-label { color:#cbd5e1; }
+[data-theme="dark"] .ir-modal .form-control, [data-theme="dark"] .ir-modal .form-select { background:#0f172a; border-color:#334155; color:#e2e8f0; }
+[data-theme="dark"] .ir-modal .form-control:focus, [data-theme="dark"] .ir-modal .form-select:focus { border-color:var(--primary,#4f46e5); box-shadow:0 0 0 0.2rem rgba(79,70,229,0.15); }
+
+/* ── 循环点列表 ── */
+.ir-point-list { max-height:320px; overflow-y:auto; padding:2px; }
+.ir-point-item { display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--card-bg,rgba(255,255,255,0.4)); border-radius:8px; margin-bottom:6px; border:1px solid var(--card-border,rgba(229,231,235,0.2)); transition:all .15s; }
+[data-theme="dark"] .ir-point-item { background:rgba(15,23,42,0.4); border-color:rgba(51,65,85,0.3); }
+.ir-point-item:hover { border-color:var(--primary,#4f46e5); }
+.ir-point-item .ir-point-idx { width:22px; height:22px; border-radius:50%; background:var(--primary,#4f46e5); color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; opacity:0.8; }
+.ir-point-item .ir-point-info { flex:1; display:flex; flex-wrap:wrap; gap:2px 10px; font-size:12px; color:var(--text,#1e293b); }
+[data-theme="dark"] .ir-point-item .ir-point-info { color:#e2e8f0; }
+.ir-point-item .ir-point-info .point-label { color:var(--text-muted,#94a3b8); font-size:10px; }
+.ir-point-item .ir-point-del { width:24px; height:24px; border-radius:6px; border:none; background:transparent; color:#94a3b8; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; transition:all .12s; flex-shrink:0; }
+.ir-point-item .ir-point-del:hover { background:rgba(239,68,68,0.1); color:#ef4444; }
+
+/* ── 添加点区域 ── */
+.ir-add-point { display:flex; gap:6px; flex-wrap:wrap; align-items:flex-end; padding:10px; background:var(--card-bg,rgba(255,255,255,0.3)); border-radius:10px; border:1px dashed var(--card-border,rgba(229,231,235,0.4)); margin-top:6px; }
+[data-theme="dark"] .ir-add-point { background:rgba(15,23,42,0.3); border-color:rgba(51,65,85,0.4); }
+.ir-add-point .form-control, .ir-add-point .form-select { font-size:12px; padding:4px 8px; min-width:80px; }
+.ir-add-point .btn-add { font-size:12px; padding:4px 12px; white-space:nowrap; }
+
+/* ── 动画 ── */
+@keyframes irFadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+.ir-card { animation:irFadeUp 0.3s ease both; }
+
+/* ── 响应式 ── */
+@media (max-width:576px) {
+  .ir-card-wrap { grid-template-columns:1fr; }
+  .ir-add-point { flex-direction:column; }
+  .ir-add-point .form-control, .ir-add-point .form-select { min-width:100%; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="ir-wrap">
+    <!-- 顶栏 -->
+    <div class="ir-topbar">
+      <h4><i class="fas fa-route"></i> 巡检路线规划</h4>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#routeModal" onclick="resetRouteForm()">
+          <i class="fas fa-plus me-1"></i>新建路线
+        </button>
+        <a href="{{ url_for('feature.inspection_routes') }}" class="btn btn-outline-secondary btn-sm">
+          <i class="fas fa-sync"></i>
+        </a>
+      </div>
+    </div>
+
+    <!-- 统计 -->
+    {% set total = routes|length %}
+    {% set active = routes|selectattr('active','equalto',true)|list|length %}
+    <div class="ir-stats">
+      <div class="ir-stat"><strong>{{ total }}</strong>路线总数</div>
+      <div class="ir-stat"><strong style="color:var(--primary,#4f46e5);">{{ active }}</strong>启用中</div>
+      <div class="ir-stat"><strong style="color:#94a3b8;">{{ total - active }}</strong>已停用</div>
+    </div>
+
+    <!-- 路线列表 -->
+    {% if routes %}
+    <div class="ir-card-wrap">
+      {% for r in routes %}
+      {% set point_count = r.points|length if r.points else 0 %}
+      <div class="ir-card" style="animation-delay:{{ loop.index0*0.05 }}s;" data-route-id="{{ r.id }}">
+        <div class="ir-card-header">
+          <div class="ir-card-title">
+            <i class="fas fa-route text-primary" style="font-size:13px;"></i>
+            {{ r.name }}
+          </div>
+          <span style="font-size:11px;color:var(--text-muted,#94a3b8);white-space:nowrap;">#{{ r.id }}</span>
+        </div>
+        <div class="ir-card-body">
+          <span><i class="fas fa-map-pin"></i> {{ point_count }} 个巡检点</span>
+          <span><i class="fas fa-calendar-alt"></i> {{ r.updated_at.strftime('%m-%d %H:%M') if r.updated_at else r.created_at.strftime('%m-%d %H:%M') if r.created_at else '—' }}</span>
+          {% if point_count > 0 and r.points %}
+          <div class="ir-point-preview">
+            {% for p in r.points[:5] %}
+            <span class="ir-point-tag" title="{{ p.building or '' }} {{ p.floor or '' }} {{ p.department or '' }} {{ p.location or '' }}">
+              <i class="fas fa-location-dot" style="font-size:8px;"></i>
+              {{ p.building or '?' }}-{{ p.floor or '?' }}-{{ p.department or '?' }}
+            </span>
+            {% endfor %}
+            {% if point_count > 5 %}
+            <span class="ir-point-tag" style="background:transparent;border-color:transparent;color:var(--text-muted,#94a3b8);">
+              +{{ point_count - 5 }}…
+            </span>
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+        <div class="ir-card-ft">
+          <div class="ft-left">
+            <i class="fas fa-user-circle"></i> {{ r.creator_name or r.creator or '—' }}
+            <div class="form-check form-switch ir-toggle ms-2" style="margin-bottom:0;">
+              <input class="form-check-input" type="checkbox" role="switch"
+                     {% if r.active %}checked{% endif %}
+                     onchange="toggleRouteActive({{ r.id }}, this.checked)"
+                     id="toggle-{{ r.id }}">
+            onchange="toggleRouteActive({{ r.id }}, this.checked)"
+            </div>
+            </div>
+            <div style="margin-top:10px;">
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="editRoute({{ r.id }})">
+            <i class="fas fa-edit"></i> 编辑
+            </button>
+            <form method="post" action="{{ url_for('feature.inspection_route_delete', rid=r.id) }}" style="display:inline;"
+                  onsubmit="return confirm('确定删除路线「{{ r.name }}」？删除后不可恢复。')">
+              <button class="ft-btn ft-del"><i class="fas fa-trash"></i></button>
+            </form>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="ir-empty">
+      <div class="ir-empty-icon"><i class="fas fa-route"></i></div>
+      <div style="font-size:16px;font-weight:600;color:var(--text,#1e293b);margin-bottom:4px;">暂无巡检路线</div>
+      <div style="font-size:13px;color:var(--text-muted,#94a3b8);">点击「新建路线」创建第一条巡检路线</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ====== 新建/编辑路线弹窗 ====== -->
+<div class="modal fade ir-modal" id="routeModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title"><i class="fas fa-route text-primary me-1"></i><span id="routeModalTitle">新建巡检路线</span></h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="routeForm" method="post" action="{{ url_for('feature.inspection_route_save') }}">
+        <input type="hidden" name="id" id="routeId" value="">
+        <div class="modal-body">
+          <!-- 路线名称 -->
+          <div class="mb-3">
+            <label class="form-label fw-medium"><i class="fas fa-tag text-primary me-1"></i>路线名称 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="name" id="routeName"
+                   placeholder="例如：A区日常巡检路线" required maxlength="100">
+          </div>
+
+          <!-- 巡检点列表 -->
+          <div class="mb-2 d-flex justify-content-between align-items-center">
+            <label class="form-label fw-medium mb-0"><i class="fas fa-list text-info me-1"></i>巡检点列表 <small class="text-muted fw-normal">（按巡检顺序排列）</small></label>
+            <span class="badge bg-primary bg-opacity-10 text-primary" id="pointCountBadge">0 个点</span>
+          </div>
+
+          <div class="ir-point-list" id="pointListContainer">
+            <!-- 由 JS 动态渲染 -->
+          </div>
+
+          <!-- 添加巡检点 -->
+          <div class="ir-add-point" id="addPointArea">
+            <div style="flex:1;min-width:60px;">
+              <label class="form-label" style="font-size:10px;color:var(--text-muted,#94a3b8);margin-bottom:2px;">楼栋</label>
+              <select class="form-select" id="pointBuilding">
+                {% for b in buildings or [] %}
+                <option value="{{ b }}">{{ b }}</option>
+                {% else %}
+                <option value="A栋">A栋</option>
+                <option value="B栋">B栋</option>
+                <option value="C栋">C栋</option>
+                <option value="门诊楼">门诊楼</option>
+                <option value="住院楼">住院楼</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div style="flex:1;min-width:50px;">
+              <label class="form-label" style="font-size:10px;color:var(--text-muted,#94a3b8);margin-bottom:2px;">楼层</label>
+              <select class="form-select" id="pointFloor">
+                {% for f in floors or [] %}
+                <option value="{{ f }}">{{ f }}</option>
+                {% else %}
+                <option value="1F">1F</option>
+                <option value="2F">2F</option>
+                <option value="3F">3F</option>
+                <option value="4F">4F</option>
+                <option value="5F">5F</option>
+                <option value="6F">6F</option>
+                <option value="B1">B1</option>
+                <option value="B2">B2</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div style="flex:1;min-width:70px;">
+              <label class="form-label" style="font-size:10px;color:var(--text-muted,#94a3b8);margin-bottom:2px;">科室</label>
+              <input type="text" class="form-control" id="pointDept" placeholder="科室名称" list="deptList">
+              <datalist id="deptList">
+                {% for d in departments or [] %}
+                <option value="{{ d }}">
+                {% endfor %}
+              </datalist>
+            </div>
+            <div style="flex:1;min-width:70px;">
+              <label class="form-label" style="font-size:10px;color:var(--text-muted,#94a3b8);margin-bottom:2px;">位置</label>
+              <input type="text" class="form-control" id="pointLocation" placeholder="如：配电室">
+            </div>
+            <div style="width:56px;text-align:center;">
+              <label class="form-label" style="font-size:10px;color:var(--text-muted,#94a3b8);margin-bottom:2px;">序号</label>
+              <input type="number" class="form-control text-center" id="pointSeq" value="1" min="1" style="width:56px;">
+            </div>
+            <div style="display:flex;align-items:flex-end;">
+              <button type="button" class="btn btn-primary btn-add" onclick="addPoint()">
+                <i class="fas fa-plus"></i> 添加
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+          <button type="submit" class="btn btn-primary btn-sm" id="routeSubmitBtn">
+            <i class="fas fa-save me-1"></i>保存路线
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ============================
+// 全局状态
+// ============================
+var routePoints = [];       // [{building, floor, department, location, seq}, ...]
+var editMode = false;
+var nextTempId = 1;
+
+// ============================
+// 数据辅助
+// ============================
+{% if routes_json is defined %}
+var routesData = {{ routes_json | safe }};
+{% else %}
+var routesData = [];
+{% endif %}
+
+{% if buildings_json is defined %}
+var buildingsList = {{ buildings_json | safe }};
+{% endif %}
+{% if floors_json is defined %}
+var floorsList = {{ floors_json | safe }};
+{% endif %}
+{% if departments_json is defined %}
+var departmentsList = {{ departments_json | safe }};
+{% endif %}
+
+// ============================
+// 表单重置
+// ============================
+function resetRouteForm() {
+    editMode = false;
+    document.getElementById('routeModalTitle').textContent = '新建巡检路线';
+    document.getElementById('routeId').value = '';
+    document.getElementById('routeName').value = '';
+    document.getElementById('routeSubmitBtn').innerHTML = '<i class="fas fa-save me-1"></i>保存路线';
+    routePoints = [];
+    renderPointList();
+}
+
+// ============================
+// 巡检点 CRUD
+// ============================
+function addPoint() {
+    var building = document.getElementById('pointBuilding').value.trim();
+    var floor = document.getElementById('pointFloor').value.trim();
+    var dept = document.getElementById('pointDept').value.trim();
+    var location = document.getElementById('pointLocation').value.trim();
+    var seq = parseInt(document.getElementById('pointSeq').value, 10) || (routePoints.length + 1);
+
+    if (!building) { showToast('请选择楼栋', 'warning'); return; }
+    if (!floor) { showToast('请选择楼层', 'warning'); return; }
+
+    // Assign seq automatically if not specified or equal to default 1
+    if (seq < 1) seq = routePoints.length + 1;
+
+    routePoints.push({
+        _tempId: nextTempId++,
+        building: building,
+        floor: floor,
+        department: dept || '',
+        location: location || '',
+        seq: seq
+    });
+    renderPointList();
+    document.getElementById('pointDept').value = '';
+    document.getElementById('pointLocation').value = '';
+    document.getElementById('pointSeq').value = routePoints.length + 1;
+}
+
+function removePoint(tempId) {
+    routePoints = routePoints.filter(function(p) { return p._tempId !== tempId; });
+    renderPointList();
+}
+
+function renderPointList() {
+    var container = document.getElementById('pointListContainer');
+    var badge = document.getElementById('pointCountBadge');
+
+    // Update count
+    badge.textContent = routePoints.length + ' 个点';
+
+    if (routePoints.length === 0) {
+        container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted,#94a3b8);font-size:13px;">'
+            + '<i class="fas fa-plus-circle" style="font-size:24px;opacity:0.3;display:block;margin-bottom:6px;"></i>'
+            + '尚未添加巡检点，请在下方面板中添加</div>';
+        return;
+    }
+
+    // Sort by seq
+    var sorted = routePoints.slice().sort(function(a, b) { return (a.seq || 0) - (b.seq || 0); });
+
+    var html = '';
+    sorted.forEach(function(p, idx) {
+        html += '<div class="ir-point-item">'
+            + '<div class="ir-point-idx">' + (idx + 1) + '</div>'
+            + '<div class="ir-point-info">'
+            + '<span><span class="point-label">楼栋</span> ' + escapeHtml(p.building) + '</span>'
+            + '<span><span class="point-label">楼层</span> ' + escapeHtml(p.floor) + '</span>'
+            + (p.department ? '<span><span class="point-label">科室</span> ' + escapeHtml(p.department) + '</span>' : '')
+            + (p.location ? '<span><span class="point-label">位置</span> ' + escapeHtml(p.location) + '</span>' : '')
+            + '<span><span class="point-label">序号</span> ' + (p.seq || (idx + 1)) + '</span>'
+            + '</div>'
+            + '<button type="button" class="ir-point-del" onclick="removePoint(' + p._tempId + ')" title="删除此点">'
+            + '<i class="fas fa-times"></i></button>'
+            + '</div>';
+    });
+
+    container.innerHTML = html;
+}
+
+// ============================
+// 编辑路线
+// ============================
+function editRoute(routeId) {
+    // Find in data or fetch from server
+    var route = null;
+    for (var i = 0; i < routesData.length; i++) {
+        if (routesData[i].id === routeId) {
+            route = routesData[i];
+            break;
+        }
+    }
+    if (!route) {
+        // Fallback: fetch via AJAX
+        fetch('/feature/inspection_route/' + routeId + '/data')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                populateEditForm(data);
+            })
+            .catch(function() {
+                showToast('获取路线数据失败', 'danger');
+            });
+        return;
+    }
+    populateEditForm(route);
+}
+
+function populateEditForm(route) {
+    editMode = true;
+    document.getElementById('routeModalTitle').textContent = '编辑巡检路线';
+    document.getElementById('routeId').value = route.id;
+    document.getElementById('routeName').value = route.name || '';
+    document.getElementById('routeSubmitBtn').innerHTML = '<i class="fas fa-save me-1"></i>更新路线';
+
+    // Load points
+    routePoints = [];
+    if (route.points && route.points.length) {
+        route.points.forEach(function(p) {
+            routePoints.push({
+                _tempId: nextTempId++,
+                building: p.building || '',
+                floor: p.floor || '',
+                department: p.department || '',
+                location: p.location || '',
+                seq: p.seq || p.sequence || (routePoints.length + 1)
+            });
+        });
+    }
+    renderPointList();
+
+    // Open modal
+    var modal = new bootstrap.Modal(document.getElementById('routeModal'));
+    modal.show();
+}
+
+// ============================
+// 提交表单
+// ============================
+document.getElementById('routeForm').addEventListener('submit', function(e) {
+    // Inject points as hidden input
+    var existing = document.querySelector('input[name="points_json"]');
+    if (existing) existing.remove();
+
+    var input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'points_json';
+    input.value = JSON.stringify(routePoints.map(function(p) {
+        return {
+            building: p.building,
+            floor: p.floor,
+            department: p.department,
+            location: p.location,
+            seq: p.seq
+        };
+    }));
+    this.appendChild(input);
+});
+
+// ============================
+// 开关启用/停用
+// ============================
+function toggleRouteActive(routeId, active) {
+    fetch('{{ url_for("feature.inspection_route_toggle") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+        body: JSON.stringify({ id: routeId, active: active })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            showToast((active ? '已启用' : '已停用') + '路线', 'success');
+        } else {
+            showToast(data.error || '操作失败', 'danger');
+            // Revert toggle
+            var cb = document.getElementById('toggle-' + routeId);
+            if (cb) cb.checked = !active;
+        }
+    })
+    .catch(function() {
+        showToast('网络错误', 'danger');
+        var cb = document.getElementById('toggle-' + routeId);
+        if (cb) cb.checked = !active;
+    });
+}
+
+// ============================
+// 工具
+// ============================
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function showToast(msg, type) {
+    type = type || 'info';
+    var container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.cssText = 'position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;';
+        document.body.appendChild(container);
+    }
+    var toast = document.createElement('div');
+    toast.style.cssText = 'padding:10px 18px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,0.15);animation:khFadeUp 0.2s ease;display:flex;align-items:center;gap:8px;';
+    var bgColors = { success:'#22c55e', danger:'#ef4444', warning:'#f59e0b', info:'#4f46e5' };
+    toast.style.background = bgColors[type] || bgColors.info;
+    toast.style.color = '#fff';
+    toast.textContent = msg;
+    container.appendChild(toast);
+    setTimeout(function() {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        setTimeout(function() { toast.remove(); }, 300);
+    }, 2500);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+{% block title %}备件库存预警{% endblock %}
+{% block extra_head %}
+<style>
+    .alert-card { background:#fff; border-radius:16px; border:1px solid #e2e8f0; padding:20px; margin-bottom:16px; }
+    body[data-theme="dark"] .alert-card { background:#1e293b; border-color:#334155; }
+    .alert-card .card-title { font-size:15px; font-weight:600; color:#1e293b; margin-bottom:12px; }
+    body[data-theme="dark"] .alert-card .card-title { color:#e2e8f0; }
+    .alert-badge { font-size:11px; padding:3px 10px; border-radius:8px; }
+    .toggle-switch { position:relative; display:inline-block; width:40px; height:22px; }
+    .toggle-switch input { opacity:0; width:0; height:0; }
+    .toggle-slider { position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#cbd5e1; border-radius:22px; transition:.3s; }
+    body[data-theme="dark"] .toggle-slider { background:#475569; }
+    .toggle-slider:before { position:absolute; content:""; height:16px; width:16px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.3s; }
+    .toggle-switch input:checked + .toggle-slider { background:var(--primary,#4f46e5); }
+    .toggle-switch input:checked + .toggle-slider:before { transform:translateX(18px); }
+    .progress-bar-thin { height:4px; border-radius:2px; background:#e2e8f0; overflow:hidden; }
+    body[data-theme="dark"] .progress-bar-thin { background:#334155; }
+    .progress-bar-thin .fill { height:100%; border-radius:2px; transition:width .5s; }
+    .stock-critical { color:#dc2626; font-weight:600; }
+    .stock-warning { color:#d97706; font-weight:600; }
+    .stock-normal { color:#16a34a; font-weight:600; }
+    .stat-card { background:#fff; border-radius:14px; border:1px solid #e2e8f0; padding:16px; text-align:center; transition:all .2s; }
+    body[data-theme="dark"] .stat-card { background:#1e293b; border-color:#334155; }
+    .stat-card:hover { border-color:var(--primary,#4f46e5); box-shadow:0 4px 12px rgba(79,70,229,0.1); }
+    .stat-card .stat-icon { font-size:24px; margin-bottom:6px; }
+    .stat-card .stat-value { font-size:22px; font-weight:700; }
+    .stat-card .stat-label { font-size:12px; color:var(--text-muted,#94a3b8); }
+    body[data-theme="dark"] .table { --bs-table-color:#e2e8f0; --bs-table-bg:transparent; --bs-table-hover-bg:rgba(255,255,255,0.03); }
+    .time-text { font-size:12px; color:var(--text-muted,#94a3b8); }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold mb-0"><i class="fas fa-exclamation-triangle text-warning me-2"></i>备件库存预警</h4>
+        <div>
+            <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#alertModal" onclick="resetAlertForm()">
+                <i class="fas fa-plus me-1"></i>新建预警
+            </button>
+            <a href="{{ url_for('feature.spare_part_alerts') }}" class="btn btn-outline-secondary btn-sm ms-1">
+                <i class="fas fa-sync me-1"></i>刷新
+            </a>
+        </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="row g-2 mb-3">
+        <div class="col-md-3 col-6">
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-bell text-warning"></i></div>
+                <div class="stat-value text-warning" id="statTotal">{{ stats.total or 0 }}</div>
+                <div class="stat-label">预警总数</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-exclamation-circle text-danger"></i></div>
+                <div class="stat-value text-danger" id="statTriggered">{{ stats.triggered or 0 }}</div>
+                <div class="stat-label">已触发</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-check-circle text-success"></i></div>
+                <div class="stat-value text-success" id="statNormal">{{ stats.normal or 0 }}</div>
+                <div class="stat-label">正常</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-toggle-off text-muted"></i></div>
+                <div class="stat-value text-muted" id="statDisabled">{{ stats.disabled or 0 }}</div>
+                <div class="stat-label">已停用</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 预警列表 -->
+    <div class="alert-card p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="alertTable">
+                <thead class="table-light">
+                    <tr>
+                        <th>备件名称</th>
+                        <th style="width:100px;">当前库存</th>
+                        <th style="width:90px;">最低阈值</th>
+                        <th style="width:100px;">预警状态</th>
+                        <th>最后通知时间</th>
+                        <th style="width:80px;" class="text-center">开关</th>
+                        <th style="width:90px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if alerts %}
+                    {% for a in alerts %}
+                    <tr id="alert-row-{{ a.id }}">
+                        <td>
+                            <strong>{{ a.spare_part_name }}</strong>
+                            {% if a.spare_part_spec %}
+                            <br><small class="text-muted">{{ a.spare_part_spec }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="{% if a.current_stock <= a.min_threshold %}stock-critical{% elif a.current_stock <= a.min_threshold * 1.5 %}stock-warning{% else %}stock-normal{% endif %}">
+                                {{ a.current_stock }}
+                            </span>
+                            <div class="progress-bar-thin mt-1">
+                                {% set pct = (a.current_stock / (a.min_threshold * 3) * 100) | round %}
+                                <div class="fill" style="width:{{ pct if pct <= 100 else 100 }}%;background:
+                                    {% if a.current_stock <= a.min_threshold %}#dc2626
+                                    {% elif a.current_stock <= a.min_threshold * 1.5 %}#d97706
+                                    {% else %}#16a34a{% endif %};"></div>
+                            </div>
+                        </td>
+                        <td class="fw-medium">{{ a.min_threshold }}</td>
+                        <td>
+                            {% if not a.enabled %}
+                                <span class="alert-badge" style="background:#e2e8f0;color:#64748b;">已停用</span>
+                            {% elif a.current_stock <= a.min_threshold %}
+                                <span class="alert-badge" style="background:#fef2f2;color:#dc2626;">
+                                    <i class="fas fa-exclamation-circle me-1"></i>库存不足
+                                </span>
+                            {% elif a.current_stock <= a.min_threshold * 1.5 %}
+                                <span class="alert-badge" style="background:#fffbeb;color:#d97706;">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>即将不足
+                                </span>
+                            {% else %}
+                                <span class="alert-badge" style="background:#f0fdf4;color:#16a34a;">
+                                    <i class="fas fa-check-circle me-1"></i>正常
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if a.last_notified_at %}
+                                <span class="time-text">{{ a.last_notified_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                            {% else %}
+                                <span class="time-text">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <label class="toggle-switch">
+                                <input type="checkbox" {% if a.enabled %}checked{% endif %}
+                                       onchange="toggleAlert({{ a.id }}, this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary me-1" onclick="editAlert({{ a.id }})" title="编辑">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <form method="post" action="{{ url_for('feature.spare_part_alert_delete', id=a.id) }}"
+                                  class="d-inline" onsubmit="return confirm('确定删除「{{ a.spare_part_name }}」的预警配置？')">
+                                <button class="btn btn-sm btn-outline-danger" title="删除">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-5">
+                            <i class="fas fa-inbox fa-3x mb-3" style="opacity:0.2;"></i>
+                            <div>暂无预警配置</div>
+                            <small>点击「新建预警」添加备件库存预警</small>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 新建/编辑预警弹窗 -->
+<div class="modal fade" id="alertModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fas fa-bell text-warning me-1"></i> <span id="alertModalTitle">新建预警配置</span></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('feature.spare_part_alert_save') }}" id="alertForm">
+                <input type="hidden" name="id" id="alertId" value="">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">备件名称 <span class="text-danger">*</span></label>
+                        <input type="text" name="spare_part_name" class="form-control" id="a_name"
+                               placeholder="输入备件名称" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">备件规格</label>
+                        <input type="text" name="spare_part_spec" class="form-control" id="a_spec"
+                               placeholder="例如：型号/尺寸/材质">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">最低库存阈值 <span class="text-danger">*</span></label>
+                        <input type="number" name="min_threshold" class="form-control" id="a_threshold"
+                               min="1" step="1" placeholder="低于此数量时触发预警" required>
+                        <div class="form-text">当前库存低于此值时，系统将自动发出库存预警通知</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">启用预警</label>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="enabled" id="a_enabled" checked>
+                            <label class="form-check-label small" for="a_enabled">创建后立即启用库存预警</label>
+                        </div>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">备注</label>
+                        <textarea name="remark" class="form-control" id="a_remark" rows="2"
+                                  placeholder="可选备注信息"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-warning btn-sm" id="alertSaveBtn">
+                        <i class="fas fa-save me-1"></i>保存
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ===== 新建/重置表单 =====
+function resetAlertForm() {
+    document.getElementById('alertModalTitle').textContent = '新建预警配置';
+    document.getElementById('alertId').value = '';
+    document.getElementById('alertForm').reset();
+    document.getElementById('a_enabled').checked = true;
+    document.getElementById('alertSaveBtn').innerHTML = '<i class="fas fa-save me-1"></i>保存';
+}
+
+// ===== 编辑预警 =====
+function editAlert(id) {
+    document.getElementById('alertModalTitle').textContent = '编辑预警配置';
+    document.getElementById('alertId').value = id;
+    document.getElementById('alertSaveBtn').innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>加载中...';
+    document.getElementById('alertSaveBtn').disabled = true;
+
+    fetch('{{ url_for("feature.spare_part_alert_get") }}?id=' + id)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('a_name').value = data.alert.spare_part_name || '';
+                document.getElementById('a_spec').value = data.alert.spare_part_spec || '';
+                document.getElementById('a_threshold').value = data.alert.min_threshold || '';
+                document.getElementById('a_enabled').checked = data.alert.enabled !== false;
+                document.getElementById('a_remark').value = data.alert.remark || '';
+            } else {
+                showToast('<i class="fas fa-times-circle"></i> ' + (data.error || '加载失败'), 'error');
+            }
+        })
+        .catch(() => showToast('<i class="fas fa-times-circle"></i> 网络错误', 'error'))
+        .finally(() => {
+            document.getElementById('alertSaveBtn').innerHTML = '<i class="fas fa-save me-1"></i>保存';
+            document.getElementById('alertSaveBtn').disabled = false;
+        });
+
+    // 显示弹窗
+    var modal = new bootstrap.Modal(document.getElementById('alertModal'));
+    modal.show();
+}
+
+// ===== 切换预警开关 =====
+function toggleAlert(id, enabled) {
+    fetch('{{ url_for("feature.spare_part_alert_toggle") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id: id, enabled: enabled})
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            showToast('<i class="fas fa-check-circle"></i> ' + res.message, 'success');
+            // 延迟刷新以更新状态
+            setTimeout(() => location.reload(), 800);
+        } else {
+            showToast('<i class="fas fa-times-circle"></i> ' + (res.error || '操作失败'), 'error');
+            // 回滚开关状态
+            location.reload();
+        }
+    })
+    .catch(() => {
+        showToast('<i class="fas fa-times-circle"></i> 网络错误', 'error');
+        location.reload();
+    });
+}
+
+// ===== 表单提交拦截（AJAX 提交） =====
+document.getElementById('alertForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('alertSaveBtn');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>保存中...';
+    btn.disabled = true;
+
+    const formData = new FormData(this);
+    fetch(this.action, {
+        method: 'POST',
+        body: formData
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            showToast('<i class="fas fa-check-circle"></i> ' + res.message, 'success');
+            var modal = bootstrap.Modal.getInstance(document.getElementById('alertModal'));
+            if (modal) modal.hide();
+            setTimeout(() => location.reload(), 800);
+        } else {
+            showToast('<i class="fas fa-times-circle"></i> ' + (res.error || '保存失败'), 'error');
+        }
+    })
+    .catch(() => showToast('<i class="fas fa-times-circle"></i> 网络错误', 'error'))
+    .finally(() => {
+        btn.innerHTML = '<i class="fas fa-save me-1"></i>保存';
+        btn.disabled = false;
+    });
+});
+</script>
+{% endblock %}

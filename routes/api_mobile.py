@@ -1183,13 +1183,9 @@ def delete_photo(user, order_id, photo_id):
         return jsonify({'error': '图片不存在', 'code': 404}), 404
 
     # 删文件
-    import os
-    base = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads')
-    for p in [photo.filepath]:
-        if p:
-            fp = os.path.join(base, p)
-            if os.path.exists(fp):
-                os.remove(fp)
+    from utils.photo import delete_photo_file
+    if photo.filepath:
+        delete_photo_file(photo.filepath)
 
     db.session.delete(photo)
     db.session.commit()

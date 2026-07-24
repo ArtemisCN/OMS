@@ -708,14 +708,11 @@ def upload_photo(order_id):
 def delete_photo(order_id, photo_id):
     """删除工单照片"""
     from models import WorkOrderPhoto
+    from utils.photo import delete_photo_file
     photo = db.session.get(WorkOrderPhoto, photo_id)
     if photo and photo.work_order_id == int(order_id):
-        import os
-        base = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads')
         if photo.filepath:
-            fp = os.path.join(base, photo.filepath)
-            if os.path.exists(fp):
-                os.remove(fp)
+            delete_photo_file(photo.filepath)
         db.session.delete(photo)
         db.session.commit()
     flash('✅ 已删除', 'success')

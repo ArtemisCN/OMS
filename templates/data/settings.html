@@ -205,6 +205,12 @@
   'sla_resolution_urgent':    {'icon':'exclamation-triangle','label':'紧急解决时限','desc':'紧急工单从接单到完成不能超过几小时','unit':'小时'},
   'sla_resolution_normal':    {'icon':'clock','label':'普通解决时限','desc':'普通工单从接单到完成不能超过几小时','unit':'小时'},
   'finance_invoice_types':    {'icon':'file-invoice','label':'发票类型映射','desc':'发票类型代码→名称，JSON格式，如 {"0001":"增值税发票","0002":"普通发票"} 系统自动读取'},
+  'cos_enabled':     {'icon':'cloud-upload-alt','label':'对象存储开关','desc':'开启后图片上传到腾讯云COS，不存本地','unit':''},
+  'cos_bucket':      {'icon':'archive','label':'COS存储桶','desc':'腾讯云COS Bucket名称，如 oms-photos-125xxxxxx','unit':''},
+  'cos_region':      {'icon':'map-marker-alt','label':'COS地域','desc':'Bucket所在地域，如 ap-guangzhou','unit':''},
+  'cos_secret_id':   {'icon':'key','label':'SecretId','desc':'腾讯云API密钥ID（CAM访问管理获取）','unit':''},
+  'cos_secret_key':  {'icon':'key','label':'SecretKey','desc':'腾讯云API密钥Key','unit':''},
+  'cos_cdn_domain':  {'icon':'link','label':'CDN加速域名','desc':'可选，如 https://img.xxx.com，留空则用COS默认域名','unit':''},
 } %}
 {% set stepper_cfg = {
   'font_scale':                {'step':5, 'min':50, 'max':200},

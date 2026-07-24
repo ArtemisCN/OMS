@@ -102,6 +102,13 @@ def index():
         ('sla_resolution_emergency', '2', '特急解决时限', '特急工单从接单到搞定不能超过多少小时？默认2小时', 'SLA'),
         ('sla_resolution_urgent', '8', '紧急解决时限', '紧急工单从接单到搞定不能超过多少小时？默认8小时=一个班次', 'SLA'),
         ('sla_resolution_normal', '24', '普通解决时限', '普通工单从接单到搞定不能超过多少小时？默认24小时=一天', 'SLA'),
+        # COS 对象存储
+        ('cos_enabled', '0', '对象存储', '开启后图片上传到腾讯云COS，不存本地', '对象存储'),
+        ('cos_bucket', '', 'COS存储桶', '腾讯云COS Bucket名称，如 oms-photos-125xxxxxx', '对象存储'),
+        ('cos_region', 'ap-guangzhou', 'COS地域', 'Bucket所在地域，如 ap-guangzhou', '对象存储'),
+        ('cos_secret_id', '', 'SecretId', '腾讯云API密钥ID（CAM访问管理获取）', '对象存储'),
+        ('cos_secret_key', '', 'SecretKey', '腾讯云API密钥Key', '对象存储'),
+        ('cos_cdn_domain', '', 'CDN加速域名', '可选，如 https://img.xxx.com，留空则用COS默认域名', '对象存储'),
     ]
     for key, val, label, desc, cat in defaults:
         if key not in existing_keys:
@@ -247,6 +254,13 @@ def init_defaults():
         ('upload_max_mb', '20', '上传大小限制', '单张照片最大允许上传的 MB 数', '工单'),
         ('feature_toggle_auto_assign', 'false', '自动派单', '新工单创建后自动根据人员空闲状态+故障类型匹配度分配处理人（需先创建好人员账号）', '功能开关'),
         ('feature_toggle_timeout_reminder', 'false', '超时催办', '工单超过设定时长未处理时自动发送企业微信催办通知', '功能开关'),
+        # COS 对象存储配置
+        ('cos_enabled', '0', '对象存储', '开启后图片上传到腾讯云COS，不存本地', '对象存储'),
+        ('cos_bucket', '', 'COS存储桶', '腾讯云COS Bucket名称，如 oms-photos-125xxxxxx', '对象存储'),
+        ('cos_region', 'ap-guangzhou', 'COS地域', 'Bucket所在地域，如 ap-guangzhou', '对象存储'),
+        ('cos_secret_id', '', 'SecretId', '腾讯云API密钥ID（CAM访问管理获取）', '对象存储'),
+        ('cos_secret_key', '', 'SecretKey', '腾讯云API密钥Key', '对象存储'),
+        ('cos_cdn_domain', '', 'CDN加速域名', '可选，如 https://img.xxx.com，留空则用COS默认域名', '对象存储'),
     ]
     count = 0
     for key, value, label, desc, cat in defaults:

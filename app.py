@@ -233,16 +233,12 @@ if __name__ == '__main__':
             admin.set_password('admin123')
             db.session.add(admin)
 
-            from models import Person, SolutionTemplate
-            default_names = ['徐天麟', '姚毫', '张程', '季张欢', '代茂霖']
-            for name in default_names:
-                if not Person.query.filter_by(name=name).first():
-                    db.session.add(Person(name=name, is_active=True))
+            from models import SolutionTemplate
             for title, content in app_config.SOLUTION_TEMPLATES.items():
                 db.session.add(SolutionTemplate(title=title, content=content))
             db.session.commit()
             print("✓ 初始化完成")
-            print(f"  - 人员: {', '.join(default_names)}")
+            print(f"  - 管理员: admin / admin123")
             print(f"  - 方案模板: {len(app_config.SOLUTION_TEMPLATES)} 条")
         else:
             from models import SolutionTemplate

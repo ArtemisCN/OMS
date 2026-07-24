@@ -1300,6 +1300,7 @@ def list_templates():
     """统一模板管理页面（按组查看故障模板组+方案模板）"""
     from models import FaultTemplateGroup, SolutionTemplate, FaultTemplateItem
     all_teams = data_service.get_team_options()
+    current_team = request.args.get('team', '')
 
     fault_groups = FaultTemplateGroup.query.order_by(FaultTemplateGroup.id).all()
     for g in fault_groups:
@@ -1332,7 +1333,8 @@ def list_templates():
 
     return render_template('data/templates.html', all_teams=all_teams,
                            fault_groups=fault_groups, fault_group_map=fault_group_map,
-                           solutions=solutions, solution_map=solution_map)
+                           solutions=solutions, solution_map=solution_map,
+                           current_team=current_team)
 
 
 @data_bp.route('/templates/copy-to/<target_team>', methods=['POST'])
@@ -1462,6 +1464,146 @@ def delete_fault_template_item(gid, iid):
     data_service.delete_fault_template_item(gid, iid)
     flash('故障项已删除', 'success')
     return redirect(url_for('data.list_templates'))
+
+
+# ==================== 模板管理 JSON API ====================
+
+@data_bp.route('/fault-template-groups/api/add', methods=['POST'])
+@admin_required
+def add_fault_template_group_api():
+    """API：新增故障模板组，返回JSON"""
+    ok, msg = data_service.add_fault_template_group(
+        request.form.get('name', '').strip(),
+        request.form.getlist('teams'),
+        current_user.display_name or current_user.username)
+    if not ok:
+        return jsonify({'ok': False, 'msg': msg}), 400
+    from models import FaultTemplateGroup
+    g = FaultTemplateGroup.query.filter_by(name=request.form.get('name', '').strip()).order_by(FaultTemplateGroup.id.desc()).first()
+    return jsonify({'ok': True, 'group': {
+        'id': g.id, 'name': g.name, 'teams': g.teams or ''
+    }})
+
+
+@data_bp.route('/fault-template-groups/<int:gid>/api/edit', methods=['POST'])
+@admin_required
+def edit_fault_template_group_api(gid):
+    """API：编辑故障模板组，返回JSON"""
+    data_service.edit_fault_template_group(gid,
+        request.form.get('field', ''),
+        request.form.get('value', ''))
+    from models import FaultTemplateGroup
+    g = db.session.get(FaultTemplateGroup, gid)
+    return jsonify({'ok': True, 'group': {
+        'id': g.id, 'name': g.name, 'teams': g.teams or ''
+    }})
+
+
+@data_bp.route('/fault-template-groups/<int:gid>/api/delete', methods=['POST'])
+@admin_required
+def delete_fault_template_group_api(gid):
+    """API：删除故障模板组，返回JSON"""
+    name = data_service.delete_fault_template_group(gid,
+        current_user.display_name or current_user.username)
+    return jsonify({'ok': True})
+
+
+@data_bp.route('/fault-template-groups/<int:gid>/items/api/add', methods=['POST'])
+@admin_required
+def add_fault_template_item_api(gid):
+    """API：新增故障模板项，返回JSON"""
+    ok, msg = data_service.add_fault_template_item(gid,
+        request.form.get('fault_type', '硬件'),
+        request.form.get('display_name', '').strip(),
+        int(request.form.get('default_count', 1)))
+    if not ok:
+        return jsonify({'ok': False, 'msg': msg}), 400
+    from models import FaultTemplateItem
+    items = FaultTemplateItem.query.filter_by(group_id=gid).order_by(FaultTemplateItem.id.desc()).all()
+    item = items[0] if items else None
+    return jsonify({'ok': True, 'item': {
+        'id': item.id, 'fault_type': item.fault_type,
+        'display_name': item.display_name, 'group_id': item.group_id
+    }})
+
+
+@data_bp.route('/fault-template-groups/<int:gid>/items/<int:iid>/api/edit', methods=['POST'])
+@admin_required
+def edit_fault_template_item_api(gid, iid):
+    """API：编辑故障模板项，返回JSON"""
+    data_service.edit_fault_template_item(gid, iid,
+        request.form.get('fault_type', ''),
+        request.form.get('display_name', ''),
+        int(request.form.get('default_count', 1)))
+    from models import FaultTemplateItem
+    item = db.session.get(FaultTemplateItem, iid)
+    return jsonify({'ok': True, 'item': {
+        'id': item.id, 'fault_type': item.fault_type,
+        'display_name': item.display_name, 'group_id': item.group_id
+    }})
+
+
+@data_bp.route('/fault-template-groups/<int:gid>/items/<int:iid>/api/delete', methods=['POST'])
+@admin_required
+def delete_fault_template_item_api(gid, iid):
+    """API：删除故障模板项，返回JSON"""
+    data_service.delete_fault_template_item(gid, iid)
+    return jsonify({'ok': True})
+
+
+@data_bp.route('/solutions/api/add', methods=['POST'])
+@admin_required
+def add_solution_api():
+    """API：新增方案模板，返回JSON"""
+    teams_list = request.form.getlist('teams')
+    teams = ','.join([t for t in teams_list if t]) if teams_list else ''
+    ok, msg = data_service.add_solution(
+        request.form.get('title', '').strip(),
+        request.form.get('content', '').strip(),
+        request.form.get('keywords', ''),
+        request.form.get('device_type', ''),
+        request.form.get('fault_type', ''),
+        request.form.get('fault_subcategory', ''),
+        teams)
+    if not ok:
+        return jsonify({'ok': False, 'msg': msg}), 400
+    from models import SolutionTemplate
+    s = SolutionTemplate.query.filter_by(title=request.form.get('title', '').strip()).order_by(SolutionTemplate.id.desc()).first()
+    return jsonify({'ok': True, 'solution': {
+        'id': s.id, 'title': s.title, 'content': s.content,
+        'fault_type': s.fault_type or '', 'teams': s.teams or ''
+    }})
+
+
+@data_bp.route('/solutions/<int:sid>/api/edit', methods=['POST'])
+@admin_required
+def edit_solution_api(sid):
+    """API：编辑方案模板，返回JSON"""
+    from models import SolutionTemplate
+    s = db.session.get(SolutionTemplate, sid)
+    if not s:
+        return jsonify({'ok': False, 'msg': '方案不存在'}), 404
+    s.title = request.form.get('title', s.title)
+    s.content = request.form.get('content', s.content)
+    s.fault_type = request.form.get('fault_type', s.fault_type)
+    s.keywords = request.form.get('keywords', s.keywords)
+    s.device_type = request.form.get('device_type', s.device_type)
+    teams = request.form.get('teams', '')
+    if teams:
+        s.teams = teams
+    db.session.commit()
+    return jsonify({'ok': True, 'solution': {
+        'id': s.id, 'title': s.title, 'content': s.content,
+        'fault_type': s.fault_type or '', 'teams': s.teams or ''
+    }})
+
+
+@data_bp.route('/solutions/<int:sid>/api/delete', methods=['POST'])
+@admin_required
+def delete_solution_api(sid):
+    """API：删除方案模板，返回JSON"""
+    data_service.delete_solution(sid, current_user.display_name or current_user.username)
+    return jsonify({'ok': True})
 
 
 # ==================== 注册审批 ====================

@@ -288,52 +288,63 @@ def sla_dashboard():
 @feature_bp.route('/sla/data', methods=['GET'])
 @login_required
 def sla_data():
-    """SLA 数据 JSON"""
+    """SLA 数据 JSON（优化版：SQL 批量计算，不调 is_overdue 属性）"""
     now = datetime.now()
-    # 使用 is_overdue 属性检查所有工单
+    thresholds = _get_sla_thresholds()
+
+    # 只查最近3个月的工单，避免全表扫描
+    three_months_ago = now - timedelta(days=90)
+
     all_orders = WorkOrder.query.filter(
-        WorkOrder.status.in_(['pending', 'in_progress', 'completed'])
+        WorkOrder.status.in_(['pending', 'in_progress', 'completed']),
+        WorkOrder.created_at >= three_months_ago
     ).order_by(WorkOrder.created_at.desc()).all()
 
     overdue_list = []
     for wo in all_orders:
-        if wo.is_overdue:
-            cost_hours = None
-            if wo.end_time or wo.completed_at:
-                end = wo.end_time or wo.completed_at
-                start = wo.start_time or wo.accepted_at or wo.created_at
-                if start:
-                    cost_hours = round((end - start).total_seconds() / 3600, 1)
-            elif wo.status in ('pending', 'in_progress') and wo.created_at:
-                cost_hours = round((now - wo.created_at).total_seconds() / 3600, 1)
+        t = thresholds.get(wo.priority, thresholds['normal'])
+        is_overdue = _check_overdue(wo, t, now)
+        if not is_overdue:
+            continue
 
-            # 友好显示：超过24h显示 X天Y小时
-            display_time = ''
-            if cost_hours is not None:
-                if cost_hours >= 24:
-                    days = int(cost_hours // 24)
-                    hours = int(cost_hours % 24)
-                    display_time = f'{days}d{hours}h'
-                else:
-                    display_time = f'{cost_hours}h'
+        cost_hours = None
+        if wo.end_time or wo.completed_at:
+            end = wo.end_time or wo.completed_at
+            start = wo.start_time or wo.accepted_at or wo.created_at
+            if start:
+                cost_hours = round((end - start).total_seconds() / 3600, 1)
+        elif wo.status in ('pending', 'in_progress') and wo.created_at:
+            cost_hours = round((now - wo.created_at).total_seconds() / 3600, 1)
 
-            overdue_list.append({
-                'id': wo.id,
-                'title': wo.title,
-                'priority': wo.priority,
-                'status': wo.status,
-                'person': wo.person,
-                'department': wo.department,
-                'created_at': fmt_dt(wo.created_at, '%Y-%m-%d %H:%M'),
-                'cost_hours': cost_hours,
-                'display_time': display_time,
-            })
+        display_time = ''
+        if cost_hours is not None:
+            if cost_hours >= 24:
+                days = int(cost_hours // 24)
+                hours = int(cost_hours % 24)
+                display_time = f'{days}d{hours}h'
+            else:
+                display_time = f'{cost_hours}h'
 
-    # 按优先级统计
+        overdue_list.append({
+            'id': wo.id,
+            'title': wo.title,
+            'priority': wo.priority,
+            'status': wo.status,
+            'person': wo.person,
+            'department': wo.department,
+            'created_at': fmt_dt(wo.created_at, '%Y-%m-%d %H:%M'),
+            'cost_hours': cost_hours,
+            'display_time': display_time,
+        })
+
+    # 用 SQL 聚合统计，不循环 Python
+    total_count = len(all_orders)
     by_priority = {}
     for pri in ['normal', 'urgent', 'emergency']:
-        total = sum(1 for wo in all_orders if wo.priority == pri)
-        overdue = sum(1 for wo in all_orders if wo.priority == pri and wo.is_overdue)
+        t = thresholds.get(pri, thresholds['normal'])
+        pri_orders = [wo for wo in all_orders if wo.priority == pri]
+        total = len(pri_orders)
+        overdue = sum(1 for wo in pri_orders if _check_overdue(wo, t, now))
         by_priority[pri] = {
             'total': total,
             'overdue': overdue,
@@ -341,8 +352,25 @@ def sla_data():
         }
 
     return jsonify(success=True, overdue_count=len(overdue_list),
-                   total_count=len(all_orders), overdue_list=overdue_list,
+                   total_count=total_count, overdue_list=overdue_list,
                    by_priority=by_priority)
+
+
+def _check_overdue(wo, thresholds, now):
+    """直接判断工单是否超时，不调 is_overdue 属性（避免 N+1 查 SystemSetting）"""
+    resp_th = thresholds['response']
+    resol_th = thresholds['resolution']
+    if wo.status == 'completed' and (wo.end_time or wo.completed_at):
+        end = wo.end_time or wo.completed_at
+        start = wo.start_time or wo.accepted_at or wo.created_at
+        if start:
+            return (end - start).total_seconds() / 3600 > resol_th
+        return False
+    elif wo.status == 'in_progress' and wo.accepted_at:
+        return (now - wo.accepted_at).total_seconds() / 3600 > resol_th
+    elif wo.status == 'pending' and wo.created_at:
+        return (now - wo.created_at).total_seconds() / 3600 > resp_th
+    return False
 
 
 @feature_bp.route('/sla/settings', methods=['POST'])

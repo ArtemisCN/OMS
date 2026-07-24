@@ -1100,6 +1100,7 @@ def api_addresses(user):
 @login_required_api
 def list_photos(user, order_id):
     """获取工单图片列表"""
+    from utils.photo import get_photo_url
     order = db.session.get(WorkOrder, order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
@@ -1109,7 +1110,7 @@ def list_photos(user, order_id):
     return jsonify({
         'photos': [{
             'id': p.id,
-            'url': '/uploads/' + p.filepath,
+            'url': get_photo_url(p.filepath),
             'filename': p.filename,
             'file_size': p.file_size,
             'width': p.width,
@@ -1133,7 +1134,7 @@ def upload_photo(user, order_id):
     if not files:
         return jsonify({'error': '请选择图片', 'code': 400}), 400
 
-    from utils.photo import save_photo, allowed_file
+    from utils.photo import save_photo, allowed_file, get_photo_url
     uploaded = []
     errors = []
 
@@ -1157,7 +1158,7 @@ def upload_photo(user, order_id):
             db.session.flush()
             uploaded.append({
                 'id': photo.id,
-                'url': '/uploads/' + rel_path,
+                'url': get_photo_url(rel_path),
                 'filename': f.filename,
             })
         except Exception as e:

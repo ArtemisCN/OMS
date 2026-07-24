@@ -436,7 +436,7 @@ function renderDetail(o){
   if(o.photos && o.photos.length){
     h.innerHTML += '<div class="detail-card"><h3>📷 照片 ('+o.photos.length+')</h3><div class="photo-grid">';
     o.photos.forEach(function(p){
-      h.innerHTML += '<div class="photo-item"><img src="'+(p.thumbnail_url||p.url||'/static/uploads/'+p.filename)+'" onclick="viewPhoto(\''+(p.url||'/static/uploads/'+p.filename)+'\')"></div>';
+      h.innerHTML += '<div class="photo-item"><img src="'+(p.thumbnail_url||p.url||'/uploads/'+p.filepath)+'" onclick="viewPhoto(\''+(p.url||'/uploads/'+p.filepath)+'\')"></div>';
     });
     h.innerHTML += '</div></div>';
   }

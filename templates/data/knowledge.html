@@ -152,6 +152,18 @@
 [data-theme="dark"] .wo-search-result { border-color:#2a2e3a; background:#1a1d27; }
 [data-theme="dark"] .wo-search-modal .modal-content { background:#111318; }
 
+/* ====== Tab 导航 ====== */
+.kh-tabs { display:flex;gap:4px;margin-bottom:20px;padding:4px;background:var(--card-bg,#f1f5f9);border-radius:10px;width:fit-content; }
+.kh-tabs .sub-nav-tab { display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:8px;font-size:13px;font-weight:500;color:var(--text-secondary,#475569);text-decoration:none;transition:all .2s;cursor:pointer;border:none;background:transparent; }
+.kh-tabs .sub-nav-tab:hover { color:var(--primary,#4f46e5);background:rgba(79,70,229,0.06); }
+.kh-tabs .sub-nav-tab.active { background:var(--primary,#4f46e5);color:#fff;box-shadow:0 2px 8px rgba(79,70,229,0.25); }
+.kh-tabs .sub-nav-tab i { font-size:14px; }
+
+/* Tab 切换动画 */
+.kh-tab-pane { transition:opacity 0.3s ease,transform 0.3s ease; }
+.kh-tab-pane.active { opacity:1;transform:translateY(0); }
+.kh-tab-pane:not(.active) { position:absolute;opacity:0;transform:translateY(12px);pointer-events:none;overflow:hidden;height:0;width:0; }
+
 /* 动画 */
 @keyframes khFadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
 .kh-card { animation:khFadeUp 0.35s ease both; }
@@ -168,6 +180,14 @@
 </style>
 
 <div class="kh-wrap">
+  <!-- Tab 导航 -->
+  <div class="kh-tabs">
+    <button class="sub-nav-tab active" data-tab="knowledge" onclick="switchTab('knowledge')"><i class="fas fa-book"></i> 知识库</button>
+    <button class="sub-nav-tab" data-tab="ai" onclick="switchTab('ai')"><i class="fas fa-robot"></i> AI问答</button>
+  </div>
+
+  <!-- Tab: 知识库 -->
+  <div class="kh-tab-pane active" id="tab-knowledge">
   <div class="kh-topbar">
     <h4><i class="fas fa-book"></i> 知识库</h4>
     <div class="kh-topbar-right">
@@ -243,7 +263,44 @@
     <div style="font-size:13px;color:var(--text-muted,#94a3b8);">点击右上角「新增」添加第一篇知识文章</div>
   </div>
   {% endif %}
-</div>
+  </div><!-- /.kh-tab-pane#tab-knowledge -->
+
+  <!-- Tab: AI 问答 -->
+  <div class="kh-tab-pane" id="tab-ai">
+    <div class="kb-qa-container" style="max-width:860px;margin:0 auto;padding:0 0 3rem;">
+      <!-- 搜索输入框 -->
+      <div class="kb-search-box" style="background:var(--card-bg);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid var(--card-border);border-radius:14px;padding:4px 4px 4px 18px;display:flex;align-items:center;gap:8px;box-shadow:var(--card-shadow);transition:box-shadow .2s,border-color .2s;margin-bottom:1.25rem;">
+        <input type="text" id="kbSearchInput" class="kb-search-input" placeholder="请输入故障描述，例如：CT机扫描时报错E100..." maxlength="500" autocomplete="off"
+               style="flex:1;border:none;background:transparent;color:var(--text);font-size:0.95rem;outline:none;padding:12px 0;" />
+        <button class="btn-send" id="kbSendBtn" title="发送" onclick="kbSendQuery()"
+                style="width:42px;height:42px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--primary,#4f46e5),var(--primary-dark,#4338ca));color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.1rem;cursor:pointer;transition:transform .15s,box-shadow .2s;flex-shrink:0;">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </div>
+
+      <!-- 对话消息区 -->
+      <div class="kb-messages" id="kbMessages" style="display:flex;flex-direction:column;gap:1rem;margin-bottom:1.5rem;min-height:200px;">
+        <div class="kb-empty-hint" style="text-align:center;padding:2.5rem 1rem;color:var(--text-muted,#94a3b8);">
+          <i class="fas fa-comment-dots" style="font-size:2.5rem;opacity:0.25;display:block;margin-bottom:0.75rem;"></i>
+          <p style="margin:0;font-size:0.92rem;">输入故障描述，AI 将为您匹配知识库中的解决方案<br>支持设备名称、故障代码、异常现象等关键词</p>
+        </div>
+      </div>
+
+      <!-- 热门故障快捷按钮 -->
+      <div class="kb-hot-section" style="margin-top:0.5rem;">
+        <div class="hot-label" style="font-size:0.82rem;color:var(--text-secondary,#475569);margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+          <i class="fas fa-fire" style="color:#f59e0b;"></i> 热门故障
+        </div>
+        <div class="kb-hot-grid" id="kbHotGrid" style="display:flex;flex-wrap:wrap;gap:8px;">
+          {% for item in hot_questions or [] %}
+          <button class="kb-hot-btn" onclick="kbQuickQuery('{{ item | e }}')" style="background:var(--card-bg);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid var(--card-border);border-radius:20px;padding:6px 16px;font-size:0.85rem;color:var(--text-secondary,#475569);cursor:pointer;transition:all .2s;white-space:nowrap;">{{ item }}</button>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div><!-- /.kh-tab-pane#tab-ai -->
+
+</div><!-- /.kh-wrap -->
 
 <button class="kh-fab" onclick="showAddModal()" title="新增文章"><i class="fas fa-plus"></i></button>
 
@@ -356,6 +413,29 @@
 <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
 
 <script>
+// ==================== Tab 切换 ====================
+function switchTab(tab) {
+  document.querySelectorAll('.kh-tabs .sub-nav-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+  document.querySelectorAll('.kh-tab-pane').forEach(function(pane) {
+    pane.classList.toggle('active', pane.id === 'tab-' + tab);
+  });
+  // 更新 URL 参数
+  var url = new URL(window.location);
+  if (tab === 'ai') { url.searchParams.set('tab', 'ai'); }
+  else { url.searchParams.delete('tab'); }
+  window.history.replaceState({}, '', url);
+}
+
+// 页面加载时检查 tab 参数
+document.addEventListener('DOMContentLoaded', function() {
+  var params = new URLSearchParams(window.location.search);
+  if (params.get('tab') === 'ai') {
+    switchTab('ai');
+  }
+});
+
 // ==================== Quill 编辑器 ====================
 var quill = null;
 var quillReady = false;
@@ -672,6 +752,229 @@ function escapeAttr(t) { if(!t)return''; return String(t).replace(/&/g,'&amp;').
 
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') { closeReadPanel(); }
+});
+
+// ====== AI 知识库问答 - 前端逻辑 ======
+
+const KB = {
+  csrfToken: '',
+  searchUrl: '/feature/ai-kb-search',
+  messagesEl: null,
+  inputEl: null,
+  sendBtn: null,
+  isProcessing: false,
+
+  init() {
+    this.messagesEl = document.getElementById('kbMessages');
+    this.inputEl = document.getElementById('kbSearchInput');
+    this.sendBtn = document.getElementById('kbSendBtn');
+    if (!this.messagesEl || !this.inputEl || !this.sendBtn) return;
+    this.inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        this.send();
+      }
+    });
+    this.inputEl.addEventListener('input', () => this.updateSendBtn());
+    this.updateSendBtn();
+  },
+
+  updateSendBtn() {
+    if (!this.sendBtn) return;
+    const hasText = this.inputEl.value.trim().length > 0;
+    this.sendBtn.disabled = !hasText || this.isProcessing;
+  },
+
+  async send() {
+    const text = this.inputEl.value.trim();
+    if (!text || this.isProcessing) return;
+    const emptyHint = this.messagesEl.querySelector('.kb-empty-hint');
+    if (emptyHint) emptyHint.remove();
+    this.addMessage('user', text);
+    this.inputEl.value = '';
+    this.isProcessing = true;
+    this.updateSendBtn();
+    const loadingId = this.addLoading();
+    try {
+      const resp = await fetch(this.searchUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': this.csrfToken,
+        },
+        body: JSON.stringify({ query: text }),
+      });
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        throw new Error(errData.message || '请求失败 (' + resp.status + ')');
+      }
+      const data = await resp.json();
+      this.removeLoading(loadingId);
+      if (data.error) { this.addError(data.error); return; }
+      this.addAiResponse(text, data);
+    } catch (err) {
+      this.removeLoading(loadingId);
+      this.addError(err.message || '网络异常，请稍后重试');
+    } finally {
+      this.isProcessing = false;
+      this.updateSendBtn();
+    }
+    this.scrollToBottom();
+  },
+
+  addMessage(role, text) {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    const div = document.createElement('div');
+    div.className = 'kb-message ' + role;
+    div.style.cssText = 'display:flex;gap:12px;animation:fadeInUp 0.35s ease both;';
+    div.innerHTML =
+      '<div class="msg-avatar" style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:600;flex-shrink:0;margin-top:2px;' +
+        (role === 'user' ? 'background:linear-gradient(135deg,var(--primary,#4f46e5),#4f46e5);color:#fff;' : 'background:linear-gradient(135deg,#06b6d4,#0891b2);color:#fff;') + '">' +
+        (role === 'user' ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>') +
+      '</div>' +
+      '<div class="msg-bubble" style="max-width:75%;padding:12px 16px;font-size:0.925rem;line-height:1.6;' +
+        (role === 'user'
+          ? 'background:linear-gradient(135deg,var(--primary,#4f46e5),var(--primary-dark,#4338ca));color:#fff;border-radius:16px 16px 4px 16px;'
+          : 'background:var(--card-bg);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid var(--card-border);border-radius:16px 16px 16px 4px;box-shadow:var(--card-shadow);') + '">' +
+        '<div class="msg-header" style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+          '<span class="msg-label" style="font-size:0.78rem;font-weight:600;opacity:0.85;">' + (role === 'user' ? '我' : 'AI 知识库') + '</span>' +
+          '<span class="msg-time" style="font-size:0.72rem;' + (role === 'user' ? 'color:rgba(255,255,255,0.6);' : 'opacity:0.5;') + 'margin-left:auto;">' + timeStr + '</span>' +
+        '</div>' +
+        '<div class="msg-text" style="white-space:pre-wrap;word-break:break-word;">' + this.escapeHtml(text) + '</div>' +
+      '</div>';
+    this.messagesEl.appendChild(div);
+    this.scrollToBottom();
+  },
+
+  addAiResponse(query, data) {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    const div = document.createElement('div');
+    div.className = 'kb-message ai';
+    div.style.cssText = 'display:flex;gap:12px;animation:fadeInUp 0.35s ease both;';
+
+    let solutionsHtml = '';
+    const solutions = data.solutions || [];
+    if (solutions.length > 0) {
+      solutions.forEach((s) => {
+        const confidence = s.confidence || 0;
+        const confidencePct = Math.round(confidence * 100);
+        const barColor = confidence >= 0.8 ? '#22c55e' : confidence >= 0.5 ? '#f59e0b' : '#ef4444';
+        const tags = s.tags || [];
+        const tagsHtml = tags.length
+          ? '<div class="solution-tags" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;">' + tags.map(function(t) { return '<span class="badge bg-primary bg-opacity-10 text-primary" style="font-weight:400;font-size:0.72rem;padding:2px 8px;border-radius:20px;">' + KB.escapeHtml(t) + '</span>'; }).join('') + '</div>'
+          : '';
+        solutionsHtml +=
+          '<div class="kb-solution-card" style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:12px 14px;margin-top:8px;">' +
+            '<div class="solution-title" style="font-weight:600;font-size:0.85rem;color:var(--primary-light,#818cf8);margin-bottom:4px;display:flex;align-items:center;gap:6px;">' +
+              '<i class="fas fa-wrench"></i> ' + this.escapeHtml(s.title || '解决方案') +
+            '</div>' +
+            '<div class="solution-body" style="font-size:0.9rem;color:var(--text-secondary,#475569);line-height:1.6;">' + this.escapeHtml(s.content || '') + '</div>' +
+            tagsHtml +
+            '<div class="confidence-bar" style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:0.75rem;color:var(--text-muted,#94a3b8);">' +
+              '匹配度' +
+              '<div class="bar-track" style="flex:1;max-width:80px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;">' +
+                '<div class="bar-fill" style="height:100%;border-radius:2px;transition:width 0.6s ease;width:' + confidencePct + '%;background:' + barColor + ';"></div>' +
+              '</div>' +
+              confidencePct + '%' +
+            '</div>' +
+          '</div>';
+      });
+    }
+
+    let summaryText = data.summary || '';
+    if (!summaryText && solutions.length === 0) {
+      summaryText = '抱歉，知识库中暂未匹配到相关的解决方案。请尝试更换关键词描述，或联系管理员新增知识条目。';
+    }
+
+    div.innerHTML =
+      '<div class="msg-avatar" style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:600;flex-shrink:0;margin-top:2px;background:linear-gradient(135deg,#06b6d4,#0891b2);color:#fff;"><i class="fas fa-robot"></i></div>' +
+      '<div class="msg-bubble" style="max-width:75%;padding:12px 16px;font-size:0.925rem;line-height:1.6;background:var(--card-bg);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid var(--card-border);border-radius:16px 16px 16px 4px;box-shadow:var(--card-shadow);">' +
+        '<div class="msg-header" style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+          '<span class="msg-label" style="font-size:0.78rem;font-weight:600;opacity:0.85;">AI 知识库</span>' +
+          '<span class="msg-time" style="font-size:0.72rem;opacity:0.5;margin-left:auto;">' + timeStr + '</span>' +
+        '</div>' +
+        (summaryText ? '<div class="msg-text" style="white-space:pre-wrap;word-break:break-word;">' + this.escapeHtml(summaryText) + '</div>' : '') +
+        solutionsHtml +
+      '</div>';
+    this.messagesEl.appendChild(div);
+    this.scrollToBottom();
+  },
+
+  addLoading() {
+    const id = 'kb-loading-' + Date.now();
+    const div = document.createElement('div');
+    div.id = id;
+    div.className = 'kb-message ai';
+    div.style.cssText = 'display:flex;gap:12px;animation:fadeIn 0.3s ease;';
+    div.innerHTML =
+      '<div class="msg-avatar" style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:600;flex-shrink:0;margin-top:2px;background:linear-gradient(135deg,#06b6d4,#0891b2);color:#fff;"><i class="fas fa-robot"></i></div>' +
+      '<div class="kb-loading" style="display:flex;align-items:center;gap:12px;padding:12px 16px;color:var(--text-muted,#94a3b8);font-size:0.9rem;animation:fadeIn 0.3s ease;">' +
+        '<div class="spinner" style="width:20px;height:20px;border:2px solid var(--card-border);border-top-color:var(--primary,#4f46e5);border-radius:50%;animation:spin 0.7s linear infinite;"></div>' +
+        '<span>正在从知识库匹配解决方案...</span>' +
+      '</div>';
+    this.messagesEl.appendChild(div);
+    this.scrollToBottom();
+    return id;
+  },
+
+  removeLoading(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  },
+
+  addError(message) {
+    const div = document.createElement('div');
+    div.className = 'kb-message ai';
+    div.style.cssText = 'display:flex;gap:12px;animation:fadeIn 0.3s ease;';
+    div.innerHTML =
+      '<div class="msg-avatar" style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:600;flex-shrink:0;margin-top:2px;background:linear-gradient(135deg,#06b6d4,#0891b2);color:#fff;"><i class="fas fa-robot"></i></div>' +
+      '<div class="kb-error" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:12px 16px;color:#f87171;font-size:0.88rem;display:flex;align-items:flex-start;gap:8px;animation:fadeIn 0.3s ease;">' +
+        '<i class="fas fa-exclamation-triangle" style="margin-top:2px;flex-shrink:0;"></i>' +
+        '<span>' + this.escapeHtml(message) + '</span>' +
+      '</div>';
+    this.messagesEl.appendChild(div);
+    this.scrollToBottom();
+  },
+
+  quickQuery(text) {
+    this.inputEl.value = text;
+    this.send();
+  },
+
+  scrollToBottom() {
+    const scrollable = this.messagesEl ? (this.messagesEl.closest('.content') || this.messagesEl) : null;
+    if (!scrollable) return;
+    requestAnimationFrame(() => {
+      scrollable.scrollTop = scrollable.scrollHeight;
+    });
+  },
+
+  escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+};
+
+function kbSendQuery() { KB.send(); }
+function kbQuickQuery(text) { KB.quickQuery(text); }
+
+// 扩展 DOMContentLoaded 以初始化 KB
+var _origDCL = document.addEventListener;
+document.addEventListener('DOMContentLoaded', function() {
+  var params = new URLSearchParams(window.location.search);
+  if (params.get('tab') === 'ai' || document.getElementById('tab-ai').classList.contains('active')) {
+    KB.init();
+  }
+  // 监听 tab 切换以初始化 KB
+  var _origSwitch = window.switchTab;
+  window.switchTab = function(tab) {
+    _origSwitch(tab);
+    if (tab === 'ai') { KB.init(); }
+  };
 });
 </script>
 {% endblock %}

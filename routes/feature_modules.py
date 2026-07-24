@@ -2677,13 +2677,8 @@ def asset_lifecycle():
 @feature_bp.route('/ai-kb-qa', methods=['GET'])
 @login_required
 def ai_kb_qa():
-    """AI知识库问答页面"""
-    hot_questions = SolutionTemplate.query.order_by(SolutionTemplate.id.desc()).limit(8).all()
-    return render_template('feature/ai_kb_qa.html',
-                           hot_questions=hot_questions,
-                           hot_questions_json=json.dumps([{
-                               'id': q.id, 'title': q.title,
-                           } for q in hot_questions], ensure_ascii=False))
+    """AI知识库问答页面 — 已合并到知识库页面"""
+    return redirect(url_for('data.list_knowledge', tab='ai'))
 
 
 @feature_bp.route('/ai-kb-search', methods=['POST'])

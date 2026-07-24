@@ -617,6 +617,11 @@
        style="padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;color:var(--text,#475569);text-decoration:none;transition:all .15s;">
       <i class="fas fa-file-alt"></i> 电子表单
     </a>
+    <a href="/finance/"
+       class="sub-nav-tab {% if request.endpoint and request.endpoint.startswith('finance.') %}active{% endif %}"
+       style="padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;color:var(--text,#475569);text-decoration:none;transition:all .15s;">
+      <i class="fas fa-file-invoice-dollar"></i> 维修做账
+    </a>
   </div>
 
   <div class="pipeline-header">

@@ -74,7 +74,7 @@
                     {% endif %}
 
                     <!-- ===== 业务管理 ===== -->
-                    {% set _show_s3 = can_access('巡检管理') or can_access('维修管理') or can_access('知识库') or can_access('值班排班') %}
+                    {% set _show_s3 = can_access('巡检管理') or can_access('维修管理') or can_access('知识库') or can_access('值班排班') or can_access('维修做账') %}
                     {% if _show_s3 %}<div class="nav-section-label">业务管理</div>{% endif %}
                     {% if can_access('巡检管理') %}
                     <a class="nav-link {% if request.endpoint and request.endpoint.startswith('inspection.') %}active{% endif %}"
@@ -82,8 +82,8 @@
                         <i class="fas fa-clipboard-check"></i> 巡检管理
                     </a>
                     {% endif %}
-                    {% if can_access('维修管理') or can_access('电子表单') %}
-                    <a class="nav-link {% if request.endpoint and (request.endpoint.startswith('repair.') or request.endpoint.startswith('forms.')) %}active{% endif %}"
+                    {% if can_access('维修管理') or can_access('电子表单') or can_access('维修做账') %}
+                    <a class="nav-link {% if request.endpoint and (request.endpoint.startswith('repair.') or request.endpoint.startswith('forms.') or request.endpoint.startswith('finance.')) %}active{% endif %}"
                        href="{{ url_for('repair.order_list') }}">
                         <i class="fas fa-tools"></i> 维修管理
                     </a>
@@ -124,22 +124,13 @@
                     </a>
                     {% endif %}
                     {% if can_access('备件库存') %}
-                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('stock.') %}active{% endif %}"
+                    <a class="nav-link {% if request.endpoint and (request.endpoint.startswith('stock.') or request.endpoint == 'feature.spare_part_alerts' or request.endpoint == 'feature.stock_requests') %}active{% endif %}"
                        href="{{ url_for('stock.index') }}">
                         <i class="fas fa-boxes"></i> 备件库存
                     </a>
                     {# 出库总记录已移到备件库存页面内 #}
                     {% endif %}
                     {# 出入库管理已合并到资产台账 #}
-                    <!-- ===== 财务做账 ===== -->
-                    {% if can_access('维修做账') %}
-                    <div class="nav-section-label">财务做账</div>
-                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('finance.') %}active{% endif %}"
-                       href="{{ url_for('finance.index') }}">
-                        <i class="fas fa-file-invoice-dollar"></i> 维修做账
-                    </a>
-                    {% endif %}
-
                     <!-- ===== 系统管理 ===== -->
                     {% set _show_s5 = can_access('审计日志') or can_access('月度报表') or can_access('权限管理') or can_access('注册审批') or current_user.is_admin or can_access('服务器监控') or can_access('重复单分析') %}
                     {% if _show_s5 %}<div class="nav-section-label">系统管理</div>{% endif %}
@@ -191,7 +182,7 @@
                     {# 工单管理已合并（SLA监控移至工单列表区，智能开关移至数据管理） #}
 
                     <!-- ===== 运维分析（合并报表） ===== -->
-                    {% set _show_s7 = can_access('效能看板') or can_access('运维大屏') or can_access('领导驾驶舱') or can_access('故障热力图') or can_access('数字孪生') or can_access('自定义报表') or can_access('周报月报') or can_access('交接班日志') or can_access('投诉管理') or can_access('巡检路线规划') or can_access('维修评价') or can_access('运维成本核算') or can_access('设备履历') or can_access('维保日历') or can_access('备件预警') or can_access('领用审批') or can_access('短信通知') or can_access('AI知识库问答') or can_access('多院区协同') %}
+                    {% set _show_s7 = can_access('效能看板') or can_access('运维大屏') or can_access('领导驾驶舱') or can_access('故障热力图') or can_access('数字孪生') or can_access('自定义报表') or can_access('周报月报') or can_access('交接班日志') or can_access('投诉管理') or can_access('巡检路线规划') or can_access('维修评价') or can_access('运维成本核算') or can_access('设备履历') or can_access('维保日历') or can_access('短信通知') or can_access('多院区协同') %}
                     {% if _show_s7 %}<div class="nav-section-label" style="margin-top:4px;">运维分析</div>{% endif %}
 
                     {% if can_access('效能看板') %}
@@ -277,28 +268,10 @@
                         <i class="fas fa-calendar-alt"></i> 维保日历
                     </a>
                     {% endif %}
-                    {% if can_access('备件预警') %}
-                    <a class="nav-link {% if request.endpoint == 'feature.spare_part_alerts' %}active{% endif %}"
-                       href="{{ url_for('feature.spare_part_alerts') }}">
-                        <i class="fas fa-exclamation-triangle"></i> 备件预警
-                    </a>
-                    {% endif %}
-                    {% if can_access('领用审批') %}
-                    <a class="nav-link {% if request.endpoint == 'feature.stock_requests' %}active{% endif %}"
-                       href="{{ url_for('feature.stock_requests') }}">
-                        <i class="fas fa-clipboard-check"></i> 领用审批
-                    </a>
-                    {% endif %}
                     {% if can_access('短信通知') %}
                     <a class="nav-link {% if request.endpoint == 'feature.sms_settings' %}active{% endif %}"
                        href="{{ url_for('feature.sms_settings') }}">
                         <i class="fas fa-sms"></i> 短信通知
-                    </a>
-                    {% endif %}
-                    {% if can_access('AI知识库问答') %}
-                    <a class="nav-link {% if request.endpoint == 'feature.ai_kb_qa' %}active{% endif %}"
-                       href="{{ url_for('feature.ai_kb_qa') }}">
-                        <i class="fas fa-brain"></i> AI知识库
                     </a>
                     {% endif %}
                     {% if can_access('多院区协同') %}
@@ -405,7 +378,7 @@
                             {% if can_access('值班排班') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('data.list_duty_schedules') }}">值班排班</a></li>{% endif %}
                             {% if can_access('知识库') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('data.list_knowledge') }}">知识库</a></li>{% endif %}
                             {% if can_access('巡检管理') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('inspection.list_templates') }}">巡检管理</a></li>{% endif %}
-                            {% if can_access('维修管理') or can_access('电子表单') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('repair.order_list') }}">维修管理</a></li>{% endif %}
+                            {% if can_access('维修管理') or can_access('电子表单') or can_access('维修做账') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('repair.order_list') }}">维修管理</a></li>{% endif %}
                             {% if can_access('审计日志') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('audit.audit_logs') }}">审计日志</a></li>{% endif %}
                             {% if can_access('月度报表') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('report.report_page') }}">月度报表</a></li>{% endif %}
                             {% if can_access('权限管理') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('data.permissions') }}">权限管理</a></li>{% endif %}

@@ -1026,7 +1026,12 @@ def duty_staff_delete(sid):
 def list_knowledge():
     category = request.args.get('category', '')
     articles, categories = data_service.list_knowledge(category)
-    return render_template('data/knowledge.html', articles=articles, categories=categories, cur_cat=category)
+    # 获取热门故障（供AI问答tab使用）
+    from models import SolutionTemplate
+    hot_questions = SolutionTemplate.query.order_by(SolutionTemplate.id.desc()).limit(8).all()
+    hot_titles = [q.title for q in hot_questions]
+    return render_template('data/knowledge.html', articles=articles, categories=categories, cur_cat=category,
+                           hot_questions=hot_titles)
 
 
 @data_bp.route('/knowledge/add', methods=['POST'])

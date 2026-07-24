@@ -1,8 +1,13 @@
 """医院故障工单管理系统 - Web 版入口"""
 import os
 import sys
+import mimetypes
 from flask import Flask
 from flask_login import LoginManager
+
+# 注册 .woff2 / .svg MIME 类型（Flask 开发服务器默认没有）
+mimetypes.add_type('font/woff2', '.woff2')
+mimetypes.add_type('image/svg+xml', '.svg')
 
 # 确保项目目录在 sys.path 中
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

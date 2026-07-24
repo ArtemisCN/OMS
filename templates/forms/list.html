@@ -2,12 +2,25 @@
 {% block title %}电子表单{% endblock %}
 {% block content %}
 <style>
+/* 子导航标签 */
+.sub-nav-tab { padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;color:var(--text,#475569);text-decoration:none;transition:all .15s;display:inline-flex;align-items:center;gap:6px; }
+.sub-nav-tab:hover { background:rgba(99,102,241,0.08); color:#4f46e5 !important; }
+.sub-nav-tab.active { background:#fff !important; color:#4f46e5 !important; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
 .status-badge { font-size:12px; padding:3px 10px; border-radius:20px; font-weight:500; }
 .status-draft { background:#fef3c7; color:#92400e; }
 .status-active { background:#dbeafe; color:#1e40af; }
 .status-completed { background:#d1fae5; color:#065f46; }
 </style>
 <div class="container-fluid px-4 py-3">
+    <!-- ====== 子导航标签 ====== -->
+    <div style="display:flex;gap:4px;margin-bottom:16px;padding:4px;background:var(--card-bg,#f1f5f9);border-radius:10px;width:fit-content;">
+        <a href="{{ url_for('repair.order_list') }}" class="sub-nav-tab {% if request.endpoint and request.endpoint.startswith('repair.') %}active{% endif %}">
+            <i class="fas fa-clipboard-list"></i> 维修单
+        </a>
+        <a href="{{ url_for('forms.form_list') }}" class="sub-nav-tab {% if request.endpoint and request.endpoint.startswith('forms.') %}active{% endif %}">
+            <i class="fas fa-file-alt"></i> 电子表单
+        </a>
+    </div>
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h4 class="mb-0"><i class="fas fa-file-alt me-2"></i>电子表单</h4>
         <div class="d-flex align-items-center gap-2">

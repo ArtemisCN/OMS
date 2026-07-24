@@ -73,7 +73,7 @@
                     {% endif %}
 
                     <!-- ===== 业务管理 ===== -->
-                    {% set _show_s3 = can_access('巡检管理') or can_access('维修管理') or can_access('电子表单') or can_access('知识库') or can_access('值班排班') %}
+                    {% set _show_s3 = can_access('巡检管理') or can_access('维修管理') or can_access('知识库') or can_access('值班排班') %}
                     {% if _show_s3 %}<div class="nav-section-label">业务管理</div>{% endif %}
                     {% if can_access('巡检管理') %}
                     <a class="nav-link {% if request.endpoint and request.endpoint.startswith('inspection.') %}active{% endif %}"
@@ -81,16 +81,10 @@
                         <i class="fas fa-clipboard-check"></i> 巡检管理
                     </a>
                     {% endif %}
-                    {% if can_access('维修管理') %}
-                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('repair.') %}active{% endif %}"
+                    {% if can_access('维修管理') or can_access('电子表单') %}
+                    <a class="nav-link {% if request.endpoint and (request.endpoint.startswith('repair.') or request.endpoint.startswith('forms.')) %}active{% endif %}"
                        href="{{ url_for('repair.order_list') }}">
                         <i class="fas fa-tools"></i> 维修管理
-                    </a>
-                    {% endif %}
-                    {% if can_access('电子表单') %}
-                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('forms.') %}active{% endif %}"
-                       href="{{ url_for('forms.form_list') }}">
-                        <i class="fas fa-file-alt"></i> 电子表单
                     </a>
                     {% endif %}
                     {% if can_access('知识库') %}
@@ -410,8 +404,7 @@
                             {% if can_access('值班排班') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('data.list_duty_schedules') }}">值班排班</a></li>{% endif %}
                             {% if can_access('知识库') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('data.list_knowledge') }}">知识库</a></li>{% endif %}
                             {% if can_access('巡检管理') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('inspection.list_templates') }}">巡检管理</a></li>{% endif %}
-                            {% if can_access('维修管理') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('repair.order_list') }}">维修管理</a></li>{% endif %}
-                            {% if can_access('电子表单') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('forms.form_list') }}">电子表单</a></li>{% endif %}
+                            {% if can_access('维修管理') or can_access('电子表单') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('repair.order_list') }}">维修管理</a></li>{% endif %}
                             {% if can_access('审计日志') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('audit.audit_logs') }}">审计日志</a></li>{% endif %}
                             {% if can_access('月度报表') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('report.report_page') }}">月度报表</a></li>{% endif %}
                             {% if can_access('权限管理') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('data.permissions') }}">权限管理</a></li>{% endif %}

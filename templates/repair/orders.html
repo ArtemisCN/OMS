@@ -74,6 +74,10 @@
   transform: translateY(-2px);
 }
 
+/* 子导航标签 */
+.sub-nav-tab:hover { background: rgba(99,102,241,0.08); color:#4f46e5 !important; }
+.sub-nav-tab.active { background:#fff !important; color:#4f46e5 !important; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+
 /* ====== Pipeline Flow ====== */
 .pipeline-flow {
   display: flex;
@@ -601,6 +605,20 @@
 <div class="repair-pipeline">
 
   <!-- ====== HEADER ====== -->
+  <!-- ====== 子导航标签 ====== -->
+  <div style="display:flex;gap:4px;margin-bottom:16px;padding:4px;background:var(--card-bg,#f1f5f9);border-radius:10px;width:fit-content;">
+    <a href="{{ url_for('repair.order_list') }}"
+       class="sub-nav-tab {% if request.endpoint and request.endpoint.startswith('repair.') %}active{% endif %}"
+       style="padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;color:var(--text,#475569);text-decoration:none;transition:all .15s;">
+      <i class="fas fa-clipboard-list"></i> 维修单
+    </a>
+    <a href="{{ url_for('forms.form_list') }}"
+       class="sub-nav-tab {% if request.endpoint and request.endpoint.startswith('forms.') %}active{% endif %}"
+       style="padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;color:var(--text,#475569);text-decoration:none;transition:all .15s;">
+      <i class="fas fa-file-alt"></i> 电子表单
+    </a>
+  </div>
+
   <div class="pipeline-header">
     <h2>
       <i class="fas fa-clipboard-list"></i> 维修流程管道

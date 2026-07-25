@@ -15,6 +15,7 @@ Page({
     stats: { pending: 0, in_progress: 0, completed: 0, completed_today: 0 },
     user: {},
     subscribed: false,
+    unreadCount: 0,
   },
 
   _prevPending: 0,
@@ -44,17 +45,30 @@ Page({
   },
 
   onShow() {
+    // 刷新用户信息（头像等可能已变更）
+    var app = getApp();
+    var user = wx.getStorageSync('user') || app.globalData.user || {};
+    app.globalData.user = user;
+    this.setData({ user: user });
     // 从后台切回时，只静默刷新，不弹 loading
     this.fetchOrders(true);
     this.startPendingPoll();
+    this.startUnreadPoll();
+    // 立即刷新未读（聊完回来立刻更新红点）
+    var self = this;
+    api.getUnreadCount().then(function(res) {
+      self.setData({ unreadCount: res.total_unread || 0 });
+    }).catch(function() {});
   },
 
   onHide() {
     this.stopPendingPoll();
+    this.stopUnreadPoll();
   },
 
   onUnload() {
     this.stopPendingPoll();
+    this.stopUnreadPoll();
   },
 
   checkSubscribeStatus() {
@@ -92,6 +106,8 @@ Page({
 
   startPendingPoll() {
     this.stopPendingPoll();
+    // 未登录不轮询
+    if (!wx.getStorageSync('token')) return;
     if (this.data.activeTab === 'pending') {
       this._pendingTimer = setInterval(() => {
         this.fetchOrders(true);
@@ -267,15 +283,13 @@ Page({
   // ⋮ 更多菜单：订阅通知 + 退出
   onMore() {
     const subscribed = this.data.subscribed;
-    const items = [subscribed ? '🔔 已订阅' : '🔕 订阅通知', '🎓 在线考试', '🚪 退出登录'];
+    const items = [subscribed ? '🔔 已订阅' : '🔕 订阅通知', '🚪 退出登录'];
     wx.showActionSheet({
       itemList: items,
       success: (res) => {
         if (res.tapIndex === 0) {
           this.onSubscribe();
         } else if (res.tapIndex === 1) {
-          this.onExam();
-        } else if (res.tapIndex === 2) {
           this.onLogout();
         }
       },
@@ -295,6 +309,43 @@ Page({
   // 考试入口
   onExam() {
     wx.navigateTo({ url: '/pages/exam/exam' });
+  },
+
+  onWorkbench() {
+    wx.navigateTo({ url: '/pages/workbench/workbench' });
+  },
+
+  onDuty() {
+    wx.navigateTo({ url: '/pages/duty/duty' });
+  },
+
+  onShift() {
+    wx.navigateTo({ url: '/pages/shift/shift' });
+  },
+
+  // ===== 聊天 =====
+
+  onChat() {
+    wx.navigateTo({ url: '/pages/chat/chat' });
+  },
+
+  startUnreadPoll() {
+    // 未登录不轮询
+    if (!wx.getStorageSync('token')) return;
+    var self = this;
+    this._unreadTimer = setInterval(function() {
+      api.getUnreadCount().then(function(res) {
+        var count = res.total_unread || 0;
+        self.setData({ unreadCount: count });
+      }).catch(function() {});
+    }, 10000);
+  },
+
+  stopUnreadPoll() {
+    if (this._unreadTimer) {
+      clearInterval(this._unreadTimer);
+      this._unreadTimer = null;
+    }
   },
 
   onBindWx() {

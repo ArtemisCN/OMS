@@ -110,6 +110,7 @@
   display: flex;
   gap: 12rpx;
   flex-wrap: nowrap;
+  padding-right: 30rpx;
 }
 .chip {
   display: inline-flex;
@@ -165,14 +166,15 @@
 .btn-primary {
   width: 100%;
   height: 96rpx;
-  line-height: 96rpx;
   border: none;
   border-radius: 20rpx;
   font-size: 32rpx;
   font-weight: 700;
   color: #fff;
   background: linear-gradient(135deg, #4f46e5, #6366f1);
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   box-shadow: 0 4rpx 16rpx rgba(79,70,229,0.3);
 }
 .btn-primary[disabled] { opacity: 0.5; }
@@ -228,9 +230,9 @@
 .modal-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 26rpx 0;
   border-bottom: 2rpx solid #f8fafc;
+  gap: 12rpx;
 }
 .modal-item:last-child { border-bottom: none; }
 .modal-item:active { opacity: .7; }
@@ -238,8 +240,22 @@
   font-size: 28rpx;
   color: #1e293b;
   font-weight: 500;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .modal-item-d {
   font-size: 24rpx;
   color: #64748b;
+  background: #f1f5f9;
+  padding: 4rpx 14rpx;
+  border-radius: 20rpx;
+  flex-shrink: 0;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: auto;
 }

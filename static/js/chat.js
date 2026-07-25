@@ -52,7 +52,7 @@
     // 初始化
     chat.init = function() {
         chat.bubble = document.getElementById('chat-bubble');
-        chat.bubbleWasDocked = false;  // 记录吸附状态，关闭窗口时恢复
+        chat.bubbleWasDocked = false;
         chat.window = document.getElementById('chat-window');
         chat.header = document.getElementById('chat-header');
         chat.title = document.getElementById('chat-title');
@@ -338,7 +338,6 @@
     chat.openWindow = function() {
         chat.window.classList.add('open');
         document.body.classList.add('chat-open');
-        // 打开窗口时展开气泡（取消吸附隐藏）
         if (chat.bubble) {
             chat.bubbleWasDocked = chat.bubble.classList.contains('docked-left') || chat.bubble.classList.contains('docked-right');
             if (chat.bubbleWasDocked) {
@@ -352,7 +351,6 @@
     chat.closeWindow = function() {
         chat.window.classList.remove('open');
         document.body.classList.remove('chat-open');
-        // 关闭窗口时恢复吸附隐藏
         if (chat.bubble && chat.bubbleWasDocked) {
             chat.bubble.classList.remove('chat-open-state');
             chat.bubbleWasDocked = false;

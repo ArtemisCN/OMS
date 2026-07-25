@@ -1,0 +1,68 @@
+<view class="page">
+  <view class="header">
+    <view class="header-left">
+      <text class="header-title">🧑‍💼 个人工作台</text>
+    </view>
+    <text class="btn-back" bindtap="onGoOrders">‹ 返回</text>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading">
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <view wx:else class="content">
+    <!-- 今日概览气泡 -->
+    <view class="stat-row">
+      <view class="stat-item active">
+        <text class="stat-num">{{stats.today.pending}}</text>
+        <text class="stat-label">⏳ 待处理</text>
+      </view>
+      <view class="stat-item active">
+        <text class="stat-num">{{stats.today.completed}}</text>
+        <text class="stat-label">✅ 今日完成</text>
+      </view>
+      <view class="stat-item active">
+        <text class="stat-num">{{stats.today.unassigned}}</text>
+        <text class="stat-label">📋 待接手</text>
+      </view>
+    </view>
+
+    <!-- 月统计卡片 -->
+    <view class="card">
+      <text class="card-title">📊 本月统计</text>
+      <view class="card-body">
+        <view class="metric">
+          <text class="metric-val">{{stats.month.total}}</text>
+          <text class="metric-label">总工单</text>
+        </view>
+        <view class="metric">
+          <text class="metric-val" style="color:#22c55e">{{stats.month.completed}}</text>
+          <text class="metric-label">已完成</text>
+        </view>
+        <view class="metric">
+          <text class="metric-val" style="color:#f97316">{{stats.month.overdue}}</text>
+          <text class="metric-label">超时</text>
+        </view>
+        <view class="metric">
+          <text class="metric-val" style="color:#4f46e5">{{stats.month.rate}}%</text>
+          <text class="metric-label">完成率</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 个人信息 -->
+    <view class="card">
+      <text class="card-title">👤 个人信息</text>
+      <view class="card-body">
+        <view class="info-row avatar-row" bindtap="onChangeAvatar">
+          <image class="info-avatar" src="{{stats.avatar || ''}}" mode="aspectFit"></image>
+          <text class="info-avatar-hint">更换头像 ›</text>
+        </view>
+        <view class="info-row">
+          <text class="info-label">姓名</text>
+          <text class="info-val">{{stats.person}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

@@ -221,6 +221,45 @@ module.exports = {
   guess: (title) =>
     request('GET', '/guess?title=' + encodeURIComponent(title)),
 
+  // ========== 聊天 ==========
+  getConversations: () => request('GET', '/chat/conversations'),
+  getMessages: (convId, beforeId) => {
+    var path = '/chat/messages?conversation_id=' + convId;
+    if (beforeId) path += '&before_id=' + beforeId;
+    return request('GET', path);
+  },
+  sendMessage: (convId, content, msgType) => {
+    var data = { conversation_id: convId, content: content };
+    if (msgType) data.msg_type = msgType;
+    return request('POST', '/chat/send', data);
+  },
+  uploadChatFile: (filePath) => {
+    return new Promise(function(resolve, reject) {
+      var token = _getToken();
+      wx.uploadFile({
+        url: config.API_BASE_URL + '/chat/upload',
+        filePath: filePath,
+        name: 'file',
+        header: token ? { 'Authorization': 'Bearer ' + token } : {},
+        success: function(r) {
+          try {
+            var data = JSON.parse(r.data);
+            if (r.statusCode >= 200 && r.statusCode < 300) resolve(data);
+            else if (r.statusCode === 401) { _tokenCache = null; wx.removeStorageSync('token'); wx.removeStorageSync('user'); wx.reLaunch({ url: '/pages/login/login' }); reject(data); }
+            else reject(data);
+          } catch(e) { reject({ error: '上传解析失败' }); }
+        },
+        fail: function() { reject({ error: '上传失败' }); }
+      });
+    });
+  },
+  getChatUsers: () => request('GET', '/chat/users'),
+  startConversation: (userId) => request('POST', '/chat/start', { user_id: userId }),
+  getUnreadCount: () => request('GET', '/chat/unread-counts'),
+  markAllRead: () => request('POST', '/chat/mark-read'),
+  recallMessage: (msgId) => request('POST', '/chat/recall', { message_id: msgId }),
+  deleteConversation: (convId) => request('POST', '/chat/delete', { conversation_id: convId }),
+
   // ========== 通用请求（盘点用） ==========
   get: (path) => request('GET', path),
   post: (path, data) => request('POST', path, data),

@@ -1,0 +1,60 @@
+<view class="page">
+  <!-- 会话列表 -->
+  <view wx:if="{{loading && conversations.length === 0}}" class="loading-wrap">
+    <view class="loading-icon"></view>
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <view wx:elif="{{conversations.length === 0}}" class="empty">
+    <text class="empty-icon">💬</text>
+    <text class="empty-text">暂无消息</text>
+    <text class="empty-sub">点击下方按钮发起新聊天</text>
+  </view>
+
+  <scroll-view wx:else class="conv-list" scroll-y enhanced show-scrollbar="{{false}}">
+    <view
+      class="conv-item"
+      wx:for="{{conversations}}"
+      wx:key="id"
+      data-id="{{item.id}}"
+      data-title="{{item.title}}"
+      bindtap="onConvTap"
+      bindlongpress="onConvLongPress"
+    >
+      <!-- 头像区域 -->
+      <view class="conv-avatar-wrap">
+        <view
+          class="conv-avatar"
+          style="background: linear-gradient(135deg, {{item.avatarColor[0]}}, {{item.avatarColor[1]}});"
+        >
+          <image wx:if="{{item.conv_avatar}}" class="conv-avatar-img" src="{{item.conv_avatar}}" mode="aspectFill"></image>
+          <text wx:else class="conv-avatar-text">{{item.avatarLetter}}</text>
+        </view>
+        <!-- 群聊标记 -->
+        <view wx:if="{{item.is_group}}" class="conv-group-badge">
+          <text class="conv-group-icon">👥</text>
+        </view>
+      </view>
+
+      <!-- 信息区域 -->
+      <view class="conv-info">
+        <view class="conv-top">
+          <text class="conv-name">{{item.title}}</text>
+          <text class="conv-time">{{item.last_time}}</text>
+        </view>
+        <view class="conv-bottom">
+          <text class="conv-preview">
+            <text wx:if="{{item.last_sender}}" class="conv-sender">{{item.last_sender}}：</text>
+            {{item.last_message}}
+          </text>
+          <view wx:if="{{item.unread > 0}}" class="badge-dot">{{item.unread > 99 ? '99+' : item.unread}}</view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 浮动新聊按钮 -->
+  <view class="fab-new" bindtap="onNewChat">
+    <text class="fab-new-icon">✚</text>
+  </view>
+</view>

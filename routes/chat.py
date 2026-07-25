@@ -48,7 +48,8 @@ def _serialize_conversation(conv, current_user_id):
         'last_message': conv.last_message or '', 'last_sender': conv.last_sender or '',
         'last_time': conv.last_time.isoformat() if conv.last_time else '',
         'unread': unread,
-        'participants': [{'id': p.user_id, 'name': p.user_name, 'hospital_id': p.hospital_id} for p in participants]
+        'participants': [{'id': p.user_id, 'name': p.user_name, 'hospital_id': p.hospital_id,
+                          'avatar': (User.query.get(p.user_id).avatar or '') if User.query.get(p.user_id) else ''} for p in participants]
     }
 
 @chat_bp.route('/conversations')
@@ -81,7 +82,8 @@ def get_messages():
         'id': m.id, 'sender_id': m.sender_id, 'sender_name': m.sender_name,
         'sender_hospital': m.sender_hospital, 'content': m.content, 'msg_type': m.msg_type,
         'recalled': m.recalled, 'file_name': m.file_name, 'file_size': m.file_size,
-        'created_at': m.created_at.isoformat(), 'is_self': m.sender_id == current_user.id
+        'created_at': m.created_at.isoformat(), 'is_self': m.sender_id == current_user.id,
+        'sender_avatar': (User.query.get(m.sender_id).avatar or '') if User.query.get(m.sender_id) else ''
     } for m in messages]})
 
 @chat_bp.route('/send', methods=['POST'])
@@ -115,6 +117,25 @@ def send_message():
         'sender_hospital': msg.sender_hospital, 'content': msg.content,
         'msg_type': msg.msg_type, 'created_at': msg.created_at.isoformat(), 'is_self': True
     })
+
+@chat_bp.route('/leave', methods=['POST'])
+@login_required
+def leave_group():
+    """Leave group chat"""
+    from models import ChatParticipant
+    data = request.get_json(silent=True) or {}
+    conv_id = data.get('conversation_id')
+    if not conv_id:
+        return jsonify({'error': 'missing conversation_id'}), 400
+    participant = ChatParticipant.query.filter_by(
+        conversation_id=conv_id, user_id=current_user.id, is_active=True
+    ).first()
+    if not participant:
+        return jsonify({'error': 'not in this group'}), 404
+    participant.is_active = False
+    db.session.commit()
+    return jsonify({'ok': True})
+
 
 @chat_bp.route('/upload', methods=['POST'])
 @login_required

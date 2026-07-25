@@ -17,9 +17,31 @@
   z-index: 10;
 }
 
-.header-title {
-  font-size: 36rpx;
+.header-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  flex: 1;
+  gap: 12rpx;
+}
+
+.header-avatar {
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 50%;
+  border: 2rpx solid rgba(255,255,255,0.3);
+  flex-shrink: 0;
+}
+
+.header-user {
+  font-size: 32rpx;
   font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .header-user {
@@ -389,5 +411,28 @@
   font-size: 52rpx;
   color: #fff;
   font-weight: 200;
+  line-height: 1;
+}
+
+/* ===== 标题栏聊天入口角标 ===== */
+.chat-header-btn {
+  position: relative;
+}
+.header-chat-badge {
+  position: absolute;
+  top: -4rpx;
+  right: -4rpx;
+  min-width: 28rpx;
+  height: 28rpx;
+  border-radius: 14rpx;
+  background: #ef4444;
+  color: #fff;
+  font-size: 16rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4rpx;
+  border: 2rpx solid rgba(255,255,255,0.3);
   line-height: 1;
 }

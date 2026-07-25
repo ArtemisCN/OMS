@@ -90,6 +90,11 @@
             });
         }
         chat.sendBtn.addEventListener('click', chat.sendMessage);
+        // 退出群聊
+        var leaveBtn = document.getElementById('chat-leave-group');
+        if (leaveBtn) {
+            leaveBtn.addEventListener('click', chat.leaveGroup);
+        }
         chat.input.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') chat.sendMessage();
         });
@@ -482,7 +487,9 @@
 
     // 显示群聊选人列表
     chat.showGroupUserList = function() {
+        chat.chatMode = 'group';
         chat.title.textContent = '选择群成员';
+        chat.selectedGroupUserIds = {};
         chat.backBtn.classList.add('show');
         chat.convList.classList.add('hide');
         chat.msgArea.classList.remove('show');
@@ -522,7 +529,6 @@
         if (!chat.userList) return;
         if (!teams || !Array.isArray(teams)) { teams = []; }
         chat.userList.innerHTML = '';
-        chat.selectedGroupUserIds = {};
 
         if (teams.length === 0) {
             chat.userList.innerHTML = '<div style="text-align:center;padding:40px 16px;color:var(--text-muted);font-size:13px;">暂无其他用户</div>';
@@ -592,6 +598,41 @@
         xhr.send(JSON.stringify({user_ids: userIds}));
     };
 
+    // 退出群聊
+    chat.leaveGroup = function() {
+        if (!chat.currentConvId) return;
+        if (!confirm('确定退出该群聊？')) return;
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/chat/leave', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                chat.showConvList();
+                // 直接从 HTTP 刷新会话列表，确保已退出的群聊消失
+                var fetchXhr = new XMLHttpRequest();
+                fetchXhr.open('GET', '/chat/conversations', true);
+                fetchXhr.onload = function() {
+                    if (fetchXhr.status === 200) {
+                        try {
+                            var convData = JSON.parse(fetchXhr.responseText);
+                            chat.conversations = convData.conversations || [];
+                            chat.renderConvList();
+                            chat.updateBubble();
+                        } catch(e) {}
+                    }
+                };
+                fetchXhr.send();
+            } else {
+                try {
+                    var err = JSON.parse(xhr.responseText);
+                    alert(err.error || '操作失败');
+                } catch(e) { alert('操作失败'); }
+            }
+        };
+        xhr.onerror = function() { alert('网络错误'); };
+        xhr.send(JSON.stringify({conversation_id: chat.currentConvId}));
+    };
+
     // 渲染会话列表
     chat.renderConvList = function() {
         if (!chat.convList) return;
@@ -650,6 +691,15 @@
         chat.renderConvList();
         // 加载消息
         chat.loadMessages(convId);
+        // 显示退出群聊按钮（仅群聊）
+        var leaveBtn = document.getElementById('chat-leave-group');
+        if (leaveBtn) {
+            var conv = null;
+            for (var i = 0; i < chat.conversations.length; i++) {
+                if (chat.conversations[i].id === convId) { conv = chat.conversations[i]; break; }
+            }
+            leaveBtn.style.display = (conv && conv.type === 'group') ? '' : 'none';
+        }
         chat.input.focus();
         // 延迟加载已读状态（等消息渲染完成）
         setTimeout(function() { chat.loadReadStatus(convId); }, 500);
@@ -927,30 +977,30 @@
     chat.sendImageMessage = function(imageUrl) {
         if (!chat.currentConvId) return;
 
-        // 通过 HTTP 发送
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/chat/send', true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                try {
-                    var data = JSON.parse(xhr.responseText);
-                    chat.appendMessage(data, true);
-                    chat.scrollToBottom();
-                    chat.refreshConversations();
-                } catch(e) { }
-            }
-        };
-        xhr.send(JSON.stringify({
-            conversation_id: chat.currentConvId,
-            content: imageUrl,
-            msg_type: 'image'
-        }));
-
-        // 也通过 WS 发送
+        // 优先通过 WebSocket 发送
         if (chat.ws && chat.ws.readyState === WebSocket.OPEN) {
             chat.ws.send(JSON.stringify({
                 type: 'send',
+                conversation_id: chat.currentConvId,
+                content: imageUrl,
+                msg_type: 'image'
+            }));
+        } else {
+            // WS 未连接，降级到 HTTP
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/chat/send', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    try {
+                        var data = JSON.parse(xhr.responseText);
+                        chat.appendMessage(data, true);
+                        chat.scrollToBottom();
+                        chat.refreshConversations();
+                    } catch(e) { }
+                }
+            };
+            xhr.send(JSON.stringify({
                 conversation_id: chat.currentConvId,
                 content: imageUrl,
                 msg_type: 'image'
@@ -1105,28 +1155,30 @@
     chat.sendVoiceMessage = function(content) {
         if (!chat.currentConvId) return;
 
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/chat/send', true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                try {
-                    var data = JSON.parse(xhr.responseText);
-                    chat.appendMessage(data, true);
-                    chat.scrollToBottom();
-                    chat.refreshConversations();
-                } catch(e) { }
-            }
-        };
-        xhr.send(JSON.stringify({
-            conversation_id: chat.currentConvId,
-            content: content,
-            msg_type: 'voice'
-        }));
-
+        // 优先通过 WebSocket 发送
         if (chat.ws && chat.ws.readyState === WebSocket.OPEN) {
             chat.ws.send(JSON.stringify({
                 type: 'send',
+                conversation_id: chat.currentConvId,
+                content: content,
+                msg_type: 'voice'
+            }));
+        } else {
+            // WS 未连接，降级到 HTTP
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/chat/send', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    try {
+                        var data = JSON.parse(xhr.responseText);
+                        chat.appendMessage(data, true);
+                        chat.scrollToBottom();
+                        chat.refreshConversations();
+                    } catch(e) { }
+                }
+            };
+            xhr.send(JSON.stringify({
                 conversation_id: chat.currentConvId,
                 content: content,
                 msg_type: 'voice'
@@ -1140,36 +1192,39 @@
         if (!content || !chat.currentConvId) return;
         chat.input.value = '';
 
-        // 通过 HTTP 发送
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/chat/send', true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                try {
-                    var data = JSON.parse(xhr.responseText);
-                    chat.appendMessage(data, true);
-                    chat.scrollToBottom();
-                    chat.refreshConversations();
-                } catch(e) {
-                    console.error('Chat send parse error:', e);
-                }
-            } else {
-                console.error('Chat send failed:', xhr.status, xhr.responseText);
-            }
-        };
-        xhr.onerror = function() {
-            console.error('Chat send network error');
-        };
-        xhr.send(JSON.stringify({
-            conversation_id: chat.currentConvId,
-            content: content
-        }));
-
-        // 也通过 WebSocket 发送
+        // 优先通过 WebSocket 发送（实时推送给所有在线用户）
         if (chat.ws && chat.ws.readyState === WebSocket.OPEN) {
             chat.ws.send(JSON.stringify({
                 type: 'send',
+                conversation_id: chat.currentConvId,
+                content: content
+            }));
+            // WS 服务端创建消息后广播 new_message 给所有客户端，
+            // sender 收到广播后由 onNewMessage → appendMessage 展示，
+            // 不会重复。
+        } else {
+            // WS 未连接，降级到 HTTP
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/chat/send', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    try {
+                        var data = JSON.parse(xhr.responseText);
+                        chat.appendMessage(data, true);
+                        chat.scrollToBottom();
+                        chat.refreshConversations();
+                    } catch(e) {
+                        console.error('Chat send parse error:', e);
+                    }
+                } else {
+                    console.error('Chat send failed:', xhr.status, xhr.responseText);
+                }
+            };
+            xhr.onerror = function() {
+                console.error('Chat send network error');
+            };
+            xhr.send(JSON.stringify({
                 conversation_id: chat.currentConvId,
                 content: content
             }));
@@ -1216,11 +1271,23 @@
             if (xhr.status === 200) {
                 try {
                     var data = JSON.parse(xhr.responseText);
+                    var oldOnline = chat.onlineUsers;
                     chat.onlineUsers = new Set(data.online_ids || []);
-                    if (chat.userList && chat.userList.classList.contains('show')) {
-                        chat.loadUsers();
+                    // 仅更新在线绿点，不重绘列表（避免滚动重置）
+                    if (chat.chatMode === 'group') {
+                        document.querySelectorAll('.chat-user-item .dot').forEach(function(el) {
+                            var parent = el.closest('.chat-user-item');
+                            var checkbox = parent && parent.querySelector('.group-checkbox');
+                            if (checkbox) {
+                                var uid = parseInt(checkbox.getAttribute('data-uid'));
+                                el.className = 'dot' + (chat.onlineUsers.has(uid) ? '' : ' offline');
+                            }
+                        });
+                    } else {
+                        document.querySelectorAll('.chat-user-item .dot').forEach(function(el) {
+                            // 单聊模式也仅更新绿点，不重绘
+                        });
                     }
-                    chat.renderConvList();
                 } catch(e) {}
             }
         };

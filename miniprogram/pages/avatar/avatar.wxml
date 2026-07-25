@@ -1,0 +1,32 @@
+<view class="page">
+  <view class="banner">
+    <view class="banner-text">选择一个你喜欢的头像</view>
+    <view class="banner-sub">6大风格 · 48个选择</view>
+  </view>
+
+  <view class="current-section">
+    <text class="section-title">当前头像</text>
+    <view class="current-avatar-wrap">
+      <image class="current-avatar" src="{{userAvatar}}" mode="aspectFit"></image>
+    </view>
+  </view>
+
+  <block wx:for="{{groups}}" wx:key="key">
+    <view class="avatar-section">
+      <text class="section-title">{{item.label}}</text>
+      <view class="avatar-grid">
+        <view
+          class="avatar-item {{userAvatar === url ? 'selected' : ''}}"
+          wx:for="{{item.avatars}}"
+          wx:for-index="idx"
+          wx:key="idx"
+          data-src="{{item}}"
+          bindtap="onSelect"
+        >
+          <image class="avatar-img" src="{{item}}" mode="aspectFit"></image>
+          <view wx:if="{{userAvatar === item}}" class="avatar-check">✓</view>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

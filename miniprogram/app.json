@@ -8,7 +8,14 @@
     "pages/inventory/inventory",
     "pages/inventory/scan",
     "pages/exam/exam",
-    "pages/exam/take"
+    "pages/exam/take",
+    "pages/workbench/workbench",
+    "pages/duty/duty",
+    "pages/shift/shift",
+    "pages/chat/chat",
+    "pages/chat-detail/chat-detail",
+    "pages/new-chat/new-chat",
+    "pages/avatar/avatar"
   ],
   "window": {
     "navigationBarTitleText": "工单助手",

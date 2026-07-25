@@ -1,5 +1,5 @@
 """仪表盘路由（优化版：合并查询+缓存）"""
-from flask import current_app,  Blueprint, render_template, request, g
+from flask import current_app,  Blueprint, render_template, request, g, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import func, case
 from datetime import datetime, timedelta
@@ -7,6 +7,83 @@ from models import WorkOrder, User, db, SystemSetting
 from services.cache import cached
 
 main_bp = Blueprint('main', __name__)
+
+
+@main_bp.route('/user/avatars')
+@login_required
+def list_avatars():
+    """返回默认头像列表"""
+    avatars = [
+        # 🎨 卡通冒险 - Adventurer 风格
+        'https://api.dicebear.com/9.x/adventurer/svg?seed=Kitty&backgroundColor=b6e3f4',
+        'https://api.dicebear.com/9.x/adventurer/svg?seed=Max&backgroundColor=ffd5dc',
+        'https://api.dicebear.com/9.x/adventurer/svg?seed=Luna&backgroundColor=c0aede',
+        'https://api.dicebear.com/9.x/adventurer/svg?seed=Charlie&backgroundColor=d1d4f9',
+        'https://api.dicebear.com/9.x/adventurer/svg?seed=Molly&backgroundColor=ffdfbf',
+        'https://api.dicebear.com/9.x/adventurer/svg?seed=Cooper&backgroundColor=fecaca',
+        'https://api.dicebear.com/9.x/adventurer/svg?seed=Daisy&backgroundColor=bbf7d0',
+        'https://api.dicebear.com/9.x/adventurer/svg?seed=Buddy&backgroundColor=fde68a',
+        # ✨ 可爱动漫 - Lorelei 风格
+        'https://api.dicebear.com/9.x/lorelei/svg?seed=Alice&backgroundColor=b6e3f4',
+        'https://api.dicebear.com/9.x/lorelei/svg?seed=Bob&backgroundColor=ffd5dc',
+        'https://api.dicebear.com/9.x/lorelei/svg?seed=Coral&backgroundColor=c0aede',
+        'https://api.dicebear.com/9.x/lorelei/svg?seed=Dean&backgroundColor=d1d4f9',
+        'https://api.dicebear.com/9.x/lorelei/svg?seed=Eve&backgroundColor=ffdfbf',
+        'https://api.dicebear.com/9.x/lorelei/svg?seed=Finn&backgroundColor=fecaca',
+        'https://api.dicebear.com/9.x/lorelei/svg?seed=Gina&backgroundColor=bbf7d0',
+        'https://api.dicebear.com/9.x/lorelei/svg?seed=Hank&backgroundColor=fde68a',
+        # 🐾 动物表情 - Fun Emoji 风格
+        'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Cat&backgroundColor=b6e3f4',
+        'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Dog&backgroundColor=ffd5dc',
+        'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Fox&backgroundColor=c0aede',
+        'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Bear&backgroundColor=d1d4f9',
+        'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Panda&backgroundColor=ffdfbf',
+        'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Rabbit&backgroundColor=fecaca',
+        'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Lion&backgroundColor=bbf7d0',
+        'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Koala&backgroundColor=fde68a',
+        # 👾 像素角色 - Pixel Art 风格
+        'https://api.dicebear.com/9.x/pixel-art/svg?seed=Hero&backgroundColor=b6e3f4',
+        'https://api.dicebear.com/9.x/pixel-art/svg?seed=Ninja&backgroundColor=ffd5dc',
+        'https://api.dicebear.com/9.x/pixel-art/svg?seed=Wizard&backgroundColor=c0aede',
+        'https://api.dicebear.com/9.x/pixel-art/svg?seed=Knight&backgroundColor=d1d4f9',
+        'https://api.dicebear.com/9.x/pixel-art/svg?seed=Elf&backgroundColor=ffdfbf',
+        'https://api.dicebear.com/9.x/pixel-art/svg?seed=Dwarf&backgroundColor=fecaca',
+        'https://api.dicebear.com/9.x/pixel-art/svg?seed=Dragon&backgroundColor=bbf7d0',
+        'https://api.dicebear.com/9.x/pixel-art/svg?seed=Robot&backgroundColor=fde68a',
+        # 🎭 卡通角色 - Avataaars 风格
+        'https://api.dicebear.com/9.x/avataaars/svg?seed=Sunny&backgroundColor=b6e3f4',
+        'https://api.dicebear.com/9.x/avataaars/svg?seed=Rain&backgroundColor=ffd5dc',
+        'https://api.dicebear.com/9.x/avataaars/svg?seed=Star&backgroundColor=c0aede',
+        'https://api.dicebear.com/9.x/avataaars/svg?seed=Cloud&backgroundColor=d1d4f9',
+        'https://api.dicebear.com/9.x/avataaars/svg?seed=Moon&backgroundColor=ffdfbf',
+        'https://api.dicebear.com/9.x/avataaars/svg?seed=Wave&backgroundColor=fecaca',
+        'https://api.dicebear.com/9.x/avataaars/svg?seed=Flame&backgroundColor=bbf7d0',
+        'https://api.dicebear.com/9.x/avataaars/svg?seed=Storm&backgroundColor=fde68a',
+        # 🎪 趣味插画 - Open Peeps 风格
+        'https://api.dicebear.com/9.x/open-peeps/svg?seed=Happy&backgroundColor=b6e3f4',
+        'https://api.dicebear.com/9.x/open-peeps/svg?seed=Smile&backgroundColor=ffd5dc',
+        'https://api.dicebear.com/9.x/open-peeps/svg?seed=Chill&backgroundColor=c0aede',
+        'https://api.dicebear.com/9.x/open-peeps/svg?seed=Wink&backgroundColor=d1d4f9',
+        'https://api.dicebear.com/9.x/open-peeps/svg?seed=Cozy&backgroundColor=ffdfbf',
+        'https://api.dicebear.com/9.x/open-peeps/svg?seed=Bliss&backgroundColor=fecaca',
+        'https://api.dicebear.com/9.x/open-peeps/svg?seed=Dream&backgroundColor=bbf7d0',
+        'https://api.dicebear.com/9.x/open-peeps/svg?seed=Zen&backgroundColor=fde68a',
+    ]
+    return jsonify({'avatars': avatars})
+
+
+@main_bp.route('/user/avatar/select', methods=['POST'])
+@login_required
+def select_avatar():
+    """保存用户头像选择"""
+    from flask import request, jsonify
+    data = request.get_json(silent=True) or {}
+    avatar_url = (data.get('avatar') or '').strip()
+    if not avatar_url:
+        return jsonify({'error': '请选择头像'}), 400
+    current_user.avatar = avatar_url
+    db.session.commit()
+    return jsonify({'ok': True, 'avatar': avatar_url})
 
 
 @main_bp.route('/uploads/<path:filename>')

@@ -267,7 +267,7 @@ Page({
     var idx = e.currentTarget.dataset.idx;
     var photos = this.data.photos;
     if (!photos || photos.length === 0) return;
-    var urls = photos.map(function(p) { return 'https://demolin.cn' + p.url; });
+    var urls = photos.map(function(p) { return p.url.indexOf('http')===0 ? p.url : 'https://demolin.cn' + p.url; });
     wx.previewImage({
       current: urls[idx] || urls[0],
       urls: urls,

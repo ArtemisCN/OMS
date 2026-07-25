@@ -7,8 +7,31 @@ from models import db, User, WorkOrder, MobileToken, SubscribeUser, PaperForm, S
 import random
 from datetime import datetime, date
 from sqlalchemy import func, case
+from utils.time_helpers import fmt_dt
 
 api_mobile_bp = Blueprint('api_mobile', __name__, url_prefix='/api/mobile')
+
+DEFAULT_AVATARS = [
+    # 卡通人物
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Kitty&backgroundColor=b6e3f4',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Max&backgroundColor=ffd5dc',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Luna&backgroundColor=c0aede',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Charlie&backgroundColor=d1d4f9',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Molly&backgroundColor=ffdfbf',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Cooper&backgroundColor=fecaca',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Daisy&backgroundColor=bbf7d0',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Buddy&backgroundColor=fde68a',
+    # 猫咪
+    'https://api.dicebear.com/9.x/cat/svg?seed=Whiskers&backgroundColor=b6e3f4',
+    'https://api.dicebear.com/9.x/cat/svg?seed=Mittens&backgroundColor=ffd5dc',
+    'https://api.dicebear.com/9.x/cat/svg?seed=Snowball&backgroundColor=c0aede',
+    'https://api.dicebear.com/9.x/cat/svg?seed=Oreo&backgroundColor=d1d4f9',
+    'https://api.dicebear.com/9.x/cat/svg?seed=Simba&backgroundColor=ffdfbf',
+    'https://api.dicebear.com/9.x/cat/svg?seed=Tiger&backgroundColor=fecaca',
+    'https://api.dicebear.com/9.x/cat/svg?seed=Pumpkin&backgroundColor=bbf7d0',
+    'https://api.dicebear.com/9.x/cat/svg?seed=Pepper&backgroundColor=fde68a',
+]
+
 
 
 def login_required_api(f):
@@ -91,10 +114,30 @@ def api_login():
             'display_name': user.display_name or user.username,
             'wx_bound': bool(user.wx_openid),
             'is_admin': user.is_admin,
+            'avatar': user.avatar or '',
         }
     })
 
 
+
+
+@api_mobile_bp.route('/avatars')
+def list_avatars():
+    """获取默认头像列表"""
+    return jsonify({'avatars': DEFAULT_AVATARS})
+
+
+@api_mobile_bp.route('/avatar/select', methods=['POST'])
+@login_required_api
+def select_avatar(user):
+    """选择头像"""
+    data = request.get_json(silent=True) or {}
+    avatar = data.get('avatar', '').strip()
+    if not avatar:
+        return jsonify({'error': '缺少头像URL'}), 400
+    user.avatar = avatar
+    db.session.commit()
+    return jsonify({'ok': True, 'avatar': avatar})
 @api_mobile_bp.route('/wx_login', methods=['POST'])
 def wx_login():
     """微信自动登录：通过 wx.login code 换取 openid
@@ -1727,3 +1770,530 @@ def mobile_exam_history(user):
         d['passed'] = s.is_passed(s.exam.pass_score) if s.exam else False
         result.append(d)
     return jsonify({'submissions': result})
+
+
+# ==================== 个人工作台 ====================
+
+@api_mobile_bp.route('/workbench')
+@login_required_api
+def mobile_workbench(user):
+    """个人工作台统计数据"""
+    person_name = user.display_name or user.username
+    today = date.today()
+    month_start = today.replace(day=1)
+    now = datetime.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    month_orders = WorkOrder.query.filter(
+        WorkOrder.person == person_name,
+        WorkOrder.created_at >= month_start
+    ).all()
+    month_total = len(month_orders)
+    month_completed = sum(1 for o in month_orders if o.status == 'completed')
+    month_overdue = sum(1 for o in month_orders if o.completed_at and o.created_at and
+                        (o.completed_at - o.created_at).total_seconds() > 7200)
+
+    today_pending = WorkOrder.query.filter(
+        WorkOrder.person == person_name,
+        WorkOrder.status.in_(['pending', 'in_progress']),
+        WorkOrder.created_at >= today_start
+    ).count()
+
+    today_done = WorkOrder.query.filter(
+        WorkOrder.person == person_name,
+        WorkOrder.status == 'completed',
+        WorkOrder.completed_at >= today_start
+    ).count()
+
+    unassigned_pending = WorkOrder.query.filter(
+        WorkOrder.status == 'pending',
+        (WorkOrder.person.is_(None)) | (WorkOrder.person == '')
+    ).count()
+
+    return jsonify({
+        'person': person_name,
+        'avatar': user.avatar or '',
+        'month': {
+            'total': month_total,
+            'completed': month_completed,
+            'overdue': month_overdue,
+            'rate': round(month_completed / month_total * 100, 1) if month_total else 0,
+        },
+        'today': {
+            'pending': today_pending,
+            'completed': today_done,
+            'unassigned': unassigned_pending,
+        },
+    })
+
+
+# ==================== 值班排班 ====================
+
+@api_mobile_bp.route('/duty-schedules')
+@login_required_api
+def mobile_duty_schedules(user):
+    """值班排班表（手机端）"""
+    from services.data_service import get_duty_schedules_api, get_duty_schedule_staff
+    today = date.today()
+    year = request.args.get('year', today.year, type=int)
+    month = request.args.get('month', today.month, type=int)
+
+    records = get_duty_schedules_api(year, month)
+
+    # 构建 team_map：人员名 → 所属组
+    all_staff = get_duty_schedule_staff()
+    team_map = {}
+    for s in all_staff:
+        team = s.team or ''
+        if team not in team_map:
+            team_map[team] = []
+        team_map[team].append(s.name)
+
+    # 按用户所属组筛选值班人员
+    user_team = user.team or ''
+    if user_team and user_team in team_map:
+        allowed_names = set(team_map[user_team])
+        filtered_records = {}
+        for k, v in records.items():
+            parts = k.split('_')
+            if len(parts) == 2 and parts[0] in allowed_names:
+                filtered_records[k] = v
+        records = filtered_records
+
+    # 今日值班人员
+    today_duty = []
+    for k, v in records.items():
+        parts = k.split('_')
+        if len(parts) == 2 and parts[1] == str(today.day):
+            today_duty.append({'person_name': parts[0], 'shift': v})
+
+    return jsonify({
+        'records': records,
+        'today': today_duty,
+        'year': year,
+        'month': month,
+    })
+
+
+# ==================== 交接班记录 ====================
+
+@api_mobile_bp.route('/shift-handovers', methods=['GET'])
+@login_required_api
+def mobile_shift_handovers(user):
+    """交接班记录列表（含未读计数 + 关联工单详情）"""
+    from models import ShiftHandover, WorkOrder
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    query = ShiftHandover.query.order_by(ShiftHandover.created_at.desc())
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    handovers = pagination.items
+
+    # 未读计数：用用户偏好存储上次阅读时间
+    import json
+    from datetime import datetime
+    last_read_str = user.get_pref('shift_last_read_at', '')
+    last_read = datetime.fromisoformat(last_read_str) if last_read_str else datetime(2000, 1, 1)
+    unread_count = ShiftHandover.query.filter(ShiftHandover.created_at > last_read).count()
+
+    # 只返回同医院同组的成员
+    my_hids = set()
+    assigned = user.get_assigned_hospitals()
+    for h in assigned: my_hids.add(h.id)
+    persons = User.query.filter(User.is_active == True).order_by(User.display_name).all()
+    filtered = []
+    for p in persons:
+        if p.id == user.id: continue
+        if p.team and user.team and p.team != user.team: continue
+        phids = set()
+        for h in p.get_assigned_hospitals(): phids.add(h.id)
+        if my_hids and not phids.intersection(my_hids): continue
+        filtered.append({'name': p.display_name or p.username})
+
+    # 收集所有关联工单ID
+    all_order_ids = set()
+    for h in handovers:
+        ids = h.work_order_ids or []
+        for oid in ids: all_order_ids.add(int(oid))
+    # 批量查询工单标题
+    orders_map = {}
+    if all_order_ids:
+        orders = WorkOrder.query.filter(WorkOrder.id.in_(list(all_order_ids))).all()
+        for o in orders:
+            orders_map[o.id] = {'id': o.id, 'title': o.title or '工单#' + str(o.id), 'status': o.status or ''}
+
+    return jsonify({
+        'handovers': [{
+            'id': h.id,
+            'handover_person': h.handover_person,
+            'receive_person': h.receive_person,
+            'content': (h.content or '')[:100],
+            'notes': h.notes or '',
+            'status': h.status,
+            'created_at': fmt_dt(h.created_at, '%Y-%m-%d %H:%M'),
+            'photos': h.photos or [],
+            'work_orders': [orders_map.get(oid, {'id': oid, 'title': '工单#' + str(oid), 'status': ''}) for oid in (h.work_order_ids or [])],
+        } for h in handovers],
+        'unread_count': unread_count,
+        'total': pagination.total,
+        'page': page,
+        'has_more': pagination.has_next,
+        'persons': filtered,
+    })
+
+
+@api_mobile_bp.route('/shift-handovers/mark-read', methods=['POST'])
+@login_required_api
+def mobile_shift_handover_mark_read(user):
+    """标记交接班已读"""
+    from datetime import datetime
+    user.set_pref('shift_last_read_at', datetime.now().isoformat())
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@api_mobile_bp.route('/shift-handovers/my-orders', methods=['GET'])
+@login_required_api
+def mobile_shift_handover_my_orders(user):
+    """获取当前用户可选的工单（已接单/处理中/已完成）"""
+    from models import WorkOrder
+    orders = WorkOrder.query.filter(
+        WorkOrder.person == user.display_name,
+        WorkOrder.status.in_(['processing', 'completed'])
+    ).order_by(WorkOrder.created_at.desc()).limit(50).all()
+    return jsonify({
+        'orders': [{
+            'id': o.id,
+            'title': o.title or '工单#' + str(o.id),
+            'status': o.status,
+            'status_label': {'pending': '待接单', 'processing': '处理中', 'completed': '已完成'}.get(o.status, o.status),
+            'location': o.location or '',
+            'created_at': fmt_dt(o.created_at, '%m/%d'),
+        } for o in orders]
+    })
+
+
+@api_mobile_bp.route('/shift-handovers', methods=['POST'])
+@login_required_api
+def mobile_shift_handover_create(user):
+    """创建交接班记录（含关联工单）"""
+    from models import ShiftHandover
+    data = request.get_json(silent=True) or {}
+    handover_person = data.get('handover_person', '').strip()
+    receive_person = data.get('receive_person', '').strip()
+    content = data.get('content', '').strip()
+    notes = data.get('notes', '').strip()
+    photos = data.get('photos', []) or []
+    work_order_ids = data.get('work_order_ids', []) or []
+
+    if not handover_person or not receive_person:
+        return jsonify({'error': '交班人和接班人不能为空', 'code': 400}), 400
+
+    handover = ShiftHandover(
+        handover_person=handover_person,
+        receive_person=receive_person,
+        content=content,
+        unfinished_orders=[],
+        notes=notes,
+        photos=photos,
+        work_order_ids=[int(oid) for oid in work_order_ids if str(oid).isdigit()],
+        status='completed',
+    )
+    db.session.add(handover)
+    db.session.commit()
+
+    return jsonify({'success': True, 'id': handover.id})
+
+
+# ==================== 手机端聊天 ====================
+
+@api_mobile_bp.route('/chat/conversations')
+@login_required_api
+def mobile_chat_conversations(user):
+    from routes.chat import _serialize_conversation
+    from models import ChatConversation, ChatParticipant
+    participant_ids = db.session.query(ChatParticipant.conversation_id).filter(
+        ChatParticipant.user_id == user.id, ChatParticipant.is_active == True
+    ).subquery()
+    conversations = ChatConversation.query.filter(
+        ChatConversation.id.in_(participant_ids)
+    ).order_by(ChatConversation.updated_at.desc()).all()
+    return jsonify({'conversations': [_serialize_conversation(c, user.id) for c in conversations]})
+
+
+@api_mobile_bp.route('/chat/leave', methods=['POST'])
+@login_required_api
+def mobile_chat_leave(user):
+    from models import ChatParticipant
+    data = request.get_json(silent=True) or {}
+    conv_id = data.get('conversation_id')
+    if not conv_id:
+        return jsonify({'error': '缺少 conversation_id'}), 400
+    participant = ChatParticipant.query.filter_by(
+        conversation_id=conv_id, user_id=user.id, is_active=True
+    ).first()
+    if not participant:
+        return jsonify({'error': '不在该群聊中'}), 404
+    participant.is_active = False
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@api_mobile_bp.route('/chat/messages')
+@login_required_api
+def mobile_chat_messages(user):
+    from models import ChatConversation, ChatParticipant, ChatMessage
+    from datetime import datetime
+    conv_id = request.args.get('conversation_id', type=int)
+    before_id = request.args.get('before_id', type=int)
+    limit = min(request.args.get('limit', 50, type=int), 100)
+    if not conv_id:
+        return jsonify({'error': '缺少 conversation_id'}), 400
+    participant = ChatParticipant.query.filter_by(conversation_id=conv_id, user_id=user.id, is_active=True).first()
+    if not participant:
+        return jsonify({'error': '无权访问'}), 403
+    participant.last_read_at = datetime.now()
+    db.session.commit()
+    query = ChatMessage.query.filter_by(conversation_id=conv_id)
+    if before_id:
+        query = query.filter(ChatMessage.id < before_id)
+    messages = query.order_by(ChatMessage.id.desc()).limit(limit).all()
+    messages.reverse()
+    return jsonify({'messages': [{
+        'id': m.id, 'sender_id': m.sender_id, 'sender_name': m.sender_name,
+        'sender_hospital': m.sender_hospital, 'content': m.content, 'msg_type': m.msg_type,
+        'recalled': m.recalled, 'file_name': m.file_name, 'file_size': m.file_size,
+        'created_at': m.created_at.isoformat(), 'is_self': m.sender_id == user.id,
+        'sender_avatar': (User.query.get(m.sender_id).avatar or '') if User.query.get(m.sender_id) else ''
+    } for m in messages]})
+
+
+
+
+@api_mobile_bp.route('/chat/upload', methods=['POST'])
+@login_required_api
+def mobile_chat_upload(user):
+    """聊天文件上传（图片走COS，非图片存本地）"""
+    import uuid, os
+    ALLOWED_EXT = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'mp3', 'wav', 'ogg'}
+    if 'file' not in request.files:
+        return jsonify({'error': '没有上传文件'}), 400
+    file = request.files['file']
+    if not file or not file.filename:
+        return jsonify({'error': '文件为空'}), 400
+    ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'jpg'
+    if ext not in ALLOWED_EXT:
+        return jsonify({'error': '不支持的文件类型'}), 400
+    is_image = ext in {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'}
+
+    if is_image:
+        # 图片用 photo.save_photo（支持COS/本地双模式）
+        from utils.photo import save_photo
+        file_data = file.read()
+        try:
+            relative_path, w, h, size = save_photo(file_data, file.filename)
+            from utils.photo import get_photo_url
+            url = get_photo_url(relative_path)
+            return jsonify({'url': url, 'filename': os.path.basename(relative_path), 'is_image': True})
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+    else:
+        # 非图片（音频等）存本地
+        upload_dir = os.path.join(current_app.root_path, 'static', 'uploads', 'chat')
+        os.makedirs(upload_dir, exist_ok=True)
+        filename = uuid.uuid4().hex + '.' + ext
+        file.save(os.path.join(upload_dir, filename))
+        url = '/static/uploads/chat/' + filename
+        return jsonify({'url': url, 'filename': filename, 'is_image': False})
+@api_mobile_bp.route('/chat/send', methods=['POST'])
+@login_required_api
+def mobile_chat_send(user):
+    from models import ChatConversation, ChatParticipant, ChatMessage
+    from datetime import datetime
+    data = request.get_json(silent=True) or {}
+    conv_id = data.get('conversation_id')
+    content = (data.get('content') or '').strip()
+    if not conv_id or not content:
+        return jsonify({'error': '缺少参数'}), 400
+    participant = ChatParticipant.query.filter_by(conversation_id=conv_id, user_id=user.id, is_active=True).first()
+    if not participant:
+        return jsonify({'error': '无权访问'}), 403
+    hospital_name = ''
+    assigned = user.get_assigned_hospitals()
+    if assigned:
+        hospital_name = assigned[0].name
+    msg_type = data.get('msg_type', 'text')
+    msg = ChatMessage(
+        conversation_id=conv_id, sender_id=user.id,
+        sender_name=user.display_name or user.username,
+        sender_hospital=hospital_name, content=content, msg_type=msg_type,
+        file_name=data.get('file_name', ''), file_size=data.get('file_size')
+    )
+    db.session.add(msg)
+    conv = ChatConversation.query.get(conv_id)
+    if conv:
+        conv.last_message = content
+        conv.last_sender = user.display_name or user.username
+        conv.last_time = datetime.now()
+        conv.updated_at = datetime.now()
+    db.session.commit()
+    return jsonify({
+        'id': msg.id, 'sender_id': msg.sender_id, 'sender_name': msg.sender_name,
+        'sender_hospital': msg.sender_hospital, 'content': msg.content,
+        'msg_type': msg.msg_type, 'created_at': msg.created_at.isoformat(), 'is_self': True
+    })
+
+
+@api_mobile_bp.route('/chat/users')
+@login_required_api
+def mobile_chat_users(user):
+    from models import User, get_group_name_by_id
+    my_team = user.team if user.team else None
+    all_users = User.query.order_by(User.display_name).all()
+    teams_map, teams_order = {}, []
+    for u in all_users:
+        if u.id == user.id: continue
+        team_name = (u.team if u.team else '未分组')
+        if my_team and team_name != my_team: continue
+        hospital_name = ''
+        assigned = u.get_assigned_hospitals()
+        if assigned: hospital_name = assigned[0].name
+        if team_name not in teams_map:
+            teams_map[team_name] = []
+            teams_order.append(team_name)
+        teams_map[team_name].append({'id': u.id, 'name': u.display_name or u.username, 'hospital': hospital_name})
+    result = []
+    for tname in teams_order:
+        if tname == '未分组': continue
+        result.append({'team': tname, 'users': teams_map[tname]})
+    if '未分组' in teams_map: result.append({'team': '未分组', 'users': teams_map['未分组']})
+    return jsonify({'teams': result})
+
+
+@api_mobile_bp.route('/chat/start', methods=['POST'])
+@login_required_api
+def mobile_chat_start(user):
+    from models import User, ChatConversation, ChatParticipant
+    data = request.get_json(silent=True) or {}
+    target_id = data.get('user_id')
+    if not target_id: return jsonify({'error': '缺少 user_id'}), 400
+    target_id = int(target_id)
+    if target_id == user.id: return jsonify({'error': '不能和自己聊天'}), 400
+    target = User.query.get(target_id)
+    if not target: return jsonify({'error': '用户不存在'}), 404
+    my_conv_ids = db.session.query(ChatParticipant.conversation_id).filter(
+        ChatParticipant.user_id == user.id, ChatParticipant.is_active == True
+    ).subquery()
+    existing = ChatConversation.query.filter(ChatConversation.id.in_(my_conv_ids), ChatConversation.type == 'single').all()
+    for conv in existing:
+        parts = ChatParticipant.query.filter_by(conversation_id=conv.id).all()
+        part_ids = [p.user_id for p in parts]
+        if target_id in part_ids:
+            return jsonify({'conversation_id': conv.id, 'title': target.display_name or target.username})
+    target_name = target.display_name or target.username
+    my_name = user.display_name or user.username
+    conv = ChatConversation(title=target_name, type='single')
+    db.session.add(conv)
+    db.session.flush()
+    for uid, uname in [(user.id, my_name), (target.id, target_name)]:
+        db.session.add(ChatParticipant(conversation_id=conv.id, user_id=uid, user_name=uname))
+    db.session.commit()
+    return jsonify({'conversation_id': conv.id, 'title': conv.title})
+
+
+@api_mobile_bp.route('/chat/start_group', methods=['POST'])
+@login_required_api
+def mobile_chat_start_group(user):
+    """创建群聊"""
+    from models import User, ChatConversation, ChatParticipant
+    data = request.get_json(silent=True) or {}
+    user_ids = data.get('user_ids', [])
+    if not user_ids or not isinstance(user_ids, list):
+        return jsonify({'error': '请选择群聊成员'}), 400
+    user_ids = list(set(int(uid) for uid in user_ids if uid and int(uid) != user.id))
+    if not user_ids:
+        return jsonify({'error': '除了自己至少需要一个人'}), 400
+    my_name = user.display_name or user.username
+    members = User.query.filter(User.id.in_(user_ids)).all()
+    name_list = [m.display_name or m.username for m in members]
+    title = ', '.join(name_list[:3])
+    if len(name_list) > 3: title += ' 等人'
+    conv = ChatConversation(title=title, type='group')
+    db.session.add(conv)
+    db.session.flush()
+    db.session.add(ChatParticipant(conversation_id=conv.id, user_id=user.id, user_name=my_name))
+    for m in members:
+        db.session.add(ChatParticipant(conversation_id=conv.id, user_id=m.id, user_name=m.display_name or m.username))
+    db.session.commit()
+    return jsonify({'conversation_id': conv.id, 'title': conv.title})
+
+
+@api_mobile_bp.route('/chat/unread-counts')
+@login_required_api
+def mobile_chat_unread(user):
+    from models import ChatConversation, ChatParticipant, ChatMessage
+    from datetime import datetime
+    participant_ids = db.session.query(ChatParticipant.conversation_id).filter(
+        ChatParticipant.user_id == user.id, ChatParticipant.is_active == True
+    ).subquery()
+    conversations = ChatConversation.query.filter(ChatConversation.id.in_(participant_ids)).all()
+    total = 0
+    for c in conversations:
+        for p in c.participants:
+            if p.user_id == user.id:
+                unread = ChatMessage.query.filter(
+                    ChatMessage.conversation_id == c.id,
+                    ChatMessage.created_at > (p.last_read_at or datetime(2000, 1, 1)),
+                    ChatMessage.sender_id != user.id
+                ).count()
+                total += unread
+                break
+    return jsonify({'total_unread': total})
+
+
+@api_mobile_bp.route('/chat/mark-read', methods=['POST'])
+@login_required_api
+def mobile_chat_mark_read(user):
+    from models import ChatParticipant
+    from datetime import datetime
+    participants = ChatParticipant.query.filter_by(user_id=user.id, is_active=True).all()
+    now = datetime.now()
+    for p in participants: p.last_read_at = now
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+
+
+@api_mobile_bp.route('/chat/delete', methods=['POST'])
+@login_required_api
+def mobile_chat_delete(user):
+    from models import ChatConversation, ChatParticipant, ChatMessage
+    data = request.get_json(silent=True) or {}
+    conv_id = data.get('conversation_id')
+    if not conv_id: return jsonify({'error': '缺少 conversation_id'}), 400
+    participant = ChatParticipant.query.filter_by(conversation_id=conv_id, user_id=user.id, is_active=True).first()
+    if not participant: return jsonify({'error': '无权访问'}), 403
+    # 软删除：标记为不活跃
+    participant.is_active = False
+    participant.last_read_at = datetime.now()
+    db.session.commit()
+    return jsonify({'ok': True})
+@api_mobile_bp.route('/chat/recall', methods=['POST'])
+@login_required_api
+def mobile_chat_recall(user):
+    from models import ChatMessage
+    from datetime import datetime
+    data = request.get_json(silent=True) or {}
+    msg_id = data.get('message_id')
+    if not msg_id: return jsonify({'error': '缺少 message_id'}), 400
+    try: msg_id = int(msg_id)
+    except: return jsonify({'error': 'message_id 必须为整数'}), 400
+    msg = ChatMessage.query.get(msg_id)
+    if not msg: return jsonify({'error': '消息不存在'}), 404
+    if msg.sender_id != user.id: return jsonify({'error': '只能撤回自己的消息'}), 403
+    delta = (datetime.now() - msg.created_at).total_seconds()
+    if delta > 120: return jsonify({'error': '超过2分钟，无法撤回'}), 400
+    msg.recalled = True
+    msg.content = '消息已撤回'
+    db.session.commit()
+    return jsonify({'ok': True, 'message_id': msg.id, 'conversation_id': msg.conversation_id})

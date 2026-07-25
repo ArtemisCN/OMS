@@ -1,0 +1,100 @@
+<view class="page">
+  <!-- 消息列表 -->
+  <scroll-view
+    class="msg-scroll"
+    scroll-y
+    enhanced
+    show-scrollbar="{{false}}"
+    scroll-into-view="{{scrollTo}}"
+    scroll-with-animation="{{true}}"
+    bindscrolltoupper="onScrollToTop"
+    upper-threshold="100"
+  >
+    <view wx:if="{{loadingMore}}" class="load-more-hint">
+      <view class="loading-mini"></view>
+      <text>加载中...</text>
+    </view>
+
+    <view wx:if="{{messages.length === 0 && !loadingMore}}" class="empty-chat">
+      <text class="empty-chat-icon">💬</text>
+      <text class="empty-chat-text">开始聊天吧</text>
+    </view>
+
+    <view
+      class="msg-item {{item.is_self ? 'self' : 'other'}}"
+      wx:for="{{messages}}"
+      wx:key="id"
+      id="msg-{{item.id}}"
+      data-index="{{index}}"
+      data-id="{{item.id}}"
+      bindlongpress="onLongPress"
+    >
+      <!-- 时间分隔 -->
+      <view wx:if="{{showTimeSeparator(index, messages)}}" class="time-sep">{{formatTime(item.created_at)}}</view>
+
+      <!-- 已撤回 -->
+      <view wx:if="{{item.recalled}}" class="recalled-msg">
+        <text>{{item.is_self ? '你' : item.sender_name}} 撤回了一条消息</text>
+      </view>
+
+      <view wx:else class="msg-row">
+        <!-- 对方头像（左侧） -->
+        <view wx:if="{{!item.is_self}}" class="msg-avatar msg-avatar-other">
+          <image wx:if="{{item.sender_avatar}}" class="msg-avatar-img" src="{{item.sender_avatar}}" mode="aspectFill"></image>
+          <text wx:else>{{item.sender_name.slice(0, 1)}}</text>
+        </view>
+        <!-- 我方头像（右侧） -->
+        <view wx:if="{{item.is_self}}" class="msg-avatar msg-avatar-self">
+          <image wx:if="{{myAvatar}}" class="msg-avatar-img" src="{{myAvatar}}" mode="aspectFill"></image>
+          <text wx:else>{{item.sender_name.slice(0, 1)}}</text>
+        </view>
+
+        <view class="msg-content">
+          <view class="msg-name" wx:if="{{!item.is_self}}">{{item.sender_name}}</view>
+          <view class="msg-bubble {{item.msg_type}}">
+            <text wx:if="{{item.msg_type === 'text' || !item.msg_type}}" class="msg-text">{{item.content}}</text>
+            <image
+              wx:elif="{{item.msg_type === 'image'}}"
+              class="msg-image"
+              src="{{item.content}}"
+              mode="widthFix"
+              bindtap="onImageTap"
+              data-src="{{item.content}}"
+            ></image>
+            <view wx:elif="{{item.msg_type === 'file'}}" class="msg-file">
+              <text class="file-icon">📎</text>
+              <text class="file-name">{{item.file_name || '文件'}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view id="msg-bottom" style="height:20rpx;"></view>
+  </scroll-view>
+
+  <!-- 输入区域 -->
+  <view class="input-bar">
+    <view class="input-wrapper">
+      <input
+        class="msg-input"
+        type="text"
+        placeholder="输入消息..."
+        placeholder-class="input-placeholder"
+        value="{{inputText}}"
+        bindinput="onInput"
+        bindconfirm="onSend"
+        cursor-spacing="20"
+        confirm-type="send"
+      />
+      <view class="input-actions">
+        <view class="action-btn" bindtap="onPickImage">
+          <text class="action-btn-icon">🖼️</text>
+        </view>
+        <view class="send-btn {{inputText.trim() ? 'active' : ''}}" bindtap="onSend">
+          <text class="send-icon">➤</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

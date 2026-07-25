@@ -332,8 +332,14 @@
                     <div class="toggle-track"></div>
                     <i class="fas fa-moon" id="themeIconMoon"></i>
                 </div>
-                <div class="user-info">
-                    <div class="avatar">{{ (current_user.display_name or current_user.username)[:1] }}</div>
+                <div class="user-info" onclick="openAvatarPicker()" style="cursor:pointer;" title="点击更换头像">
+                    <div class="avatar" id="sidebarAvatar">
+                        {% if current_user.avatar %}
+                        <img src="{{ current_user.avatar }}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">
+                        {% else %}
+                        {{ (current_user.display_name or current_user.username)[:1] }}
+                        {% endif %}
+                    </div>
                     <div>
                         <div class="user-name">{{ current_user.display_name or current_user.username }}</div>
                         <div class="user-role">
@@ -624,7 +630,167 @@
 </script>
     {% block extra_scripts %}{% endblock %}
     {% include 'chat/chat_component.html' %}
-    <script src="/static/js/chat_compiled.js"></script>
+    <script src="/static/js/chat_compiled.js?v=3"></script>
     <script src="/static/js/lottery.js?v=2"></script>
+{% if current_user.is_authenticated %}
+<!-- ====== 头像选择弹窗 ====== -->
+<div id="avatarModal" class="modal-backdrop-blur" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:99999;align-items:center;justify-content:center;" onclick="if(event.target===this)closeAvatarPicker()">
+  <div style="background:var(--card-bg,#fff);border-radius:16px;padding:24px;max-width:560px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h4 style="margin:0;font-weight:600;">🖼 选择头像</h4>
+      <button onclick="closeAvatarPicker()" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-muted,#999);">&times;</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;padding:12px 16px;background:var(--bg-light,#f5f5f5);border-radius:12px;">
+      <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--primary-color,#4f46e5);display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:600;" id="avatarPreview">
+        {% if current_user.is_authenticated %}{{ (current_user.display_name or current_user.username)[:1] }}{% else %}?{% endif %}
+      </div>
+      <div>
+        <div style="font-weight:500;">{% if current_user.is_authenticated %}{{ current_user.display_name or current_user.username }}{% else %}用户{% endif %}</div>
+        <div style="font-size:12px;color:var(--text-muted,#999);">点击下面的头像更换</div>
+      </div>
+    </div>
+    <div id="avatarGrid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+      <!-- JS 动态渲染 -->
+    </div>
+  </div>
+</div>
+
+<script>
+// ====== 头像选择 ======
+var AVATAR_LIST = [];
+var AVATAR_LOADED = false;
+
+function openAvatarPicker() {
+  var modal = document.getElementById('avatarModal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  if (!AVATAR_LOADED) {
+    modal.querySelector('#avatarGrid').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#999;">加载中...</div>';
+    fetch('/user/avatars').then(function(r){return r.json()}).then(function(data){
+      AVATAR_LIST = data.avatars || [];
+      AVATAR_LOADED = true;
+      renderAvatarGrid();
+    }).catch(function(){
+      modal.querySelector('#avatarGrid').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#999;">加载失败，请刷新页面重试</div>';
+    });
+  } else {
+    renderAvatarGrid();
+  }
+}
+
+function renderAvatarGrid() {
+  var current = '{{ current_user.avatar or "" }}';
+  var html = '';
+
+  function renderGroup(label, start, end) {
+    html += '<div style="grid-column:1/-1;font-size:13px;font-weight:600;color:var(--text-muted,#999);margin-bottom:4px;' + (start > 0 ? 'margin-top:8px;' : '') + '">' + label + '</div>';
+    for (var i = start; i < end && i < AVATAR_LIST.length; i++) {
+      var url = AVATAR_LIST[i];
+      var sel = url === current ? ' selected' : '';
+      html += '<div class="avatar-picker-item' + sel + '" data-src="' + url + '" onclick="selectAvatar(this)" style="position:relative;border-radius:12px;overflow:hidden;cursor:pointer;border:3px solid transparent;transition:all .2s;' + (sel ? 'border-color:var(--primary-color,#4f46e5);' : '') + '">';
+      html += '<img src="' + url + '" onerror="this.parentElement.style.display=\'none\'" style="width:100%;aspect-ratio:1;display:block;object-fit:cover;background:#f0f0f0;">';
+      if (sel) html += '<div style="position:absolute;top:4px;right:4px;width:20px;height:20px;background:var(--primary-color,#4f46e5);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;">✓</div>';
+      html += '</div>';
+    }
+  }
+
+  renderGroup('🎨 卡通冒险', 0, 8);
+  renderGroup('✨ 可爱动漫', 8, 16);
+  renderGroup('🐾 动物表情', 16, 24);
+  renderGroup('👾 像素角色', 24, 32);
+  renderGroup('🎭 卡通角色', 32, 40);
+  renderGroup('🎪 趣味插画', 40, 48);
+
+  var grid = document.getElementById('avatarGrid');
+  grid.innerHTML = html;
+  // 更新预览
+  updateAvatarPreview(current);
+}
+
+function selectAvatar(el) {
+  var src = el.getAttribute('data-src');
+  if (!src) return;
+  // 清除其他选中
+  document.querySelectorAll('#avatarGrid .avatar-picker-item').forEach(function(item){
+    item.style.borderColor = 'transparent';
+    var badge = item.querySelector('div:last-child');
+    if (badge && item.lastElementChild !== item.querySelector('img')) {
+      // only remove if it's the check badge
+    }
+    // rebuild simpler: just remove the check div
+    var checkDivs = item.querySelectorAll('div:not(:first-child)');
+    checkDivs.forEach(function(d){
+      if (d.style.position === 'absolute') d.remove();
+    });
+    item.classList.remove('selected');
+  });
+  el.style.borderColor = 'var(--primary-color,#4f46e5)';
+  el.classList.add('selected');
+  var check = document.createElement('div');
+  check.style.cssText = 'position:absolute;top:4px;right:4px;width:20px;height:20px;background:var(--primary-color,#4f46e5);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;';
+  check.textContent = '✓';
+  el.appendChild(check);
+  updateAvatarPreview(src);
+  // 保存
+  wxShowLoading('设置中...');
+  fetch('/user/avatar/select', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({avatar: src})
+  }).then(function(r){return r.json()}).then(function(data){
+    wxHideLoading();
+    if (data.ok) {
+      // 更新侧栏
+      var sidebarAvatar = document.getElementById('sidebarAvatar');
+      if (sidebarAvatar) sidebarAvatar.innerHTML = '<img src="' + src + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
+      showToast('✅ 头像已更换', 'success');
+    } else {
+      showToast(data.error || '设置失败', 'error');
+    }
+  }).catch(function(){
+    wxHideLoading();
+    showToast('网络错误', 'error');
+  });
+}
+
+function updateAvatarPreview(src) {
+  var preview = document.getElementById('avatarPreview');
+  if (!preview) return;
+  if (src) {
+    preview.innerHTML = '<img src="' + src + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
+  } else {
+    preview.textContent = '{{ (current_user.display_name or current_user.username)[:1] }}';
+  }
+}
+
+function closeAvatarPicker() {
+  var modal = document.getElementById('avatarModal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function wxShowLoading(t) {
+  var el = document.getElementById('avatarModal');
+  if (!el) return;
+  var existing = el.querySelector('.picker-loading');
+  if (!existing) {
+    var d = document.createElement('div');
+    d.className = 'picker-loading';
+    d.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.7);color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;z-index:10;';
+    d.textContent = t || '处理中...';
+    el.appendChild(d);
+  }
+}
+
+function wxHideLoading() {
+  var el = document.getElementById('avatarModal');
+  if (el) {
+    var d = el.querySelector('.picker-loading');
+    if (d) d.remove();
+  }
+}
+</script>
+{% endif %}
 </body>
 </html>

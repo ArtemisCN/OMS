@@ -227,6 +227,7 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Boolean, default=True)
     employee_id = db.Column(db.String(50), default='')
     team = db.Column(db.String(50), default='')
+    avatar = db.Column(db.String(500), default='')          # 头像URL
     notes = db.Column(db.Text, default='')
     sort_order = db.Column(db.Integer, default=0)
 
@@ -1913,6 +1914,8 @@ class ShiftHandover(HospitalMixin, db.Model):
     content = db.Column(db.Text, default='')                     # 交接内容
     unfinished_orders = db.Column(db.JSON, default=list)         # 未完成工单列表
     notes = db.Column(db.Text, default='')                       # 备注
+    photos = db.Column(db.JSON, default=list)                    # 照片URL列表
+    work_order_ids = db.Column(db.JSON, default=list)            # 关联工单ID列表
     status = db.Column(db.String(20), default='pending')         # pending/completed
     created_at = db.Column(db.DateTime, default=datetime.now)
 

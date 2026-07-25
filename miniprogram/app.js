@@ -1,4 +1,5 @@
 const api = require('./utils/api');
+const device = require('./utils/device');
 
 /** 全局兜底：静默吞掉 SDK 级的网络超时错误，不污染控制台 */
 if (typeof wx.onUnhandledRejection === 'function') {
@@ -20,6 +21,14 @@ App({
   },
 
   onLaunch() {
+    // 初始化设备检测（HarmonyOS 兼容）
+    device.init((info) => {
+      this.globalData.device = info;
+      if (info.isHarmonyOS) {
+        console.log('[device] HarmonyOS 平台，已启用兼容模式');
+      }
+    });
+
     const token = wx.getStorageSync('token');
     if (!token) {
       wx.redirectTo({ url: '/pages/login/login' });
@@ -37,6 +46,7 @@ App({
   },
 
   _prefetchOrders() {
+    if (!wx.getStorageSync('token')) return;
     api.getOrders('pending').then((res) => {
       const stats = res.stats || { pending: 0, in_progress: 0, completed: 0, completed_today: 0 };
       this.globalData.ordersCache.pending = {

@@ -1,0 +1,58 @@
+<view class="page">
+  <!-- 模式切换栏 -->
+  <view class="mode-bar">
+    <view class="mode-tabs">
+      <view class="mode-tab {{mode === 'single' ? 'active' : ''}}" bindtap="switchMode" data-mode="single">
+        <text class="mode-tab-icon">💬</text>
+        <text>发消息</text>
+      </view>
+      <view class="mode-tab {{mode === 'group' ? 'active' : ''}}" bindtap="switchMode" data-mode="group">
+        <text class="mode-tab-icon">👥</text>
+        <text>创建群聊</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 群聊已选栏 -->
+  <view wx:if="{{mode === 'group' && selectedIds.length > 0}}" class="group-bar">
+    <scroll-view class="group-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+      <view class="group-tag" wx:for="{{selectedNames}}" wx:key="*this">{{item}}</view>
+    </scroll-view>
+    <view class="group-count">已选 {{selectedIds.length}} 人</view>
+    <view class="group-btn" bindtap="createGroup">创建群聊</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-wrap">
+    <view class="loading-icon"></view>
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <scroll-view wx:else class="user-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+    <view wx:for="{{teams}}" wx:key="team" class="team-group">
+      <view class="team-header">
+        <text class="team-name">👥 {{item.team}}</text>
+        <text class="team-count">{{item.users.length}}人</text>
+      </view>
+      <view class="team-card">
+        <view
+          class="user-item {{mode === 'group' && selectedIds.indexOf(user.id) >= 0 ? 'checked' : ''}}"
+          wx:for="{{item.users}}"
+          wx:key="id"
+          data-uid="{{user.id}}"
+          data-name="{{user.name}}"
+          bindtap="onUserTap"
+        >
+          <view wx:if="{{mode === 'group'}}" class="user-checkbox {{selectedIds.indexOf(user.id) >= 0 ? 'checked' : ''}}">
+            <text wx:if="{{selectedIds.indexOf(user.id) >= 0}}">✓</text>
+          </view>
+          <view class="user-avatar">{{user.name.slice(0, 1)}}</view>
+          <view class="user-info">
+            <text class="user-name">{{user.name}}</text>
+            <text class="user-hospital" wx:if="{{user.hospital}}">{{user.hospital}}</text>
+          </view>
+          <text class="btn-start" wx:if="{{mode === 'single'}}">发消息</text>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+</view>

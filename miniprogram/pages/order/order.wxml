@@ -264,7 +264,7 @@
             <view wx:if="{{photos.length === 0}}" class="photo-empty">暂无照片</view>
             <view wx:else class="photo-grid">
               <view class="photo-item" wx:for="{{photos}}" wx:key="id" data-idx="{{index}}" data-url="{{item.url}}" data-id="{{item.id}}" bindtap="onPreviewPhoto">
-                <image class="photo-thumb" src="https://demolin.cn{{item.url}}" mode="aspectFill"></image>
+                <image class="photo-thumb" src="{{item.url.indexOf('http')===0?item.url:'https://demolin.cn'+item.url}}" mode="aspectFill"></image>
                 <view class="photo-delete" data-id="{{item.id}}" catchtap="onDeletePhoto">✕</view>
               </view>
             </view>
@@ -301,7 +301,7 @@
             <view wx:if="{{photos.length === 0}}" class="photo-empty">暂无照片</view>
             <view wx:else class="photo-grid">
               <view class="photo-item" wx:for="{{photos}}" wx:key="id" data-idx="{{index}}" data-url="{{item.url}}" data-id="{{item.id}}" bindtap="onPreviewPhoto">
-                <image class="photo-thumb" src="https://demolin.cn{{item.url}}" mode="aspectFill"></image>
+                <image class="photo-thumb" src="{{item.url.indexOf('http')===0?item.url:'https://demolin.cn'+item.url}}" mode="aspectFill"></image>
                 <view class="photo-delete" data-id="{{item.id}}" catchtap="onDeletePhoto">✕</view>
               </view>
             </view>

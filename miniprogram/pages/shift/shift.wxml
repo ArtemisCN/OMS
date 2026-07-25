@@ -1,0 +1,150 @@
+<view class="page">
+  <view class="header">
+    <view class="header-left">
+      <text class="header-title">📝 交接班记录</text>
+    </view>
+    <text class="btn-back" bindtap="onGoBack">‹ 返回</text>
+  </view>
+
+  <!-- 气泡 tab -->
+  <view class="tab-bar">
+    <view class="tab-item {{tab === 'create' ? 'active' : ''}}" data-tab="create" bindtap="onSwitchTab">
+      <text class="tab-icon">✏️</text>
+      <text class="tab-label">写交接</text>
+    </view>
+    <view class="tab-item {{tab === 'history' ? 'active' : ''}}" data-tab="history" bindtap="onSwitchTab">
+      <text class="tab-icon">📋</text>
+      <text class="tab-label">历史记录</text>
+      <text class="tab-badge" wx:if="{{unreadCount > 0}}">{{unreadCount > 99 ? '99+' : unreadCount}}</text>
+    </view>
+  </view>
+
+  <!-- ===== 写交接 ===== -->
+  <view wx:if="{{tab === 'create'}}" class="content">
+    <view class="card">
+      <view class="card-title">交班信息</view>
+      <view class="form-group">
+        <text class="form-label">交班人</text>
+        <view class="form-static">
+          <text class="form-static-txt">{{handoverPerson}}</text>
+        </view>
+      </view>
+      <view class="form-group">
+        <text class="form-label">接班人</text>
+        <picker class="form-picker" mode="selector" range="{{persons}}" range-key="name" bindchange="onPickerChange" data-field="receivePerson">
+          <text class="picker-txt">{{receivePerson || '请选择接班人'}}</text>
+          <text class="picker-arrow">›</text>
+        </picker>
+      </view>
+      <view class="form-group">
+        <text class="form-label">交接内容</text>
+        <textarea class="form-textarea" placeholder="描述需要交接的事项..." value="{{content}}" bindinput="onContentInput"></textarea>
+      </view>
+      <view class="form-group">
+        <text class="form-label">备注</text>
+        <textarea class="form-textarea" placeholder="其他需要说明的内容（可选）" value="{{notes}}" bindinput="onNotesInput"></textarea>
+      </view>
+
+      <!-- 关联工单 -->
+      <view class="form-group">
+        <text class="form-label">关联工单</text>
+        <view class="order-pick-btn" bindtap="onPickOrders">
+          <text class="order-pick-icon">📋</text>
+          <text class="order-pick-txt">{{selectedOrderIds.length > 0 ? '已选 ' + selectedOrderIds.length + ' 个工单' : '选择自己的工单'}}</text>
+          <text class="order-pick-arrow">›</text>
+        </view>
+        <view wx:if="{{selectedOrderIds.length > 0}}" class="selected-order-tags">
+          <view class="order-tag" wx:for="{{selectedOrderIds}}" wx:key="*this">
+            <text>#{{item}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 照片 -->
+      <view class="form-group">
+        <text class="form-label">照片</text>
+        <view class="photo-list">
+          <view class="photo-item" wx:for="{{photos}}" wx:key="*this">
+            <image class="photo-img" src="{{item}}" mode="aspectFill" bindtap="onPreviewPhoto" data-src="{{item}}"></image>
+            <text class="photo-del" bindtap="onDelPhoto" data-index="{{index}}">✕</text>
+          </view>
+          <view class="photo-add" bindtap="onAddPhoto">
+            <text class="photo-add-icon">+</text>
+            <text class="photo-add-txt">添加照片</text>
+          </view>
+        </view>
+      </view>
+    </view>
+    <button class="btn-primary" bindtap="onSubmit" disabled="{{submitting}}">
+      <text wx:if="{{!submitting}}">✅ 提交交接</text>
+      <text wx:else>提交中...</text>
+    </button>
+  </view>
+
+  <!-- ===== 历史记录 ===== -->
+  <view wx:elif="{{tab === 'history'}}" class="content">
+    <view wx:if="{{loading}}" class="loading"><text class="loading-text">加载中...</text></view>
+    <view wx:elif="{{handovers.length === 0}}" class="empty">暂无交接记录</view>
+    <view wx:else class="handover-list">
+      <view class="handover-item" wx:for="{{handovers}}" wx:key="id">
+        <view class="handover-top">
+          <text class="handover-person">{{item.handover_person}}</text>
+          <text class="handover-arrow">→</text>
+          <text class="handover-person">{{item.receive_person}}</text>
+          <text class="handover-time">{{item.created_at}}</text>
+        </view>
+        <text class="handover-content" wx:if="{{item.content}}">{{item.content}}</text>
+        <text class="handover-notes" wx:if="{{item.notes}}">📎 {{item.notes}}</text>
+        <!-- 关联工单 -->
+        <view wx:if="{{item.work_orders && item.work_orders.length > 0}}" class="h-orders">
+          <view class="h-order-item" wx:for="{{item.work_orders}}" wx:key="id" data-id="{{item.id}}" bindtap="onTapOrder">
+            <text class="h-order-icon">🔧</text>
+            <text class="h-order-title">{{item.title}}</text>
+            <text class="h-order-status">{{item.status === 'completed' ? '✅' : '⏳'}}</text>
+          </view>
+        </view>
+        <!-- 照片 -->
+        <scroll-view wx:if="{{item.photos && item.photos.length > 0}}" class="h-photo-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+          <image class="h-photo" wx:for="{{item.photos}}" wx:key="*this" src="{{item}}" mode="aspectFill" bindtap="onPreviewPhoto" data-src="{{item}}"></image>
+        </scroll-view>
+      </view>
+    </view>
+    <view wx:if="{{hasMore}}" class="load-more" bindtap="onLoadMore">
+      <text>加载更多</text>
+    </view>
+  </view>
+
+  <!-- ===== 工单选择弹窗 ===== -->
+  <view wx:if="{{showOrderPicker}}" class="order-picker-mask" bindtap="onCloseOrderPicker">
+    <view class="order-picker" catchtap="noop">
+      <view class="order-picker-header">
+        <text class="order-picker-title">选择关联工单</text>
+        <text class="order-picker-close" bindtap="onConfirmOrders">✓ 完成</text>
+      </view>
+      <scroll-view class="order-picker-list" scroll-y>
+        <view wx:if="{{myOrders.length === 0}}" class="order-picker-empty">
+          <text>暂无已接单或完成的工单</text>
+        </view>
+        <view
+          class="order-picker-item {{selectedOrderIds.indexOf(item.id) >= 0 ? 'checked' : ''}}"
+          wx:for="{{myOrders}}" wx:key="id"
+          data-id="{{item.id}}"
+          bindtap="onToggleOrder"
+        >
+          <view class="order-checkbox">
+            <view wx:if="{{selectedOrderIds.indexOf(item.id) >= 0}}" class="checkbox-on">✓</view>
+            <view wx:else class="checkbox-off"></view>
+          </view>
+          <view class="order-info">
+            <text class="order-title">{{item.title}}</text>
+            <view class="order-meta">
+              <text class="order-status-tag">{{item.status_label}}</text>
+              <text class="order-location" wx:if="{{item.location}}">{{item.location}}</text>
+              <text class="order-date">{{item.created_at}}</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+</view>

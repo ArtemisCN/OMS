@@ -1338,13 +1338,17 @@
     chat.toggleEmojiPicker = function(e) {
         e.stopPropagation();
         if (!chat.emojiPicker) return;
-        chat.emojiPicker.classList.toggle('show');
+        if (chat.emojiPicker.style.display === 'flex') {
+            chat.emojiPicker.style.display = 'none';
+        } else {
+            chat.emojiPicker.style.display = 'flex';
+        }
     };
 
     chat.onDocClickForEmoji = function(e) {
-        if (chat.emojiPicker && chat.emojiPicker.classList.contains('show')) {
+        if (chat.emojiPicker && chat.emojiPicker.style.display === 'flex') {
             if (!chat.emojiPicker.contains(e.target) && e.target !== chat.emojiBtn) {
-                chat.emojiPicker.classList.remove('show');
+                chat.emojiPicker.style.display = 'none';
             }
         }
     };

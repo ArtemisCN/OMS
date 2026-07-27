@@ -226,12 +226,12 @@ function setupPhotoUpload() {
         </div>
     </div>
     <!-- Emoji 选择器 -->
-    <div class="wo-chat-emoji-picker" id="woChatEmojiPicker"></div>
+    <div class="wo-chat-emoji-picker" id="woChatEmojiPicker" style="display:none"></div>
 </div>
 
 <!-- 图片预览 -->
 <div class="wochat-preview-overlay" id="wochatPreview">
-    <img src="" alt="preview">
+    <img src="data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=" alt="preview">
 </div>
 
 <!-- 知识库搜索弹窗 -->
@@ -601,12 +601,12 @@ function escapeHtml(text) {
     };
 
     woChat.showEmoji = function() {
-        woChat.emojiPicker.classList.add('show');
+        woChat.emojiPicker.style.display = 'flex';
         woChat.emojiVisible = true;
     };
 
     woChat.hideEmoji = function() {
-        woChat.emojiPicker.classList.remove('show');
+        woChat.emojiPicker.style.display = 'none';
         woChat.emojiVisible = false;
     };
 
@@ -716,7 +716,8 @@ document.addEventListener('DOMContentLoaded', function() {
 .wo-chat-section {
     border: 1px solid var(--border-color, #e2e8f0);
     border-radius: 8px;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: visible;
     background: var(--bg-card, #fff);
 }
 .wo-chat-header {
@@ -852,6 +853,8 @@ document.addEventListener('DOMContentLoaded', function() {
     max-height: 160px;
     overflow-y: auto;
     background: var(--bg-card, #fff);
+    width: 100%;
+    box-sizing: border-box;
 }
 .wo-chat-emoji-picker.show { display: flex; }
 .wo-chat-emoji-picker span {

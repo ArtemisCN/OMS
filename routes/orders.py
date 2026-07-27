@@ -17,6 +17,12 @@ from utils.time_helpers import fmt_dt, now, fmt_date
 orders_bp = Blueprint('orders', __name__, url_prefix='/orders')
 
 
+def _get_default_team():
+    """获取全局默认组"""
+    s = SystemSetting.query.filter_by(key='default_dashboard_team').first()
+    return s.value if s and s.value else ''
+
+
 # ==================== 工单列表 ====================
 
 @orders_bp.route('/')
@@ -40,12 +46,20 @@ def list_orders():
         'team': request.args.get('team', ''),
     }
 
-    # 未指定组时按用户自身 User.team 过滤（非管理员）
+    # 已完工单池默认当天
+    if filters['status'] == 'completed' and not filters['date_from'] and not filters['date_to']:
+        from datetime import date
+        today = date.today().isoformat()
+        filters['date_from'] = today
+        filters['date_to'] = today
+
+    # 未指定组时按全局默认组过滤
     if not filters['team']:
-        if not current_user.is_admin:
-            person = User.query.filter_by(id=current_user.id).first()
-            if person and person.team:
-                filters['team'] = person.team
+        default_team = _get_default_team()
+        if default_team:
+            filters['team'] = default_team
+        elif not current_user.is_admin and current_user.team:
+            filters['team'] = current_user.team
 
     sort = request.args.get('sort', '')
     order = request.args.get('order', '')
@@ -99,7 +113,9 @@ def list_orders():
 @login_required
 def create_order():
     from services.address import get_merged_addresses, get_all_buildings
-    team = request.args.get('team', current_user.team or '')
+    team = request.args.get('team')
+    if not team:
+        team = _get_default_team() or current_user.team or ''
 
     if request.method == 'POST':
         try:
@@ -153,7 +169,9 @@ def publish_order():
 
     from services.data_service import get_team_options
     all_teams = get_team_options()
-    team = request.args.get('team', current_user.team or '')
+    team = request.args.get('team')
+    if not team:
+        team = _get_default_team() or current_user.team or ''
     return render_template('orders/publish.html', all_teams=all_teams, team=team)
 
 
@@ -194,7 +212,24 @@ def api_address_options():
 @orders_bp.route('/batch', methods=['GET', 'POST'])
 @admin_required
 def batch_create():
-    selected_team = request.args.get('team', 'all')
+    # 默认组：优先 URL 参数，其次全局默认组
+    url_team = request.args.get('team')
+    if url_team:
+        selected_team = url_team
+    else:
+        from models import SystemSetting
+        dft = SystemSetting.query.filter_by(key='default_dashboard_team').first()
+        if dft and dft.value:
+            selected_team = dft.value
+        elif current_user.team:
+            selected_team = current_user.team
+        else:
+            # 取第一个有人的组
+            from models import User
+            first_team = User.query.filter(
+                User.is_active == True, User.team.isnot(None), User.team != ''
+            ).with_entities(User.team).first()
+            selected_team = first_team[0] if first_team else ''
     persons, templates, fault_groups, fault_group_items, team_groups, teams, default_team = \
         svc.get_batch_form_data(current_user, selected_team=selected_team)
 

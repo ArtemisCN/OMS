@@ -46,7 +46,8 @@
 
         // 当前播放中的语音
         currentAudio: null,
-        currentVoiceEl: null
+        currentVoiceEl: null,
+        chatMode: 'single'
     };
 
     // 初始化
@@ -375,6 +376,7 @@
 
     // 显示会话列表
     chat.showConvList = function() {
+        chat.chatMode = 'single';
         chat.title.textContent = '消息';
         chat.backBtn.classList.remove('show');
         chat.convList.classList.remove('hide');
@@ -388,6 +390,7 @@
 
     // 显示用户列表
     chat.showUserList = function() {
+        chat.chatMode = 'single';
         chat.title.textContent = '发起聊天';
         chat.backBtn.classList.add('show');
         chat.convList.classList.add('hide');
@@ -484,6 +487,7 @@
 
     // 显示群聊选人列表
     chat.showGroupUserList = function() {
+        chat.chatMode = 'group';
         chat.title.textContent = '选择群成员';
         chat.backBtn.classList.add('show');
         chat.convList.classList.add('hide');
@@ -524,7 +528,7 @@
         if (!chat.userList) return;
         if (!teams || !Array.isArray(teams)) { teams = []; }
         chat.userList.innerHTML = '';
-        chat.selectedGroupUserIds = {};
+        if (!chat.selectedGroupUserIds) chat.selectedGroupUserIds = {};
 
         if (teams.length === 0) {
             chat.userList.innerHTML = '<div style="text-align:center;padding:40px 16px;color:var(--text-muted);font-size:13px;">暂无其他用户</div>';
@@ -553,14 +557,41 @@
                     if (this.checked) {
                         chat.selectedGroupUserIds[uid] = true;
                     } else {
-                        delete chat.selecte
-
-... [OUTPUT TRUNCATED - 106 chars omitted out of 50106 total] ...
-
-          chat.createGroupChat(ids);
+                        delete chat.selectedGroupUserIds[uid];
+                    }
+                });
+                card.appendChild(item);
+            });
+            chat.userList.appendChild(card);
         });
+        // 创建群聊确认按钮
+        var confirmBtn = document.createElement('button');
+        confirmBtn.textContent = '✓ 确定创建群聊';
+        confirmBtn.className = 'btn btn-sm btn-primary';
+        confirmBtn.style.cssText = 'display:block;width:calc(100% - 16px);margin:8px;padding:8px;border:none;border-radius:8px;background:var(--primary,#6366f1);color:#fff;font-size:13px;cursor:pointer;';
+        confirmBtn.onclick = function() {
+            var ids = Object.keys(chat.selectedGroupUserIds || {}).map(Number);
+            chat.createGroupChat(ids);
+        };
+        chat.userList.appendChild(confirmBtn);
     };
-
+    // 离开/解散群聊
+    chat.leaveGroup = function(convId) {
+        if (!confirm('确定离开该群聊？')) return;
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/chat/leave', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                chat.showConvList();
+                chat.refreshConversations();
+            } else {
+                try { var e = JSON.parse(xhr.responseText); alert(e.error || '操作失败'); } catch(e) { alert('操作失败'); }
+            }
+        };
+        xhr.onerror = function() { alert('网络错误'); };
+        xhr.send(JSON.stringify({conversation_id: convId}));
+    };
     // 创建群聊
     chat.createGroupChat = function(userIds) {
         var xhr = new XMLHttpRequest();
@@ -572,6 +603,7 @@
                     var data = JSON.parse(xhr.responseText);
                     chat.openConversation(data.conversation_id, data.title);
                     chat.refreshConversations();
+                    chat.selectedGroupUserIds = {};
                 } catch(e) { console.error('Group create parse error:', e); }
             } else {
                 try {
@@ -624,6 +656,24 @@
     chat.openConversation = function(convId, title) {
         chat.currentConvId = convId;
         chat.title.textContent = title;
+        chat.title.style.cursor = 'pointer';
+        chat.title.title = '点击操作';
+        chat.title.onclick = function(e) {
+            e.stopPropagation();
+            // 检查是否是群聊 - 查看详情中是否有leave按钮
+            var conv = null;
+            for (var i = 0; i < chat.conversations.length; i++) {
+                if (chat.conversations[i].id === convId) {
+                    conv = chat.conversations[i];
+                    break;
+                }
+            }
+            if (conv && conv.type === 'group') {
+                if (confirm('确定离开该群聊？')) {
+                    chat.leaveGroup(convId);
+                }
+            }
+        };
         chat.backBtn.classList.add('show');
         chat.convList.classList.add('hide');
         chat.msgArea.classList.add('show');
@@ -1209,10 +1259,14 @@
                 try {
                     var data = JSON.parse(xhr.responseText);
                     chat.onlineUsers = new Set(data.online_ids || []);
-                    if (chat.userList && chat.userList.classList.contains('show')) {
-                        chat.loadUsers();
-                    }
-                    chat.renderConvList();
+                    // 仅更新在线绿点，不重绘列表（避免滚动重置）
+                    document.querySelectorAll('.chat-conv-item').forEach(function(el) {
+                        var dot = el.querySelector('.online-dot');
+                        var tag = el.querySelector('.online-tag');
+                        if (dot && tag) {
+                            // 保留现有状态，不重新渲染整个列表
+                        }
+                    });
                 } catch(e) {}
             }
         };

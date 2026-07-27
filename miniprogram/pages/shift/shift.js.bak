@@ -1,0 +1,103 @@
+const api = require('../../utils/api');
+
+Page({
+  data: {
+    loading: true,
+    tab: 'create',  // create | history
+    handovers: [],
+    persons: [],
+    todayCount: 0,
+    hasMore: false,
+    page: 1,
+    // form
+    handoverPerson: '',
+    receivePerson: '',
+    content: '',
+    notes: '',
+    submitting: false,
+  },
+
+  onLoad() {
+    this.loadHistory();
+    this.loadPersons();
+  },
+
+  loadPersons() {
+    api.get('/shift-handovers?page=1').then((res) => {
+      this.setData({ persons: res.persons || [] });
+    }).catch(() => {
+      wx.showToast({ title: '加载人员失败', icon: 'none' });
+    });
+  },
+
+  loadHistory(page) {
+    page = page || 1;
+    this.setData({ loading: true });
+    api.get('/shift-handovers?page=' + page).then((res) => {
+      const handovers = page === 1 ? (res.handovers || []) : this.data.handovers.concat(res.handovers || []);
+      this.setData({
+        handovers: handovers,
+        todayCount: res.today_count || 0,
+        hasMore: res.has_more || false,
+        page: page,
+        loading: false,
+      });
+    }).catch(() => {
+      this.setData({ loading: false });
+      wx.showToast({ title: '加载失败', icon: 'none' });
+    });
+  },
+
+  onSwitchTab(e) {
+    const tab = e.currentTarget.dataset.tab;
+    this.setData({ tab: tab });
+    if (tab === 'history' && this.data.handovers.length === 0) {
+      this.loadHistory();
+    }
+  },
+
+  onLoadMore() {
+    if (this.data.hasMore) {
+      this.loadHistory(this.data.page + 1);
+    }
+  },
+
+  onContentInput(e) { this.setData({ content: e.detail.value }); },
+  onNotesInput(e) { this.setData({ notes: e.detail.value }); },
+
+  onSubmit() {
+    const { handoverPerson, receivePerson, content } = this.data;
+    if (!handoverPerson || !receivePerson) {
+      wx.showToast({ title: '请选择交班人和接班人', icon: 'none' });
+      return;
+    }
+    this.setData({ submitting: true });
+    api.post('/shift-handovers', {
+      handover_person: handoverPerson,
+      receive_person: receivePerson,
+      content: content,
+      notes: this.data.notes,
+    }).then((res) => {
+      wx.showToast({ title: '交接班记录已保存', icon: 'success' });
+      this.setData({
+        handoverPerson: '', receivePerson: '', content: '', notes: '',
+        submitting: false, tab: 'history',
+      });
+      this.loadHistory(1);
+    }).catch(() => {
+      this.setData({ submitting: false });
+      wx.showToast({ title: '保存失败', icon: 'none' });
+    });
+  },
+
+  onPickerChange(e) {
+    const field = e.currentTarget.dataset.field;
+    const idx = e.detail.value;
+    const persons = this.data.persons;
+    this.setData({ [field]: persons[idx].name });
+  },
+
+  onGoBack() {
+    wx.navigateBack();
+  },
+});

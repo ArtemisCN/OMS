@@ -1,0 +1,79 @@
+const api = require('../../utils/api');
+
+Page({
+  data: {
+    loading: true,
+    records: {},
+    todayDuty: [],
+    year: 0,
+    month: 0,
+    days: [],
+    staff: [],
+    today: '',
+  },
+
+  onLoad() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1;
+    this.setData({ year: y, month: m, today: now.toISOString().slice(0, 10) });
+    this.loadData(y, m);
+  },
+
+  loadData(year, month) {
+    this.setData({ loading: true });
+    api.get('/duty-schedules?year=' + year + '&month=' + month).then((res) => {
+      const records = res.records || {};
+      const days = this._getDays(year, month);
+      // 获取所有值班人员
+      const staffSet = new Set();
+      for (const key in records) {
+        const name = key.split('_')[0];
+        if (name) staffSet.add(name);
+      }
+      const staff = Array.from(staffSet);
+      this.setData({
+        records: records,
+        todayDuty: res.today || [],
+        days: days,
+        staff: staff,
+        loading: false,
+      });
+    }).catch(() => {
+      this.setData({ loading: false });
+      wx.showToast({ title: '加载失败', icon: 'none' });
+    });
+  },
+
+  _getDays(year, month) {
+    const days = [];
+    const total = new Date(year, month, 0).getDate();
+    for (let d = 1; d <= total; d++) {
+      const dateStr = year + '-' + String(month).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+      const dow = new Date(year, month - 1, d).getDay();
+      const dowLabels = ['日','一','二','三','四','五','六'];
+      days.push({ day: d, date: dateStr, dow: dow, dowLabel: dowLabels[dow], isWeekend: dow === 0 || dow === 6, isToday: dateStr === this.data.today });
+    }
+    return days;
+  },
+
+  onPrevMonth() {
+    let { year, month } = this.data;
+    month--;
+    if (month < 1) { month = 12; year--; }
+    this.setData({ year, month });
+    this.loadData(year, month);
+  },
+
+  onNextMonth() {
+    let { year, month } = this.data;
+    month++;
+    if (month > 12) { month = 1; year++; }
+    this.setData({ year, month });
+    this.loadData(year, month);
+  },
+
+  onGoBack() {
+    wx.navigateBack();
+  },
+});

@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}微信绑定 · 数据管理{% endblock %}
+{% block content %}
+<style>
+.wb-page { padding:24px 28px; min-height:calc(100vh - 60px); background:var(--bg-color,#f8f9fc); }
+.wb-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
+.wb-header h1 { font-size:20px; font-weight:700; color:var(--text-color,#1e293b); margin:0; display:flex; align-items:center; gap:10px; }
+.wb-header h1 i { color:#07c160; }
+.wb-summary { display:flex; gap:20px; flex-wrap:wrap; margin-bottom:24px; }
+.wb-stat { background:var(--card-bg,#fff); border:1px solid var(--border-color,#e2e8f0); border-radius:12px; padding:14px 24px; display:flex; align-items:center; gap:14px; }
+.wb-stat-icon { width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; }
+.wb-stat-info { line-height:1.4; }
+.wb-stat-num { font-size:22px; font-weight:700; color:var(--text-color,#1e293b); }
+.wb-stat-label { font-size:12px; color:var(--text-muted,#8896ab); }
+.wb-table { width:100%; border-collapse:collapse; background:var(--card-bg,#fff); border-radius:12px; overflow:hidden; border:1px solid var(--border-color,#e2e8f0); }
+.wb-table th { background:var(--bg-light,#f1f5f9); color:var(--text-muted,#64748b); font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.3px; padding:12px 16px; text-align:left; border-bottom:1px solid var(--border-color,#e2e8f0); }
+.wb-table td { padding:12px 16px; font-size:13px; color:var(--text-color,#1e293b); border-bottom:1px solid var(--border-color,#e2e8f0); vertical-align:middle; }
+.wb-table tr:last-child td { border-bottom:none; }
+.wb-table tr:hover { background:var(--bg-light,#f8fafc); }
+.badge-bound { display:inline-flex; align-items:center; gap:5px; padding:3px 12px; border-radius:20px; font-size:12px; font-weight:500;
+  background:#f0fdf4; color:#16a34a; border:1px solid #bbf7d0; }
+.badge-unbound { display:inline-flex; align-items:center; gap:5px; padding:3px 12px; border-radius:20px; font-size:12px; font-weight:500;
+  background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
+.btn-unbind { background:none; border:1px solid #fecaca; color:#ef4444; border-radius:8px; padding:4px 14px; font-size:12px; cursor:pointer; transition:all .2s; }
+.btn-unbind:hover { background:#fef2f2; border-color:#ef4444; }
+.pagination { display:flex; justify-content:center; gap:6px; margin-top:20px; flex-wrap:wrap; }
+.pagination a,.pagination span { display:inline-flex; align-items:center; justify-content:center; min-width:34px; height:34px; padding:0 8px; border-radius:8px; font-size:13px; text-decoration:none; transition:all .2s; }
+.pagination a { background:var(--card-bg,#fff); border:1px solid var(--border-color,#e2e8f0); color:var(--text-color,#1e293b); }
+.pagination a:hover { border-color:var(--primary-color,#6366f1); color:var(--primary-color,#6366f1); }
+.pagination .current { background:var(--primary-color,#6366f1); color:#fff; border-color:var(--primary-color,#6366f1); }
+.pagination .disabled { color:var(--text-muted,#94a3b8); cursor:default; }
+.empty-state { text-align:center; padding:60px 20px; color:var(--text-muted,#94a3b8); }
+.empty-state i { font-size:48px; margin-bottom:12px; opacity:.4; }
+@media(max-width:768px) {
+  .wb-page { padding:16px; }
+  .wb-table { font-size:12px; display:block; overflow-x:auto; }
+  .wb-table th,.wb-table td { white-space:nowrap; }
+}
+</style>
+
+<div class="wb-page">
+  <div class="wb-header">
+    <h1><i class="fab fa-weixin"></i> 微信绑定</h1>
+    <a href="{{ url_for('data.index') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-arrow-left"></i> 返回数据管理
+    </a>
+  </div>
+
+  {% set total = pagination.total %}
+  {% set bound = pagination.items|selectattr('wx_openid')|list|length if pagination.items else 0 %}
+  {% set unbound = total - bound %}
+  <div class="wb-summary">
+    <div class="wb-stat">
+      <div class="wb-stat-icon" style="background:#f0fdf4;color:#16a34a;"><i class="fab fa-weixin"></i></div>
+      <div class="wb-stat-info">
+        <div class="wb-stat-num">{{ bound }}</div>
+        <div class="wb-stat-label">已绑定</div>
+      </div>
+    </div>
+    <div class="wb-stat">
+      <div class="wb-stat-icon" style="background:#fef2f2;color:#dc2626;"><i class="fab fa-weixin"></i></div>
+      <div class="wb-stat-info">
+        <div class="wb-stat-num">{{ unbound }}</div>
+        <div class="wb-stat-label">未绑定</div>
+      </div>
+    </div>
+    <div class="wb-stat">
+      <div class="wb-stat-icon" style="background:#eef2ff;color:#4f46e5;"><i class="fas fa-users"></i></div>
+      <div class="wb-stat-info">
+        <div class="wb-stat-num">{{ total }}</div>
+        <div class="wb-stat-label">总用户数</div>
+      </div>
+    </div>
+  </div>
+
+  {% if pagination.items %}
+  <table class="wb-table">
+    <thead>
+      <tr>
+        <th>用户</th>
+        <th>姓名</th>
+        <th>角色组</th>
+        <th>医院</th>
+        <th>微信绑定</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in pagination.items %}
+      <tr>
+        <td><code>{{ u.username }}</code></td>
+        <td>{{ u.display_name or '-' }}</td>
+        <td>{{ u.group or '普通用户' }}</td>
+        <td>{{ u.hospital.name if u.hospital else ('多医院' if u.hospital_id == 0 else '-') }}</td>
+        <td>
+          {% if u.wx_openid %}
+          <span class="badge-bound"><i class="fas fa-check-circle"></i> 已绑定</span>
+          {% else %}
+          <span class="badge-unbound"><i class="fas fa-times-circle"></i> 未绑定</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if u.wx_openid %}
+          <form action="{{ url_for('data.admin_unbind_wx', uid=u.id) }}" method="POST"
+                onsubmit="return confirm('确定解绑 {{ u.display_name or u.username }} 的微信？解绑后该用户需用密码重新登录小程序')">
+            <button type="submit" class="btn-unbind"><i class="fas fa-unlink"></i> 解绑</button>
+          </form>
+          {% else %}
+          <span style="color:var(--text-muted,#94a3b8);font-size:12px;">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if pagination.pages > 1 %}
+  <div class="pagination">
+    {% if pagination.has_prev %}
+    <a href="{{ url_for('data.list_wechat_bindings', page=pagination.prev_num) }}">&laquo;</a>
+    {% else %}
+    <span class="disabled">&laquo;</span>
+    {% endif %}
+    {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+      {% if p %}
+      <a href="{{ url_for('data.list_wechat_bindings', page=p) }}" class="{% if p == pagination.page %}current{% endif %}">{{ p }}</a>
+      {% else %}
+      <span class="disabled">…</span>
+      {% endif %}
+    {% endfor %}
+    {% if pagination.has_next %}
+    <a href="{{ url_for('data.list_wechat_bindings', page=pagination.next_num) }}">&raquo;</a>
+    {% else %}
+    <span class="disabled">&raquo;</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="empty-state">
+    <div><i class="fas fa-users"></i></div>
+    <div>暂无用户数据</div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

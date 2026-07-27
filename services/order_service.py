@@ -20,8 +20,13 @@ from services import generator
 # ==================== 查询 ====================
 
 def build_order_query(filters, user=None):
-    """构建工单查询（筛选条件复用）"""
+    """构建工单查询（筛选条件复用，自动按 g.hospital_id 过滤）"""
     query = WorkOrder.query
+    # 自动按当前医院过滤
+    from flask import g
+    hid = getattr(g, 'hospital_id', None)
+    if hid and hid != 0:
+        query = query.filter(WorkOrder.hospital_id == hid)
     status = filters.get('status', '')
     if status in ('pending', 'in_progress', 'completed'):
         query = query.filter(WorkOrder.status == status)
@@ -124,8 +129,13 @@ def get_order_photos(order_id):
 # ==================== 筛选辅助数据 ====================
 
 def get_filter_data():
-    """获取工单列表页所需的下拉数据"""
-    persons = User.query.filter(User.is_active==True).order_by(User.sort_order, User.display_name).all()
+    """获取工单列表页所需的下拉数据（按当前医院过滤人员）"""
+    from flask import g
+    hid = getattr(g, 'hospital_id', None)
+    q = User.query.filter(User.is_active == True)
+    if hid and hid != 0:
+        q = q.filter(User.hospital_id == hid)
+    persons = q.order_by(User.sort_order, User.display_name).all()
     buildings = get_all_buildings()
     teams = [
         t[0] for t in

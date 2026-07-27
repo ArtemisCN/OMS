@@ -220,6 +220,14 @@
         <span class="data-card-count">{{ pending_reg_count }}</span>
         {% endif %}
       </a>
+      <a href="{{ url_for('data.list_wechat_bindings') }}" class="data-card c-system">
+        <div class="data-card-icon"><i class="fab fa-weixin"></i></div>
+        <div class="data-card-info">
+          <div class="data-card-title">微信绑定</div>
+          <div class="data-card-desc">查看/解绑微信号</div>
+        </div>
+        <span class="data-card-count">{{ bound_wx_count or 0 }}</span>
+      </a>
     </div>
   </div>
 

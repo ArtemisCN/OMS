@@ -86,6 +86,16 @@ def select_avatar():
     return jsonify({'ok': True, 'avatar': avatar_url})
 
 
+@main_bp.route('/user/unbind-wx', methods=['POST'])
+@login_required
+def unbind_wx():
+    """解绑微信号"""
+    current_user.wx_openid = ''
+    db.session.commit()
+    flash('微信已解绑 ✅', 'success')
+    return redirect(request.referrer or url_for('main.dashboard'))
+
+
 @main_bp.route('/uploads/<path:filename>')
 def serve_upload(filename):
     """提供上传的图片文件"""

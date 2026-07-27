@@ -177,7 +177,8 @@ def index():
         duty_count=DutySchedule.query.count(),
         knowledge_count=KnowledgeBase.query.count(),
         users_count=User.query.count(),
-        pending_reg_count=RegistrationRequest.query.filter_by(status='pending').count())
+        pending_reg_count=RegistrationRequest.query.filter_by(status='pending').count(),
+        bound_wx_count=User.query.filter(User.wx_openid.isnot(None), User.wx_openid != '').count())
 
 
 # ==================== 人员管理 ====================
@@ -1604,6 +1605,41 @@ def delete_solution_api(sid):
     """API：删除方案模板，返回JSON"""
     data_service.delete_solution(sid, current_user.display_name or current_user.username)
     return jsonify({'ok': True})
+
+
+# ==================== 微信绑定管理 ====================
+
+
+@data_bp.route('/wechat-bindings')
+@admin_required
+def list_wechat_bindings():
+    """查看所有用户的微信绑定状态"""
+    if not can_access('微信绑定'):
+        flash('无权限访问', 'danger')
+        return redirect(url_for('data.index'))
+    page = request.args.get('page', 1, type=int)
+    q = User.query.order_by(User.id)
+    pagination = q.paginate(page=page, per_page=50, error_out=False)
+    return render_template('data/wechat_bindings.html',
+                         pagination=pagination)
+
+
+@data_bp.route('/wechat-bindings/<int:uid>/unbind', methods=['POST'])
+@admin_required
+def admin_unbind_wx(uid):
+    """管理员解绑指定用户的微信号"""
+    if not can_access('微信绑定'):
+        flash('无权限访问', 'danger')
+        return redirect(url_for('data.list_wechat_bindings'))
+    user = db.session.get(User, uid)
+    if not user:
+        flash('用户不存在', 'danger')
+        return redirect(url_for('data.list_wechat_bindings'))
+    user.wx_openid = ''
+    db.session.commit()
+    log_audit(current_user.id, '解绑微信', f'管理员解绑了 {user.display_name or user.username} 的微信')
+    flash(f'已解绑 {user.display_name or user.username} 的微信 ✅', 'success')
+    return redirect(url_for('data.list_wechat_bindings'))
 
 
 # ==================== 注册审批 ====================

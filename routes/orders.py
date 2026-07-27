@@ -8,7 +8,7 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from openpyxl import Workbook
 
-from models import db, WorkOrder, SystemSetting, WorkOrderChatMessage, WorkOrderPhoto
+from models import db, WorkOrder, SystemSetting, WorkOrderChatMessage, WorkOrderPhoto, User
 from services import order_service as svc
 from services.fault_matcher import match_fault
 from routes.auth import admin_required
@@ -56,7 +56,7 @@ def list_orders():
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     filtered_all = query.all()
 
-    persons, buildings, teams = svc.get_filter_data()
+    persons, buildings, teams = svc.get_filter_data(team=filters['team'] or None)
     stats = svc.get_order_stats()
 
     from datetime import datetime

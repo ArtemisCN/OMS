@@ -76,6 +76,14 @@
                 </select>
             </div>
             <div class="col-md-2">
+                <select name="team" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">全部组别</option>
+                    {% for t in teams %}
+                    <option value="{{ t }}" {% if team_sel==t %}selected{% endif %}>{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
                 <select name="person" class="form-select form-select-sm">
                     <option value="">全部人员</option>
                     {% for p in persons %}

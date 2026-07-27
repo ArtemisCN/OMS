@@ -128,13 +128,15 @@ def get_order_photos(order_id):
 
 # ==================== 筛选辅助数据 ====================
 
-def get_filter_data():
-    """获取工单列表页所需的下拉数据（按当前医院过滤人员）"""
+def get_filter_data(team=None):
+    """获取工单列表页所需的下拉数据（按当前医院和分组过滤人员）"""
     from flask import g
     hid = getattr(g, 'hospital_id', None)
     q = User.query.filter(User.is_active == True)
     if hid and hid != 0:
         q = q.filter(User.hospital_id == hid)
+    if team:
+        q = q.filter(User.team == team)
     persons = q.order_by(User.sort_order, User.display_name).all()
     buildings = get_all_buildings()
     teams = [

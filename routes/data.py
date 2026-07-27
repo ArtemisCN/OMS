@@ -240,11 +240,19 @@ def list_persons():
         if t not in hospital_groups[h_name]:
             hospital_groups[h_name][t] = []
         hospital_groups[h_name][t].append(p)
+
+    # 全部活跃用户（用于转移工单目标选择）
+    all_active = User.query.filter(User.is_active == True).order_by(User.team, User.display_name).all()
+
     return render_template('data/persons.html', persons=persons, user_map=user_map,
                            team_options=team_options,
                            hospital_groups=hospital_groups, hospitals=hospitals,
                            role_groups=role_groups, team_sel=team_sel,
-                           order_counts=order_counts)
+                           order_counts=order_counts,
+                           all_active_names=sorted(set(
+                               (u.display_name or u.username) for u in all_active
+                               if (u.display_name or u.username)
+                           )))
 
 
 @data_bp.route('/persons/add', methods=['POST'])

@@ -341,6 +341,37 @@
     </div>
 </div>
 
+<!-- ===== 转移工单弹窗 ===== -->
+<div class="modal fade" id="reassignModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content" style="border-radius:14px;">
+            <div class="modal-header border-0 pb-0" style="padding:20px 20px 0;">
+                <h6 class="modal-title fw-bold"><i class="fas fa-exchange-alt text-warning"></i> 转移工单</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="padding:16px 20px;">
+                <div style="background:var(--bg-light,#f8f9fa);border-radius:10px;padding:12px 14px;margin-bottom:14px;">
+                    <div style="font-size:12px;color:var(--text-muted,#8896ab);">来源人员</div>
+                    <div style="font-size:15px;font-weight:600;margin-top:2px;" id="reassignSourceName">—</div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-medium">将 <span id="reassignCount">0</span> 条工单转移给</label>
+                    <select id="reassignTarget" class="form-select">
+                        <option value="">— 选择接收人 —</option>
+                        {% for name in all_active_names %}
+                        <option value="{{ name }}">{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0" style="padding:0 20px 18px;">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-sm btn-primary" onclick="doReassign()"><i class="fas fa-exchange-alt"></i> 执行转移</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ===== 批量改组分弹窗 ===== -->
 <div class="modal fade" id="batchTeamModal" tabindex="-1">
     <div class="modal-dialog modal-sm modal-dialog-centered">
@@ -636,15 +667,27 @@ function quickEdit(pid, name) {
     document.getElementById('quickEditForm').action = '/data/persons/' + pid + '/edit-field';
     new bootstrap.Modal(document.getElementById('quickEditModal')).show();
 }
+var _reassignPid = null;
+var _reassignName = null;
 function reassignOrders(pid, name, count) {
-    var target = prompt("u201c" + name + "u201d u6709 " + count + " u6761u5de5u5355u8bb0u5f55uff0cu8f93u5165u63a5u6536u4ebau59d3u540du8fdbu884cu8f6cu79fbuff1a");
-    if (!target) return;
-    var form = document.createElement("form");
-    form.method = "post";
-    form.action = "/data/persons/" + pid + "/reassign-orders";
-    var input = document.createElement("input");
-    input.type = "hidden";
-    input.name = "target_name";
+    _reassignPid = pid;
+    _reassignName = name;
+    document.getElementById('reassignSourceName').textContent = name;
+    document.getElementById('reassignCount').textContent = count;
+    document.getElementById('reassignTarget').value = '';
+    new bootstrap.Modal(document.getElementById('reassignModal')).show();
+}
+function doReassign() {
+    var target = document.getElementById('reassignTarget').value;
+    if (!target) { alert('请选择接收人'); return; }
+    if (target === _reassignName) { alert('不能转移给自己'); return; }
+    if (!confirm('确定将 ' + _reassignName + ' 的工单转移给 ' + target + '？')) return;
+    var form = document.createElement('form');
+    form.method = 'post';
+    form.action = '/data/persons/' + _reassignPid + '/reassign-orders';
+    var input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'target_name';
     input.value = target;
     form.appendChild(input);
     document.body.appendChild(form);

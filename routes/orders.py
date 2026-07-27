@@ -306,9 +306,10 @@ def batch_undo():
 def detail(order_id):
     order = svc.get_order_or_404(order_id)
     photos = svc.get_order_photos(order_id)
-    from models import SparePart, PartUsageRecord
-    spare_parts = SparePart.query.filter(SparePart.is_active == True).order_by(SparePart.name).all()
-    linked_parts = PartUsageRecord.query.filter_by(work_order_id=order_id).order_by(PartUsageRecord.created_at.desc()).all()
+    from models import SparePart
+    spare_parts = SparePart.query.order_by(SparePart.name).all()
+    # PartUsageRecord 模型暂未创建，备件关联记录预留
+    linked_parts = []
     return render_template('orders/detail.html', order=order, photos=photos,
                            spare_parts=spare_parts, linked_parts=linked_parts)
 

@@ -131,7 +131,7 @@
   '资产':'fas fa-boxes', '界面':'fas fa-paint-brush', '基本':'fas fa-cog',
   '系统':'fas fa-server', '通知':'fas fa-bell', 'SLA':'fas fa-hourglass-half',
   '短信':'fas fa-sms', '关键词':'fas fa-key', '功能开关':'fas fa-toggle-on',
-  '运维大屏':'fas fa-tv',
+  '运维大屏':'fas fa-tv', '日志':'fas fa-history',
 } %}
 {% set param_meta = {
   'auto_refresh_interval':     {'icon':'sync-alt','label':'自动刷新间隔','desc':'每隔多少秒自动刷新仪表盘数据？设为 0 则改为手动刷新','unit':'秒'},
@@ -181,6 +181,10 @@
   'show_system_version':       {'icon':'info-circle','label':'显示版本号','desc':'页面底部是否显示系统版本和运行时长'},
   'primary_color':             {'icon':'palette','label':'系统主色调','desc':'主题色，改完后刷新看效果'},
   'timezone':                  {'icon':'globe-asia','label':'系统时区','desc':'系统默认时区，影响时间显示'},
+  'log_level':                 {'icon':'toggle-on','label':'日志级别','desc':'日志输出详细程度：DEBUG=最详细，INFO=常规，WARNING=仅警告，ERROR=仅错误'},
+  'log_retention_days':        {'icon':'archive','label':'日志保留天数','desc':'日志文件保留多少天后自动删除','unit':'天'},
+  'slow_query_threshold':      {'icon':'tachometer-alt','label':'慢查询阈值','desc':'SQL执行超过此毫秒数时记录到慢查询日志','unit':'毫秒'},
+  'enable_console_log':        {'icon':'terminal','label':'控制台日志','desc':'是否在终端输出日志，生产环境可关闭以减少磁盘IO'},
   'maintenance_mode':          {'icon':'shield-alt','label':'维护模式','desc':'开启后普通用户看到维护提示，仅管理员可进'},
   'personnel_default_team':     {'icon':'users','label':'效能看板默认团队','desc':'人员效能看板默认选中的团队，空=全部'},
   'ops_display_groups':        {'icon':'layer-group','label':'运维大屏分组配置','desc':'大屏角色组显示配置，JSON格式'},
@@ -241,6 +245,8 @@
   'sla_resolution_emergency':  {'step':0.5, 'min':0.5, 'max':48},
   'sla_resolution_urgent':     {'step':1, 'min':1, 'max':96},
   'sla_resolution_normal':     {'step':2, 'min':2, 'max':168},
+  'log_retention_days':        {'step':7, 'min':1, 'max':365},
+  'slow_query_threshold':      {'step':100, 'min':100, 'max':10000},
 } %}
 
 <div class="settings-page">
@@ -438,6 +444,14 @@
             <button class="btn-soft btn btn-sm" style="margin-left:auto;padding:3px 12px;font-size:11px;background:var(--set-accent);color:#fff;border-color:var(--set-accent);" onclick="saveTemplate({{ s.id }})">保存</button>
           </div>
         </div>
+
+        {% elif s.key == 'log_level' %}
+        <select class="set-select" onchange="saveSetting({{ s.id }}, this)" data-key="{{ s.key }}">
+          <option value="DEBUG" {% if s.value == 'DEBUG' %}selected{% endif %}>🐛 DEBUG（调试）</option>
+          <option value="INFO" {% if s.value == 'INFO' %}selected{% endif %}>ℹ️ INFO（常规）</option>
+          <option value="WARNING" {% if s.value == 'WARNING' %}selected{% endif %}>⚠️ WARNING（警告）</option>
+          <option value="ERROR" {% if s.value == 'ERROR' %}selected{% endif %}>🚨 ERROR（错误）</option>
+        </select>
 
         {% elif s.value == '0' or s.value == '1' %}
         <div class="form-check form-switch" style="margin:0;">

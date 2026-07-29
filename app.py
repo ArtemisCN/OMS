@@ -69,6 +69,18 @@ def create_app():
             _system_settings[s.key] = s.value
         app.config['SYSTEM_SETTINGS'] = _system_settings
 
+        # 用系统设置的日志参数覆盖环境变量默认值
+        if 'log_level' in _system_settings:
+            app.config['LOG_LEVEL_FROM_SETTINGS'] = _system_settings['log_level']
+            # 动态更新日志级别
+            import logging
+            level_name = _system_settings['log_level'].upper()
+            level = getattr(logging, level_name, logging.INFO)
+            for handler in getattr(app, 'logger_inst', app.logger).handlers:
+                handler.setLevel(level)
+            app.logger_inst.setLevel(level)
+            app.logger.info("日志级别已设为 %s (来自系统设置)", level_name)
+
     login_manager = LoginManager()
     login_manager.login_view = 'auth.login'
     login_manager.login_message = '请先登录'

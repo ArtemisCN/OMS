@@ -98,6 +98,11 @@ def index():
         ('search_default_days', '30', '搜索默认时间范围', '搜索工单时默认只看最近多少天的，省得搜出来一堆老数据。30天够用，想查更早的再手动调', '工单'),
         ('confirm_destructive', '1', '破坏性操作确认', '删工单、删人员这种重要操作，要不要弹个框再确认一下？建议开着，防止手滑误删', '系统'),
         ('session_timeout_minutes', '480', '会话超时时间', '用户登录后一直没操作，过多少分钟自动登出。480分钟=8小时，够一个班次用了，范围60~1440', '系统'),
+        # 日志与监控
+        ('log_level', 'INFO', '日志级别', '控制台和文件日志的输出级别：DEBUG=最详细（调试用），INFO=常规，WARNING=仅警告和错误，ERROR=仅错误', '日志'),
+        ('log_retention_days', '30', '日志保留天数', '系统日志文件保留多少天，超期自动删除。建议至少保留30天便于排查问题', '日志'),
+        ('slow_query_threshold', '500', '慢查询阈值', 'SQL查询超过多少毫秒算「慢查询」并被记录到日志，设得太低会刷屏，建议500ms', '日志'),
+        ('enable_console_log', '1', '控制台日志输出', '是否在终端输出日志（生产环境可以关闭以减少磁盘IO，调试时建议开启）', '日志'),
         ('ops_display_groups', '{}', '运维大屏分组配置', '运维大屏上怎么分组显示工单？用JSON配：{"default":"默认组名","merged":[{"label":"合并后名称","groups":["组1","组2"]}]}，可以把多个组合并成一个显示', '运维大屏'),
         # SLA 响应时限（小时）
         ('sla_response_emergency', '0.5', '特急响应时限', '特急工单从创建到接单不能超过多少小时？超时就违约了。默认0.5小时=30分钟', 'SLA'),
@@ -189,6 +194,26 @@ def save():
         setting = SystemSetting(key=key, value=value, label=key)
         db.session.add(setting)
     db.session.commit()
+
+    # 日志配置变更即时生效
+    if key in ('log_level', 'log_retention_days', 'slow_query_threshold', 'enable_console_log'):
+        import logging
+        from flask import current_app
+        current_app.config.setdefault('SYSTEM_SETTINGS', {})
+        current_app.config['SYSTEM_SETTINGS'][key] = value
+        if key == 'log_level':
+            level_name = value.upper()
+            level = getattr(logging, level_name, logging.INFO)
+            logger = getattr(current_app, 'logger_inst', current_app.logger)
+            for handler in logger.handlers:
+                handler.setLevel(level)
+            logger.setLevel(level)
+            current_app.logger.info("日志级别已动态更新为 %s", level_name)
+        elif key == 'slow_query_threshold':
+            import utils.logging_config as lc
+            lc.SLOW_QUERY_THRESHOLD = int(value)
+            current_app.logger.info("慢查询阈值已动态更新为 %sms", value)
+
     return jsonify({'ok': True})
 
 
@@ -265,6 +290,11 @@ def init_defaults():
         ('cos_secret_id', '', 'SecretId', '腾讯云API密钥ID（CAM访问管理获取）', '对象存储'),
         ('cos_secret_key', '', 'SecretKey', '腾讯云API密钥Key', '对象存储'),
         ('cos_cdn_domain', '', 'CDN加速域名', '可选，如 https://img.xxx.com，留空则用COS默认域名', '对象存储'),
+        # 日志与监控
+        ('log_level', 'INFO', '日志级别', '日志输出级别：DEBUG/INFO/WARNING/ERROR', '日志'),
+        ('log_retention_days', '30', '日志保留天数', '日志文件保留天数，超期自动清理', '日志'),
+        ('slow_query_threshold', '500', '慢查询阈值', 'SQL查询耗时超过此毫秒数时记录慢查询日志', '日志'),
+        ('enable_console_log', '1', '控制台日志', '是否输出日志到终端控制台', '日志'),
     ]
     count = 0
     for key, value, label, desc, cat in defaults:

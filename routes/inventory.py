@@ -136,7 +136,9 @@ def detail(task_id):
 @login_required
 def review(task_id):
     """盘点核对页面：左右对比，逐条确认"""
-    task = InventoryTask.query.get_or_404(task_id)
+    task = InventoryTask.query.filter(InventoryTask.id == task_id).first()
+    if not task:
+        return render_template('errors/404.html'), 404
     return render_template('inventory/review.html', task=task)
 
 
@@ -182,7 +184,7 @@ def review_data(task_id):
         # 匹配资产
         asset = None
         if item.asset_id:
-            asset = Asset.query.get(item.asset_id)
+            asset = Asset.query.filter(Asset.id == item.asset_id).first()
         if not asset and item.asset_no:
             asset = Asset.query.filter_by(asset_no=item.asset_no, hospital_id=task.hospital_id).first()
 

@@ -2,8 +2,10 @@
 import os
 import sys
 import mimetypes
-from flask import Flask
+import time as _time
+from flask import Flask, g, request
 from flask_login import LoginManager
+from utils.logging_config import setup_logging, register_slow_query_listener
 
 # 注册 .woff2 / .svg MIME 类型（Flask 开发服务器默认没有）
 mimetypes.add_type('font/woff2', '.woff2')
@@ -43,6 +45,9 @@ def create_app():
     app.config['REMEMBER_COOKIE_DURATION'] = 604800  # 7天
 
     db.init_app(app)
+
+    # ===== 初始化日志与监控系统 =====
+    setup_logging(app)
 
     # 初始化系统参数缓存（避免每次请求查询 SystemSetting）
     with app.app_context():
@@ -105,6 +110,7 @@ def create_app():
     from routes.efficiency import efficiency_bp
     from routes.assets import assets_bp
     from routes.dashboard import dashboard_bp
+    from routes.health import health_bp
 
     from routes.finance_asset import fin_bp as finance_asset_bp
 
@@ -117,10 +123,13 @@ def create_app():
         forms_bp, monitor_bp, analysis_bp, finance_bp,
         finance_asset_bp, scan_bp, chat_bp, inv_bp, exam_bp,
         miniapp_bp, feature_bp, contracts_bp, sla_bp,
-        efficiency_bp, assets_bp, dashboard_bp,
+        efficiency_bp, assets_bp, dashboard_bp, health_bp,
     ]
     for _bp in BLUEPRINTS:
         app.register_blueprint(_bp)
+
+    # 注册 SQLAlchemy 慢查询监听
+    register_slow_query_listener(app)
 
     # 上下文处理器
     @app.context_processor
@@ -174,6 +183,13 @@ def create_app():
         """根据当前用户设置医院上下文"""
         from flask import g, session
         from flask_login import current_user
+
+        # ----- 日志链路追踪 -----
+        from utils.logging_config import generate_request_id
+        g.request_id = generate_request_id()
+        g.start_time = _time.time()
+        g.user_id = current_user.id if current_user.is_authenticated else None
+
         # 从缓存读取会话超时（避免每次请求查数据库）
         try:
             timeout = app.config.get('SESSION_TIMEOUT', 30)
@@ -221,15 +237,53 @@ def create_app():
                         hid = -1
                     g.hospital_id = hid
 
+    # 请求日志（after_request）
+    @app.after_request
+    def log_request(response):
+        """记录每个请求的日志"""
+        if request.path.startswith('/static/'):
+            return response  # 静态文件不记录
+        # 计算耗时
+        duration_ms = round((_time.time() - getattr(g, 'start_time', _time.time())) * 1000, 1)
+        # 获取日志器
+        logger = getattr(app, 'logger_inst', app.logger)
+        # 状态码
+        status_code = response.status_code
+        # 跳过健康检查的日志（减少噪音）
+        if request.path.startswith('/health'):
+            return response
+        # 记录 INFO 级别日志（ERROR 由 errorhandler 记录）
+        if status_code < 400:
+            logger.info(
+                "%s %s → %s (%sms)",
+                request.method, request.path, status_code, duration_ms,
+                extra={
+                    'duration_ms': duration_ms,
+                    'status_code': status_code,
+                }
+            )
+        else:
+            # 4xx/5xx 已由 errorhandler 记录，此处仅补充 duration
+            pass
+        # 添加响应头便于调试
+        response.headers['X-Request-ID'] = getattr(g, 'request_id', '-')
+        response.headers['X-Response-Time-Ms'] = str(duration_ms)
+        return response
+
     # 错误处理器
     @app.errorhandler(404)
     def not_found(e):
+        logger = getattr(app, 'logger_inst', app.logger)
+        logger.warning("404 %s %s", request.method, request.path, extra={'status_code': 404})
         from flask import render_template
         return render_template('errors/404.html'), 404
 
     @app.errorhandler(500)
     def server_error(e):
         db.session.rollback()
+        logger = getattr(app, 'logger_inst', app.logger)
+        logger.error("500 %s %s", request.method, request.path,
+                     exc_info=True, extra={'status_code': 500})
         from flask import render_template
         return render_template('errors/500.html'), 500
 
@@ -237,6 +291,8 @@ def create_app():
     def forbidden(e):
         from flask import render_template, jsonify, request
         if request.path.startswith('/api/'):
+            logger = getattr(app, 'logger_inst', app.logger)
+            logger.warning("403 %s %s", request.method, request.path, extra={'status_code': 403})
             return jsonify(error='无权访问'), 403
         return render_template('errors/403.html'), 403
 

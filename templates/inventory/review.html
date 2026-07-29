@@ -269,17 +269,22 @@ var confirmedItemIds = {};
 
 // ==================== 加载数据 ====================
 function loadReview() {
+  console.log('[review] loadReview start');
   var loadingEl = document.getElementById('loading');
   var timeoutTimer = setTimeout(function() {
-    loadingEl.innerHTML = '加载超时，请刷新重试。如果持续出现，可能是数据量过大。';
-  }, 15000); // 15秒超时保护
+    console.log('[review] TIMEOUT - 8s exceeded');
+    loadingEl.innerHTML = '⏱ 加载超时（8秒）· <button class="btn btn-sm btn-outline-primary mt-2" onclick="loadReview()">重试</button>';
+  }, 8000); // 8秒超时
 
+  console.log('[review] fetching data...');
   fetch('/inventory/api/{{ task.id }}/review-data')
     .then(function(r) {
+      console.log('[review] fetch response:', r.status);
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     })
     .then(function(data) {
+      console.log('[review] data received, items:', data.total);
       clearTimeout(timeoutTimer);
       reviewData = data;
       data.issue.forEach(function(item) { initSelected(item); });
@@ -296,6 +301,7 @@ function loadReview() {
       document.getElementById('progressWrap').style.display = 'block';
     })
     .catch(function(e) {
+      console.log('[review] ERROR:', e.message);
       clearTimeout(timeoutTimer);
       var msg = e.message || String(e);
       if (msg.indexOf('JSON') !== -1) msg = '数据解析失败，接口返回格式异常';

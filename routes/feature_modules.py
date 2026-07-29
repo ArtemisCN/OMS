@@ -6,7 +6,7 @@ import json
 import os
 from datetime import datetime, date, timedelta
 
-from flask import current_app,  Blueprint, render_template, jsonify, request, send_file, g
+from flask import current_app,  Blueprint, render_template, jsonify, request, send_file, g, redirect
 from flask_login import login_required, current_user
 from sqlalchemy import func
 
@@ -2144,41 +2144,8 @@ def maintenance_calendar():
 @feature_bp.route('/asset-lifecycle', methods=['GET'])
 @login_required
 def asset_lifecycle():
-    """设备履历页面"""
-    asset_id = request.args.get('asset_id', type=int)
-    if not asset_id:
-        asset_id = request.args.get('id', type=int)
-    asset = Asset.query.get(asset_id) if asset_id else None
-    if not asset:
-        return render_template('errors/404.html'), 404
-    logs = AssetLog.query.filter_by(asset_id=asset.id).order_by(AssetLog.created_at.desc()).all()
-    # 关联的工单
-    work_orders = WorkOrder.query.filter(
-        WorkOrder.device_type == asset.device_type,
-        WorkOrder.department == asset.department,
-        WorkOrder.created_at >= (asset.purchase_date or date(2000, 1, 1))
-    ).order_by(WorkOrder.created_at.desc()).limit(20).all()
-    # 合并时间线
-    timeline = []
-    for log in logs:
-        timeline.append({
-            'type': log.action, 'time': log.created_at,
-            'operator': log.operator,
-            'detail': f"{log.old_value or ''} → {log.new_value or ''}" if log.old_value or log.new_value else '',
-            'source': 'asset_log',
-        })
-    for wo in work_orders:
-        timeline.append({
-            'type': 'repair' if wo.status == 'completed' else ('pending' if wo.status == 'pending' else 'processing'),
-            'time': wo.created_at,
-            'operator': wo.person or wo.created_by,
-            'detail': f"工单#{wo.id}: {wo.title} ({wo.status})",
-            'source': 'work_order',
-        })
-    timeline.sort(key=lambda x: x['time'], reverse=True)
-    return render_template('feature/asset_lifecycle.html',
-                           asset=asset, timeline=timeline,
-                           asset_logs=logs)
+    """设备履历页面（已迁移至 assets 蓝图）"""
+    return redirect(url_for('assets.asset_lifecycle', asset_id=request.args.get('asset_id', type=int), id=request.args.get('id', type=int)))
 
 
 # ==== 10. AI知识库问答 ====

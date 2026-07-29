@@ -7,7 +7,7 @@ import os
 import calendar
 from datetime import datetime, date, timedelta
 
-from flask import Blueprint, render_template, jsonify, request, send_file, Response
+from flask import Blueprint, render_template, jsonify, request, send_file, Response, g
 from flask_login import login_required, current_user
 from sqlalchemy import func
 
@@ -668,18 +668,23 @@ def maintenance_calendar():
 @login_required
 def asset_lifecycle():
     """设备履历页面"""
+    hid = getattr(g, 'hospital_id', 0)
     asset_id = request.args.get('asset_id', type=int)
     if not asset_id:
         asset_id = request.args.get('id', type=int)
-    asset = Asset.query.get(asset_id) if asset_id else None
+    asset = Asset.query.filter(Asset.id == asset_id).first() if asset_id else None
     if not asset:
         return render_template('errors/404.html'), 404
-    logs = AssetLog.query.filter_by(asset_id=asset.id).order_by(AssetLog.created_at.desc()).all()
+    logs = AssetLog.query.filter(
+        AssetLog.asset_id == asset.id,
+        AssetLog.hospital_id == hid
+    ).order_by(AssetLog.created_at.desc()).all()
     # 关联的工单
     work_orders = WorkOrder.query.filter(
         WorkOrder.device_type == asset.device_type,
         WorkOrder.department == asset.department,
-        WorkOrder.created_at >= (asset.purchase_date or date(2000, 1, 1))
+        WorkOrder.created_at >= (asset.purchase_date or date(2000, 1, 1)),
+        WorkOrder.hospital_id == hid
     ).order_by(WorkOrder.created_at.desc()).limit(20).all()
     # 合并时间线
     timeline = []

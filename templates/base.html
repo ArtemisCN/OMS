@@ -172,7 +172,7 @@
                     {# 自定义报表已合并到月度报表 #}
                     {# 交接班日志已合并到发布工单 #}
                     {% if can_access('设备履历') %}
-                    <a class="nav-link" href="javascript:void(0)" onclick="var aid=prompt('输入资产ID查询履历');if(aid)location.href='{{ url_for('feature.asset_lifecycle') }}?asset_id='+aid">
+                    <a class="nav-link" href="javascript:void(0)" onclick="var aid=prompt('输入资产ID查询履历');if(aid)location.href='{{ url_for('assets.asset_lifecycle') }}?asset_id='+aid">
                         <i class="fas fa-history"></i> 设备履历
                     </a>
                     {% endif %}

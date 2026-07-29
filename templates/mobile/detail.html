@@ -345,7 +345,7 @@
         c.width = c.offsetWidth;
         c.height = c.offsetHeight;
         var ctx = c.getContext('2d');
-        ctx.fillStyle = '#fafafa'; ctx.fillRect(0,0,c.width,c.height);
+        ctx.fillStyle = getCanvasBg(); ctx.fillRect(0,0,c.width,c.height);
         ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2; ctx.lineCap = 'round';
         var drawing = false;
         var getPos = function(e) {
@@ -367,7 +367,7 @@
     function clearMobileSig() {
         var c = document.getElementById('mobileSigCanvas');
         if (!c || !c._ctx) return;
-        c._ctx.fillStyle = '#fafafa'; c._ctx.fillRect(0,0,c.width,c.height);
+        c._ctx.fillStyle = getCanvasBg(); c._ctx.fillRect(0,0,c.width,c.height);
     }
 
     function confirmMobileSig(fid) {
@@ -434,7 +434,7 @@
             c.height = c.offsetHeight * 2;
             sigCtx = c.getContext('2d');
             sigCtx.scale(2, 2);
-            sigCtx.fillStyle = '#fafafa';
+            sigCtx.fillStyle = getCanvasBg();
             sigCtx.fillRect(0, 0, c.width/2, c.height/2);
             sigCtx.strokeStyle = '#1e293b';
             sigCtx.lineWidth = 2;
@@ -479,7 +479,7 @@
         }
         function clearCanvas() {
             const c = document.getElementById('sigCanvas');
-            sigCtx.fillStyle = '#fafafa';
+            sigCtx.fillStyle = getCanvasBg();
             sigCtx.fillRect(0, 0, c.width/2, c.height/2);
             sigData = '';
             document.getElementById('signatureInput').value = '';
@@ -606,6 +606,12 @@
 </style>
 
 <script>
+function getCanvasBg() {
+    try {
+        if (document.documentElement.getAttribute('data-theme') === 'dark') return '#1e293b';
+    } catch(e) {}
+    return '#fafafa';
+}
 // 移动端照片预览 + 触摸缩放
 var mobilePhotoScale = 1;
 var mobilePhotoStartDist = 0;

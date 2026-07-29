@@ -19,7 +19,17 @@ from models import db, User
 def create_app():
     app = Flask(__name__)
     app.config.from_object(app_config)
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'hospital-workorder-secret-2026')
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
+    if not app.config['SECRET_KEY']:
+        # 尝试从 .secret 文件读取（由 config.py 生成）
+        _secret_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.secret')
+        if os.path.exists(_secret_file):
+            with open(_secret_file) as _f:
+                app.config['SECRET_KEY'] = _f.read().strip()
+    if not app.config['SECRET_KEY']:
+        raise RuntimeError(
+            'SECRET_KEY 未设置！请通过环境变量 SECRET_KEY 或 .secret 文件设置密钥。'
+        )
 
     # 微信小程序配置（从环境变量注入 app.config）
     app.config['WECHAT_APPID'] = os.environ.get('WECHAT_APPID', '')
@@ -33,6 +43,26 @@ def create_app():
     app.config['REMEMBER_COOKIE_DURATION'] = 604800  # 7天
 
     db.init_app(app)
+
+    # 初始化系统参数缓存（避免每次请求查询 SystemSetting）
+    with app.app_context():
+        try:
+            from models import SystemSetting
+            st = SystemSetting.query.filter_by(key='session_timeout_minutes').first()
+            if st and st.value:
+                timeout = max(60, min(1440, int(st.value)))
+            else:
+                timeout = 30
+        except Exception:
+            timeout = 30
+        app.config['SESSION_TIMEOUT'] = timeout
+        app.config['SESSION_TIMEOUT_DYNAMIC'] = True  # 标记为可动态刷新
+
+        # 加载全部系统设置到缓存（避免每次请求查数据库）
+        _system_settings = {}
+        for s in SystemSetting.query.all():
+            _system_settings[s.key] = s.value
+        app.config['SYSTEM_SETTINGS'] = _system_settings
 
     login_manager = LoginManager()
     login_manager.login_view = 'auth.login'
@@ -48,6 +78,10 @@ def create_app():
     from routes.orders import orders_bp
     from routes.chat import chat_bp
     from routes.data import data_bp
+    from routes.data_personnel import data_personnel_bp
+    from routes.data_department import data_department_bp
+    from routes.data_fault import data_fault_bp
+    from routes.data_address import data_address_bp
     from routes.mobile import mobile_bp
     from routes.api_mobile import api_mobile_bp
     from routes.inspection import inspection_bp
@@ -66,33 +100,27 @@ def create_app():
     from routes.exam import exam_bp
     from routes.miniapp import miniapp_bp
     from routes.feature_modules import feature_bp
+    from routes.contracts import contracts_bp
+    from routes.sla import sla_bp
+    from routes.efficiency import efficiency_bp
+    from routes.assets import assets_bp
+    from routes.dashboard import dashboard_bp
 
     from routes.finance_asset import fin_bp as finance_asset_bp
 
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(main_bp)
-    app.register_blueprint(orders_bp)
-    app.register_blueprint(data_bp)
-    app.register_blueprint(mobile_bp)
-    app.register_blueprint(api_mobile_bp)
-    app.register_blueprint(inspection_bp)
-    app.register_blueprint(audit_bp)
-    app.register_blueprint(report_bp)
-    app.register_blueprint(asset_bp)
-    app.register_blueprint(stock_bp)
-    app.register_blueprint(settings_bp)
-    app.register_blueprint(repair_bp)
-    app.register_blueprint(forms_bp)
-    app.register_blueprint(monitor_bp)
-    app.register_blueprint(analysis_bp)
-    app.register_blueprint(finance_bp)
-    app.register_blueprint(finance_asset_bp)
-    app.register_blueprint(scan_bp)
-    app.register_blueprint(chat_bp)
-    app.register_blueprint(inv_bp)
-    app.register_blueprint(exam_bp)
-    app.register_blueprint(miniapp_bp)
-    app.register_blueprint(feature_bp)
+    # 蓝图清单（逐个声明，url_prefix 已在各蓝图构造函数中定义）
+    BLUEPRINTS = [
+        auth_bp, main_bp, orders_bp, data_bp, data_personnel_bp,
+        data_department_bp, data_fault_bp, data_address_bp,
+        mobile_bp, api_mobile_bp, inspection_bp, audit_bp,
+        report_bp, asset_bp, stock_bp, settings_bp, repair_bp,
+        forms_bp, monitor_bp, analysis_bp, finance_bp,
+        finance_asset_bp, scan_bp, chat_bp, inv_bp, exam_bp,
+        miniapp_bp, feature_bp, contracts_bp, sla_bp,
+        efficiency_bp, assets_bp, dashboard_bp,
+    ]
+    for _bp in BLUEPRINTS:
+        app.register_blueprint(_bp)
 
     # 上下文处理器
     @app.context_processor
@@ -100,7 +128,7 @@ def create_app():
         from datetime import datetime
         from flask import g
         from flask_login import current_user
-        from models import can_access, Hospital, SystemSetting
+        from models import can_access, Hospital
         # 注入当前医院信息（供模板切换显示）
         current_hospital = None
         hid = getattr(g, 'hospital_id', None)
@@ -115,11 +143,8 @@ def create_app():
         # 所有启用的医院（供管理员切换）
         all_hospitals = Hospital.query.filter_by(is_active=True).order_by(Hospital.id).all()
         user_assigned_hospitals = getattr(g, 'user_assigned_hospitals', [])
-        sys_settings = {}
-        for s in SystemSetting.query.filter(
-            SystemSetting.key.in_(['system_name','system_subtitle','system_title_suffix','home_name','login_page_title','sidebar_auto_hide_seconds','default_dark_mode','primary_color','font_scale'])
-        ).all():
-            sys_settings[s.key] = s.value
+        # 从缓存读取系统设置（启动时加载，/settings/refresh-config 可刷新）
+        sys_settings = dict(app.config.get('SYSTEM_SETTINGS', {}))
         # 个人偏好覆盖全局设置
         if current_user.is_authenticated:
             for pk in ['primary_color', 'default_dark_mode', 'sidebar_auto_hide_seconds']:
@@ -149,13 +174,10 @@ def create_app():
         """根据当前用户设置医院上下文"""
         from flask import g, session
         from flask_login import current_user
-        # 动态读取会话超时
+        # 从缓存读取会话超时（避免每次请求查数据库）
         try:
-            from models import SystemSetting
-            st = SystemSetting.query.filter_by(key='session_timeout_minutes').first()
-            if st and st.value:
-                mins = int(st.value)
-                app.config['PERMANENT_SESSION_LIFETIME'] = max(60, min(1440, mins)) * 60
+            timeout = app.config.get('SESSION_TIMEOUT', 30)
+            app.config['PERMANENT_SESSION_LIFETIME'] = timeout * 60
         except Exception:
             pass
         g.hospital_id = None

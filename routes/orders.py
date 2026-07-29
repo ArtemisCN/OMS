@@ -8,19 +8,13 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from openpyxl import Workbook
 
-from models import db, WorkOrder, SystemSetting, WorkOrderChatMessage, WorkOrderPhoto, User
+from models import db, WorkOrder, SystemSetting, WorkOrderChatMessage, WorkOrderPhoto, can_access, User, ShiftHandover
 from services import order_service as svc
 from services.fault_matcher import match_fault
 from routes.auth import admin_required
-from utils.time_helpers import fmt_dt, now, fmt_date
+from utils.time_helpers import fmt_dt, now, fmt_date, resolve_team
 
 orders_bp = Blueprint('orders', __name__, url_prefix='/orders')
-
-
-def _get_default_team():
-    """获取全局默认组"""
-    s = SystemSetting.query.filter_by(key='default_dashboard_team').first()
-    return s.value if s and s.value else ''
 
 
 # ==================== 工单列表 ====================
@@ -43,23 +37,8 @@ def list_orders():
         'department': request.args.get('department', ''),
         'floor': request.args.get('floor', ''),
         'location': request.args.get('location', ''),
-        'team': request.args.get('team', ''),
+        'team': resolve_team(request, current_user),
     }
-
-    # 已完工单池默认当天
-    if filters['status'] == 'completed' and not filters['date_from'] and not filters['date_to']:
-        from datetime import date
-        today = date.today().isoformat()
-        filters['date_from'] = today
-        filters['date_to'] = today
-
-    # 未指定组时按全局默认组过滤
-    if not filters['team']:
-        default_team = _get_default_team()
-        if default_team:
-            filters['team'] = default_team
-        elif not current_user.is_admin and current_user.team:
-            filters['team'] = current_user.team
 
     sort = request.args.get('sort', '')
     order = request.args.get('order', '')
@@ -70,10 +49,11 @@ def list_orders():
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     filtered_all = query.all()
 
-    persons, buildings, teams = svc.get_filter_data(team=filters['team'] or None)
+    persons, buildings, teams = svc.get_filter_data()
     stats = svc.get_order_stats()
 
     from datetime import datetime
+    now = datetime.now()
     ball_map = {}
     for o in filtered_all:
         end_t = o.end_time or o.completed_at
@@ -86,6 +66,17 @@ def list_orders():
                 ball_map[o.id] = 'urgent'
             else:
                 ball_map[o.id] = 'emergency'
+        elif o.status == 'pending' and o.created_at:
+            # 未接单：按等待时间自动升级紧急程度（只升不降）
+            wait_hours = (now - o.created_at).total_seconds() / 3600
+            base_priority = o.priority or 'normal'
+            priority_level = {'normal': 0, 'urgent': 1, 'emergency': 2}
+            display_level = priority_level.get(base_priority, 0)
+            if wait_hours > 8:
+                display_level = max(display_level, 2)
+            elif wait_hours > 4:
+                display_level = max(display_level, 1)
+            ball_map[o.id] = ['normal', 'urgent', 'emergency'][display_level]
         else:
             ball_map[o.id] = o.priority or 'normal'
 
@@ -112,10 +103,10 @@ def list_orders():
 @orders_bp.route('/create', methods=['GET', 'POST'])
 @login_required
 def create_order():
+    if not can_access('新建工单'):
+        return "无权访问", 403
     from services.address import get_merged_addresses, get_all_buildings
-    team = request.args.get('team')
-    if not team:
-        team = _get_default_team() or current_user.team or ''
+    team = resolve_team(request, current_user)
 
     if request.method == 'POST':
         try:
@@ -169,10 +160,41 @@ def publish_order():
 
     from services.data_service import get_team_options
     all_teams = get_team_options()
-    team = request.args.get('team')
-    if not team:
-        team = _get_default_team() or current_user.team or ''
-    return render_template('orders/publish.html', all_teams=all_teams, team=team)
+    team = resolve_team(request, current_user)
+
+    # ====== 交接班数据 ======
+    handovers = ShiftHandover.query.order_by(ShiftHandover.created_at.desc()).limit(20).all()
+    pending_orders = WorkOrder.query.filter(
+        WorkOrder.status.in_(['pending', 'in_progress'])
+    ).order_by(WorkOrder.created_at.desc()).all()
+    persons = User.query.filter(User.is_active == True).order_by(User.display_name).all()
+    handover_person_set = set()
+    for h in handovers:
+        if h.handover_person: handover_person_set.add(h.handover_person)
+        if h.receive_person: handover_person_set.add(h.receive_person)
+    import json
+    return render_template('orders/publish.html',
+        all_teams=all_teams, team=team,
+        handover_records=handovers,
+        handover_records_json=json.dumps([{
+            'id': h.id,
+            'handover_person': h.handover_person,
+            'receive_person': h.receive_person,
+            'content': h.content,
+            'unfinished_orders': h.unfinished_orders or [],
+            'notes': h.notes,
+            'status': h.status,
+            'created_at': h.created_at.strftime('%Y-%m-%d %H:%M') if h.created_at else '',
+        } for h in handovers], ensure_ascii=False),
+        handover_stats={
+            'total': len(handovers),
+            'today': sum(1 for h in handovers if h.created_at and h.created_at.date() == datetime.now().date()),
+            'pending_orders': len(pending_orders),
+            'person_count': len(handover_person_set),
+        },
+        handover_persons=persons,
+        handover_pending_orders=pending_orders,
+    )
 
 
 # ==================== API 辅助 ====================
@@ -212,24 +234,7 @@ def api_address_options():
 @orders_bp.route('/batch', methods=['GET', 'POST'])
 @admin_required
 def batch_create():
-    # 默认组：优先 URL 参数，其次全局默认组
-    url_team = request.args.get('team')
-    if url_team:
-        selected_team = url_team
-    else:
-        from models import SystemSetting
-        dft = SystemSetting.query.filter_by(key='default_dashboard_team').first()
-        if dft and dft.value:
-            selected_team = dft.value
-        elif current_user.team:
-            selected_team = current_user.team
-        else:
-            # 取第一个有人的组
-            from models import User
-            first_team = User.query.filter(
-                User.is_active == True, User.team.isnot(None), User.team != ''
-            ).with_entities(User.team).first()
-            selected_team = first_team[0] if first_team else ''
+    selected_team = request.args.get('team', 'all')
     persons, templates, fault_groups, fault_group_items, team_groups, teams, default_team = \
         svc.get_batch_form_data(current_user, selected_team=selected_team)
 
@@ -341,10 +346,9 @@ def batch_undo():
 def detail(order_id):
     order = svc.get_order_or_404(order_id)
     photos = svc.get_order_photos(order_id)
-    from models import SparePart
+    from models import SparePart, StockRecord
     spare_parts = SparePart.query.order_by(SparePart.name).all()
-    # PartUsageRecord 模型暂未创建，备件关联记录预留
-    linked_parts = []
+    linked_parts = StockRecord.query.filter_by(work_order_id=order_id, type='out').order_by(StockRecord.created_at.desc()).all()
     return render_template('orders/detail.html', order=order, photos=photos,
                            spare_parts=spare_parts, linked_parts=linked_parts)
 
@@ -494,6 +498,7 @@ def anonymous_publish():
             status='pending',
             created_by='匿名',
             priority='normal', original_priority='normal',
+            hospital_id=request.form.get('hospital_id', 1, type=int),
         )
         db.session.add(order)
         db.session.commit()
@@ -891,7 +896,7 @@ def toggle_star(order_id):
 @orders_bp.route('/<int:order_id>/urge', methods=['POST'])
 @login_required
 def urge_order(order_id):
-    """催单：发送企业微信通知"""
+    """催单：工单紧急程度上升为紧急 + 发送企业微信通知"""
     order = WorkOrder.query.get_or_404(order_id)
     
     # 检查催单间隔
@@ -904,10 +909,20 @@ def urge_order(order_id):
             remain = int(min_interval - elapsed)
             return jsonify({'success': False, 'error': f'距上次催单仅{int(elapsed)}分钟，请{remain}分钟后再试'})
     
+    # 升级紧急程度为「紧急」
+    prev_priority = order.priority
+    was_escalated = False
+    if order.priority != 'emergency':
+        order.priority = 'emergency'
+        note = f'\n[催办升级] {now().strftime("%Y-%m-%d %H:%M")} 由 {prev_priority} 提升为 emergency（催办人：{current_user.username}）'
+        order.description = (order.description or '') + note
+        was_escalated = True
+    
     from routes.api_mobile import send_wecom_notification
-    send_wecom_notification(order, skip_time_check=True)
+    send_wecom_notification(order, skip_time_check=True, is_urge=True)
     
     order.last_urged_at = now()
     db.session.commit()
     
-    return jsonify({'success': True, 'message': '催办通知已发送 ✅'})
+    msg = '🚨 已升级为紧急 · 催办通知已发送 ✅' if was_escalated else '催办通知已发送 ✅'
+    return jsonify({'success': True, 'message': msg})

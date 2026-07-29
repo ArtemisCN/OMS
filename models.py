@@ -28,7 +28,21 @@ class Hospital(db.Model):
 
 class HospitalMixin:
     """为数据模型添加医院隔离字段"""
-    hospital_id = db.Column(db.Integer, db.ForeignKey('hospitals.id'), nullable=False, default=1)
+    hospital_id = db.Column(db.Integer, db.ForeignKey('hospitals.id'), nullable=False)
+
+    @classmethod
+    def new_with_hospital(cls, **kwargs):
+        """创建实例，自动从 g.hospital_id 填充 hospital_id"""
+        if 'hospital_id' not in kwargs:
+            from flask import g
+            hid = getattr(g, 'hospital_id', None)
+            if hid is None:
+                raise ValueError(
+                    f"无法创建 {cls.__name__}：未指定 hospital_id，"
+                    f"请先设置 g.hospital_id 或显式传入 hospital_id= 参数"
+                )
+            kwargs['hospital_id'] = hid
+        return cls(**kwargs)
 
 
 # 需要按医院过滤的模型白名单（__name__）
@@ -44,14 +58,34 @@ HOSPITAL_FILTERED_MODELS = {
     'MaintenanceContract',
     'FinanceReceipt', 'FinanceReceiptItem', 'FinanceDelivery', 'FinanceDeliveryItem',
     'ShiftHandover', 'RepairRating', 'Complaint', 'StockRequest', 'InspectionRoute', 'SparePartAlert',
+    'StockSignRequest', 'PartRequest',
 }
 
 # 全院区共享模型（hospital_id=0，不参与自动过滤）
 SHARED_MODELS = {'Exam', 'ExamQuestion', 'ExamSubmission'}
 
+import sys as _sys
+
 from sqlalchemy import event as sa_event
 from sqlalchemy.orm import Query as SAQuery
 from flask_sqlalchemy.query import Query as FSQuery
+
+# ===== 缓存：表名 → 模型类（避免每次查询都遍历 AST） =====
+_FILTERED_MODEL_BY_TABLE = {}
+
+def _rebuild_filtered_table_cache():
+    """重建表名→模型类映射缓存（单例模式，只在模块重载时更新）"""
+    _FILTERED_MODEL_BY_TABLE.clear()
+    _mod = _sys.modules[__name__]
+    for name in dir(_mod):
+        cls = getattr(_mod, name)
+        if (isinstance(cls, type) and issubclass(cls, db.Model)
+                and hasattr(cls, '__tablename__')
+                and getattr(cls, '__name__', None) in HOSPITAL_FILTERED_MODELS):
+            _FILTERED_MODEL_BY_TABLE[cls.__tablename__] = cls
+
+_rebuild_filtered_table_cache()
+
 
 # 同时注册到两个 Query 类，确保 Flask-SQLAlchemy 也能触发
 @sa_event.listens_for(SAQuery, 'before_compile', retval=True)
@@ -69,14 +103,15 @@ def auto_hospital_filter(query):
     has_limit = getattr(query, '_limit_clause', None) is not None
     has_offset = getattr(query, '_offset_clause', None) is not None
 
+    # ---- 路径A：简单实体查询（column_descriptions 中有 model type）----
     for ent in query.column_descriptions:
         model = ent.get('type')
         if model is None:
             continue
-        name = getattr(model, '__name__', None)
-        if name and name in SHARED_MODELS:
+        model_name = getattr(model, '__name__', None)
+        if model_name and model_name in SHARED_MODELS:
             return None  # 共享模型不过滤
-        if name and name in HOSPITAL_FILTERED_MODELS:
+        if model_name and model_name in HOSPITAL_FILTERED_MODELS:
             if hasattr(model, 'hospital_id'):
                 if has_limit or has_offset:
                     q = query._generate()
@@ -86,30 +121,58 @@ def auto_hospital_filter(query):
                 return query.filter(model.hospital_id == hid)
             return None
 
-    # 聚合查询（无实体类型）：扫描表达式中的表引用
-    seen = set()
-    for ent in query.column_descriptions:
-        expr = ent.get('expr')
-        if expr is None:
-            continue
-        for col in _iter_cols(expr):
-            table = getattr(col, 'table', None)
-            if table is None:
+    # ---- 路径B：聚合/表达式查询（快速检查 FROM 子句，缓存加速）----
+    if not _FILTERED_MODEL_BY_TABLE:
+        return None
+
+    # 聚合查询标记：group_by 或 with_entities 的查询跳过 _iter_cols AST 遍历
+    is_aggregate_query = bool(getattr(query, '_group_by', None)) or bool(getattr(query, '_entities', None))
+
+    # 快速获取查询涉及的表名（从 FROM 子句，避免 _iter_cols AST 遍历）
+    try:
+        froms = getattr(query, '_froms', None) or query._from_obj or []
+    except AttributeError:
+        froms = []
+
+    seen_tables = set()
+    candidate = None
+    for from_obj in froms:
+        tname = getattr(from_obj, 'name', None)
+        if tname and tname in _FILTERED_MODEL_BY_TABLE:
+            candidate = _FILTERED_MODEL_BY_TABLE[tname]
+            seen_tables.add(tname)
+            break
+
+    # 如果 FROM 子句中找不到匹配的表，尝试检查自连接子查询
+    if not candidate:
+        if is_aggregate_query:
+            # 聚合查询：FROM 子句已覆盖所有表引用，无需 _iter_cols 遍历
+            return None
+        # 自连接/子查询场景（非聚合查询）：列所属的表不在最外层 FROM 中
+        for ent in query.column_descriptions:
+            expr = ent.get('expr')
+            if expr is None:
                 continue
-            tname = getattr(table, 'name', None)
-            if tname and tname not in seen:
-                seen.add(tname)
-                model = _table_to_model(tname)
-                if not model or model.__name__ not in HOSPITAL_FILTERED_MODELS:
+            for col in _iter_cols(expr):
+                table = getattr(col, 'table', None)
+                if table is None:
                     continue
-                if hasattr(model, 'hospital_id'):
-                    if has_limit or has_offset:
-                        q = query._generate()
-                        q._enable_assertions = False
-                        q = q.filter(model.hospital_id == hid)
-                        return q
-                    return query.filter(model.hospital_id == hid)
+                tname = getattr(table, 'name', None)
+                if tname and tname in _FILTERED_MODEL_BY_TABLE and tname not in seen_tables:
+                    candidate = _FILTERED_MODEL_BY_TABLE[tname]
+                    seen_tables.add(tname)
+                    break
+            if candidate:
                 break
+
+    if candidate and hasattr(candidate, 'hospital_id'):
+        if has_limit or has_offset:
+            q = query._generate()
+            q._enable_assertions = False
+            q = q.filter(candidate.hospital_id == hid)
+            return q
+        return query.filter(candidate.hospital_id == hid)
+
     return None
 
 
@@ -227,6 +290,8 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Boolean, default=True)
     employee_id = db.Column(db.String(50), default='')
     team = db.Column(db.String(50), default='')
+    login_attempts = db.Column(db.Integer, default=0)
+    locked_until = db.Column(db.DateTime, nullable=True)
     avatar = db.Column(db.String(500), default='')          # 头像URL
     notes = db.Column(db.Text, default='')
     sort_order = db.Column(db.Integer, default=0)
@@ -246,7 +311,7 @@ class User(UserMixin, db.Model):
                                 lazy='dynamic')
 
     def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+        self.password_hash = generate_password_hash(password, method='scrypt')
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
@@ -325,21 +390,29 @@ class WorkOrder(HospitalMixin, db.Model):
     @property
     def is_overdue(self):
         """判断工单是否超时（SLA 超时），从 SystemSetting 读取用户配置的阈值"""
-        from datetime import datetime
         from models import SystemSetting
-        now = datetime.now()
+        # 一次性读取所有 SLA 阈值并缓存到 g 对象（避免每条工单都查 DB）
+        from flask import g
+        try:
+            if not hasattr(g, '_sla_thresholds'):
+                rows = SystemSetting.query.with_entities(
+                    SystemSetting.key, SystemSetting.value
+                ).filter(
+                    SystemSetting.key.like('sla_response_%') |
+                    SystemSetting.key.like('sla_resolution_%')
+                ).all()
+                g._sla_thresholds = {r.key: float(r.value) for r in rows if r.value}
+            th = g._sla_thresholds
+        except (RuntimeError, Exception):
+            th = {}
 
-        def _get_threshold(key, default):
-            s = db.session.query(SystemSetting.value).filter_by(key=key).scalar()
-            if s:
-                try: return float(s)
-                except: pass
-            return default
+        def _get_th(key, default):
+            return th.get(key, default)
 
-        resp_th = _get_threshold(f'sla_response_{self.priority}',
-                                 {'emergency': 0.5, 'urgent': 2, 'normal': 4}.get(self.priority, 4))
-        resol_th = _get_threshold(f'sla_resolution_{self.priority}',
-                                  {'emergency': 2, 'urgent': 8, 'normal': 24}.get(self.priority, 24))
+        resp_th = _get_th(f'sla_response_{self.priority}',
+                         {'emergency': 0.5, 'urgent': 2, 'normal': 4}.get(self.priority, 4))
+        resol_th = _get_th(f'sla_resolution_{self.priority}',
+                          {'emergency': 2, 'urgent': 8, 'normal': 24}.get(self.priority, 24))
         if self.status == 'completed' and (self.end_time or self.completed_at):
             # 用 end_time（实际结束时间）如果有，否则用 completed_at
             end = self.end_time or self.completed_at
@@ -430,12 +503,12 @@ class Department(HospitalMixin, db.Model):
 # 所有模块的完整定义（按类别分组）—— 与 base.html 侧边栏完全对应
 ALL_MODULES_DEFINITION = [
     ('工单管理', ['仪表盘', '工单列表', '发布工单', '新建工单', '批量生成', '工单转交', 'SLA监控', '历史追溯', '自动派单', '超时催办']),
-    ('业务管理', ['巡检管理', '知识库', '电子表单', '维修管理', '巡检签到', '投诉管理', '交接班日志']),
+    ('业务管理', ['巡检管理', '巡检路线规划', '知识库', '电子表单', '维修管理', '巡检签到', '投诉管理', '交接班日志']),
     ('数据中心', ['数据管理', '资产台账', '资产二维码', '供应商管理', '合同维保', '设备折旧', '备件库存', '备件联动', '备件预警', '耗材管理', '耗材预测', '值班排班', '固定资产入库', '固定资产出库', '领用审批', '维保日历', '设备履历']),
-    ('运维分析', ['效能看板', '运维大屏', '领导驾驶舱', '数字孪生', '自定义报表', '短信通知', '重复单分析', '维修评价', '运维成本核算', 'AI知识库问答', '多院区协同']),
-    ('运维报表', ['PDF导出', '周报月报', '巡检路线规划']),
+    ('运维分析', ['运维大屏', '领导驾驶舱', '数字孪生', 'AI知识库问答', '多院区协同']),
+    ('运维报表', ['PDF导出']),
     ('财务做账', ['维修做账']),
-    ('系统管理', ['审计日志', '月度报表', '权限管理', '服务器监控', '注册审批', '微信绑定']),
+    ('系统管理', ['月度报表', '服务器监控', '重复单分析', '故障热力图', '效能看板', '维修评价', '投诉管理', '运维成本核算']),
     ('教育培训', ['考试系统']),
 ]
 
@@ -460,15 +533,15 @@ DEFAULT_GROUPS = {
         '固定资产入库': False, '固定资产出库': False,
         '领用审批': False, '维保日历': False, '设备履历': False,
         '效能看板': False, '运维大屏': False, '领导驾驶舱': False,
-        '数字孪生': False, '自定义报表': False, '短信通知': False,
+        '数字孪生': False, '自定义报表': False,
         '维修评价': False, '运维成本核算': False, 'AI知识库问答': False, '多院区协同': False,
-        '审计日志': False, '月度报表': False, '权限管理': False,
+        '月度报表': False,
         '考试系统': True,
         '重复单分析': False,
         'PDF导出': False, '周报月报': False, '巡检路线规划': False,
     },
 }
-_PERM_CACHE = {}  # hospital_id → data
+_PERM_CACHE = {}  # hospital_id → data (⚠️ Gunicorn多进程下各worker缓存不一致，仅用于单进程开发/调试模式)
 _PERM_LOCK = threading.Lock()
 
 
@@ -680,21 +753,29 @@ class MobileToken(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     token = db.Column(db.String(128), unique=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now)
+    expires_at = db.Column(db.DateTime, nullable=True)
     user = db.relationship('User', backref='mobile_tokens')
 
     @classmethod
     def generate(cls, user):
         import secrets
+        from datetime import timedelta
         token_str = secrets.token_hex(48)
-        record = cls(user_id=user.id, token=token_str)
+        record = cls(user_id=user.id, token=token_str,
+                     expires_at=datetime.now() + timedelta(days=30))
         db.session.add(record)
         db.session.commit()
         return record
 
     @classmethod
     def verify(cls, token_str):
+        from datetime import datetime
         record = cls.query.filter_by(token=token_str).first()
         if record:
+            if record.expires_at and record.expires_at < datetime.now():
+                db.session.delete(record)
+                db.session.commit()
+                return None
             return record.user
         return None
 
@@ -1337,7 +1418,7 @@ class RegistrationRequest(db.Model):
     reviewed_at = db.Column(db.DateTime)
 
     def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+        self.password_hash = generate_password_hash(password, method='scrypt')
 
 
 # ==================== 角色组（权限组，用 ID 关联） ====================
@@ -1393,9 +1474,9 @@ class RoleGroup(db.Model):
 def get_group_name_by_id(group_id):
     """根据 group_id 获取角色组名称"""
     if group_id is None:
-        return '普通用户'
+        return None
     rg = RoleGroup.query.get(group_id)
-    return rg.name if rg else '普通用户'
+    return rg.name if rg else None
 
 
 # ==================== 在线聊天 ====================

@@ -3,17 +3,16 @@ import io
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, send_file, jsonify
 from flask_login import login_required, current_user
-from sqlalchemy import func, case
-from models import AuditLog, db, WorkOrder, ConsumableRecord, StockRecord, Consumable, SparePart, RepairOrder, Asset, AssetLog, FormTemplate
+from sqlalchemy import func, case, and_, literal_column
+from models import AuditLog, db, WorkOrder, ConsumableRecord, StockRecord, Consumable, SparePart, RepairOrder, Asset, AssetLog, FormTemplate, can_access
 from models import log_audit
-from utils.time_helpers import fmt_dt, now, fmt_date
 
 report_bp = Blueprint('report', __name__, url_prefix='/report')
 
 # ======================== 数据查询函数 ========================
 
-def _get_report_data(year, month):
-    """获取完整报表数据。month=0 表示全年"""
+def _get_report_data(year, month, hospital_id=None, team_names=None):
+    """获取完整报表数据。month=0 表示全年。使用SQL聚合减少数据库往返。"""
     is_year = (month == 0)
     if is_year:
         first = datetime(year, 1, 1)
@@ -25,59 +24,43 @@ def _get_report_data(year, month):
         else:
             last = datetime(year, month + 1, 1)
 
-    # --- Sheet 1: 月度概览 ---
-    total = WorkOrder.query.filter(
+    # 医院+组别筛选
+    _fil = []
+    if hospital_id:
+        _fil.append(WorkOrder.hospital_id == hospital_id)
+    if team_names:
+        _fil.append(WorkOrder.person.in_(team_names))
+
+    _base_fil = [
         WorkOrder.created_at >= first,
         WorkOrder.created_at < last,
         WorkOrder.person != 'admin',
-    ).count()
+    ] + _fil
 
-    completed = WorkOrder.query.filter(
-        WorkOrder.created_at >= first,
-        WorkOrder.created_at < last,
-        WorkOrder.person != 'admin',
-        WorkOrder.status == 'completed',
-    ).count()
+    # --- Sheet 1: 月度概览（1次SQL聚合取代5次独立查询） ---
+    overview_row = db.session.query(
+        func.count(WorkOrder.id).label('total'),
+        func.sum(case((WorkOrder.status == 'completed', 1), else_=0)).label('completed'),
+        func.sum(case((WorkOrder.status == 'pending', 1), else_=0)).label('pending'),
+        func.sum(case((WorkOrder.status == 'in_progress', 1), else_=0)).label('in_progress'),
+    ).filter(*_base_fil).first()
 
-    pending = WorkOrder.query.filter(
-        WorkOrder.created_at >= first,
-        WorkOrder.created_at < last,
-        WorkOrder.person != 'admin',
-        WorkOrder.status == 'pending',
-    ).count()
+    total = overview_row.total or 0
+    completed = overview_row.completed or 0
+    pending = overview_row.pending or 0
+    in_progress = overview_row.in_progress or 0
 
-    in_progress = WorkOrder.query.filter(
-        WorkOrder.created_at >= first,
-        WorkOrder.created_at < last,
-        WorkOrder.person != 'admin',
-        WorkOrder.status == 'in_progress',
-    ).count()
-
-    # 平均响应时长（接单）- 小时
-    avg_response = WorkOrder.query.with_entities(
+    # 平均响应/完成时长（1次SQL聚合取代2次独立查询）
+    avg_row = db.session.query(
         func.avg(
             func.julianday(WorkOrder.accepted_at) -
             func.julianday(WorkOrder.created_at)
-        ) * 24
-    ).filter(
-        WorkOrder.created_at >= first,
-        WorkOrder.created_at < last,
-        WorkOrder.person != 'admin',
-        WorkOrder.accepted_at.isnot(None),
-    ).scalar() or 0
-
-    # 平均完成时长 - 小时
-    avg_complete = WorkOrder.query.with_entities(
+        ).label('avg_resp'),
         func.avg(
             func.julianday(WorkOrder.completed_at) -
             func.julianday(WorkOrder.created_at)
-        ) * 24
-    ).filter(
-        WorkOrder.created_at >= first,
-        WorkOrder.created_at < last,
-        WorkOrder.person != 'admin',
-        WorkOrder.completed_at.isnot(None),
-    ).scalar() or 0
+        ).label('avg_comp'),
+    ).filter(*_base_fil).first()
 
     overview = {
         'year': year, 'month': month,
@@ -87,54 +70,38 @@ def _get_report_data(year, month):
         'in_progress': in_progress,
         'pending': pending,
         'complete_rate': round(completed / total * 100, 1) if total else 0,
-        'avg_response': round(avg_response, 1),
-        'avg_complete': round(avg_complete, 1),
+        'avg_response': round((avg_row.avg_resp or 0) * 24, 1),
+        'avg_complete': round((avg_row.avg_comp or 0) * 24, 1),
     }
 
-    # --- Sheet 2: 各周统计（年模式=各月统计） ---
+    # --- Sheet 2: 各周/月统计（1次SQL GROUP BY取代循环查询） ---
     weekly = []
     if is_year:
+        # 年模式：按月聚合，1次SQL
+        month_rows = db.session.query(
+            func.strftime('%m', WorkOrder.created_at).label('mo'),
+            func.count(WorkOrder.id).label('total'),
+            func.sum(case((WorkOrder.status == 'completed', 1), else_=0)).label('done'),
+        ).filter(*_base_fil).group_by(func.strftime('%m', WorkOrder.created_at)).order_by('mo').all()
+        month_map = {r.mo: (r.total, r.done) for r in month_rows}
         for m in range(1, 13):
-            ms = datetime(year, m, 1)
-            me = datetime(year + 1, 1, 1) if m == 12 else datetime(year, m + 1, 1)
-            wk_total = WorkOrder.query.filter(
-                WorkOrder.created_at >= ms,
-                WorkOrder.created_at < me,
-                WorkOrder.person != 'admin',
-            ).count()
-            wk_done = WorkOrder.query.filter(
-                WorkOrder.created_at >= ms,
-                WorkOrder.created_at < me,
-                WorkOrder.person != 'admin',
-                WorkOrder.status == 'completed',
-            ).count()
-            weekly.append({
-                'week': f'{m}月',
-                'total': wk_total,
-                'completed': wk_done,
-            })
+            key = f'{m:02d}'
+            cnt, d = month_map.get(key, (0, 0))
+            weekly.append({'week': f'{m}月', 'total': cnt, 'completed': d})
     else:
-        for week in range(1, 6):
-            ws_start = first + timedelta(weeks=week - 1)
-            ws_end = min(first + timedelta(weeks=week), last)
-            if ws_start >= last:
-                break
-            wk_total = WorkOrder.query.filter(
-                WorkOrder.created_at >= ws_start,
-                WorkOrder.created_at < ws_end,
-                WorkOrder.person != 'admin',
-            ).count()
-            wk_done = WorkOrder.query.filter(
-                WorkOrder.created_at >= ws_start,
-                WorkOrder.created_at < ws_end,
-                WorkOrder.person != 'admin',
-                WorkOrder.status == 'completed',
-            ).count()
-            weekly.append({
-                'week': f'第{week}周',
-                'total': wk_total,
-                'completed': wk_done,
-            })
+        # 月模式：按周聚合，1次SQL
+        _week_expr = func.cast(
+            (func.julianday(WorkOrder.created_at) -
+             func.julianday(literal_column(f"'{first.date()}'"))) / 7 + 1,
+            db.Integer
+        )
+        week_rows = db.session.query(
+            _week_expr.label('wk'),
+            func.count(WorkOrder.id).label('total'),
+            func.sum(case((WorkOrder.status == 'completed', 1), else_=0)).label('done'),
+        ).filter(*_base_fil).group_by(_week_expr).order_by('wk').all()
+        for r in week_rows:
+            weekly.append({'week': f'第{r.wk}周', 'total': r.total, 'completed': r.done})
 
     # --- Sheet 3: 人员排行 ---
     person_rows = WorkOrder.query.with_entities(
@@ -143,8 +110,10 @@ def _get_report_data(year, month):
         WorkOrder.created_at >= first,
         WorkOrder.created_at < last,
         WorkOrder.person != '',
+        WorkOrder.person != '管理员',
         WorkOrder.person != 'admin',
         WorkOrder.person.isnot(None),
+        *_fil,
     ).group_by(WorkOrder.person).order_by(
         func.count(WorkOrder.id).desc()
     ).all()
@@ -165,6 +134,7 @@ def _get_report_data(year, month):
         WorkOrder.person != 'admin',
         WorkOrder.fault_type.isnot(None),
         WorkOrder.fault_type != '',
+        *_fil,
     ).group_by(WorkOrder.fault_type).order_by(
         func.count(WorkOrder.id).desc()
     ).all()
@@ -185,6 +155,7 @@ def _get_report_data(year, month):
         WorkOrder.person != 'admin',
         WorkOrder.department.isnot(None),
         WorkOrder.department != '',
+        *_fil,
     ).group_by(WorkOrder.department).order_by(
         func.count(WorkOrder.id).desc()
     ).limit(20).all()
@@ -196,34 +167,36 @@ def _get_report_data(year, month):
             'pct': round(cnt / total * 100, 1) if total else 0,
         })
 
-    # --- Sheet 6: 响应趋势（近14天） ---
+    # --- Sheet 6: 响应趋势（近14天，1次SQL GROUP BY取代14次循环查询） ---
     now = datetime.now()
+    trend_start = (now - timedelta(days=13)).replace(hour=0, minute=0, second=0, microsecond=0)
+    trend_end = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    trend_rows = db.session.query(
+        func.date(WorkOrder.created_at).label('dt'),
+        func.count(WorkOrder.id).label('cnt'),
+        func.avg(
+            func.julianday(WorkOrder.completed_at) -
+            func.julianday(WorkOrder.created_at)
+        ).label('avg_dur'),
+    ).filter(
+        WorkOrder.created_at >= trend_start,
+        WorkOrder.created_at < trend_end,
+        WorkOrder.person != 'admin',
+    ).group_by(func.date(WorkOrder.created_at)).order_by('dt').all()
+    trend_map = {r.dt: (r.cnt, r.avg_dur) for r in trend_rows}
     trend = []
     for i in range(13, -1, -1):
         day = now - timedelta(days=i)
-        day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
-        day_end = day_start + timedelta(days=1)
-
-        day_orders = WorkOrder.query.with_entities(
-            WorkOrder.created_at, WorkOrder.completed_at
-        ).filter(
-            WorkOrder.created_at >= day_start,
-            WorkOrder.created_at < day_end,
-            WorkOrder.person != 'admin',
-        ).all()
-
-        cnt = len(day_orders)
-        durations = []
-        for o in day_orders:
-            if o.completed_at:
-                minutes = (o.completed_at - o.created_at).total_seconds() / 60
-                durations.append(min(minutes, 60))
-
-        avg_val = round(sum(durations) / len(durations), 1) if durations else None
+        day_key = day.strftime('%Y-%m-%d')
+        cnt, avg_dur = trend_map.get(day_key, (0, None))
+        avg_min = round(((avg_dur or 0) * 24 * 60), 1) if avg_dur else None
+        # 控制最长60分钟，防止种子数据顶穿Y轴
+        if avg_min and avg_min > 160:
+            avg_min = None
         trend.append({
             'day': day.strftime('%m/%d'),
             'count': cnt,
-            'avg_minutes': avg_val,
+            'avg_minutes': avg_min,
         })
 
     # --- Sheet 7: 楼区分布 ---
@@ -235,6 +208,7 @@ def _get_report_data(year, month):
         WorkOrder.person != 'admin',
         WorkOrder.building.isnot(None),
         WorkOrder.building != '',
+        *_fil,
     ).group_by(WorkOrder.building).order_by(
         func.count(WorkOrder.id).desc()
     ).all()
@@ -251,7 +225,7 @@ def _get_report_data(year, month):
         WorkOrder.created_at >= first,
         WorkOrder.created_at < last,
         WorkOrder.person != 'admin',
-    ).all()
+    ).filter(*_fil).all()
     person_sla = {}
     for o in all_orders:
         p = o.person
@@ -310,6 +284,7 @@ def _get_report_data(year, month):
         WorkOrder.created_at >= first,
         WorkOrder.created_at < last,
         WorkOrder.person != 'admin',
+        *_fil,
     ).group_by(WorkOrder.priority).all()
     priority_map = {'normal': '普通', 'urgent': '加急', 'emergency': '紧急'}
     priority_stats = []
@@ -390,6 +365,7 @@ def _get_report_data(year, month):
             'operator': r.operator,
             'note': r.note,
         })
+    # 统计
     con_in = sum(1 for r in rows if r.ConsumableRecord.type == 'in')
     con_out = sum(1 for r in rows if r.ConsumableRecord.type == 'out')
     con_qty_in = sum(r.ConsumableRecord.quantity for r in rows if r.ConsumableRecord.type == 'in')
@@ -420,16 +396,23 @@ def _get_report_data(year, month):
     sp_qty_in = sum(r.StockRecord.quantity for r in srows if r.StockRecord.type == 'in')
     sp_qty_out = sum(r.StockRecord.quantity for r in srows if r.StockRecord.type == 'out')
 
-    # --- Sheet 13: 维修单统计报告 ---
-    repair_all = RepairOrder.query.filter(
+    # --- Sheet 13: 维修单统计报告（SQL聚合取代全表加载） ---
+    # 状态统计：1次SQL取代5次Python sum
+    r_status_row = db.session.query(
+        func.count(RepairOrder.id).label('r_total'),
+        func.sum(case((RepairOrder.status == 'draft', 1), else_=0)).label('r_draft'),
+        func.sum(case((RepairOrder.status == 'pending', 1), else_=0)).label('r_pending'),
+        func.sum(case((RepairOrder.status == 'approved', 1), else_=0)).label('r_approved'),
+        func.sum(case((RepairOrder.status == 'rejected', 1), else_=0)).label('r_rejected'),
+    ).filter(
         RepairOrder.created_at >= first,
         RepairOrder.created_at < last,
-    ).all()
-    r_total = len(repair_all)
-    r_draft = sum(1 for r in repair_all if r.status == 'draft')
-    r_pending = sum(1 for r in repair_all if r.status == 'pending')
-    r_approved = sum(1 for r in repair_all if r.status == 'approved')
-    r_rejected = sum(1 for r in repair_all if r.status == 'rejected')
+    ).first()
+    r_total = r_status_row.r_total or 0
+    r_draft = r_status_row.r_draft or 0
+    r_pending = r_status_row.r_pending or 0
+    r_approved = r_status_row.r_approved or 0
+    r_rejected = r_status_row.r_rejected or 0
     r_approval_rate = round(r_approved / (r_approved + r_rejected) * 100, 1) if (r_approved + r_rejected) else 0
 
     # 维修单模板分布 + 审批时效
@@ -444,31 +427,55 @@ def _get_report_data(year, month):
     ).limit(8).all()
     r_template_stats = [{'name': name or '未知模板', 'count': cnt} for name, cnt in r_template_rows]
 
-    # 审批时效统计
-    r_approval_hours = []
-    for r in repair_all:
-        if r.approved_at and r.created_at:
-            h = (r.approved_at - r.created_at).total_seconds() / 3600
-            r_approval_hours.append(h)
-    r_avg_approval = round(sum(r_approval_hours) / len(r_approval_hours), 1) if r_approval_hours else 0
-    r_quick = sum(1 for h in r_approval_hours if h <= 1)       # ≤1h
-    r_normal = sum(1 for h in r_approval_hours if 1 < h <= 24)  # 1-24h
-    r_slow = sum(1 for h in r_approval_hours if h > 24)         # >24h
+    # 审批时效统计（SQL avg取代全表加载）
+    r_avg_row = db.session.query(
+        func.avg(
+            (func.julianday(RepairOrder.approved_at) -
+             func.julianday(RepairOrder.created_at)) * 24
+        ).label('avg_hours'),
+    ).filter(
+        RepairOrder.created_at >= first,
+        RepairOrder.created_at < last,
+        RepairOrder.approved_at.isnot(None),
+        RepairOrder.status == 'approved',
+    ).first()
+    r_avg_approval = round(r_avg_row.avg_hours or 0, 1)
+
+    # 审批时长分布（3个SQL CASE聚合）
+    _approval_diff = func.julianday(RepairOrder.approved_at) - func.julianday(RepairOrder.created_at)
+    r_dist_row = db.session.query(
+        func.sum(case((_approval_diff * 24 <= 1, 1), else_=0)).label('quick'),
+        func.sum(case((and_(_approval_diff * 24 > 1, _approval_diff * 24 <= 24), 1), else_=0)).label('normal'),
+        func.sum(case((_approval_diff * 24 > 24, 1), else_=0)).label('slow'),
+    ).filter(
+        RepairOrder.created_at >= first,
+        RepairOrder.created_at < last,
+        RepairOrder.approved_at.isnot(None),
+        RepairOrder.status == 'approved',
+    ).first()
+    r_quick = r_dist_row.quick or 0
+    r_normal = r_dist_row.normal or 0
+    r_slow = r_dist_row.slow or 0
     r_approval_dist = [
         {'label': '≤1小时', 'count': r_quick, 'color': '#10b981'},
         {'label': '1~24小时', 'count': r_normal, 'color': '#f59e0b'},
         {'label': '>24小时', 'count': r_slow, 'color': '#ef4444'},
     ]
 
-    # 维修单月度趋势（按周）
-    r_trend = []
-    for week in range(1, 6):
-        ws = first + timedelta(weeks=week - 1)
-        we = min(first + timedelta(weeks=week), last)
-        if ws >= last:
-            break
-        wc = sum(1 for r in repair_all if ws <= r.created_at < we)
-        r_trend.append({'week': f'第{week}周', 'count': wc})
+    # 维修单月度趋势（按周，1次SQL GROUP BY取代循环）
+    _r_week_expr = func.cast(
+        (func.julianday(RepairOrder.created_at) -
+         func.julianday(first)) / 7 + 1,
+        db.Integer
+    )
+    r_week_rows = db.session.query(
+        _r_week_expr.label('wk'),
+        func.count(RepairOrder.id).label('cnt'),
+    ).filter(
+        RepairOrder.created_at >= first,
+        RepairOrder.created_at < last,
+    ).group_by(_r_week_expr).order_by('wk').all()
+    r_trend = [{'week': f'第{r.wk}周', 'count': r.cnt} for r in r_week_rows]
 
     repair_stats = {
         'total': r_total, 'draft': r_draft, 'pending': r_pending,
@@ -580,6 +587,7 @@ def _get_report_data(year, month):
             else:
                 chart_data.append(type('row', (), {'mon': r.mon, 'fault_type': '其他', 'cnt': r.cnt})())
 
+    # 构建图表数据集
     month_labels = [f'{m}月' for m in range(1, 13)]
     colors = ['#4f46e5','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#94a3b8']
     chart_types = [t for t in top_types if t != '其他'] + (['其他'] if any(c.fault_type == '其他' for c in chart_data) else [])
@@ -615,6 +623,7 @@ def _get_report_data(year, month):
             WorkOrder.person != 'admin',
             WorkOrder.person != '',
             WorkOrder.person.isnot(None),
+            *_fil,
         ).group_by('mon', WorkOrder.person).order_by('mon').all()
         pm_persons = list(dict.fromkeys(r.person for r in pm_rows))
         pm_chart = {}
@@ -701,6 +710,7 @@ def _get_report_data(year, month):
         WorkOrder.created_at < last,
         WorkOrder.person != 'admin',
         WorkOrder.completed_at.isnot(None),
+        *_fil,
     ).order_by(WorkOrder.completed_at.desc()).limit(50).all()
     # Python 侧计算耗时并排序
     overdue_raw = []
@@ -732,6 +742,7 @@ def _get_report_data(year, month):
         WorkOrder.person != 'admin',
         WorkOrder.building != '',
         WorkOrder.fault_type != '',
+        *_fil,
     ).group_by(
         WorkOrder.building, WorkOrder.floor, WorkOrder.location,
         WorkOrder.fault_type, WorkOrder.fault_subcategory,
@@ -746,7 +757,7 @@ def _get_report_data(year, month):
             'fault_type': r.fault_type,
             'subcategory': r.fault_subcategory or '',
             'count': r.cnt,
-            'last_time': fmt_dt(r.last_time, '%m-%d'),
+            'last_time': r.last_time.strftime('%m-%d') if r.last_time else '',
         })
 
     # 6. 🖥️ 设备故障排行
@@ -758,6 +769,7 @@ def _get_report_data(year, month):
         WorkOrder.person != 'admin',
         WorkOrder.device_type.isnot(None),
         WorkOrder.device_type != '',
+        *_fil,
     ).group_by(WorkOrder.device_type).order_by(
         func.count(WorkOrder.id).desc()
     ).limit(12).all()
@@ -771,7 +783,7 @@ def _get_report_data(year, month):
         WorkOrder.created_at >= first,
         WorkOrder.created_at < last,
         WorkOrder.person != 'admin',
-    ).all()
+    ).filter(*_fil).all()
     night_count = 0
     weekend_count = 0
     for o in after_hours:
@@ -793,6 +805,7 @@ def _get_report_data(year, month):
 
     # 8. 📈 工单状态耗时（各阶段平均时长）
     stage_times = {}
+    # 创建→接单
     t1 = db.session.query(
         func.avg((WorkOrder.accepted_at - WorkOrder.created_at) * 24 * 60)
     ).filter(
@@ -813,6 +826,7 @@ def _get_report_data(year, month):
         WorkOrder.completed_at.isnot(None),
     ).scalar() or 0
     stage_times['accept_to_complete'] = round(float(t2), 1) if t2 else 0
+    # 创建→完成（总耗时）
     stage_times['total'] = round(stage_times['to_accept'] + stage_times['accept_to_complete'], 1)
 
     # 9. 🏆 人员工作量对比（已存在 person_stats，前端复用）
@@ -836,7 +850,7 @@ def _get_report_data(year, month):
         'priority': priority_label.get(o.priority, o.priority),
         'fault_type': o.fault_type,
         'department': o.department,
-        'created_at': fmt_dt(o.created_at, '%m-%d %H:%M'),
+        'created_at': o.created_at.strftime('%m-%d %H:%M') if o.created_at else '',
     } for o in order_list]
 
     stock_outbound = _get_stock_outbound_data(first, last)
@@ -925,11 +939,24 @@ def _get_stock_outbound_data(first, last):
 @login_required
 def report_page():
     """报表页面（在线预览）"""
+    if not can_access('月度报表'):
+        return "无权访问", 403
     year = request.args.get('year', datetime.now().year, type=int)
     month = request.args.get('month', datetime.now().month, type=int)
     if month < 0 or month > 12:
         month = datetime.now().month
-    data = _get_report_data(year, month)
+    from flask import g
+    from models import User
+    from utils.time_helpers import resolve_team
+    team = resolve_team(request, current_user)
+    team_names = None
+    if team:
+        team_q = User.query.filter(User.team == team, User.is_active == True)
+        hid = getattr(g, 'hospital_id', None)
+        if hid:
+            team_q = team_q.filter(User.hospital_id == hid)
+        team_names = [u.display_name for u in team_q.all() if u.display_name]
+    data = _get_report_data(year, month, hospital_id=hid, team_names=team_names)
     return render_template('report/index.html',
                            data=data, now=datetime.now(),
                            selected_year=year, selected_month=month)
@@ -943,7 +970,18 @@ def report_data():
     month = request.args.get('month', datetime.now().month, type=int)
     if month < 0 or month > 12:
         return jsonify({'error': '月份参数错误'}), 400
-    data = _get_report_data(year, month)
+    from flask import g
+    from models import User
+    from utils.time_helpers import resolve_team
+    team = resolve_team(request, current_user)
+    team_names = None
+    if team:
+        team_q = User.query.filter(User.team == team, User.is_active == True)
+        hid = getattr(g, 'hospital_id', None)
+        if hid:
+            team_q = team_q.filter(User.hospital_id == hid)
+        team_names = [u.display_name for u in team_q.all() if u.display_name]
+    data = _get_report_data(year, month, hospital_id=hid, team_names=team_names)
     return jsonify(data)
 
 
@@ -962,7 +1000,18 @@ def download_report():
     except ImportError:
         return '服务器未安装 openpyxl', 500
 
-    data = _get_report_data(year, month)
+    from flask import g
+    from models import User
+    from utils.time_helpers import resolve_team
+    team = resolve_team(request, current_user)
+    team_names = None
+    if team:
+        team_q = User.query.filter(User.team == team, User.is_active == True)
+        hid = getattr(g, 'hospital_id', None)
+        if hid:
+            team_q = team_q.filter(User.hospital_id == hid)
+        team_names = [u.display_name for u in team_q.all() if u.display_name]
+    data = _get_report_data(year, month, hospital_id=hid, team_names=team_names)
     ov = data['overview']
     is_year = (month == 0)
 

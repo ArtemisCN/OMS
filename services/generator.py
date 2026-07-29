@@ -2,6 +2,7 @@
 import random
 from datetime import datetime, timedelta
 import calendar
+from flask import g
 from services import matcher
 from services.address import ADDRESS_LIST
 
@@ -187,7 +188,7 @@ def generate_time_person_pairs(total, year, month, min_per_day, max_per_day,
             from models import DutySchedule, db
             schedules = DutySchedule.query.filter(
                 DutySchedule.duty_date == current_date.date(),
-                DutySchedule.hospital_id == 1,  # 当前医院ID
+                DutySchedule.hospital_id == getattr(g, 'hospital_id', None) or 1,  # 使用当前医院ID（批量生成时在请求上下文中）
             ).all()
             # 过滤出有效班次（排除病假/事假/年假/×）
             valid_shifts = {'白班', '日班', '夜班', '24H'}

@@ -20,13 +20,8 @@ from services import generator
 # ==================== 查询 ====================
 
 def build_order_query(filters, user=None):
-    """构建工单查询（筛选条件复用，自动按 g.hospital_id 过滤）"""
+    """构建工单查询（筛选条件复用）"""
     query = WorkOrder.query
-    # 自动按当前医院过滤
-    from flask import g
-    hid = getattr(g, 'hospital_id', None)
-    if hid and hid != 0:
-        query = query.filter(WorkOrder.hospital_id == hid)
     status = filters.get('status', '')
     if status in ('pending', 'in_progress', 'completed'):
         query = query.filter(WorkOrder.status == status)
@@ -81,7 +76,7 @@ def build_order_query(filters, user=None):
     if department:
         query = query.filter(WorkOrder.department == department)
 
-    # 组别筛选
+    # 组别筛选（pending 状态不按人员组过滤，因为未接单无人可指）
     team = filters.get('team', '')
     if team and status != 'pending':
         team_persons = User.query.filter(
@@ -128,16 +123,29 @@ def get_order_photos(order_id):
 
 # ==================== 筛选辅助数据 ====================
 
-def get_filter_data(team=None):
-    """获取工单列表页所需的下拉数据（按当前医院和分组过滤人员）"""
+def get_filter_data():
+    """获取工单列表页所需的下拉数据（按当前医院和分组过滤）"""
     from flask import g
+    from flask_login import current_user
+    from models import SystemSetting
+
+    base_q = User.query.filter(User.is_active == True)
+
+    # 医院过滤
     hid = getattr(g, 'hospital_id', None)
-    q = User.query.filter(User.is_active == True)
-    if hid and hid != 0:
-        q = q.filter(User.hospital_id == hid)
+    if hid:
+        base_q = base_q.filter(User.hospital_id == hid)
+
+    # 团队过滤（不用 resolve_team 因为它需要 request）
+    team = current_user.team
+    if not team:
+        s = SystemSetting.query.filter_by(key='default_dashboard_team').first()
+        if s and s.value:
+            team = s.value
     if team:
-        q = q.filter(User.team == team)
-    persons = q.order_by(User.sort_order, User.display_name).all()
+        base_q = base_q.filter(User.team == team)
+
+    persons = base_q.order_by(User.sort_order, User.display_name).all()
     buildings = get_all_buildings()
     teams = [
         t[0] for t in
@@ -342,12 +350,6 @@ def get_batch_form_data(user, selected_team=None):
     """批量生成页面的表单辅助数据"""
     persons = User.query.filter(User.is_active==True).order_by(User.sort_order, User.display_name).all()
     _person = User.query.filter_by(id=user.id).first()
-
-    # 按当前医院过滤（g.hospital_id，管理员切换医院后也适用）
-    from flask import g
-    hid = getattr(g, 'hospital_id', None)
-    if hid:
-        persons = [p for p in persons if p.hospital_id == hid]
     
     # 如果指定了组，过滤人员和方案
     if selected_team and selected_team != 'all':
@@ -397,48 +399,26 @@ def batch_preview(form_data, user):
     """批量生成第一步：生成预览数据"""
     from models import FaultTemplateItem
 
-    # 收集动态故障类型数量（支持新旧两种格式）
+    # 收集动态故障类型数量
     fault_counts = {}
     fault_details = {}
     total = 0
-
-    # 新格式：勾选方式，checkbox 传 item ID
-    checked_items = form_data.getlist('fault_group_item')
-    if checked_items:
-        from models import FaultTemplateItem
-        for item_id_str in checked_items:
+    for key, val in form_data.items():
+        if key.startswith('fault_count_'):
             try:
-                item_id = int(item_id_str)
-                item = FaultTemplateItem.query.get(item_id)
-                if item:
-                    count = item.default_count or 1
-                    fault_counts[item.id] = count
-                    fault_details[item.id] = {
-                        'fault_type': item.fault_type,
-                        'display_name': item.display_name,
-                    }
-                    total += count
+                item_id = int(key.replace('fault_count_', ''))
+                count = max(0, int(val))
+                if count > 0:
+                    item = FaultTemplateItem.query.get(item_id)
+                    if item:
+                        fault_counts[item.id] = count
+                        fault_details[item.id] = {
+                            'fault_type': item.fault_type,
+                            'display_name': item.display_name,
+                        }
+                        total += count
             except (ValueError, TypeError):
                 pass
-
-    # 旧格式兼容：fault_count_ 前缀
-    if total == 0:
-        for key, val in form_data.items():
-            if key.startswith('fault_count_'):
-                try:
-                    item_id = int(key.replace('fault_count_', ''))
-                    count = max(0, int(val))
-                    if count > 0:
-                        item = FaultTemplateItem.query.get(item_id)
-                        if item:
-                            fault_counts[item.id] = count
-                            fault_details[item.id] = {
-                                'fault_type': item.fault_type,
-                                'display_name': item.display_name,
-                            }
-                            total += count
-                except (ValueError, TypeError):
-                    pass
 
     # 兼容旧格式
     if total == 0:
@@ -713,13 +693,6 @@ def get_create_page_data(user):
     """获取新建工单页面的辅助数据"""
     persons = User.query.filter(User.is_active==True).order_by(User.sort_order, User.display_name).all()
     _person = User.query.filter_by(id=user.id).first()
-
-    # 按当前医院过滤
-    from flask import g
-    hid = getattr(g, 'hospital_id', None)
-    if hid:
-        persons = [p for p in persons if p.hospital_id == hid]
-
     query = SolutionTemplate.query
     if _person and _person.team:
         query = query.filter(db.or_(

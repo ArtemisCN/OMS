@@ -85,6 +85,11 @@ def index():
          '未接单工单提醒模板',
          '手动推送未接单工单时用的消息模板，额外支持变量：{overdue}超24小时未接单数，其他变量同上',
          '通知'),
+        ('wecom_push_template_urge',
+         '## 🚨 工单催办通知\n\n> **工单名称：**{title}\n> **紧急程度：**{priority}\n> **楼区：**{building}\n> **科室：**{department}\n> **发布时间：**{created_at}\n> **状态：**待处理 ⏰ 请尽快安排人员处理！',
+         '催办加急模板',
+         '催办/超时提醒推送到企业微信的消息模板，支持变量：{title}工单标题 {priority}紧急程度 {building}楼区 {department}科室 {created_at}发布时间',
+         '通知'),
         ('audit_log_retention_days', '365', '审计日志保留天数', '操作日志保留多少天，超过就自动清理省数据库空间。365天就是一年，设0就永远不删', '系统'),
         ('password_min_length', '6', '密码最小长度', '用户设密码最少要几位？建议至少6位，太短不安全，太长大家记不住', '系统'),
         ('timezone', 'Asia/Shanghai', '系统时区', '系统用的时区，国内一般就是Asia/Shanghai北京时间，改了这个所有时间显示都会跟着变', '系统'),
@@ -138,11 +143,10 @@ def index():
         if s.hospital_id:
             hospital_prefixes[s.hospital_id] = s.value or ''
     # 组别列表（供 default_dashboard_team 下拉菜单使用）
-    import re
-    team_setting = SystemSetting.query.filter_by(key='person_teams').first()
-    team_list = []
-    if team_setting and team_setting.value:
-        team_list = [t.strip() for t in re.split(r'[,，]', team_setting.value) if t.strip()]
+    from services.data_service import get_team_options
+    from flask import g
+    _set_hid = getattr(g, 'hospital_id', None)
+    team_list = get_team_options(hospital_id=_set_hid if _set_hid and _set_hid != 0 else None)
     # 故障类型列表（去重）
     fault_types = sorted(set(f.name for f in FaultType.query.all()))
     return render_template('data/settings.html', settings=settings, categories=cat_list,
@@ -296,7 +300,7 @@ def add_department():
     if Department.query.filter_by(name=name).first():
         flash(f'科室「{name}」已存在', 'warning')
         return redirect(url_for('settings.list_departments'))
-    dept = Department(
+    dept = Department.new_with_hospital(
         name=name,
         building=request.form.get('building', '').strip(),
         floor=request.form.get('floor', '').strip(),
@@ -408,3 +412,28 @@ def import_departments():
     db.session.commit()
     flash(f'从工单和地址数据中导入 {imported} 个科室', 'success')
     return redirect(url_for('settings.list_departments'))
+
+
+@settings_bp.route('/refresh-config')
+@admin_required
+def refresh_config():
+    """刷新系统参数缓存（不重启服务即可生效，如 session_timeout）"""
+    from flask import current_app
+    try:
+        st = SystemSetting.query.filter_by(key='session_timeout_minutes').first()
+        if st and st.value:
+            timeout = max(60, min(1440, int(st.value)))
+        else:
+            timeout = 30
+        current_app.config['SESSION_TIMEOUT'] = timeout
+
+        # 刷新全部系统设置缓存
+        _system_settings = {}
+        for s in SystemSetting.query.all():
+            _system_settings[s.key] = s.value
+        current_app.config['SYSTEM_SETTINGS'] = _system_settings
+
+        flash(f'配置已刷新（会话超时: {timeout}分钟，共 {len(_system_settings)} 项设置）', 'success')
+    except Exception as e:
+        flash(f'刷新失败: {e}', 'danger')
+    return redirect(url_for('settings.index'))

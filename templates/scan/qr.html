@@ -8,7 +8,7 @@
     {% else %}
     <p class="text-muted">全院通用</p>
     {% endif %}
-    <div class="d-inline-block p-4 bg-white rounded shadow-sm" style="border:2px solid #e2e8f0;">
+    <div class="d-inline-block p-4 bg-dark text-white rounded shadow-sm" style="border:2px solid #2a2e3a;">
         <img src="{{ url_for('scan.qr_image', hospital_id=hospital.id, department=department or '') }}" 
              alt="报修二维码" style="width:280px;height:280px;image-rendering:pixelated;">
     </div>

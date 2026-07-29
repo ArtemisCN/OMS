@@ -3,13 +3,15 @@
 - 超过15分钟未接单：normal → urgent（加急🟡）
 - 超过30分钟未接单：urgent → emergency（紧急🔴）
 - emergency 不再升级
+
+多院区兼容：遍历所有医院分别处理，确保每所医院的工单按各自时限升级
 """
 import sys, os
 sys.path.insert(0, '/var/www/hospital-workorder')
 os.chdir('/var/www/hospital-workorder')
 
 from wsgi import app
-from models import db, WorkOrder
+from models import db, WorkOrder, Hospital
 from datetime import datetime, timedelta
 
 with app.app_context():
@@ -19,25 +21,32 @@ with app.app_context():
 
     escalated = {'normal_to_urgent': 0, 'urgent_to_emergency': 0}
 
-    # 查找超15分钟还未接单的 normal 工单 → 升urgent
-    orders = WorkOrder.query.filter(
-        WorkOrder.status == 'pending',
-        WorkOrder.priority == 'normal',
-        WorkOrder.created_at <= deadline_15,
-    ).all()
-    for o in orders:
-        o.priority = 'urgent'
-        escalated['normal_to_urgent'] += 1
+    # 获取所有活跃医院，逐院处理
+    hospitals = Hospital.query.filter_by(is_active=True).all()
+    if not hospitals:
+        hospitals = [None]  # 兜底：无医院配置时全量处理
 
-    # 查找超30分钟还未接单的 urgent 工单 → 升emergency
-    orders = WorkOrder.query.filter(
-        WorkOrder.status == 'pending',
-        WorkOrder.priority == 'urgent',
-        WorkOrder.created_at <= deadline_30,
-    ).all()
-    for o in orders:
-        o.priority = 'emergency'
-        escalated['urgent_to_emergency'] += 1
+    for hospital in hospitals:
+        hid = hospital.id if hospital else None
+
+        q = WorkOrder.query.filter(
+            WorkOrder.status == 'pending',
+            WorkOrder.created_at <= deadline_15,
+        )
+        if hid:
+            q = q.filter(WorkOrder.hospital_id == hid)
+
+        # 超15分钟未接单的 normal → urgent
+        normal_orders = q.filter(WorkOrder.priority == 'normal').all()
+        for o in normal_orders:
+            o.priority = 'urgent'
+        escalated['normal_to_urgent'] += len(normal_orders)
+
+        # 超30分钟未接单的 urgent → emergency
+        urgent_orders = q.filter(WorkOrder.priority == 'urgent').all()
+        for o in urgent_orders:
+            o.priority = 'emergency'
+        escalated['urgent_to_emergency'] += len(urgent_orders)
 
     db.session.commit()
 

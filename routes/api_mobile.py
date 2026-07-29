@@ -1,7 +1,9 @@
 """微信小程序 REST API - 手机端工单接单功能"""
 import threading
+import time
 import urllib.request
 import json as pyjson
+from collections import defaultdict
 from flask import Blueprint, request, jsonify, current_app
 from models import db, User, WorkOrder, MobileToken, SubscribeUser, PaperForm, SystemSetting, WorkOrderTransferLog, WorkOrderPhoto, InventoryTask, InventoryItem, Asset, Exam, ExamQuestion, ExamSubmission
 import random
@@ -10,6 +12,38 @@ from sqlalchemy import func, case
 from utils.time_helpers import fmt_dt
 
 api_mobile_bp = Blueprint('api_mobile', __name__, url_prefix='/api/mobile')
+
+# ===== 内存限流器（无外部依赖） =====
+_rate_limit_lock = threading.Lock()
+_rate_limit_store = defaultdict(list)  # key: "ip:endpoint" → [timestamp, ...]
+
+def rate_limit(max_requests=5, window=60):
+    """API 限流装饰器：每个 IP + 端点，window 秒内最多 max_requests 次"""
+    def decorator(f):
+        from functools import wraps
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            ip = request.remote_addr or '127.0.0.1'
+            endpoint = request.path
+            key = f'{ip}:{endpoint}'
+            now = time.time()
+            cutoff = now - window
+            with _rate_limit_lock:
+                timestamps = _rate_limit_store.get(key, [])
+                # 清理过期记录
+                timestamps = [t for t in timestamps if t > cutoff]
+                if len(timestamps) >= max_requests:
+                    retry_after = int(window - (now - timestamps[0]))
+                    return jsonify({
+                        'error': f'请求过于频繁，请 {retry_after} 秒后重试',
+                        'code': 429,
+                        'retry_after': retry_after
+                    }), 429, {'Retry-After': str(retry_after)}
+                timestamps.append(now)
+                _rate_limit_store[key] = timestamps
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
 
 DEFAULT_AVATARS = [
     # 卡通人物
@@ -89,6 +123,7 @@ def generate_qr():
 
 
 @api_mobile_bp.route('/login', methods=['POST'])
+@rate_limit(max_requests=5, window=60)
 def api_login():
     """用户登录（密码），返回 token"""
     data = request.get_json(silent=True) or {}
@@ -138,7 +173,9 @@ def select_avatar(user):
     user.avatar = avatar
     db.session.commit()
     return jsonify({'ok': True, 'avatar': avatar})
+
 @api_mobile_bp.route('/wx_login', methods=['POST'])
+@rate_limit(max_requests=5, window=60)
 def wx_login():
     """微信自动登录：通过 wx.login code 换取 openid
     需先在 config.py 配置 WECHAT_APPID 和 WECHAT_SECRET
@@ -654,8 +691,8 @@ def send_new_order_notification(order):
     t.start()
 
 
-def send_wecom_notification(order, skip_time_check=False):
-    """企业微信群机器人推送新工单通知（非阻塞）"""
+def send_wecom_notification(order, skip_time_check=False, is_urge=False):
+    """企业微信群机器人推送工单通知（非阻塞）。is_urge=True 时使用催办加急模板"""
     import urllib.request, json as pyjson
     from flask import current_app
     from datetime import datetime
@@ -705,18 +742,50 @@ def send_wecom_notification(order, skip_time_check=False):
     building = order.building or '未指定'
     department = order.department or '未指定'
     created_at = fmt_dt(order.created_at, '%Y-%m-%d %H:%M')
+    pri_label = {'normal': '普通', 'urgent': '加急', 'emergency': '紧急'}.get(order.priority, '普通')
 
-    payload = {
-        "msgtype": "markdown",
-        "markdown": {
-            "content": "## 🔧 新工单通知\n"
-                       f"> **工单名称：**{title}\n"
-                       f"> **楼区：**{building}\n"
-                       f"> **科室：**{department}\n"
-                       f"> **发布时间：**{created_at}\n"
-                       f"> **状态：**待接单"
+    if is_urge:
+        # ====== 催办加急模板 ======
+        # 尝试从设置读取自定义催办模板（支持变量替换）
+        urge_template_setting = SystemSetting.query.filter_by(key='wecom_push_template_urge', hospital_id=hid).first()
+        if urge_template_setting and urge_template_setting.value:
+            try:
+                content = urge_template_setting.value.format(
+                    title=title,
+                    priority=order.priority or 'normal',
+                    pri_label=pri_label,
+                    building=building,
+                    department=department,
+                    created_at=created_at,
+                )
+            except (KeyError, ValueError):
+                content = urge_template_setting.value
+                print(f'[WECOM] warning: urge template has invalid placeholders, sending raw', flush=True)
+        else:
+            content = "## 🚨 工单催办通知\n" \
+                      f"> **工单名称：**{title}\n" \
+                      f"> **紧急程度：**{pri_label}\n" \
+                      f"> **楼区：**{building}\n" \
+                      f"> **科室：**{department}\n" \
+                      f"> **发布时间：**{created_at}\n" \
+                      f"> **状态：**待处理 ⏰ 请尽快安排人员处理！"
+        payload = {
+            "msgtype": "markdown",
+            "markdown": {"content": content}
         }
-    }
+    else:
+        # ====== 新工单通知模板 ======
+        payload = {
+            "msgtype": "markdown",
+            "markdown": {
+                "content": "## 🔧 新工单通知\n"
+                           f"> **工单名称：**{title}\n"
+                           f"> **楼区：**{building}\n"
+                           f"> **科室：**{department}\n"
+                           f"> **发布时间：**{created_at}\n"
+                           f"> **状态：**待接单"
+            }
+        }
 
     def _do_push(url, data):
         try:
@@ -1044,7 +1113,7 @@ def api_create_order(user):
     now = datetime.now()
     priority = data.get('priority', 'normal')
 
-    order = WorkOrder(
+    order = WorkOrder.new_with_hospital(
         title=title,
         device_type=auto_device,
         fault_type=auto_fault,
@@ -1988,7 +2057,7 @@ def mobile_shift_handover_create(user):
     if not handover_person or not receive_person:
         return jsonify({'error': '交班人和接班人不能为空', 'code': 400}), 400
 
-    handover = ShiftHandover(
+    handover = ShiftHandover.new_with_hospital(
         handover_person=handover_person,
         receive_person=receive_person,
         content=content,

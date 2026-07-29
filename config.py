@@ -1,9 +1,27 @@
 import os
+import secrets
+
+# ==================== 路径计算 ====================
+_basedir = os.path.abspath(os.path.dirname(__file__))
 
 # ==================== Flask 配置 ====================
-SECRET_KEY = os.environ.get('SECRET_KEY',
-    'hw-' + __import__('hashlib').sha256(b'hospital-workorder-2026-secret').hexdigest()[:32])
-SQLALCHEMY_DATABASE_URI = 'sqlite:///workorders.db'
+# SECRET_KEY: 优先从环境变量读取，否则运行时生成并持久化到 .secret 文件
+_secret_key = os.environ.get('SECRET_KEY')
+if not _secret_key:
+    _secret_file = os.path.join(_basedir, '.secret')
+    if os.path.exists(_secret_file):
+        with open(_secret_file, 'r') as f:
+            _secret_key = f.read().strip()
+    else:
+        _secret_key = secrets.token_hex(32)
+        try:
+            with open(_secret_file, 'w') as f:
+                f.write(_secret_key)
+            os.chmod(_secret_file, 0o600)
+        except OSError:
+            pass  # 无法写入 .secret 文件时使用内存中的密钥
+SECRET_KEY = _secret_key
+SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(_basedir, 'instance', 'workorders.db')
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 # ==================== 设备类型关键词（按优先级排序） ====================

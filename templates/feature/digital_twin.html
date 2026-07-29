@@ -286,7 +286,9 @@ function setMapBg(url) {
 // ===== 加载数据 =====
 async function loadData() {
     try {
-        const res = await fetch('/feature/digital-twin/data');
+        const params = new URLSearchParams(window.location.search);
+        const hid = params.get('hospital_id') || '{{ default_hospital_id }}';
+        const res = await fetch('/feature/digital-twin/data?hospital_id=' + hid);
         const data = await res.json();
         if (!data.success) return;
         buildings = data.buildings || [];
@@ -465,10 +467,12 @@ function toggleAdmin() {
 
 async function savePositions() {
     try {
+        const params = new URLSearchParams(window.location.search);
+        const hid = params.get('hospital_id') || '{{ default_hospital_id }}';
         const res = await fetch('/feature/digital-twin/save-positions', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({positions})
+            body: JSON.stringify({positions, hospital_id: parseInt(hid)})
         });
         const data = await res.json();
         showToast(data.success ? '保存成功 <i class="fas fa-check-circle"></i>' : '保存失败', data.success ? 'success' : 'error');
@@ -497,10 +501,12 @@ function resetPositions() {
 async function saveMapUrl() {
     const url = document.getElementById('mapUrlInput').value.trim();
     try {
+        const params = new URLSearchParams(window.location.search);
+        const hid = params.get('hospital_id') || '{{ default_hospital_id }}';
         const res = await fetch('/feature/digital-twin/save-map', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({map_url: url})
+            body: JSON.stringify({map_url: url, hospital_id: parseInt(hid)})
         });
         const data = await res.json();
         if (data.success) {
@@ -521,6 +527,9 @@ async function uploadMapFile() {
     if (file.size > 10 * 1024 * 1024) { showToast('图片不能超过10MB', 'error'); return; }
     const formData = new FormData();
     formData.append('file', file);
+    const params = new URLSearchParams(window.location.search);
+    const hid = params.get('hospital_id') || '{{ default_hospital_id }}';
+    formData.append('hospital_id', hid);
     try {
         const res = await fetch('/feature/digital-twin/upload-map', {
             method: 'POST',

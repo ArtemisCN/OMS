@@ -28,7 +28,8 @@ def generate_inspection_order(plan):
         building=plan.building, floor=plan.floor, department=plan.department,
         location=plan.location, start_time=datetime.now(), status='pending',
         inspection_data={'template_name': tpl.name, 'items': [{'name': item, 'result': None} for item in tpl.items]},
-        created_by='系统(巡检)'
+        created_by='系统(巡检)',
+        hospital_id=plan.hospital_id or 1,
     )
     db.session.add(order)
     db.session.flush()
@@ -41,10 +42,15 @@ def generate_inspection_order(plan):
 
 with app.app_context():
     now = datetime.now()
-    recurring = InspectionPlan.query.filter(
-        InspectionPlan.status == 'pending',
-        InspectionPlan.schedule_type.in_(['daily', 'workday', 'monthly'])
-    ).all()
+    from models import Hospital
+    hospitals = Hospital.query.filter_by(is_active=True).all()
+    recurring = []
+    for h in hospitals:
+        recurring.extend(InspectionPlan.query.filter(
+            InspectionPlan.status == 'pending',
+            InspectionPlan.hospital_id == h.id,
+            InspectionPlan.schedule_type.in_(['daily', 'workday', 'monthly'])
+        ).all())
 
     generated = 0
     for plan in recurring:

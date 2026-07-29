@@ -76,14 +76,6 @@
                 </select>
             </div>
             <div class="col-md-2">
-                <select name="team" class="form-select form-select-sm" onchange="this.form.submit()">
-                    <option value="">全部组别</option>
-                    {% for t in teams %}
-                    <option value="{{ t }}" {% if team_sel==t %}selected{% endif %}>{{ t }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
                 <select name="person" class="form-select form-select-sm">
                     <option value="">全部人员</option>
                     {% for p in persons %}
@@ -162,7 +154,9 @@
 </style>
 
 <div class="card" id="orderCard">
-
+    <div class="card-header d-flex align-items-center justify-content-between py-2 px-3">
+        <span id="result-count" class="text-muted" style="font-size:13px;"></span>
+    </div>
     <div class="table-responsive">
         <table class="table table-hover mb-0" id="orderTable">
             <thead class="table-light">
@@ -232,12 +226,12 @@
                         <span class="badge bg-success">已完成</span>
                         {% endif %}
                     </td>
-                    <td><small class="text-muted">{% if o.start_time %}{{ o.start_time.strftime('%m/%d %H:%M') }}{% endif %}</small></td>
+                    <td><small class="text-muted">{% set _t = o.start_time or o.accepted_at or o.created_at %}{% if _t %}{{ _t.strftime('%m/%d %H:%M') }}{% endif %}</small></td>
                     <td>
                         <div class="d-flex gap-1">
                             <a href="{{ url_for('orders.detail', order_id=o.id) }}" class="btn btn-sm btn-outline-primary" title="详情"><i class="fas fa-eye"></i></a>
-                            {% if o.person and o.person != '未指派' and o.status != 'completed' %}
-                            <button class="btn btn-sm btn-outline-warning urge-btn" data-id="{{ o.id }}" title="催办"><i class="fas fa-bell"></i></button>
+                            {% if o.status != 'completed' %}
+                            <button class="btn btn-sm btn-outline-warning urge-btn" data-id="{{ o.id }}" title="催办{{ ' · 推送至企微' if not o.person else '' }}"><i class="fas fa-bell"></i></button>
                             {% endif %}
                             <form method="post" action="{{ url_for('orders.delete_order', order_id=o.id) }}" style="display:inline;">
                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="删除"><i class="fas fa-trash"></i></button>
@@ -283,6 +277,24 @@
     var status = '{{ status }}';
     var sort = '{{ sort }}';
     var order = '{{ order }}';
+
+    // 结果计数（服务端 total 而非页内行数）
+    function updateResultCount() {
+        var el = document.getElementById('result-count');
+        if (el) {
+            el.textContent = '共 {{ pagination.total }} 条{% if pagination.pages > 1 %}（第{{ pagination.page }}/{{ pagination.pages }}页）{% endif %}';
+        }
+    }
+    // 监听筛选变化、翻页后更新
+    document.addEventListener('DOMContentLoaded', function() { updateResultCount(); });
+    // 每次页面内容变化时更新
+    var _origPushState = window.history.pushState;
+    if (_origPushState) {
+        window.history.pushState = function() {
+            _origPushState.apply(this, arguments);
+            setTimeout(updateResultCount, 100);
+        };
+    }
 
     // ==================== 1. 列选择器 ====================
     var colToggleBtn = document.getElementById('columnToggleBtn');
@@ -407,14 +419,14 @@
             .then(function(r) { return r.json(); })
             .then(function(d) {
                 if (d.success) {
-                    alert('<i class="fas fa-check-circle"></i> ' + d.message);
+                    alert('✅ ' + d.message);
                 } else {
-                    alert('<i class="fas fa-times-circle"></i> ' + (d.error || '发送失败'));
+                    alert('❌ ' + (d.error || '发送失败'));
                 }
                 self.disabled = false;
                 self.innerHTML = '<i class="fas fa-bell"></i>';
             }).catch(function() {
-                alert('<i class="fas fa-times-circle"></i> 催办失败');
+                alert('❌ 催办失败');
                 self.disabled = false;
                 self.innerHTML = '<i class="fas fa-bell"></i>';
             });
@@ -488,7 +500,7 @@
             .then(function(r) { return r.json(); })
             .then(function(d) {
                 if (d.success) {
-                    alert('<i class="fas fa-check-circle"></i> ' + d.message);
+                    alert('✅ ' + d.message);
                     // 对于删除、指派等操作刷新页面
                     if (action === 'delete' || action === 'assign' || action === 'priority') {
                         window.location.reload();
@@ -497,11 +509,11 @@
                         window.location.reload();
                     }
                 } else {
-                    alert('<i class="fas fa-times-circle"></i> ' + (d.error || '操作失败'));
+                    alert('❌ ' + (d.error || '操作失败'));
                 }
             })
             .catch(function(err) {
-                alert('<i class="fas fa-times-circle"></i> 操作失败: ' + err);
+                alert('❌ ' + (d.error || '操作失败'));
             });
         });
     });

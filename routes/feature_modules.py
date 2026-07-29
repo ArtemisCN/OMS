@@ -10,7 +10,7 @@ from flask import current_app,  Blueprint, render_template, jsonify, request, se
 from flask_login import login_required, current_user
 from sqlalchemy import func
 
-from utils.time_helpers import fmt_dt, now, fmt_date
+from utils.time_helpers import fmt_dt, now, fmt_date, resolve_team
 from models import (
     db, WorkOrder, WorkOrderTransferLog, WorkOrderChatMessage,
     Asset, User, SystemSetting, RoleGroup,
@@ -23,7 +23,6 @@ from models import (
 
 feature_bp = Blueprint('feature', __name__, url_prefix='/feature')
 
-HOSPITAL_ID = 1  # 演示用固定值，后续可改为 g.hospital_id
 QR_BASE_URL = 'https://demolin.cn/scan/1/submit?asset_id='
 
 
@@ -127,121 +126,177 @@ def history_page(order_id):
 @feature_bp.route('/personnel/dashboard', methods=['GET'])
 @login_required
 def personnel_dashboard():
-    """人员效能看板页面"""
-    import re
-    team_setting = SystemSetting.query.filter_by(key='person_teams').first()
-    team_list = []
-    if team_setting and team_setting.value:
-        team_list = [t.strip() for t in re.split(r'[,，]', team_setting.value) if t.strip()]
-    default_team = SystemSetting.query.filter_by(key='personnel_default_team').first()
-    return render_template('feature/personnel_dashboard.html',
-                           team_list=team_list,
-                           default_team=default_team.value if default_team and default_team.value else '')
+    """已迁移至 efficiency 蓝图"""
+    from flask import redirect
+    return redirect('/efficiency/personnel/dashboard', 301)
 
 
 @feature_bp.route('/personnel/data', methods=['GET'])
 @login_required
 def personnel_data():
     """人员效能统计 JSON（支持 hospital 和 group 过滤）"""
+    from sqlalchemy import text
+    from utils.time_helpers import resolve_team
+
     group_id = request.args.get('group_id', type=int)
     team = request.args.get('team')
+    # 未指定 team 时自动解析当前用户所属团队
+    if team is None:
+        team = resolve_team(request, current_user, setting_key='personnel_default_team')
     hid = getattr(g, 'hospital_id', None)
-    from sqlalchemy import text
 
-    # 基础查询：按 person 聚合已完成工单
-    base_q = db.session.query(
-        WorkOrder.person,
-        func.count(WorkOrder.id).label('total_orders'),
-        func.sum(
-            func.cast(
-                func.julianday(WorkOrder.completed_at) - func.julianday(WorkOrder.created_at),
-                db.Float
-            )
-        ).label('total_days')
-    ).filter(
-        WorkOrder.person != '',
-        WorkOrder.person.isnot(None),
-        WorkOrder.completed_at.isnot(None),
-        WorkOrder.created_at.isnot(None),
-    )
-
-    # 医院过滤
-    if hid:
-        base_q = base_q.filter(WorkOrder.hospital_id == hid)
-
-    # 团队过滤：通过 Person.team 查出该团队的 person 名单
-    team_person_names = None
+    # --- 1. 一次性查出所有符合条件的 Person 名单 ---
+    # 团队/角色组过滤
+    person_scope = None  # None = 不限制
+    scope_sql = []
+    scope_params = {}
     if team:
-        p_rows = db.session.execute(text(
-            "SELECT display_name FROM users WHERE team = :team"
-        ), {'team': team}).fetchall()
-        team_person_names = {r[0] for r in p_rows}
-        if team_person_names:
-            base_q = base_q.filter(WorkOrder.person.in_(team_person_names))
-        else:
-            return jsonify(success=True, data=[], total=0, groups=[])
-
-    # 分组过滤：通过 Person → User → RoleGroup 查出该组的 person 名单
-    group_person_names = None
+        scope_sql.append("team = :team")
+        scope_params['team'] = team
     if group_id:
-        rows = db.session.execute(text(
-            "SELECT display_name FROM users "
-            "WHERE group_id = :gid"
-        ), {'gid': group_id}).fetchall()
-        group_person_names = {r[0] for r in rows}
-        if group_person_names:
-            base_q = base_q.filter(WorkOrder.person.in_(group_person_names))
-        else:
-            return jsonify(success=True, data=[], total=0)
+        scope_sql.append("group_id = :gid")
+        scope_params['gid'] = group_id
+    if scope_sql:
+        scope_where = " AND ".join(scope_sql)
+        scope_rows = db.session.execute(
+            text(f"SELECT display_name FROM users WHERE is_active = 1 AND ({scope_where})"),
+            scope_params
+        ).fetchall()
+        person_scope = {r[0] for r in scope_rows}
+        if not person_scope:
+            # 该团队/组下无在岗人员
+            groups = RoleGroup.query.order_by(RoleGroup.name).all()
+            return jsonify(success=True, data=[], total=0, groups=[{'id': rg.id, 'name': rg.name} for rg in groups])
 
-    rows = base_q.group_by(WorkOrder.person).all()
+    # --- 2. 基础聚合：按 person 聚合已完成工单的 总数+耗时 ---
+    # 用 raw SQL 绕过 ORM + auto_hospital_filter 性能问题
+    agg_sql = "SELECT person, COUNT(id) as total_orders, " \
+              "SUM(CAST(julianday(completed_at) - julianday(created_at) AS REAL)) as total_days " \
+              "FROM work_orders WHERE person != '' AND person IS NOT NULL " \
+              "AND completed_at IS NOT NULL AND created_at IS NOT NULL"
+    agg_params = {}
+    if person_scope is not None:
+        placeholders = ','.join(f':ps{i}' for i in range(len(person_scope)))
+        agg_sql += f" AND person IN ({placeholders})"
+        for i, n in enumerate(person_scope):
+            agg_params[f'ps{i}'] = n
+    if hid:
+        agg_sql += " AND hospital_id = :agg_hid"
+        agg_params['agg_hid'] = hid
+    agg_sql += " GROUP BY person"
+    agg_rows = db.session.execute(text(agg_sql), agg_params).fetchall()
+    person_names = {r[0] for r in agg_rows}
 
-    # 在岗人员名单（同条件过滤）
-    active_q = "SELECT display_name FROM users WHERE is_active = 1"
+    # --- 3. 批量查询：所有人员的 in_progress / pending ---
+    st_sql = "SELECT person, status FROM work_orders WHERE person IS NOT NULL AND person != ''"
+    st_params = {}
+    if person_names:
+        placeholders = ','.join(f':sn{i}' for i in range(len(person_names)))
+        st_sql += f" AND person IN ({placeholders})"
+        for i, n in enumerate(person_names):
+            st_params[f'sn{i}'] = n
+    st_sql += " AND status IN ('in_progress', 'pending')"
+    if hid:
+        st_sql += " AND hospital_id = :st_hid"
+        st_params['st_hid'] = hid
+    status_rows = db.session.execute(text(st_sql), st_params).fetchall()
+    status_map = {}
+    for sr in status_rows:
+        name, st = sr[0], sr[1]
+        if name not in status_map:
+            status_map[name] = {'in_progress': 0, 'pending': 0}
+        if st in status_map[name]:
+            status_map[name][st] += 1
+
+    # --- 4. 批量查询：所有人员的 SLA 数据（is_overdue 是 Python property，需在代码中计算）---
+    if person_names:
+        # 先读 SLA 阈值（只读一次，避免每条工单都查 DB）
+        def _batch_get_th():
+            rows = SystemSetting.query.with_entities(SystemSetting.key, SystemSetting.value).filter(
+                SystemSetting.key.like('sla_response_%') | SystemSetting.key.like('sla_resolution_%')
+            ).all()
+            return {r.key: float(r.value) for r in rows if r.value}
+        sla_th_cache = _batch_get_th()
+        def _get_th(key, default):
+            return sla_th_cache.get(key, default)
+
+        # 用 raw SQL 避免 SQLAlchemy `is_overdue` property 问题
+        sla_sql = "SELECT person, priority, created_at, completed_at, end_time " \
+                  "FROM work_orders WHERE status = 'completed'"
+        sla_params = {}
+        if hid:
+            sla_sql += " AND hospital_id = :hid"
+            sla_params['hid'] = hid
+        # 用 IN 批量查
+        placeholders = ','.join(f':n{i}' for i in range(len(person_names)))
+        sla_sql += f" AND person IN ({placeholders})"
+        for i, n in enumerate(person_names):
+            sla_params[f'n{i}'] = n
+        sla_fields = db.session.execute(text(sla_sql), sla_params).fetchall()
+    else:
+        sla_fields = []
+    # 读 SLA 阈值
+    def _get_th(key, default):
+        s = SystemSetting.query.with_entities(SystemSetting.value).filter_by(key=key).scalar()
+        return float(s) if s else default
+    sla_map = {}
+    for sr in sla_fields:
+        name = sr[0]
+        priority = sr[1] or 'normal'
+        created_raw = sr[2]
+        completed_raw = sr[4] or sr[3]  # end_time > completed_at
+        if not created_raw or not completed_raw:
+            continue
+        # SQLite 返回字符串，需转为 datetime
+        from datetime import datetime as _dt
+        try:
+            created = _dt.strptime(str(created_raw)[:19], '%Y-%m-%d %H:%M:%S')
+            completed = _dt.strptime(str(completed_raw)[:19], '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            continue
+        resp_th = _get_th(f'sla_response_{priority}',
+                          {'emergency': 0.5, 'urgent': 2, 'normal': 4}.get(priority, 4))
+        resol_th = _get_th(f'sla_resolution_{priority}',
+                           {'emergency': 2, 'urgent': 8, 'normal': 24}.get(priority, 24))
+        duration_h = (completed - created).total_seconds() / 3600
+        overdue = duration_h > (resp_th + resol_th)
+        if name not in sla_map:
+            sla_map[name] = {'total': 0, 'ok': 0}
+        sla_map[name]['total'] += 1
+        if not overdue:
+            sla_map[name]['ok'] += 1
+
+    # --- 5. 在岗人员名单 ---
+    active_q = text("SELECT display_name FROM users WHERE is_active = 1")
     active_params = {}
     if hid:
-        active_q += " AND hospital_id = :hid"
+        active_q = text("SELECT display_name FROM users WHERE is_active = 1 AND hospital_id = :hid")
         active_params['hid'] = hid
-    if group_person_names is not None:
-        # 已经在 user group 范围内的 persons
-        pass  # group_person_names already filtered
-    p_rows = db.session.execute(text(active_q), active_params).fetchall()
+    p_rows = db.session.execute(active_q, active_params).fetchall()
     all_active_names = {r[0] for r in p_rows}
-    if group_person_names is not None:
-        all_active_names &= group_person_names
-    if team_person_names is not None:
-        all_active_names &= team_person_names
+    if person_scope is not None:
+        all_active_names &= person_scope
 
+    # --- 6. 组装结果 ---
     stats = []
-    for row in rows:
+    for row in agg_rows:
         name = row.person
         total = row.total_orders
         total_days = float(row.total_days or 0)
         avg_hours = round(total_days * 24 / total, 1) if total > 0 else 0
 
-        # 子查询加过滤
-        def _person_q():
-            q = WorkOrder.query.filter(WorkOrder.person == name)
-            if hid:
-                q = q.filter(WorkOrder.hospital_id == hid)
-            return q
-
-        in_progress = _person_q().filter(WorkOrder.status == 'in_progress').count()
-        pending = _person_q().filter(WorkOrder.status == 'pending').count()
-
-        person_completed = _person_q().filter(WorkOrder.status == 'completed').all()
-        sla_total = len(person_completed)
-        sla_ok = sum(1 for wo in person_completed if not wo.is_overdue)
-        sla_pct = round(sla_ok / sla_total * 100) if sla_total > 0 else 0
+        st = status_map.get(name, {})
+        sl = sla_map.get(name, {})
+        sla_pct = round(sl['ok'] / sl['total'] * 100) if sl.get('total', 0) > 0 else 0
 
         stats.append({
             'name': name,
             'total_orders': total,
-            'in_progress': in_progress,
-            'pending': pending,
+            'in_progress': st.get('in_progress', 0),
+            'pending': st.get('pending', 0),
             'avg_hours': avg_hours,
             'active': name in all_active_names,
-            'sla_total': sla_total,
+            'sla_total': sl.get('total', 0),
             'sla_ok': sla_pct,
         })
 
@@ -255,153 +310,30 @@ def personnel_data():
 
 # ===================== 4. SLA 时限管理 =====================
 
-def _get_sla_thresholds():
-    """从 SystemSetting 读取 SLA 阈值"""
-    def get_val(key, default):
-        s = SystemSetting.query.filter_by(key=key).first()
-        return s.value if s and s.value else default
-
-    return {
-        'emergency': {
-            'response': float(get_val('sla_response_emergency', '0.5')),
-            'resolution': float(get_val('sla_resolution_emergency', '2')),
-        },
-        'urgent': {
-            'response': float(get_val('sla_response_urgent', '2')),
-            'resolution': float(get_val('sla_resolution_urgent', '8')),
-        },
-        'normal': {
-            'response': float(get_val('sla_response_normal', '4')),
-            'resolution': float(get_val('sla_resolution_normal', '24')),
-        },
-    }
-
-
 @feature_bp.route('/sla/dashboard', methods=['GET'])
 @login_required
 def sla_dashboard():
-    """SLA 监控页面"""
-    return render_template('feature/sla_dashboard.html',
-                           thresholds=_get_sla_thresholds())
+    """SLA 监控页面 (已迁移至 sla 蓝图)"""
+    from flask import redirect
+    return redirect('/sla/dashboard', 301)
+
+
 
 
 @feature_bp.route('/sla/data', methods=['GET'])
 @login_required
 def sla_data():
-    """SLA 数据 JSON（优化版：SQL 批量计算，不调 is_overdue 属性）"""
-    now = datetime.now()
-    thresholds = _get_sla_thresholds()
-
-    # 只查最近3个月的工单，避免全表扫描
-    three_months_ago = now - timedelta(days=90)
-
-    all_orders = WorkOrder.query.filter(
-        WorkOrder.status.in_(['pending', 'in_progress', 'completed']),
-        WorkOrder.created_at >= three_months_ago
-    ).order_by(WorkOrder.created_at.desc()).all()
-
-    overdue_list = []
-    for wo in all_orders:
-        t = thresholds.get(wo.priority, thresholds['normal'])
-        is_overdue = _check_overdue(wo, t, now)
-        if not is_overdue:
-            continue
-
-        cost_hours = None
-        if wo.end_time or wo.completed_at:
-            end = wo.end_time or wo.completed_at
-            start = wo.start_time or wo.accepted_at or wo.created_at
-            if start:
-                cost_hours = round((end - start).total_seconds() / 3600, 1)
-        elif wo.status in ('pending', 'in_progress') and wo.created_at:
-            cost_hours = round((now - wo.created_at).total_seconds() / 3600, 1)
-
-        display_time = ''
-        if cost_hours is not None:
-            if cost_hours >= 24:
-                days = int(cost_hours // 24)
-                hours = int(cost_hours % 24)
-                display_time = f'{days}d{hours}h'
-            else:
-                display_time = f'{cost_hours}h'
-
-        overdue_list.append({
-            'id': wo.id,
-            'title': wo.title,
-            'priority': wo.priority,
-            'status': wo.status,
-            'person': wo.person,
-            'department': wo.department,
-            'created_at': fmt_dt(wo.created_at, '%Y-%m-%d %H:%M'),
-            'cost_hours': cost_hours,
-            'display_time': display_time,
-        })
-
-    # 用 SQL 聚合统计，不循环 Python
-    total_count = len(all_orders)
-    by_priority = {}
-    for pri in ['normal', 'urgent', 'emergency']:
-        t = thresholds.get(pri, thresholds['normal'])
-        pri_orders = [wo for wo in all_orders if wo.priority == pri]
-        total = len(pri_orders)
-        overdue = sum(1 for wo in pri_orders if _check_overdue(wo, t, now))
-        by_priority[pri] = {
-            'total': total,
-            'overdue': overdue,
-            'rate': round(overdue / total * 100, 1) if total > 0 else 0,
-        }
-
-    return jsonify(success=True, overdue_count=len(overdue_list),
-                   total_count=total_count, overdue_list=overdue_list,
-                   by_priority=by_priority)
-
-
-def _check_overdue(wo, thresholds, now):
-    """直接判断工单是否超时，不调 is_overdue 属性（避免 N+1 查 SystemSetting）"""
-    resp_th = thresholds['response']
-    resol_th = thresholds['resolution']
-    if wo.status == 'completed' and (wo.end_time or wo.completed_at):
-        end = wo.end_time or wo.completed_at
-        start = wo.start_time or wo.accepted_at or wo.created_at
-        if start:
-            return (end - start).total_seconds() / 3600 > resol_th
-        return False
-    elif wo.status == 'in_progress' and wo.accepted_at:
-        return (now - wo.accepted_at).total_seconds() / 3600 > resol_th
-    elif wo.status == 'pending' and wo.created_at:
-        return (now - wo.created_at).total_seconds() / 3600 > resp_th
-    return False
+    """SLA 数据 JSON (已迁移至 sla 蓝图)"""
+    from flask import redirect
+    return redirect('/sla/data', 301)
 
 
 @feature_bp.route('/sla/settings', methods=['POST'])
 @login_required
 def sla_settings():
-    """保存 SLA 阈值设置"""
-    if not current_user.is_admin:
-        return jsonify(success=False, error='仅管理员可修改'), 403
-
-    data = request.get_json(silent=True) or {}
-    mappings = [
-        ('sla_response_emergency', 'emergency_response'),
-        ('sla_resolution_emergency', 'emergency_resolution'),
-        ('sla_response_urgent', 'urgent_response'),
-        ('sla_resolution_urgent', 'urgent_resolution'),
-        ('sla_response_normal', 'normal_response'),
-        ('sla_resolution_normal', 'normal_resolution'),
-    ]
-
-    for key, field in mappings:
-        val = data.get(field)
-        if val is not None:
-            setting = SystemSetting.query.filter_by(key=key).first()
-            if setting:
-                setting.value = str(val)
-            else:
-                setting = SystemSetting(key=key, value=str(val), label=key, category='SLA')
-                db.session.add(setting)
-
-    db.session.commit()
-    return jsonify(success=True, message='SLA 阈值已保存')
+    """保存 SLA 阈值设置 (已迁移至 sla 蓝图)"""
+    from flask import redirect
+    return redirect('/sla/settings', 307)
 
 
 # ===================== 5. 资产二维码 =====================
@@ -409,10 +341,9 @@ def sla_settings():
 @feature_bp.route('/asset/qr', methods=['GET'])
 @login_required
 def asset_qr():
-    """资产二维码列表页面"""
-    assets = Asset.query.order_by(Asset.asset_no).all()
-    return render_template('feature/asset_qr.html', assets=assets,
-                           qr_base_url=QR_BASE_URL)
+    """已迁移至 assets 蓝图"""
+    from flask import redirect
+    return redirect('/assets/asset/qr', 301)
 
 
 @feature_bp.route('/asset/qr/<int:asset_id>', methods=['GET'])
@@ -626,7 +557,7 @@ def supplier_save():
         if not supplier:
             return jsonify(success=False, error='供应商不存在'), 404
     else:
-        supplier = Supplier()
+        supplier = Supplier.new_with_hospital()
 
     supplier.name = name
     supplier.contact_person = request.form.get('contact_person', '').strip()
@@ -649,13 +580,9 @@ def supplier_save():
 @feature_bp.route('/suppliers/<int:id>/delete', methods=['POST'])
 @login_required
 def supplier_delete(id):
-    """删除供应商"""
-    supplier = db.session.get(Supplier, id)
-    if not supplier:
-        return jsonify(success=False, error='供应商不存在'), 404
-    db.session.delete(supplier)
-    db.session.commit()
-    return jsonify(success=True, message='供应商已删除')
+    """已迁移至 assets 蓝图"""
+    from flask import redirect
+    return redirect(f'/assets/suppliers/{id}/delete', 307)
 
 
 # ===================== 9. 合同维保管理 =====================
@@ -663,86 +590,25 @@ def supplier_delete(id):
 @feature_bp.route('/contracts', methods=['GET'])
 @login_required
 def contracts():
-    """合同列表"""
-    contract_list = MaintenanceContract.query.order_by(
-        MaintenanceContract.end_date.asc()
-    ).all()
-
-    # 即将到期的合同（30天内）
-    today = date.today()
-    expiring = [c for c in contract_list if c.expiring_soon]
-
-    contracts_json = []
-    for c in contract_list:
-        d = {col.name: getattr(c, col.name) for col in c.__table__.columns}
-        for k, v in d.items():
-            if isinstance(v, (date, datetime)):
-                d[k] = v.isoformat() if v else None
-        contracts_json.append(d)
-
-    suppliers = Supplier.query.filter_by(is_active=True).order_by(Supplier.name).all()
-    assets = Asset.query.order_by(Asset.asset_no).all()
-
-    return render_template(
-        'feature/contract_list.html',
-        contracts=contract_list,
-        expiring_contracts=expiring,
-        suppliers=suppliers,
-        assets=assets,
-        contracts_json=json.dumps(contracts_json, ensure_ascii=False),
-    )
+    """合同列表 (已迁移至 contracts 蓝图)"""
+    from flask import redirect
+    return redirect('/contracts/', 301)
 
 
 @feature_bp.route('/contracts/save', methods=['POST'])
 @login_required
 def contract_save():
-    """创建/编辑合同"""
-    contract_id = request.form.get('id', type=int)
-    contract_name = request.form.get('contract_name', '').strip()
-    if not contract_name:
-        return jsonify(success=False, error='合同名称不能为空'), 400
-
-    if contract_id:
-        contract = db.session.get(MaintenanceContract, contract_id)
-        if not contract:
-            return jsonify(success=False, error='合同不存在'), 404
-    else:
-        contract = MaintenanceContract()
-
-    contract.contract_no = request.form.get('contract_no', '').strip()
-    contract.contract_name = contract_name
-    contract.supplier_id = request.form.get('supplier_id', type=int) or None
-    contract.asset_id = request.form.get('asset_id', type=int) or None
-
-    start_date_str = request.form.get('start_date', '').strip()
-    end_date_str = request.form.get('end_date', '').strip()
-    contract.start_date = date.fromisoformat(start_date_str) if start_date_str else None
-    contract.end_date = date.fromisoformat(end_date_str) if end_date_str else None
-
-    contract.contract_amount = request.form.get('contract_amount', 0, type=float) or 0
-    contract.payment_type = request.form.get('payment_type', '一次性')
-    contract.status = request.form.get('status', 'active')
-    contract.contact_person = request.form.get('contact_person', '').strip()
-    contract.contact_phone = request.form.get('contact_phone', '').strip()
-    contract.remark = request.form.get('remark', '').strip()
-
-    if not contract_id:
-        db.session.add(contract)
-    db.session.commit()
-
-    return jsonify(success=True, message='合同已保存')
+    """创建/编辑合同 (已迁移至 contracts 蓝图)"""
+    from flask import redirect
+    return redirect('/contracts/save', 307)
 
 
 @feature_bp.route('/contracts/<int:id>/delete', methods=['POST'])
 @login_required
 def contract_delete(id):
-    """删除合同"""
-    contract = db.session.get(MaintenanceContract, id)
-    if not contract:
-        return jsonify(success=False, error='合同不存在'), 404
-    db.session.delete(contract)
-    db.session.commit()
-    return jsonify(success=True, message='合同已删除')
+    """删除合同 (已迁移至 contracts 蓝图)"""
+    from flask import redirect
+    return redirect(f'/contracts/{id}/delete', 307)
 
 
 # ===================== 10. 设备折旧计算 =====================
@@ -855,6 +721,7 @@ def inspection_checkin_do(task_id):
         checkin_time=datetime.now(),
         location=data.get('location', plan.location or ''),
         remark=data.get('remark', ''),
+        hospital_id=getattr(g, 'hospital_id', 1),
     )
     db.session.add(checkin)
     plan.status = 'completed'
@@ -883,305 +750,18 @@ def inspection_checkin_status(task_id):
 # ===================== 12. 运维大屏 (Feature 2) =====================
 
 @feature_bp.route('/ops-screen', methods=['GET'])
-def ops_screen():
-    """运维大屏页面（无需登录，用于墙面展示）"""
-    return render_template('feature/ops_screen.html')
+def ops_screen(*args, **kwargs):
+    """已迁移至新蓝图"""
+    from flask import redirect
+    return redirect('/dashboard/ops-screen', 301)
 
 
 @feature_bp.route('/ops-screen/data', methods=['GET'])
-def ops_screen_data():
-    """运维大屏数据 API（支持 hospital_id 参数）"""
-    now = datetime.now()
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+def ops_screen_data(*args, **kwargs):
+    """已迁移至新蓝图"""
+    from flask import redirect
+    return redirect('/dashboard/ops-screen/data', 301)
 
-    hid = request.args.get('hospital_id', type=int)
-
-    def _filter(q):
-        """如果指定了 hospital_id，加到查询上"""
-        if hid:
-            return q.filter(WorkOrder.hospital_id == hid)
-        return q
-
-    # 总数
-    total_orders = _filter(WorkOrder.query).count()
-    pending = _filter(WorkOrder.query.filter_by(status='pending')).count()
-    in_progress = _filter(WorkOrder.query.filter_by(status='in_progress')).count()
-    completed_today = _filter(WorkOrder.query.filter(
-        WorkOrder.status == 'completed',
-        WorkOrder.completed_at >= today_start
-    )).count()
-
-    # 当月已完成总数
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    completed_month = _filter(WorkOrder.query.filter(
-        WorkOrder.status == 'completed',
-        WorkOrder.completed_at >= month_start
-    )).count()
-
-    # 本月完成率 = 本月已完成 / (本月已创建 - 本月已取消)
-    total_month = _filter(WorkOrder.query.filter(
-        WorkOrder.created_at >= month_start
-    )).count()
-    completion_rate = round(completed_month / total_month * 100, 1) if total_month > 0 else 0
-
-    # 平均处理时长（已完成的工单，小时）
-    avg_time_row = db.session.query(
-        func.avg(
-            func.strftime('%s', WorkOrder.completed_at) -
-            func.strftime('%s', WorkOrder.created_at)
-        ) / 3600
-    ).filter(
-        WorkOrder.status == 'completed',
-        WorkOrder.completed_at.isnot(None),
-        WorkOrder.created_at.isnot(None),
-    )
-    if hid:
-        avg_time_row = avg_time_row.filter(WorkOrder.hospital_id == hid)
-    avg_hours = round(avg_time_row.scalar() or 0, 1)
-
-    # SLA 达标率（已完成工单中，未超时的比例）
-    # 注意：is_overdue 是 @property（内存计算），不能在 SQL 里过滤
-    all_completed = _filter(WorkOrder.query.filter(
-        WorkOrder.status == 'completed',
-    )).all()
-    sla_compliant = sum(1 for wo in all_completed if not wo.is_overdue)
-    sla_total = len(all_completed)
-    sla_rate = round(sla_compliant / sla_total * 100, 1) if sla_total > 0 else 0
-
-    # 当月工单趋势（过去30天）
-    thirty_days_ago = now - timedelta(days=30)
-    trend = _filter(db.session.query(
-        func.date(WorkOrder.created_at).label('d'),
-        func.count(WorkOrder.id).label('cnt')
-    ).filter(
-        WorkOrder.created_at >= thirty_days_ago
-    )).group_by(func.date(WorkOrder.created_at)).order_by('d').all()
-
-    trend_dates = []
-    trend_counts = []
-    for row in trend:
-        trend_dates.append(row.d)
-        trend_counts.append(row.cnt)
-
-    # 故障类型饼图
-    fault_data = _filter(db.session.query(
-        WorkOrder.fault_type,
-        func.count(WorkOrder.id).label('cnt')
-    )).group_by(WorkOrder.fault_type).all()
-
-    fault_labels = [r.fault_type for r in fault_data]
-    fault_values = [r.cnt for r in fault_data]
-
-    # 科室排行
-    dept_data = _filter(db.session.query(
-        WorkOrder.department,
-        func.count(WorkOrder.id).label('cnt')
-    ).filter(
-        WorkOrder.department != '',
-        WorkOrder.department.isnot(None)
-    )).group_by(WorkOrder.department).order_by(func.count(WorkOrder.id).desc()).limit(10).all()
-
-    dept_labels = [r.department for r in dept_data]
-    dept_values = [r.cnt for r in dept_data]
-
-    # 最新工单列表
-    recent_orders = _filter(WorkOrder.query).order_by(WorkOrder.created_at.desc()).limit(20).all()
-    orders_list = []
-    for wo in recent_orders:
-        status_map = {'pending': '待处理', 'in_progress': '处理中', 'completed': '已完成', 'cancelled': '已取消'}
-        priority_map = {'normal': '普通', 'urgent': '紧急', 'emergency': '特急'}
-        orders_list.append({
-            'id': wo.id,
-            'title': wo.title[:30] + '...' if len(wo.title) > 30 else wo.title,
-            'status': status_map.get(wo.status, wo.status),
-            'priority': priority_map.get(wo.priority, wo.priority),
-            'department': wo.department,
-            'person': wo.person,
-            'created_at': fmt_dt(wo.created_at, '%H:%M'),
-        })
-
-    # 今日优先级分布
-    today_orders = _filter(WorkOrder.query.filter(
-        WorkOrder.created_at >= today_start
-    ))
-    today_by_priority = {}
-    for pri in ['emergency', 'urgent', 'normal']:
-        today_by_priority[pri] = today_orders.filter(WorkOrder.priority == pri).count()
-
-    # 今日已完成工单明细（按完成时间倒序）
-    today_completed = _filter(WorkOrder.query.filter(
-        WorkOrder.status == 'completed',
-        WorkOrder.completed_at >= today_start
-    )).order_by(WorkOrder.completed_at.desc()).limit(20).all()
-    today_completed_list = []
-    for wo in today_completed:
-        today_completed_list.append({
-            'id': wo.id,
-            'title': (wo.title[:24] + '…') if len(wo.title) > 24 else wo.title,
-            'person': wo.person,
-            'completed_at': fmt_dt(wo.completed_at, '%H:%M'),
-        })
-
-    # 今日涉及科室数
-    today_dept_count = _filter(db.session.query(WorkOrder.department).filter(
-        WorkOrder.created_at >= today_start,
-        WorkOrder.department != '',
-        WorkOrder.department.isnot(None)
-    )).distinct().count()
-
-    # 今日处理人员数（与top_workers逻辑一致：今日创建且处理中or已完成）
-    today_person_count = _filter(db.session.query(WorkOrder.person).filter(
-        WorkOrder.created_at >= today_start,
-        WorkOrder.person != '',
-        WorkOrder.person.isnot(None),
-        WorkOrder.status.in_(['in_progress', 'completed'])
-    )).distinct().count()
-
-    # 今日故障类型数
-    today_fault_type_count = _filter(db.session.query(WorkOrder.fault_type).filter(
-        WorkOrder.created_at >= today_start,
-        WorkOrder.fault_type != '',
-        WorkOrder.fault_type.isnot(None)
-    )).distinct().count()
-
-    # 今日最早/最晚报修时间
-    today_time_range = _filter(today_orders.with_entities(
-        func.min(WorkOrder.created_at).label('first'),
-        func.max(WorkOrder.created_at).label('last')
-    )).first()
-    today_first_order = today_time_range.first.strftime('%H:%M') if today_time_range and today_time_range.first else '--:--'
-    today_last_order = today_time_range.last.strftime('%H:%M') if today_time_range and today_time_range.last else '--:--'
-
-    # 今日处理人排行（处理中or今日已完成的工单）
-    top_workers = db.session.query(
-        WorkOrder.person,
-        func.count(WorkOrder.id).label('cnt')
-    ).filter(
-        WorkOrder.person != '',
-        WorkOrder.person.isnot(None),
-        WorkOrder.created_at >= today_start,
-        WorkOrder.status.in_(['in_progress', 'completed']),
-    )
-    if hid:
-        top_workers = top_workers.filter(WorkOrder.hospital_id == hid)
-    top_workers = top_workers.group_by(WorkOrder.person).order_by(func.count(WorkOrder.id).desc()).limit(5).all()
-
-    workers_list = [{'name': r.person, 'count': r.cnt} for r in top_workers]
-
-    # 即将超时的工单（处理中，接近解决时限80%的）
-    nearing = []
-    thresholds_80 = {
-        'emergency': 0.5 * 0.8,  # 紧急解决时限2h的80%=1.6h, 用响应时限0.5h*0.8=0.4h判断
-        'urgent': 2 * 0.8,       # 加急响应2h的80%=1.6h
-        'normal': 4 * 0.8,       # 普通响应4h的80%=3.2h
-    }
-    nearing_orders = _filter(WorkOrder.query.filter(
-        WorkOrder.status.in_(['pending', 'in_progress']),
-    )).all()
-    for wo in nearing_orders:
-        th = thresholds_80.get(wo.priority, 4 * 0.8)
-        if wo.status == 'pending' and wo.created_at:
-            elapsed = (now - wo.created_at).total_seconds() / 3600
-            if elapsed >= th:
-                remaining = round(th * 1.25 - elapsed, 1)  # 预估剩余响应时间
-                nearing.append({
-                    'id': wo.id,
-                    'title': wo.title[:20],
-                    'person': wo.person,
-                    'priority': wo.priority,
-                    'remaining': remaining,
-                })
-        elif wo.status == 'in_progress' and wo.accepted_at:
-            elapsed = (now - wo.accepted_at).total_seconds() / 3600
-            resol_th = {'emergency': 2, 'urgent': 8, 'normal': 24}.get(wo.priority, 24)
-            if elapsed >= resol_th * 0.8:
-                remaining = round(resol_th - elapsed, 1)
-                nearing.append({
-                    'id': wo.id,
-                    'title': wo.title[:20],
-                    'person': wo.person,
-                    'priority': wo.priority,
-                    'remaining': remaining,
-                })
-    nearing.sort(key=lambda x: x['remaining'])
-    nearing = nearing[:5]
-
-    # 按角色组分组的月度处理人排行（每组下列出所有组员的工单量）
-    # WorkOrder.person → Person.name → Person.user_id → User.group_id → RoleGroup.name
-    grouped_workers_raw = db.session.query(
-        RoleGroup.name.label('group_name'),
-        WorkOrder.person,
-        func.count(WorkOrder.id).label('cnt')
-    ).select_from(WorkOrder
-    ).join(User, User.display_name == WorkOrder.person
-    ).join(RoleGroup, RoleGroup.id == User.group_id
-    ).filter(
-        WorkOrder.person != '',
-        WorkOrder.person.isnot(None),
-        WorkOrder.created_at >= month_start,
-    )
-    if hid:
-        grouped_workers_raw = grouped_workers_raw.filter(WorkOrder.hospital_id == hid)
-    grouped_workers_raw = grouped_workers_raw.group_by(RoleGroup.name, WorkOrder.person).order_by(RoleGroup.name, func.count(WorkOrder.id).desc()).all()
-
-    from collections import OrderedDict
-    grouped_map = OrderedDict()
-    for r in grouped_workers_raw:
-        if r.group_name not in grouped_map:
-            grouped_map[r.group_name] = []
-        grouped_map[r.group_name].append({'name': r.person, 'count': r.cnt})
-    grouped_workers_list = [{'group': g, 'workers': w} for g, w in grouped_map.items()]
-
-    ops_display = SystemSetting.query.filter_by(key='ops_display_groups', hospital_id=1).first()
-    ops_display_config = {}
-    if ops_display and ops_display.value:
-        try:
-            ops_display_config = json.loads(ops_display.value)
-        except:
-            ops_display_config = {}
-
-    return jsonify(
-        success=True,
-        stats={
-            'total_orders': total_orders,
-            'pending': pending,
-            'in_progress': in_progress,
-            'completed_today': completed_today,
-            'completed_month': completed_month,
-            'completion_rate': completion_rate,
-            'avg_hours': avg_hours,
-            'sla_rate': sla_rate,
-            'daily_avg': round(total_month / max((now.day - 1), 1), 1) if total_month > 0 else 0,
-            'month_total': total_month,
-        },
-        trend={
-            'labels': trend_dates,
-            'values': trend_counts,
-        },
-        fault_chart={
-            'labels': fault_labels,
-            'values': fault_values,
-        },
-        dept_chart={
-            'labels': dept_labels,
-            'values': dept_values,
-        },
-        recent_orders=orders_list,
-        today_priority=today_by_priority,
-        top_workers=workers_list,
-        grouped_workers=grouped_workers_list,
-        ops_display=ops_display_config,
-        nearing_timeout=nearing,
-        today_completed=today_completed_list,
-        today_dept_count=today_dept_count,
-        today_person_count=today_person_count,
-        today_fault_type_count=today_fault_type_count,
-        today_first_order=today_first_order,
-        today_last_order=today_last_order,
-    )
-
-
-# ===================== 13. 院领导驾驶舱 (Feature 3) =====================
 
 @feature_bp.route('/leadership-dashboard', methods=['GET'])
 @login_required
@@ -1194,12 +774,26 @@ def leadership_dashboard():
 @login_required
 def leadership_dashboard_data():
     """院领导驾驶舱数据 API"""
+    from sqlalchemy import text as _t
     now = datetime.now()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     year_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
 
+    # ---- 本院+本组过滤 ----
+    hid = getattr(g, 'hospital_id', None)
+    team = resolve_team(request, current_user)
+    team_names = set()
+    if team:
+        team_names = {u.display_name for u in User.query.filter(
+            User.team == team, User.is_active == True).all()}
+    _fil = []
+    if hid:
+        _fil.append(WorkOrder.hospital_id == hid)
+    if team_names:
+        _fil.append(WorkOrder.person.in_(team_names))
+
     # 本月工单
-    month_orders = WorkOrder.query.filter(WorkOrder.created_at >= month_start)
+    month_orders = WorkOrder.query.filter(WorkOrder.created_at >= month_start).filter(*_fil)
     total_month = month_orders.count()
     completed_month = month_orders.filter(WorkOrder.status == 'completed').count()
     completion_rate = round(completed_month / total_month * 100, 1) if total_month > 0 else 0
@@ -1212,11 +806,12 @@ def leadership_dashboard_data():
     ).filter(
         WorkOrder.created_at >= month_start,
         WorkOrder.accepted_at.isnot(None),
+        *_fil,
     ).scalar()
     avg_response_hours = round((avg_response or 0) * 24, 1)
 
     # 超时率
-    all_month_orders = WorkOrder.query.filter(WorkOrder.created_at >= month_start).all()
+    all_month_orders = WorkOrder.query.filter(WorkOrder.created_at >= month_start).filter(*_fil).all()
     overdue_count = sum(1 for wo in all_month_orders if wo.is_overdue)
     overdue_rate = round(overdue_count / total_month * 100, 1) if total_month > 0 else 0
 
@@ -1229,6 +824,7 @@ def leadership_dashboard_data():
         WorkOrder.department != '',
         WorkOrder.department.isnot(None),
         WorkOrder.created_at >= month_start,
+        *_fil,
     ).group_by(WorkOrder.department).order_by(func.count(WorkOrder.id).desc()).all()
 
     dept_breakdown = []
@@ -1246,7 +842,8 @@ def leadership_dashboard_data():
         func.strftime('%Y-%m', WorkOrder.created_at).label('month'),
         func.count(WorkOrder.id).label('cnt')
     ).filter(
-        WorkOrder.created_at >= twelve_months_ago
+        WorkOrder.created_at >= twelve_months_ago,
+        *_fil,
     ).group_by(func.strftime('%Y-%m', WorkOrder.created_at)).order_by('month').all()
 
     trend_labels = [r.month for r in monthly_trend]
@@ -1257,7 +854,8 @@ def leadership_dashboard_data():
         WorkOrder.priority,
         func.count(WorkOrder.id).label('cnt')
     ).filter(
-        WorkOrder.created_at >= month_start
+        WorkOrder.created_at >= month_start,
+        *_fil,
     ).group_by(WorkOrder.priority).all()
 
     pri_labels = {'normal': '普通', 'urgent': '紧急', 'emergency': '特急'}
@@ -1271,13 +869,14 @@ def leadership_dashboard_data():
     ).filter(
         WorkOrder.created_at >= month_start,
         WorkOrder.fault_type != '',
+        *_fil,
     ).group_by(WorkOrder.fault_type).order_by(func.count(WorkOrder.id).desc()).limit(5).all()
 
     fault_labels = [r.fault_type for r in fault_data]
     fault_values = [r.cnt for r in fault_data]
 
     # 最近10条工单
-    recent = WorkOrder.query.order_by(WorkOrder.created_at.desc()).limit(10).all()
+    recent = WorkOrder.query.filter(*_fil).order_by(WorkOrder.created_at.desc()).limit(10).all()
     recent_list = []
     status_map = {'pending': '待处理', 'in_progress': '处理中', 'completed': '已完成', 'cancelled': '已取消'}
     for wo in recent:
@@ -1608,104 +1207,24 @@ def sms_test():
 # ===== 数字孪生 =====
 
 @feature_bp.route('/digital-twin')
-def digital_twin():
-    """数字孪生页面"""
-    return render_template('feature/digital_twin.html',
-        user_is_admin=getattr(current_user, 'is_admin', False),
-        user_is_auth=current_user.is_authenticated
-    )
+def digital_twin(*args, **kwargs):
+    """已迁移至新蓝图"""
+    from flask import redirect
+    return redirect('/dashboard/digital-twin', 301)
 
 
 @feature_bp.route('/digital-twin-3d')
-def digital_twin_3d():
-    """3D数字孪生页面"""
-    return render_template('feature/digital_twin_3d.html')
+def digital_twin_3d(*args, **kwargs):
+    """已迁移至新蓝图"""
+    from flask import redirect
+    return redirect('/dashboard/digital-twin-3d', 301)
 
 
 @feature_bp.route('/digital-twin/data')
-def digital_twin_data():
-    """获取建筑故障热力数据"""
-    from sqlalchemy import text as sa_text
-
-    hid = request.args.get('hospital_id', type=int)
-
-    query = """
-        SELECT building, COUNT(*) as fault_count,
-               SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress
-        FROM work_orders
-        WHERE building != '' AND building IS NOT NULL
-    """
-    params = {}
-    if hid:
-        query += " AND hospital_id = :hid"
-        params['hid'] = hid
-    query += " GROUP BY building ORDER BY fault_count DESC"
-
-    rows = db.session.execute(sa_text(query), params).fetchall()
-    buildings = []
-    total_orders = 0
-    in_progress = 0
-    top_building = ''
-    top_count = 0
-
-    for r in rows:
-        buildings.append({
-            'building': r[0],
-            'fault_count': r[1],
-            'in_progress': r[2] or 0,
-        })
-        total_orders += r[1]
-        in_progress += r[2] or 0
-        if r[1] > top_count:
-            top_count = r[1]
-            top_building = r[0]
-
-    pos_setting = SystemSetting.query.filter_by(key='digital_twin_positions').first()
-    positions = {}
-    if pos_setting and pos_setting.value:
-        try:
-            positions = json.loads(pos_setting.value)
-        except:
-            positions = {}
-
-    # 默认位置（环形排列）
-    default_positions = {}
-    n = len(buildings)
-    for i, b in enumerate(buildings):
-        angle = (i / n) * 2 * 3.14159 - 1.57
-        radius = 25 + (i % 3) * 8
-        cx, cy = 50, 50
-        default_positions[b['building']] = {
-            'x': round(cx + radius * 0.8 * __import__('math').cos(angle), 1),
-            'y': round(cy + radius * 0.7 * __import__('math').sin(angle), 1),
-        }
-
-    # 合并：已保存的覆盖默认
-    for b in buildings:
-        b_name = b['building']
-        if b_name in positions:
-            b['default_pos'] = positions[b_name]
-        elif b_name in default_positions:
-            b['default_pos'] = default_positions[b_name]
-        else:
-            b['default_pos'] = {'x': 50, 'y': 50}
-
-    # 地图背景
-    map_setting = SystemSetting.query.filter_by(key='digital_twin_map_url').first()
-    map_url = map_setting.value if map_setting else ''
-
-    return jsonify(
-        success=True,
-        buildings=buildings,
-        positions=positions,
-        map_url=map_url,
-        stats={
-            'total_buildings': len(buildings),
-            'total_orders': total_orders,
-            'in_progress': in_progress,
-            'top_building': top_building,
-        }
-    )
+def digital_twin_data(*args, **kwargs):
+    """已迁移至新蓝图"""
+    from flask import redirect
+    return redirect('/dashboard/digital-twin/data', 301)
 
 
 @feature_bp.route('/digital-twin/save-positions', methods=['POST'])
@@ -1792,39 +1311,23 @@ def digital_twin_upload_map():
 @feature_bp.route('/digital-twin/model/<building_id>', methods=['GET'])
 @login_required
 def get_building_model(building_id):
-    """获取建筑的建模数据"""
-    setting = SystemSetting.query.filter_by(key=f'dt_model_{building_id}').first()
-    if setting and setting.value:
-        try:
-            return jsonify(success=True, model=json.loads(setting.value))
-        except:
-            pass
-    return jsonify(success=True, model={'elements': [], 'textures': {}})
-
-
+    """已迁移至 dashboard 蓝图"""
+    from flask import redirect
+    return redirect(f'/dashboard/digital-twin/model/{building_id}', 301)
 @feature_bp.route('/digital-twin/model/<building_id>', methods=['POST'])
 @login_required
 def save_building_model(building_id):
-    """保存建筑的建模数据"""
-    if not current_user.is_admin:
-        return jsonify(success=False, error='仅管理员可操作'), 403
-    data = request.get_json(silent=True) or {}
-    model = data.get('model', {})
-    setting = SystemSetting.query.filter_by(key=f'dt_model_{building_id}').first()
-    if not setting:
-        setting = SystemSetting(key=f'dt_model_{building_id}', value='{}')
-        db.session.add(setting)
-    setting.value = json.dumps(model, ensure_ascii=False)
-    db.session.commit()
-    return jsonify(success=True)
+    """已迁移至 dashboard 蓝图"""
+    from flask import redirect
+    return redirect(f'/dashboard/digital-twin/model/{building_id}', 307)
 
 
 @feature_bp.route('/digital-twin/upload-texture', methods=['POST'])
 @login_required
 def upload_dt_texture():
-    """上传自定义贴图"""
-    if not current_user.is_admin:
-        return jsonify(success=False, error='仅管理员可操作'), 403
+    """已迁移至 dashboard 蓝图"""
+    from flask import redirect
+    return redirect('/dashboard/digital-twin/upload-texture', 307)
     if 'file' not in request.files:
         return jsonify(success=False, error='未选择文件'), 400
     file = request.files['file']
@@ -2025,7 +1528,7 @@ def shift_handover_save():
                 'id': o.id, 'title': o.title,
                 'department': o.department, 'priority': o.priority
             })
-    handover = ShiftHandover(
+    handover = ShiftHandover.new_with_hospital(
         handover_person=handover_person,
         receive_person=receive_person,
         content=content,
@@ -2066,8 +1569,7 @@ def repair_ratings():
     page = request.args.get('page', 1, type=int)
     rating_filter = request.args.get('rating', type=int)
     q = RepairRating.query.order_by(RepairRating.created_at.desc())
-    if rating_filter:
-        q = q.filter(RepairRating.rating == rating_filter)
+    q = q.filter(RepairRating.rating == rating_filter)
     pagination = q.paginate(page=page, per_page=20, error_out=False)
     ratings = pagination.items
     stats = {
@@ -2096,7 +1598,7 @@ def repair_rating_save():
         existing.comment = comment
         existing.created_by = current_user.display_name or current_user.username
     else:
-        rr = RepairRating(
+        rr = RepairRating.new_with_hospital(
             work_order_id=order_id,
             rating=rating,
             comment=comment,
@@ -2176,7 +1678,7 @@ def complaint_save():
         c.complainant = complainant
         c.department = department
     else:
-        c = Complaint(title=title, description=description,
+        c = Complaint.new_with_hospital(title=title, description=description,
                       complainant=complainant, department=department)
         db.session.add(c)
     db.session.commit()
@@ -2287,7 +1789,7 @@ def stock_request_save():
     items = data.get('items', [])
     if not applicant or not items:
         return jsonify(success=False, error='申请人和领用备件不能为空'), 400
-    sr = StockRequest(
+    sr = StockRequest.new_with_hospital(
         applicant=applicant,
         department=department,
         items=items,
@@ -2391,7 +1893,7 @@ def spare_part_alert_save():
             existing.min_threshold = min_threshold
             existing.enabled = enabled
         else:
-            a = SparePartAlert(part_id=part_id, min_threshold=min_threshold, enabled=enabled)
+            a = SparePartAlert.new_with_hospital(part_id=part_id, min_threshold=min_threshold, enabled=enabled)
             db.session.add(a)
     db.session.commit()
     return jsonify(success=True)
@@ -2503,7 +2005,7 @@ def inspection_route_save():
             r.name = name
             r.points = points
     else:
-        r = InspectionRoute(name=name, points=points,
+        r = InspectionRoute.new_with_hospital(name=name, points=points,
                             created_by=current_user.display_name or current_user.username)
         db.session.add(r)
     db.session.commit()
@@ -2819,62 +2321,12 @@ def multi_hospital_collab():
 
 @feature_bp.route('/report-auto', methods=['GET'])
 @login_required
-def report_auto():
-    """运维周报月报页面"""
-    now = datetime.now()
-    year = request.args.get('year', now.year, type=int)
-    month = request.args.get('month', now.month, type=int)
-    mode = request.args.get('mode', 'month')
-    
-    import calendar
-    if mode == 'week':
-        # 本周
-        week_start = now - timedelta(days=now.weekday())
-        week_end = week_start + timedelta(days=7)
-        orders = WorkOrder.query.filter(
-            WorkOrder.created_at >= week_start,
-            WorkOrder.created_at < week_end,
-        ).all()
-        period_label = f"第{now.isocalendar()[1]}周周报"
+def report_auto(*args, **kwargs):
+    """已迁移至新蓝图"""
+    from flask import redirect
+    if kwargs:
+        url = '/dashboard/digital-twin/model/{building_id}'.format(**kwargs)
     else:
-        first_day = date(year, month, 1)
-        last_day = date(year, month, calendar.monthrange(year, month)[1])
-        orders = WorkOrder.query.filter(
-            WorkOrder.created_at >= first_day,
-            WorkOrder.created_at < last_day + timedelta(days=1),
-        ).all()
-        period_label = f"{year}年{month}月月报"
-    
-    total = len(orders)
-    pending = sum(1 for o in orders if o.status == 'pending')
-    in_progress = sum(1 for o in orders if o.status == 'in_progress')
-    completed = sum(1 for o in orders if o.status == 'completed')
-    
-    # 故障类型分布
-    type_dist = {}
-    for o in orders:
-        ft = o.fault_type or '未知'
-        type_dist[ft] = type_dist.get(ft, 0) + 1
-    type_dist = dict(sorted(type_dist.items(), key=lambda x: -x[1])[:10])
-    
-    # 人员排行
-    person_stats = {}
-    for o in orders:
-        if o.person:
-            person_stats[o.person] = person_stats.get(o.person, 0) + 1
-    person_stats = dict(sorted(person_stats.items(), key=lambda x: -x[1])[:10])
-    
-    # 科室排行
-    dept_stats = {}
-    for o in orders:
-        dept = o.department or '未知'
-        dept_stats[dept] = dept_stats.get(dept, 0) + 1
-    dept_stats = dict(sorted(dept_stats.items(), key=lambda x: -x[1])[:10])
-    
-    return render_template('feature/report_auto.html',
-                           year=year, month=month, mode=mode,
-                           period_label=period_label,
-                           total=total, pending=pending,
-                           in_progress=in_progress, completed=completed,
-                           type_dist=type_dist, person_stats=person_stats,
-                           dept_stats=dept_stats, orders=orders[:20])
+        url = '/dashboard/digital-twin/model/{building_id}'
+    return redirect(url, 307)
+

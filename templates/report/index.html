@@ -112,6 +112,39 @@
     </div>
 </div>
 
+<!-- ===== 快捷入口：已合并的报表分析功能 ===== -->
+<div class="mb-3" style="padding:10px 14px;border-radius:10px;border:1px solid var(--card-border);background:var(--modal-bg);">
+    <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+        <i class="fas fa-th"></i> 报表分析工具
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('analysis.repeats') }}" class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:11px;border-radius:6px;">
+            <i class="fas fa-clone"></i> 重复单分析
+        </a>
+        <a href="{{ url_for('feature.personnel_dashboard') }}" class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:11px;border-radius:6px;">
+            <i class="fas fa-users-cog"></i> 效能看板
+        </a>
+        <a href="{{ url_for('analysis.heatmap') }}" class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:11px;border-radius:6px;">
+            <i class="fas fa-fire"></i> 故障热力图
+        </a>
+        <a href="{{ url_for('feature.report_auto') }}" class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:11px;border-radius:6px;">
+            <i class="fas fa-file-alt"></i> 周报月报
+        </a>
+        <a href="{{ url_for('feature.repair_ratings') }}" class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:11px;border-radius:6px;">
+            <i class="fas fa-star"></i> 维修评价
+        </a>
+        <a href="{{ url_for('feature.complaints') }}" class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:11px;border-radius:6px;">
+            <i class="fas fa-comment-dots"></i> 投诉管理
+        </a>
+        <a href="{{ url_for('feature.cost_accounting') }}" class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:11px;border-radius:6px;">
+            <i class="fas fa-calculator"></i> 成本核算
+        </a>
+        <a href="{{ url_for('feature.report_builder') }}" class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:11px;border-radius:6px;">
+            <i class="fas fa-chart-simple"></i> 自定义报表
+        </a>
+    </div>
+</div>
+
 <!-- ================================================================== -->
 <!-- 🛠️ 板块一：运维工单概况 -->
 <!-- ================================================================== -->

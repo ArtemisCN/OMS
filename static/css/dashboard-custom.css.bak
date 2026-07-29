@@ -1,0 +1,109 @@
+/* ====== Dashboard UI 去AI味覆盖 ====== */
+/* Load after dashboard.css to override */
+
+/* --- 圆角覆盖 --- */
+.card-stat { border-radius: 8px !important; }
+.card-trend, .card-section { border-radius: 8px !important; }
+.card-stat .stat-bar { border-radius: 8px 0 0 8px; }
+.card-stat .stat-icon::before { border-radius: 8px; }
+.card-stat::after { border-radius: 8px !important; }
+.fault-item { border-radius: 8px; }
+#autoRefreshPill { border-radius: 8px; }
+.item-box { border-radius: 8px; }
+.scroll-dot.active { border-radius: 3px; }
+.chart-dot.active { border-radius: 3px; }
+
+/* --- 颜色替换 #6366f1 → #1e3a5f --- */
+.scroll-dot.active { background: #1e3a5f !important; box-shadow: none !important; }
+.chart-dot.active { background: #1e3a5f !important; box-shadow: none !important; }
+#autoRefreshPill { border-color: rgba(30,58,95,0.15); }
+.card-section .card-body .d-flex.text-center[style*="border-top"]::before { background: linear-gradient(90deg, transparent, #1e3a5f, transparent); }
+.item-box:hover { border-color: rgba(30,58,95,0.1); box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+.item-box[style*="cursor:pointer"]:hover { border-color: rgba(30,58,95,0.15); box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+.item-box[style*="cursor:pointer"]:hover::after { background: #1e3a5f; }
+.fault-item:hover { border-color: rgba(30,58,95,0.15); box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+.card-trend:hover, .card-section:hover { border-color: rgba(30,58,95,0.1) !important; }
+
+/* --- 颜色替换 #4f46e5 → #15294a --- */
+.card-trend:hover, .card-section:hover { box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important; }
+
+/* --- 渐变全部改为纯色 --- */
+.dashboard-title-icon {
+    background: #1e3a5f !important;
+    animation: none !important;
+}
+.card-section:nth-of-type(1)::before { background: #1e3a5f !important; }
+.card-section:nth-of-type(2)::before { background: #1e3a5f !important; }
+.card-section:nth-of-type(3)::before { background: #1e3a5f !important; }
+.card-section:nth-of-type(4)::before { background: #1e3a5f !important; }
+.card-trend::before { background: #1e3a5f !important; }
+.card-trend .card-header, .card-section .card-header {
+    background: #f8fafc !important;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+
+/* --- 背景点阵网格移除 --- */
+#dashboard-content {
+    background-image: none !important;
+}
+
+/* --- card-stat::before radial-gradient 移除 --- */
+.card-stat::before { background: none !important; }
+
+/* --- conic-gradient 移除 --- */
+.fault-item::before { background: none !important; }
+
+/* --- 全部动画禁用 --- */
+.card-stat { animation: none !important; }
+.card-stat .stat-icon::before { animation: none !important; }
+.card-stat:nth-child(2n) .stat-icon::before { animation: none !important; }
+.card-stat:nth-child(3n) .stat-icon::before { animation: none !important; }
+.card-stat::after { animation: none !important; }
+.card-stat:hover::after { animation: none !important; opacity: 0 !important; }
+@keyframes breathe-shadow { }
+@keyframes spin-ring { }
+@keyframes card-shine { }
+@keyframes rainbow-glow { }
+@keyframes progress-shimmer { }
+.progress-bar::after { animation: none !important; }
+@keyframes rotate-glow { }
+.fault-item::before { animation: none !important; }
+#autoRefreshPill:not(.paused) { animation: none !important; }
+.live-clock .clock-dot { animation: none !important; }
+.sla-ring text { animation: none !important; }
+.badge-urgent i.fa-exclamation-triangle,
+.item-box i.fa-exclamation-triangle { animation: none !important; }
+#dashboard-content { animation: none !important; }
+@keyframes heart-beat { }
+@keyframes circle-breathe { }
+@keyframes dash-enter { }
+@keyframes urgent-pulse { }
+
+/* --- cubic-bezier 过渡削平 --- */
+#dashboard-content { backface-visibility: visible; }
+.card-stat { transition: all 0.15s ease !important; }
+.card-trend, .card-section { transition: all 0.15s ease !important; }
+#slaTabBtn, #countTabBtn, #faultTypeTabBtn, #repeatFaultTabBtn { transition: all 0.15s ease; }
+.card-stat:hover .stat-icon { transform: none; }
+
+/* --- box-shadow 大幅削弱 --- */
+.card-stat { box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important; }
+.card-stat:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.06) !important; transform: none; }
+.card-trend, .card-section { box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important; }
+.card-trend:hover, .card-section:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.04) !important; transform: none; }
+.fault-item { box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+.fault-item:hover { box-shadow: 0 1px 3px rgba(0,0,0,0.04); transform: none; }
+.item-box:hover { box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+.item-box[style*="cursor:pointer"]:hover { transform: none; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+#autoRefreshPill { box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+
+/* --- 卡片悬停光扫效果移除 --- */
+.card-stat::after { display: none !important; }
+
+/* --- 背景装饰移除 --- */
+.card-section .card-body .d-flex.text-center[style*="border-top"] {
+    background: none !important;
+}
+
+/* --- 滚动: transition 削平 --- */
+.scroll-list { transition: transform .2s ease; }

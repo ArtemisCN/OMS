@@ -36,6 +36,7 @@ body{background:#f0f4f8;font-family:-apple-system,BlinkMacSystemFont,sans-serif;
 {% endwith %}
 
 <form method="post">
+  <input type="hidden" name="_csrf_token" value="{{ _csrf() }}">
   <div class="row g-3">
     <div class="col-12">
       <label class="form-label">用户名 <span class="text-danger">*</span></label>

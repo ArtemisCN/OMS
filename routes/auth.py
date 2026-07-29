@@ -1,5 +1,6 @@
 """认证相关路由"""
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+import secrets
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_login import login_user, logout_user, login_required, current_user
 from models import db, User, AuditLog, RegistrationRequest, Hospital, RoleGroup
 from datetime import datetime
@@ -8,6 +9,26 @@ from functools import wraps
 
 # --- 创建认证蓝图，注册 /login 和 /logout 路由 ---
 auth_bp = Blueprint('auth', __name__)
+
+
+def generate_csrf_token():
+    """生成并存储 CSRF token 到 session"""
+    if '_csrf_token' not in session:
+        session['_csrf_token'] = secrets.token_hex(32)
+    return session['_csrf_token']
+
+
+def validate_csrf():
+    """验证 CSRF token，失败返回 False"""
+    token = request.form.get('_csrf_token', '')
+    stored = session.pop('_csrf_token', None)  # 一次性使用
+    if not stored or not secrets.compare_digest(stored, token):
+        return False
+    return True
+
+
+# 注册 CSRF 生成器为 Jinja2 全局函数
+auth_bp.add_app_template_global(generate_csrf_token, '_csrf')
 
 
 def admin_required(f):
@@ -33,16 +54,36 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
-        # --- 查询用户并校验密码 ---
+        # --- 查询用户并检查锁定状态 ---
+        from datetime import datetime, timedelta
         user = User.query.filter_by(username=username).first()
+        if user and user.locked_until and user.locked_until > datetime.now():
+            remaining = int((user.locked_until - datetime.now()).total_seconds() // 60)
+            flash(f'账号已锁定，请{remaining}分钟后再试', 'danger')
+            return render_template('login.html')
+        # --- 校验密码 ---
         if user and user.check_password(password):
-            # --- 密码验证成功，执行登录并记录审计日志 ---
+            # --- 登录成功，重置尝试次数 ---
+            if user.login_attempts != 0 or user.locked_until is not None:
+                user.login_attempts = 0
+                user.locked_until = None
+                db.session.commit()
             login_user(user)
             log_audit('login', 'user', user.display_name or user.username,
                       target_id=user.id, target_desc=f'用户登录: {user.username}')
             return redirect(url_for('main.dashboard'))
-        # --- 用户名或密码错误，提示用户 ---
-        flash('用户名或密码错误', 'danger')
+        # --- 密码错误，增加尝试次数 ---
+        if user:
+            user.login_attempts = (user.login_attempts or 0) + 1
+            if user.login_attempts >= 99:
+                user.locked_until = datetime.now() + timedelta(minutes=15)
+                flash('密码错误次数过多，账号已锁定15分钟', 'danger')
+            else:
+                remaining = 99 - user.login_attempts
+                flash(f'用户名或密码错误，还剩{remaining}次尝试机会', 'danger')
+            db.session.commit()
+        else:
+            flash('用户名或密码错误', 'danger')
     return render_template('login.html')
 
 
@@ -74,6 +115,9 @@ def register():
     hospitals = Hospital.query.filter_by(is_active=True).order_by(Hospital.id).all()
     role_groups = RoleGroup.query.order_by(RoleGroup.id).all()
     if request.method == 'POST':
+        if not validate_csrf():
+            flash('表单已过期，请重新提交', 'danger')
+            return render_template('register.html', hospitals=hospitals, role_groups=role_groups, form=request.form)
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         confirm = request.form.get('confirm_password', '')

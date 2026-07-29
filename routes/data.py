@@ -1,7 +1,7 @@
 """基础数据管理路由（HTTP 编排层）"""
 import io
 import json
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, session
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, session, g
 from flask_login import login_required, current_user
 from datetime import datetime
 from models import (db, Department, SolutionTemplate, WorkOrder,
@@ -15,6 +15,7 @@ import config
 from routes.auth import admin_required
 from services import data_service
 from services.data_service import get_team_options
+from utils.time_helpers import resolve_team
 from flask import redirect
 
 data_bp = Blueprint('data', __name__, url_prefix='/data')
@@ -170,15 +171,14 @@ def index():
         type_count=FaultType.query.count(),
         settings_count=SystemSetting.query.count(),
         assets_count=Asset.query.count(),
-        spare_parts_count=SparePart.query.count(),
+        spare_parts_count=SparePart.query.filter(SparePart.hospital_id == getattr(g, 'hospital_id', None)).count() if getattr(g, 'hospital_id', None) and getattr(g, 'hospital_id', None) != 0 else SparePart.query.count(),
         storage_count=StorageLocation.query.count(),
         suppliers_count=Supplier.query.count(),
         consumables_count=Consumable.query.count(),
         duty_count=DutySchedule.query.count(),
         knowledge_count=KnowledgeBase.query.count(),
         users_count=User.query.count(),
-        pending_reg_count=RegistrationRequest.query.filter_by(status='pending').count(),
-        bound_wx_count=User.query.filter(User.wx_openid.isnot(None), User.wx_openid != '').count())
+        pending_reg_count=RegistrationRequest.query.filter_by(status='pending').count())
 
 
 # ==================== 人员管理 ====================
@@ -199,11 +199,9 @@ def list_persons():
             cnt = WorkOrder.query.filter(WorkOrder.created_by == name).count()
             if cnt:
                 order_counts[p.id] = cnt
-    team_setting = SystemSetting.query.filter_by(key='person_teams').first()
-    if team_setting and team_setting.value:
-        team_options = [x.strip() for x in re.split(r'[,，]', team_setting.value) if x.strip()]
-    else:
-        team_options = ['信息科', '后勤', '外包服务']
+    from flask import g as flask_g
+    cur_hid = getattr(flask_g, 'hospital_id', None)
+    team_options = get_team_options(hospital_id=cur_hid if cur_hid and cur_hid != 0 else None)
     from models import Hospital, RoleGroup
     hospitals = Hospital.query.order_by(Hospital.id).all()
     hospital_map = {h.id: h for h in hospitals}
@@ -240,19 +238,11 @@ def list_persons():
         if t not in hospital_groups[h_name]:
             hospital_groups[h_name][t] = []
         hospital_groups[h_name][t].append(p)
-
-    # 全部活跃用户（用于转移工单目标选择）
-    all_active = User.query.filter(User.is_active == True).order_by(User.team, User.display_name).all()
-
     return render_template('data/persons.html', persons=persons, user_map=user_map,
                            team_options=team_options,
                            hospital_groups=hospital_groups, hospitals=hospitals,
                            role_groups=role_groups, team_sel=team_sel,
-                           order_counts=order_counts,
-                           all_active_names=sorted(set(
-                               (u.display_name or u.username) for u in all_active
-                               if (u.display_name or u.username)
-                           )))
+                           order_counts=order_counts)
 
 
 @data_bp.route('/persons/add', methods=['POST'])
@@ -571,7 +561,7 @@ def delete_solution(sid):
 def list_addresses():
     building = request.args.get('building', '')
     keyword = request.args.get('keyword', '')
-    team = request.args.get('team', current_user.team or '')
+    team = resolve_team(request, current_user)
     groups, buildings, current_addresses, total = data_service.list_addresses(building, keyword, team=team)
     all_teams = get_team_options()
     return render_template('data/addresses.html',
@@ -632,7 +622,7 @@ def delete_base_address():
 @data_bp.route('/fault-types')
 @admin_required
 def list_fault_types():
-    team = request.args.get('team', current_user.team or '')
+    team = resolve_team(request, current_user)
     all_teams = get_team_options()
     return render_template('data/fault_types.html', types=data_service.list_fault_types(team=team),
                            team=team, all_teams=all_teams)
@@ -905,17 +895,10 @@ def list_duty_schedules():
         staff = [s for s in staff if s.hospital_id == cur_hid
                  or any(h.id == cur_hid for h in s.hospitals)]
     total_days, first_weekday, holidays = data_service.get_duty_month_info(year, month)
-    team_setting = SystemSetting.query.filter_by(key='person_teams').first()
-    if team_setting and team_setting.value:
-        team_list = [x.strip() for x in re.split(r'[,，]', team_setting.value) if x.strip()]
-    else:
-        team_list = ['信息科', '后勤', '外包服务']
+    team_list = get_team_options(hospital_id=cur_hid if cur_hid and cur_hid != 0 else None)
 
-    # ===== 组别默认值：非管理员默认自己的组，管理员默认全部 =====
-    team_sel = request.args.get('team', '')
-    if not team_sel and not current_user.is_admin:
-        if current_user.team:
-            team_sel = current_user.team
+    # ===== 组别默认值：resolve_team 统一处理 =====
+    team_sel = resolve_team(request, current_user)
 
     # 按组别筛选值班人员
     if team_sel:
@@ -1086,8 +1069,9 @@ def delete_knowledge(kid):
 @data_bp.route('/permissions')
 @admin_required
 def permissions():
-    users, module_perms, all_module_names, persons, users_by_group, role_groups = data_service.get_permissions_page_data()
-    user_group_map = {}
+    """权限管理页面（已合并到数据管理）"""
+    from flask import redirect, url_for
+    return redirect(url_for('data.index'))
     from models import RoleGroup
     for u in users:
         if u.is_admin:
@@ -1196,7 +1180,7 @@ def rename_permission_group():
 @data_bp.route('/fault-categories')
 @admin_required
 def list_fault_categories():
-    team = request.args.get('team', current_user.team or '')
+    team = resolve_team(request, current_user)
     cats = data_service.list_fault_categories(team=team)
     all_teams = get_team_options()
     return render_template('data/fault_categories.html', categories=cats,
@@ -1615,41 +1599,6 @@ def delete_solution_api(sid):
     return jsonify({'ok': True})
 
 
-# ==================== 微信绑定管理 ====================
-
-
-@data_bp.route('/wechat-bindings')
-@admin_required
-def list_wechat_bindings():
-    """查看所有用户的微信绑定状态"""
-    if not can_access('微信绑定'):
-        flash('无权限访问', 'danger')
-        return redirect(url_for('data.index'))
-    page = request.args.get('page', 1, type=int)
-    q = User.query.order_by(User.id)
-    pagination = q.paginate(page=page, per_page=50, error_out=False)
-    return render_template('data/wechat_bindings.html',
-                         pagination=pagination)
-
-
-@data_bp.route('/wechat-bindings/<int:uid>/unbind', methods=['POST'])
-@admin_required
-def admin_unbind_wx(uid):
-    """管理员解绑指定用户的微信号"""
-    if not can_access('微信绑定'):
-        flash('无权限访问', 'danger')
-        return redirect(url_for('data.list_wechat_bindings'))
-    user = db.session.get(User, uid)
-    if not user:
-        flash('用户不存在', 'danger')
-        return redirect(url_for('data.list_wechat_bindings'))
-    user.wx_openid = ''
-    db.session.commit()
-    log_audit(current_user.id, '解绑微信', f'管理员解绑了 {user.display_name or user.username} 的微信')
-    flash(f'已解绑 {user.display_name or user.username} 的微信 ✅', 'success')
-    return redirect(url_for('data.list_wechat_bindings'))
-
-
 # ==================== 注册审批 ====================
 
 @data_bp.route('/registration-approvals')
@@ -1744,3 +1693,29 @@ def reject_registration(rid):
               target_id=rid, target_desc=f'拒绝注册: {req.username}')
     flash(f'已拒绝 {req.display_name} 的注册申请', 'success')
     return redirect(url_for('data.list_registration_approvals'))
+
+
+# ==================== 子蓝图重定向（保持向后兼容） ====================
+
+@data_bp.route('/personnel')
+def redirect_to_personnel():
+    """重定向到新版人员管理"""
+    return redirect(url_for('data_personnel.index'), 301)
+
+
+@data_bp.route('/department')
+def redirect_to_department():
+    """重定向到新版科室管理"""
+    return redirect(url_for('data_department.index'), 301)
+
+
+@data_bp.route('/fault')
+def redirect_to_fault():
+    """重定向到新版故障类型管理"""
+    return redirect(url_for('data_fault.index'), 301)
+
+
+@data_bp.route('/address')
+def redirect_to_address():
+    """重定向到新版地址管理"""
+    return redirect(url_for('data_address.index'), 301)

@@ -252,6 +252,22 @@
     </div>
 </div>
 
+<!-- 行6 - 操作审计 -->
+<div class="mb-3">
+    <div class="card">
+        <div class="card-hd">
+            <span><i class="fas fa-history"></i> 操作审计</span>
+            <span style="font-size:12px;font-weight:400;color:var(--text-muted);">
+                今日 <strong id="auditToday" style="color:var(--primary);">--</strong>
+                · 累计 <strong id="auditTotal">--</strong>
+            </span>
+        </div>
+        <div class="card-bd" style="padding:8px 14px;">
+            <div id="auditList"></div>
+        </div>
+    </div>
+</div>
+
 <!-- 二次确认弹窗 -->
 <div id="verifyModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;background:rgba(0,0,0,.45);align-items:center;justify-content:center;">
     <div style="background:#fff;border-radius:12px;padding:28px 32px 20px;width:360px;max-width:90vw;box-shadow:0 8px 40px rgba(0,0,0,.2);">
@@ -455,6 +471,34 @@ function loadData() {
         } else {
             document.getElementById('portList').innerHTML = '<div style="font-size:12px;color:var(--text-muted);">暂无监听端口</div>';
         }
+    // --- 操作审计 ---
+    if (d.audit) {
+        document.getElementById('auditToday').textContent = d.audit.today;
+        document.getElementById('auditTotal').textContent = d.audit.total;
+        var al = document.getElementById('auditList');
+        if (d.audit.recent && d.audit.recent.length > 0) {
+            var actionMap = {'create':'创建','update':'修改','delete':'删除','login':'登录','logout':'登出','export':'导出'};
+            var targetMap = {'work_order':'工单','user':'用户','person':'人员','asset':'资产','inventory':'盘点','fault_type':'故障类型','solution_template':'方案模板','inspection_template':'巡检模板','inspection_plan':'巡检计划','report':'报表'};
+            al.innerHTML = '<div style="display:grid;grid-template-columns:60px 80px 80px 1fr 70px 100px;gap:6px;font-size:12px;font-weight:600;color:var(--text-muted);padding:6px 8px 4px;border-bottom:1px solid var(--card-border);">'
+                + '<span>ID</span><span>操作</span><span>对象</span><span>描述</span><span>操作人</span><span>时间</span></div>'
+                + d.audit.recent.map(function(l) {
+                    var actLabel = actionMap[l.action] || l.action;
+                    var tgtLabel = targetMap[l.target_type] || l.target_type;
+                    var detailHtml = l.detail ? '<br><span style="font-size:11px;color:var(--text-muted);">' + l.detail + '</span>' : '';
+                    return '<div style="display:grid;grid-template-columns:60px 80px 80px 1fr 70px 100px;gap:6px;font-size:12px;padding:6px 8px;border-bottom:1px solid var(--card-border);align-items:center;">'
+                        + '<span style="color:var(--text-muted);">#' + l.id + '</span>'
+                        + '<span style="font-weight:500;">' + actLabel + '</span>'
+                        + '<span style="color:var(--text-muted);">' + tgtLabel + '</span>'
+                        + '<span>' + (l.target_desc || '') + detailHtml + '</span>'
+                        + '<span>' + l.operator + '</span>'
+                        + '<span style="color:var(--text-muted);">' + l.time + '</span>'
+                        + '</div>';
+                }).join('');
+        } else {
+            al.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px;"><i class="fas fa-inbox" style="font-size:28px;display:block;margin-bottom:6px;opacity:.3;"></i>暂无审计日志</div>';
+        }
+    }
+    // --- end audit ---
     }).catch(function(e) { console.error('Monitor data error:', e); }).then(function() { backupList(); });
 }
 

@@ -14,14 +14,17 @@ stock_bp = Blueprint('stock', __name__, url_prefix='/stock')
 @login_required
 def index():
     """备件库存总览"""
+    hid = getattr(g, 'hospital_id', None)
     category = request.args.get('category', '').strip()
     low_only = request.args.get('low_only', '') == '1'
     q = request.args.get('q', '').strip()
     query = SparePart.query
+    if hid and hid != 0:
+        query = query.filter(SparePart.hospital_id == hid)
     if category:
         query = query.filter_by(category=category)
     if q:
-        safe_q = q.replace('%', '\\%').replace('_', '\\_')
+        safe_q = q.replace('%', '\\\\%').replace('_', '\\\\_')
         like = f'%{safe_q}%'
         query = query.filter(db.or_(
             SparePart.name.ilike(like),
@@ -35,13 +38,22 @@ def index():
     if low_only:
         parts = [p for p in parts if p.is_low]
 
-    total_types = SparePart.query.count()
-    total_stock = db.session.query(db.func.sum(SparePart.stock)).scalar() or 0
-    low_count = sum(1 for p in SparePart.query.all() if p.is_low)
-    categories = [r[0] for r in db.session.query(SparePart.category).distinct().all() if r[0]]
+    base_query = SparePart.query
+    if hid and hid != 0:
+        base_query = base_query.filter(SparePart.hospital_id == hid)
+    total_types = base_query.count()
+    total_stock = base_query.with_entities(db.func.sum(SparePart.stock)).scalar() or 0
+    low_count = 0
+    for p in base_query.all():
+        if p.is_low:
+            low_count += 1
+    categories = [r[0] for r in base_query.with_entities(SparePart.category).distinct().all() if r[0]]
 
     # 近日出入库动态（最近10条）
-    recent_records = StockRecord.query.order_by(StockRecord.created_at.desc()).limit(10).all()
+    recent_q = StockRecord.query
+    if hid and hid != 0:
+        recent_q = recent_q.filter(StockRecord.hospital_id == hid)
+    recent_records = recent_q.order_by(StockRecord.created_at.desc()).limit(10).all()
 
     return render_template('stock/index.html', parts=parts, categories=categories,
                            total_types=total_types, total_stock=total_stock,
@@ -62,7 +74,11 @@ def get_departments():
 @login_required
 def parts_json():
     """获取备件列表JSON（用于一键出库弹窗）"""
-    parts = SparePart.query.order_by(SparePart.category, SparePart.name).all()
+    hid = getattr(g, 'hospital_id', None)
+    query = SparePart.query.order_by(SparePart.category, SparePart.name)
+    if hid and hid != 0:
+        query = query.filter(SparePart.hospital_id == hid)
+    parts = query.all()
     return jsonify({'parts': [{
         'id': p.id, 'name': p.name, 'category': p.category,
         'brand': p.brand, 'model_no': p.model_no,
@@ -103,6 +119,7 @@ def add():
                 min_stock=int(request.form.get('min_stock', 5)),
                 location=request.form.get('location', ''),
                 notes=request.form.get('notes', ''),
+                hospital_id=getattr(g, 'hospital_id', None) or 1,
             )
             db.session.add(part)
             db.session.commit()
@@ -112,7 +129,8 @@ def add():
                 record = StockRecord(
                     part_id=part.id, type='in', quantity=part.stock,
                     balance=part.stock, operator=current_user.display_name,
-                    note='初始入库'
+                    note='初始入库',
+                    hospital_id=getattr(g, 'hospital_id', None) or 1,
                 )
                 db.session.add(record)
                 db.session.commit()
@@ -210,6 +228,9 @@ def out_records():
             SparePart.model_no.label('part_model'),
             SparePart.unit.label('part_unit'),
         )
+    hid = getattr(g, 'hospital_id', None)
+    if hid and hid != 0:
+        query = query.filter(SparePart.hospital_id == hid)
 
     if q:
         query = query.filter(SparePart.name.ilike(f'%{q}%'))
@@ -272,7 +293,7 @@ def inout():
         part_id=part_id, type=action, quantity=qty,
         balance=part.stock, operator=current_user.display_name,
         work_order_id=request.form.get('work_order_id', type=int),
-        note=note
+        note=note, hospital_id=getattr(g, 'hospital_id', None) or 1,
     )
     db.session.add(record)
     db.session.commit()
@@ -319,6 +340,7 @@ def batch_out():
             balance=part.stock, operator=current_user.display_name,
             department=department,
             note=f'一键出库至{department}',
+            hospital_id=getattr(g, 'hospital_id', None) or 1,
         )
         db.session.add(record)
         out_records.append({'part': part.name, 'qty': qty, 'unit': part.unit})
@@ -354,10 +376,12 @@ def batch_out_sign_init():
         if part.stock < qty:
             return jsonify({'ok': False, 'msg': f'「{part.name}」库存不足'}), 400
     token = secrets.token_hex(16)
+    hid = getattr(g, 'hospital_id', None) or 1
     sign_req = StockSignRequest(
         token=token, department=department,
         items_json=pyjson.dumps(items),
         operator=current_user.display_name,
+        hospital_id=hid,
     )
     db.session.add(sign_req)
     db.session.commit()
@@ -396,12 +420,13 @@ def batch_out_sign_execute(token):
         if not part: continue
         if part.stock < qty:
             return jsonify({'ok': False, 'msg': f'「{part.name}」库存不足'}), 400
+        hid = getattr(g, 'hospital_id', None) or 1
         part.stock -= qty
         record = StockRecord(
             part_id=pid, type='out', quantity=qty,
             balance=part.stock, operator=sign_req.operator,
             department=department, note=f'扫码签名出库至{department}',
-            signature=signature,
+            signature=signature, hospital_id=hid,
         )
         db.session.add(record)
         out_records.append({'part': part.name, 'qty': qty, 'unit': part.unit})
@@ -490,6 +515,7 @@ def import_stock_excel():
                 if row_dict.get('location'):
                     loc = StorageLocation.query.filter_by(name=row_dict['location']).first()
                     if loc: loc_id = loc.id
+                hid = getattr(g, 'hospital_id', None) or 1
                 part = SparePart(
                     name=name, category=row_dict.get('category', ''),
                     model_no=row_dict.get('model_no', ''),
@@ -500,6 +526,7 @@ def import_stock_excel():
                     price=float(row_dict['price']) if row_dict.get('price') else 0,
                     location_id=loc_id,
                     notes=row_dict.get('notes', ''),
+                    hospital_id=hid,
                 )
                 db.session.add(part)
                 imported += 1
@@ -580,6 +607,7 @@ def request_create():
         if quantity < 1:
             flash('数量必须大于0', 'danger')
             return redirect(url_for('stock.request_create'))
+        hid = getattr(g, 'hospital_id', None) or 1
         req = PartRequest(
             part_id=part_id,
             quantity=quantity,
@@ -587,6 +615,7 @@ def request_create():
             work_order_id=wo_id if wo_id else None,
             reason=reason,
             status='pending',
+            hospital_id=hid,
         )
         db.session.add(req)
         db.session.commit()
@@ -615,6 +644,7 @@ def request_approve(rid):
         return redirect(url_for('stock.request_list'))
     # 扣减库存
     part.stock -= req.quantity
+    hid = getattr(g, 'hospital_id', None) or 1
     # 记录出库流水
     record = StockRecord(
         part_id=part.id,
@@ -624,6 +654,7 @@ def request_approve(rid):
         operator=current_user.display_name or current_user.username,
         work_order_id=req.work_order_id,
         note=f'领用审批出库：{req.requester} - {req.reason}',
+        hospital_id=hid,
     )
     db.session.add(record)
     req.status = 'approved'

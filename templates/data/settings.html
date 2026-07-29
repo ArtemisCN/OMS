@@ -190,6 +190,7 @@
   'wecom_timeout_hours':       {'icon':'hourglass-half','label':'超时提醒阈值','desc':'超过多少小时未完成标记为超时','unit':'小时'},
   'wecom_push_template_today': {'icon':'pencil-alt','label':'今日工单推送模板','desc':'每日汇总推送到企业微信的消息模板，支持变量'},
   'wecom_push_template_unaccepted': {'icon':'pencil-alt','label':'未接单提醒模板','desc':'手动推送未接单工单时用的消息模板，支持变量'},
+  'wecom_push_template_urge':      {'icon':'pencil-alt','label':'催办加急模板','desc':'催办/超时提醒推送模板，支持变量'},
   'sms_enabled':               {'icon':'sms','label':'启用短信通知','desc':'开启后工单分配/完成时发短信通知相关人员'},
   'sms_api_url':               {'icon':'link','label':'短信API地址','desc':'短信服务商的API接口地址'},
   'sms_api_key':               {'icon':'key','label':'短信API密钥','desc':'短信服务商的API密钥/Token'},
@@ -420,7 +421,7 @@
           {% endfor %}
         </select>
 
-        {% elif s.key in ('wecom_push_template_today', 'wecom_push_template_unaccepted') %}
+        {% elif s.key in ('wecom_push_template_today', 'wecom_push_template_unaccepted', 'wecom_push_template_urge') %}
         <div style="width:100%;max-width:520px;">
           <textarea class="set-text template-editor" id="tmpl-{{ s.id }}"
                     style="width:100%;min-height:140px;font-family:'SF Mono','Consolas',monospace;font-size:13px;line-height:1.6;border-radius:8px;border:1px solid var(--set-border);padding:10px 14px;background:var(--set-card);color:var(--set-text);resize:vertical;"
@@ -429,6 +430,8 @@
             {% set vars = '{total} = 总单数 • {done} = 已完成 • {pending} = 待接单 • {in_progress} = 处理中 • {unfinished} = 未完成 • {urgent} = 紧急/加急 • {date} = 日期 • {faults_list} = 故障类型列表 • {buildings_list} = 楼区分布' %}
             {% if 'unaccepted' in s.key %}
             {% set vars = vars + ' • {overdue} = 超24小时未接单' %}
+            {% elif 'urge' in s.key %}
+            {% set vars = '{title} = 工单标题 • {priority} = 紧急程度 • {building} = 楼区 • {department} = 科室 • {created_at} = 发布时间' %}
             {% endif %}
             <span style="font-size:11px;color:var(--set-muted);margin-right:6px;">可用变量:</span>
             <span style="font-size:11px;color:var(--set-accent);">{{ vars }}</span>

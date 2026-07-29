@@ -225,14 +225,10 @@ function setupPhotoUpload() {
             <button class="wo-chat-send-btn" id="woChatSendBtn"><i class="fas fa-paper-plane"></i></button>
         </div>
     </div>
-    <!-- Emoji 选择器 -->
-    <div class="wo-chat-emoji-picker" id="woChatEmojiPicker" style="display:none"></div>
 </div>
 
 <!-- 图片预览 -->
-<div class="wochat-preview-overlay" id="wochatPreview">
-    <img src="data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=" alt="preview">
-</div>
+<div class="wochat-preview-overlay" id="wochatPreview"></div>
 
 <!-- 知识库搜索弹窗 -->
 <div class="modal fade" id="knowledgeModal" tabindex="-1">
@@ -392,14 +388,14 @@ function escapeHtml(text) {
         emojiVisible: false
     };
 
-    var EMOJIS = ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','😉','😊','😇','🥰','😍','🤩','😘','😋','😛','😜','🤪','😝','🤑','🤗','🤔','🤐','😑','😶','😏','😒','🙄','😬','😌','😪','😴','😷','🤒','🤕','🤢','🤮','🥴','😵','🤯','🥳','🥺','😢','😭','😤','😠','😡','🤬','💀','💩','🤡','👹','👺','👻','👽','👾','🤖','👍','👎','👊','✊','🤞','👌','✌️','💪','❤️','💛','💚','💙','💜','💕','💞','💖','💘','💝','🔥','🎉','🎊','🎈','🎁','🎀','💡','📌','✅','❌','⭐','🌟','💯','🔧','🔨','⚙️','🔩','🛠️','✏️','📋','📊','📈','📉','📌','🔗','💾','🖥️','💻','📱','🔋','💡','🔦','🧰'];
+    var EMOJIS = ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','😉','😊','😇','🥰','😍','🤩','😘','😋','😛','😜','🤪','😝','🤑','🤗','🤔','🤐','😑','😶','😏','😒','🙄','😬','😌','😪','😴','😷','🤒','🤕','🤢','🤮','🥴','😵','🤯','🥳','🥺','😢','😭','😤','😠','😡','🤬','👍','👎','👊','✊','🤞','👌','✌️','💪','❤️','💛','💚','💙','💜','💕','💞','💖','💘','💝','🔥','🎉','🎊','🎈','🎁','🎀','⭐','🌟','💯','🔨','⚙️','🔩','🛠️','📈','📉','🔗','🖥️','💻','📱','🔋','💡','🔦','🧰'];
 
     woChat.init = function() {
         woChat.msgsEl = document.getElementById('woChatMsgs');
         woChat.inputEl = document.getElementById('woChatInput');
         woChat.sendBtn = document.getElementById('woChatSendBtn');
         woChat.emojiBtn = document.getElementById('woChatEmojiBtn');
-        woChat.emojiPicker = document.getElementById('woChatEmojiPicker');
+        woChat.emojiPicker = null;  // 动态创建
         woChat.imageBtn = document.getElementById('woChatImageBtn');
         woChat.imageInput = document.getElementById('woChatImageInput');
         woChat.preview = document.getElementById('wochatPreview');
@@ -425,14 +421,16 @@ function escapeHtml(text) {
         document.addEventListener('click', function() {
             if (woChat.emojiVisible) { woChat.hideEmoji(); }
         });
-        woChat.renderEmojiPicker();
-
         // 图片
         woChat.imageBtn.addEventListener('click', function() { woChat.imageInput.click(); });
         woChat.imageInput.addEventListener('change', woChat.onImageSelected);
 
-        // 预览点击关闭
-        woChat.preview.addEventListener('click', function() { woChat.preview.classList.remove('show'); });
+        // 预览点击关闭（同时清理 img）
+        woChat.preview.addEventListener('click', function() {
+            woChat.preview.classList.remove('show');
+            var img = woChat.preview.querySelector('img');
+            if (img) img.remove();
+        });
 
         // 首次加载
         woChat.loadMessages();
@@ -489,7 +487,7 @@ function escapeHtml(text) {
         var cls = m.is_self ? 'self' : 'other';
         var content = '';
         if (m.msg_type === 'image') {
-            content = '<img class="wo-chat-img" src="' + escapeHtml(m.content) + '" alt="图片" onclick="event.stopPropagation();document.getElementById(\'wochatPreview\').querySelector(\'img\').src=this.src;document.getElementById(\'wochatPreview\').classList.add(\'show\')">';
+            content = '<img class="wo-chat-img" src="' + escapeHtml(m.content) + '" alt="图片" onclick="event.stopPropagation();woChat.showPreview(this.src)">';
         } else {
             content = '<span>' + escapeHtml(m.content) + '</span>';
         }
@@ -510,7 +508,7 @@ function escapeHtml(text) {
         div.setAttribute('data-msgid', m.id);
         var content = '';
         if (m.msg_type === 'image') {
-            content = '<img class="wo-chat-img" src="' + escapeHtml(m.content) + '" alt="图片" onclick="event.stopPropagation();document.getElementById(\'wochatPreview\').querySelector(\'img\').src=this.src;document.getElementById(\'wochatPreview\').classList.add(\'show\')">';
+            content = '<img class="wo-chat-img" src="' + escapeHtml(m.content) + '" alt="图片" onclick="event.stopPropagation();woChat.showPreview(this.src)">';
         } else {
             content = '<span>' + escapeHtml(m.content) + '</span>';
         }
@@ -601,18 +599,12 @@ function escapeHtml(text) {
     };
 
     woChat.showEmoji = function() {
-        woChat.emojiPicker.style.display = 'flex';
-        woChat.emojiVisible = true;
-    };
-
-    woChat.hideEmoji = function() {
-        woChat.emojiPicker.style.display = 'none';
-        woChat.emojiVisible = false;
-    };
-
-    woChat.renderEmojiPicker = function() {
-        if (!woChat.emojiPicker) return;
-        woChat.emojiPicker.innerHTML = '';
+        if (woChat.emojiVisible) return;
+        // 动态创建 emoji picker
+        var picker = document.createElement('div');
+        picker.className = 'wo-chat-emoji-picker show';
+        picker.id = 'woChatEmojiPicker';
+        // 填充表情
         EMOJIS.forEach(function(e) {
             var span = document.createElement('span');
             span.textContent = e;
@@ -620,8 +612,42 @@ function escapeHtml(text) {
                 ev.stopPropagation();
                 woChat.insertEmoji(e);
             });
-            woChat.emojiPicker.appendChild(span);
+            picker.appendChild(span);
         });
+        // 插入到输入栏后面
+        var inputRow = document.querySelector('.wo-chat-input-row');
+        if (inputRow) {
+            inputRow.parentNode.insertBefore(picker, inputRow.nextSibling);
+        }
+        woChat.emojiPicker = picker;
+        woChat.emojiVisible = true;
+        // 滚动到底部让选择器可见
+        var body = document.getElementById('woChatBody');
+        if (body) body.scrollTop = body.scrollHeight;
+    };
+
+    woChat.hideEmoji = function() {
+        if (woChat.emojiPicker && woChat.emojiPicker.parentNode) {
+            woChat.emojiPicker.parentNode.removeChild(woChat.emojiPicker);
+        }
+        woChat.emojiPicker = null;
+        woChat.emojiVisible = false;
+    };
+
+    woChat.showPreview = function(src) {
+        var overlay = document.getElementById('wochatPreview');
+        // 先清理旧的 img
+        var oldImg = overlay.querySelector('img');
+        if (oldImg) oldImg.remove();
+        // 创建新 img
+        var img = document.createElement('img');
+        img.className = 'wochat-preview-img';
+        img.onerror = function() {
+            overlay.classList.remove('show');
+        };
+        img.src = src;
+        overlay.appendChild(img);
+        overlay.classList.add('show');
     };
 
     woChat.insertEmoji = function(emoji) {
@@ -716,9 +742,9 @@ document.addEventListener('DOMContentLoaded', function() {
 .wo-chat-section {
     border: 1px solid var(--border-color, #e2e8f0);
     border-radius: 8px;
-    overflow-x: hidden;
-    overflow-y: visible;
+    overflow: hidden;
     background: var(--bg-card, #fff);
+    position: relative;
 }
 .wo-chat-header {
     padding: 10px 14px;
@@ -849,12 +875,13 @@ document.addEventListener('DOMContentLoaded', function() {
     flex-wrap: wrap;
     gap: 2px;
     padding: 8px;
-    border-top: 1px solid var(--border-color, #e2e8f0);
     max-height: 160px;
     overflow-y: auto;
     background: var(--bg-card, #fff);
-    width: 100%;
-    box-sizing: border-box;
+    border-top: 1px solid var(--border-color, #e2e8f0);
+    flex-shrink: 0;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.08);
+    border-radius: 8px;
 }
 .wo-chat-emoji-picker.show { display: flex; }
 .wo-chat-emoji-picker span {
@@ -881,7 +908,8 @@ document.addEventListener('DOMContentLoaded', function() {
     align-items: center;
 }
 .wochat-preview-overlay.show { display: flex; }
-.wochat-preview-overlay img {
+.wochat-preview-overlay img,
+.wochat-preview-overlay .wochat-preview-img {
     max-width: 90%;
     max-height: 90%;
     border-radius: 8px;

@@ -43,6 +43,9 @@
       <a href="{{ url_for('inspection.export_plans_csv') }}" class="kh-cat" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:500;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-color:transparent;text-decoration:none;box-shadow:0 2px 8px rgba(102,126,234,0.25);">
         <i class="fas fa-download"></i> 导出CSV
       </a>
+      <a href="{{ url_for('feature.inspection_routes') }}" class="kh-cat" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:500;border:1.5px solid var(--card-border,#e5e7eb);color:var(--text-secondary,#475569);text-decoration:none;transition:all .15s;">
+        <i class="fas fa-route"></i> 巡检路线
+      </a>
     </div>
   </div>
   {% set total = plans|length %}

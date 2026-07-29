@@ -1,0 +1,792 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.tmpl-page { min-height:calc(100vh - 60px); padding:24px 28px; }
+.tmpl-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+.tmpl-header h1 { font-size:20px; font-weight:700; color:var(--text,#1e293b); display:flex; align-items:center; gap:10px; margin:0; }
+
+.tmpl-team-bar {
+    background:var(--card-bg,#fff); border:1px solid var(--border,#e5e7eb);
+    border-radius:12px; padding:14px 18px; margin-bottom:16px;
+}
+.tmpl-team-list { display:flex; flex-wrap:wrap; gap:6px; }
+.tmpl-team-chip {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:7px 18px; border-radius:24px; font-size:13px; font-weight:700;
+    cursor:pointer; border:2px solid var(--border,#e2e8f0);
+    background:var(--card-bg,#fff); color:var(--text,#1e293b);
+    transition:all 0.15s; user-select:none;
+}
+.tmpl-team-chip:hover { border-color:#6366f1;background:rgba(99,102,241,0.04); }
+.tmpl-team-chip.active {
+    background:linear-gradient(135deg,#6366f1,#4f46e5);
+    color:#fff; border-color:#6366f1; box-shadow:0 2px 8px rgba(99,102,241,0.3);
+}
+
+.tmpl-card {
+    background:var(--card-bg,#fff); border:1px solid var(--border,#e5e7eb);
+    border-radius:12px; margin-bottom:16px; overflow:hidden;
+}
+.tmpl-card-header {
+    padding:12px 18px; border-bottom:1px solid var(--border,#e5e7eb);
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:14px; font-weight:700; color:var(--text,#1e293b);
+}
+.tmpl-card-body { padding:12px 18px; }
+
+.tmpl-group-label {
+    font-size:12px; font-weight:600; color:var(--text,#1e293b);
+    margin:10px 0 4px; display:flex; align-items:center; gap:6px;
+}
+.tmpl-group-label:first-child { margin-top:0; }
+
+.tmpl-row {
+    display:flex; align-items:center; gap:8px;
+    padding:5px 8px; border-radius:6px;
+    border-bottom:1px solid var(--border,#f1f5f9);
+    font-size:13px; transition:background 0.1s;
+}
+.tmpl-row:hover { background:var(--hover-bg,#f8fafc); }
+.tmpl-row:last-child { border-bottom:none; }
+.tmpl-badge-type { font-size:10px;padding:1px 8px;border-radius:4px;background:#e2e8f0;color:#475569; }
+.tmpl-name { flex:1;font-weight:500;color:var(--text,#1e293b);min-width:0; }
+.tmpl-meta { font-size:11px;color:#94a3b8;white-space:nowrap; }
+.tmpl-actions { display:flex;gap:3px;flex-shrink:0; }
+.tmpl-actions .btn { font-size:10px;padding:1px 6px;line-height:1.4; }
+
+.tmpl-empty { text-align:center; padding:24px 20px; color:#94a3b8; font-size:13px; }
+.copy-btn {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:8px 20px; border-radius:10px;
+    background:linear-gradient(135deg,#6366f1,#4f46e5);
+    color:#fff; border:none; font-size:13px; font-weight:600;
+    cursor:pointer; margin-top:8px;
+}
+
+.inline-form { display:flex; align-items:center; gap:6px; padding:5px 8px; }
+.inline-form input, .inline-form select {
+    font-size:12px; padding:3px 8px; border-radius:6px;
+    border:1px solid var(--border,#e2e8f0); background:var(--input-bg,#fff);
+    color:var(--text,#1e293b);
+}
+.inline-form .btn { font-size:11px; padding:3px 10px; }
+
+.ajax-toast {
+    position:fixed; bottom:24px; right:24px; z-index:9999;
+    padding:10px 20px; border-radius:10px; font-size:13px; font-weight:600;
+    color:#fff; box-shadow:0 4px 16px rgba(0,0,0,0.15);
+    animation:fadeInUp 0.2s ease;
+}
+.ajax-toast.success { background:#10b981; }
+.ajax-toast.error { background:#ef4444; }
+@keyframes fadeInUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+</style>
+
+<div class="tmpl-page">
+  <div class="tmpl-header">
+    <h1><i class="fas fa-puzzle-piece text-primary"></i> 模板管理</h1>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('data.index') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> 返回</a>
+    </div>
+  </div>
+
+  <!-- ===== 组选择器 ===== -->
+  <div class="tmpl-team-bar">
+    <div class="tmpl-team-list" id="teamSelector">
+      <span class="tmpl-team-chip active" data-team="all" onclick="selectTeam('all')"><i class="fas fa-clipboard-list"></i> 全部</span>
+      {% for t in all_teams %}
+      <span class="tmpl-team-chip" data-team="{{ t|e }}" onclick="selectTeam('{{ t|e }}')">{{ t }}</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ===== 全部组（只读概览） ===== -->
+  <div class="team-section" data-team="all">
+    <div class="tmpl-card">
+      <div class="tmpl-card-header">
+        <span><i class="fas fa-cubes text-primary"></i> 故障模板组</span>
+        <span class="text-muted" style="font-weight:400;font-size:12px;">共 {{ fault_groups|length }} 组</span>
+      </div>
+      <div class="tmpl-card-body">
+        {% for g in fault_groups %}
+        <div class="tmpl-group-label">{{ g.name }}
+          <span class="text-muted" style="font-weight:400;font-size:11px;">{% if g.teams %}({{ g.teams }}){% else %}全组通用{% endif %}</span>
+        </div>
+        {% for item in g.items %}
+        <div class="tmpl-row">
+          <span class="tmpl-badge-type">{{ item.fault_type }}</span>
+          <span class="tmpl-name">{{ item.display_name }}</span>
+        </div>
+        {% else %}<div class="tmpl-row text-muted" style="font-size:12px;">（空组）</div>{% endfor %}
+        {% else %}
+        <div class="tmpl-empty"><i class="fas fa-info-circle"></i> 暂无故障模板组</div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="tmpl-card">
+      <div class="tmpl-card-header">
+        <span><i class="fas fa-book text-success"></i> 方案模板</span>
+        <span class="text-muted" style="font-weight:400;font-size:12px;">共 {{ solutions|length }} 条</span>
+      </div>
+      <div class="tmpl-card-body">
+        {% for s in solutions %}
+        <div class="tmpl-row">
+          <span class="tmpl-name">{{ s.title }}</span>
+          <span class="tmpl-meta">{% if s.fault_type %}{{ s.fault_type }}{% endif %} · {% if s.teams %}{{ s.teams }}{% else %}全组通用{% endif %}</span>
+        </div>
+        {% else %}
+        <div class="tmpl-empty"><i class="fas fa-info-circle"></i> 暂无方案模板</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 按组展示（含操作按钮） ===== -->
+  {% for t in all_teams %}
+  {% set team_fgs = fault_group_map.get(t, []) %}
+  {% set gen_fgs = fault_group_map.get('', []) %}
+  {% set team_sols = solution_map.get(t, []) %}
+  {% set gen_sols = solution_map.get('', []) %}
+  {% set has_fault = team_fgs or gen_fgs %}
+  {% set has_solution = team_sols or gen_sols %}
+  <div class="team-section" data-team="{{ t|e }}" style="display:none;">
+
+    <!-- ===== 故障模板组 ===== -->
+    <div class="tmpl-card" id="fault-card-{{ t|e }}">
+      <div class="tmpl-card-header">
+        <span><i class="fas fa-cubes text-primary"></i> 故障模板组 · {{ t }}</span>
+        <div>
+          <button class="btn btn-sm btn-outline-success py-0" style="font-size:11px;" onclick="showAddFaultGroup('{{ t|e }}')"><i class="fas fa-plus"></i> 新建组</button>
+        </div>
+      </div>
+      <div class="tmpl-card-body" id="fault-body-{{ t|e }}">
+        {% if team_fgs %}
+        <div style="font-size:11px;font-weight:600;color:#6366f1;margin-bottom:4px;">📌 本组专属</div>
+        {% for g in team_fgs %}
+        <div class="tmpl-group-label" id="fg-label-{{ g.id }}">
+          <span id="fg-name-{{ g.id }}">{{ g.name }}</span>
+          <span class="text-muted" style="font-weight:400;font-size:11px;">{% if g.teams %}({{ g.teams }}){% else %}全组通用{% endif %}</span>
+          <span class="tmpl-actions" style="margin-left:auto;">
+            <button class="btn btn-outline-primary py-0" onclick="apiEditGroup({{ g.id }})" title="重命名"><i class="fas fa-pen"></i></button>
+            <button class="btn btn-outline-danger py-0" onclick="apiDeleteGroup({{ g.id }},'{{ g.name|e }}')" title="解散"><i class="fas fa-times"></i></button>
+          </span>
+        </div>
+        <form class="inline-form" id="edit-fg-{{ g.id }}" style="display:none;" onsubmit="return apiEditGroupSubmit(event, {{ g.id }})">
+          <input type="text" name="value" value="{{ g.name }}" style="flex:1;" required>
+          <button class="btn btn-outline-success py-0"><i class="fas fa-check"></i></button>
+          <button type="button" class="btn btn-outline-secondary py-0" onclick="apiEditGroupCancel({{ g.id }})"><i class="fas fa-times"></i></button>
+        </form>
+        <div id="fg-items-{{ g.id }}">
+        {% for item in g.items %}
+        <div class="tmpl-row" id="fault-row-{{ item.id }}">
+          <span class="tmpl-badge-type">{{ item.fault_type }}</span>
+          <span class="tmpl-name">{{ item.display_name }}</span>
+          <span class="tmpl-actions">
+            <button class="btn btn-outline-primary py-0" onclick="apiEditFault({{ item.id }})" title="编辑"><i class="fas fa-pen"></i></button>
+            <button class="btn btn-outline-danger py-0" onclick="apiDeleteFault({{ item.id }}, {{ g.id }})" title="删除"><i class="fas fa-times"></i></button>
+          </span>
+        </div>
+        <form class="inline-form" id="edit-fault-{{ item.id }}" style="display:none;" onsubmit="return apiEditFaultSubmit(event, {{ g.id }}, {{ item.id }})">
+          <select name="fault_type" class="form-select" style="width:68px;font-size:11px;padding:2px 4px;">
+            <option value="软件" {% if item.fault_type=='软件' %}selected{% endif %}>软件</option>
+            <option value="硬件" {% if item.fault_type=='硬件' %}selected{% endif %}>硬件</option>
+            <option value="打印机" {% if item.fault_type=='打印机' %}selected{% endif %}>打印机</option>
+            <option value="协助" {% if item.fault_type=='协助' %}selected{% endif %}>协助</option>
+          </select>
+          <input type="text" name="display_name" value="{{ item.display_name }}" style="flex:1;" required>
+          <button class="btn btn-outline-success py-0"><i class="fas fa-check"></i></button>
+          <button type="button" class="btn btn-outline-secondary py-0" onclick="apiEditFaultCancel({{ item.id }})"><i class="fas fa-times"></i></button>
+        </form>
+        {% endfor %}
+        </div>
+        <!-- 添加故障项 -->
+        <form class="inline-form" id="add-fault-form-{{ g.id }}" onsubmit="return apiAddFaultItem(event, {{ g.id }})" style="margin-top:2px;">
+          <select name="fault_type" class="form-select" style="width:68px;font-size:11px;padding:2px 4px;">
+            <option value="软件">软件</option><option value="硬件" selected>硬件</option>
+            <option value="打印机">打印机</option><option value="协助">协助</option>
+          </select>
+          <input type="text" name="display_name" placeholder="故障名称" style="flex:1;" required>
+          <button class="btn btn-outline-success"><i class="fas fa-plus"></i> 添加</button>
+        </form>
+        {% endfor %}
+        {% endif %}
+
+        {% if gen_fgs %}
+        <div style="font-size:11px;font-weight:600;color:#94a3b8;margin-top:{% if team_fgs %}10{% else %}0{% endif %}px;margin-bottom:4px;"><i class="fas fa-clipboard-list"></i> 全组通用</div>
+        {% for g in gen_fgs %}
+        <div class="tmpl-group-label">{{ g.name }}</div>
+        {% for item in g.items %}
+        <div class="tmpl-row">
+          <span class="tmpl-badge-type">{{ item.fault_type }}</span>
+          <span class="tmpl-name">{{ item.display_name }}</span>
+        </div>
+        {% endfor %}
+        {% endfor %}
+        {% endif %}
+
+        {% if not has_fault %}
+        <div class="tmpl-empty" id="fault-empty-{{ t|e }}">
+          <i class="fas fa-inbox"></i>
+          <div style="margin-top:4px;">「{{ t }}」还没有故障模板</div>
+          <form onsubmit="return apiCopyTemplates(event, '{{ t|e }}', 'fault')">
+            <button type="submit" class="copy-btn"><i class="fas fa-copy"></i> 从华博复制</button>
+          </form>
+        </div>
+        {% endif %}
+
+        <form id="addFaultGroupForm_{{ loop.index0 }}" onsubmit="return apiAddFaultGroup(event, this, '{{ t|e }}')" style="display:none;margin-top:8px;" class="inline-form">
+          <input type="hidden" name="teams" value="{{ t }}">
+          <input type="text" name="name" placeholder="模板组名称" required style="flex:1;">
+          <button class="btn btn-outline-success"><i class="fas fa-check"></i> 创建</button>
+          <button type="button" class="btn btn-outline-secondary" onclick="this.closest('form').style.display='none'">取消</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ===== 方案模板 ===== -->
+    <div class="tmpl-card" id="sol-card-{{ t|e }}">
+      <div class="tmpl-card-header">
+        <span><i class="fas fa-book text-success"></i> 方案模板 · {{ t }}</span>
+        <button class="btn btn-sm btn-outline-success py-0" style="font-size:11px;" onclick="showAddSolution('{{ t|e }}')"><i class="fas fa-plus"></i> 新建</button>
+      </div>
+      <div class="tmpl-card-body" id="sol-body-{{ t|e }}">
+        <form id="addSolutionForm_{{ loop.index0 }}" onsubmit="return apiAddSolution(event, this, '{{ t|e }}')" style="display:none;margin-bottom:8px;" class="inline-form flex-wrap">
+          <input type="hidden" name="teams" value="{{ t }}">
+          <input type="text" name="title" placeholder="方案标题" required style="flex:1;min-width:120px;">
+          <select name="fault_type" class="form-select" style="width:70px;font-size:11px;">
+            <option value="">类型</option><option value="软件">软件</option><option value="硬件" selected>硬件</option>
+            <option value="打印机">打印机</option><option value="协助">协助</option>
+          </select>
+          <input type="text" name="content" placeholder="方案内容" required style="flex:2;min-width:150px;">
+          <button class="btn btn-outline-success"><i class="fas fa-check"></i> 创建</button>
+          <button type="button" class="btn btn-outline-secondary" onclick="this.closest('form').style.display='none'">取消</button>
+        </form>
+
+        {% if team_sols %}
+        <div style="font-size:11px;font-weight:600;color:#6366f1;margin-bottom:4px;">📌 本组专属</div>
+        {% for s in team_sols %}
+        <div class="tmpl-row" id="sol-row-{{ s.id }}">
+          <span class="tmpl-name">{{ s.title }}</span>
+          <span class="tmpl-meta">{% if s.fault_type %}{{ s.fault_type }}{% endif %}</span>
+          <span class="tmpl-meta" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">{{ s.content[:30] }}{% if s.content|length > 30 %}…{% endif %}</span>
+          <span class="tmpl-actions">
+            <button class="btn btn-outline-primary py-0" onclick="apiEditSolution({{ s.id }})" title="编辑"><i class="fas fa-pen"></i></button>
+            <button class="btn btn-outline-danger py-0" onclick="apiDeleteSolution({{ s.id }}, '{{ s.title|e }}')" title="删除"><i class="fas fa-times"></i></button>
+          </span>
+        </div>
+        <form class="inline-form flex-wrap" id="edit-sol-{{ s.id }}" style="display:none;" onsubmit="return apiEditSolutionSubmit(event, {{ s.id }})">
+          <input type="text" name="title" value="{{ s.title }}" placeholder="标题" style="flex:1;min-width:100px;" required>
+          <input type="text" name="fault_type" value="{{ s.fault_type or '' }}" placeholder="故障类型" style="width:80px;">
+          <input type="text" name="content" value="{{ s.content }}" placeholder="方案内容" style="flex:2;min-width:150px;" required>
+          <button class="btn btn-outline-success py-0"><i class="fas fa-check"></i></button>
+          <button type="button" class="btn btn-outline-secondary py-0" onclick="apiEditSolutionCancel({{ s.id }})"><i class="fas fa-times"></i></button>
+        </form>
+        {% endfor %}
+        {% endif %}
+
+        {% if gen_sols %}
+        <div style="font-size:11px;font-weight:600;color:#94a3b8;margin-top:{% if team_sols %}10{% else %}0{% endif %}px;margin-bottom:4px;"><i class="fas fa-clipboard-list"></i> 全组通用</div>
+        {% for s in gen_sols %}
+        <div class="tmpl-row">
+          <span class="tmpl-name">{{ s.title }}</span>
+          <span class="tmpl-meta">{% if s.fault_type %}{{ s.fault_type }}{% endif %}</span>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {% if not has_solution %}
+        <div class="tmpl-empty" id="sol-empty-{{ t|e }}">
+          <i class="fas fa-inbox"></i>
+          <div style="margin-top:4px;">「{{ t }}」还没有方案模板</div>
+          <form onsubmit="return apiCopyTemplates(event, '{{ t|e }}', 'solution')">
+            <button type="submit" class="copy-btn"><i class="fas fa-copy"></i> 从华博复制</button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ===== Toast 通知 =====
+function showToast(msg, type) {
+  var t = document.createElement('div');
+  t.className = 'ajax-toast ' + type;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function(){ t.remove(); }, 2500);
+}
+
+// ===== 获取当前选中组 =====
+function getCurrentTeam() {
+  var active = document.querySelector('.tmpl-team-chip.active');
+  return active ? active.getAttribute('data-team') : 'all';
+}
+
+// ===== 组选择器 =====
+function selectTeam(team) {
+  document.querySelectorAll('.team-section').forEach(function(el) {
+    el.style.display = el.getAttribute('data-team') === team ? '' : 'none';
+  });
+  document.querySelectorAll('.tmpl-team-chip').forEach(function(el) {
+    el.classList.toggle('active', el.getAttribute('data-team') === team);
+  });
+  // 更新URL hash
+  if (team === 'all') {
+    history.replaceState(null, '', window.location.pathname);
+  } else {
+    history.replaceState(null, '', '#team=' + encodeURIComponent(team));
+  }
+}
+
+// ===== 从URL hash恢复组选择 =====
+function restoreTeamFromHash() {
+  var match = window.location.hash.match(/team=([^&]+)/);
+  if (match) {
+    var team = decodeURIComponent(match[1]);
+    var chips = document.querySelectorAll('.tmpl-team-chip');
+    for (var i = 0; i < chips.length; i++) {
+      if (chips[i].getAttribute('data-team') === team) {
+        selectTeam(team);
+        return;
+      }
+    }
+  }
+}
+
+// ===== 页面加载自动选中 =====
+var CURRENT_TEAM = '{{ current_team|e }}';
+if (CURRENT_TEAM) {
+  // 在DOM就绪后自动选中
+  document.addEventListener('DOMContentLoaded', function() {
+    var chips = document.querySelectorAll('.tmpl-team-chip');
+    for (var i = 0; i < chips.length; i++) {
+      if (chips[i].getAttribute('data-team') === CURRENT_TEAM) {
+        selectTeam(CURRENT_TEAM);
+        return;
+      }
+    }
+  });
+}
+
+// ===== 显示/隐藏添加表单 =====
+function showAddFaultGroup(team) {
+  var sections = document.querySelectorAll('.team-section[data-team="' + team + '"]');
+  if (sections.length) {
+    var form = sections[0].querySelector('form[id^="addFaultGroupForm_"]');
+    if (form) form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+  }
+}
+function showAddSolution(team) {
+  var sections = document.querySelectorAll('.team-section[data-team="' + team + '"]');
+  if (sections.length) {
+    var form = sections[0].querySelectorAll('form[id^="addSolutionForm_"]');
+    if (form.length) form[0].style.display = form[0].style.display === 'none' ? 'flex' : 'none';
+  }
+}
+
+// ===== CSRF token =====
+function getCSRF() {
+  var meta = document.querySelector('meta[name="csrf-token"]');
+  return meta ? meta.getAttribute('content') : '';
+}
+
+// ========== 故障项 API ==========
+
+// 添加故障项 — 保持表单可见，不关闭
+function apiAddFaultItem(event, gid) {
+  event.preventDefault();
+  var form = event.target;
+  var fd = new FormData(form);
+  fetch('/data/fault-template-groups/' + gid + '/items/api/add', { method:'POST', body:fd })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data.ok) {
+      showToast('已添加故障项', 'success');
+      var item = data.item;
+      var container = document.getElementById('fg-items-' + gid);
+      if (!container) container = form.parentElement;
+      var row = document.createElement('div');
+      row.className = 'tmpl-row';
+      row.id = 'fault-row-' + item.id;
+      row.innerHTML = '<span class="tmpl-badge-type">' + item.fault_type + '</span>'
+        + '<span class="tmpl-name">' + item.display_name + '</span>'
+        + '<span class="tmpl-actions">'
+        + '<button class="btn btn-outline-primary py-0" onclick="apiEditFault(' + item.id + ')" title="编辑"><i class="fas fa-pen"></i></button>'
+        + '<button class="btn btn-outline-danger py-0" onclick="apiDeleteFault(' + item.id + ',' + gid + ')" title="删除"><i class="fas fa-times"></i></button>'
+        + '</span>';
+      container.insertBefore(row, form);
+      // 添加编辑表单
+      var eform = document.createElement('form');
+      eform.className = 'inline-form';
+      eform.id = 'edit-fault-' + item.id;
+      eform.style.display = 'none';
+      eform.onsubmit = function(e){ return apiEditFaultSubmit(e, gid, item.id); };
+      eform.innerHTML = '<select name="fault_type" class="form-select" style="width:68px;font-size:11px;padding:2px 4px;">'
+        + '<option value="软件">软件</option><option value="硬件" selected>硬件</option>'
+        + '<option value="打印机">打印机</option><option value="协助">协助</option></select>'
+        + '<input type="text" name="display_name" value="' + item.display_name + '" style="flex:1;" required>'
+        + '<button class="btn btn-outline-success py-0"><i class="fas fa-check"></i></button>'
+        + '<button type="button" class="btn btn-outline-secondary py-0" onclick="apiEditFaultCancel(' + item.id + ')"><i class="fas fa-times"></i></button>';
+      container.insertBefore(eform, form);
+      // 清空表单但不关闭
+      form.querySelector('input[name="display_name"]').value = '';
+      form.querySelector('select[name="fault_type"]').value = '硬件';
+      form.querySelector('input[name="display_name"]').focus();
+    } else {
+      showToast(data.msg || '添加失败', 'error');
+    }
+  })
+  .catch(function(err){ showToast('请求失败: ' + err, 'error'); });
+  return false;
+}
+
+// 编辑故障项 — 切换编辑表单
+function apiEditFault(id) {
+  var row = document.getElementById('fault-row-' + id);
+  var form = document.getElementById('edit-fault-' + id);
+  if (row) row.style.display = 'none';
+  if (form) form.style.display = 'flex';
+}
+function apiEditFaultCancel(id) {
+  var row = document.getElementById('fault-row-' + id);
+  var form = document.getElementById('edit-fault-' + id);
+  if (row) row.style.display = '';
+  if (form) form.style.display = 'none';
+}
+function apiEditFaultSubmit(event, gid, iid) {
+  event.preventDefault();
+  var form = event.target;
+  var fd = new FormData(form);
+  fetch('/data/fault-template-groups/' + gid + '/items/' + iid + '/api/edit', { method:'POST', body:fd })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data.ok) {
+      showToast('已更新', 'success');
+      var item = data.item;
+      var row = document.getElementById('fault-row-' + iid);
+      if (row) {
+        row.querySelector('.tmpl-badge-type').textContent = item.fault_type;
+        row.querySelector('.tmpl-name').textContent = item.display_name;
+        row.style.display = '';
+      }
+      var eform = document.getElementById('edit-fault-' + iid);
+      if (eform) eform.style.display = 'none';
+    } else {
+      showToast(data.msg || '更新失败', 'error');
+    }
+  })
+  .catch(function(err){ showToast('请求失败: ' + err, 'error'); });
+  return false;
+}
+
+// 删除故障项
+function apiDeleteFault(iid, gid) {
+  if (!confirm('删除此故障项？')) return;
+  var fd = new FormData();
+  fetch('/data/fault-template-groups/' + gid + '/items/' + iid + '/api/delete', { method:'POST', body:fd })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data.ok) {
+      showToast('已删除', 'success');
+      var row = document.getElementById('fault-row-' + iid);
+      if (row) row.remove();
+      var eform = document.getElementById('edit-fault-' + iid);
+      if (eform) eform.remove();
+    } else {
+      showToast(data.msg || '删除失败', 'error');
+    }
+  })
+  .catch(function(err){ showToast('请求失败: ' + err, 'error'); });
+}
+
+// ========== 故障模板组 API ==========
+
+// 添加模板组 — 提交后关闭表单，刷新组列表
+function apiAddFaultGroup(event, form, team) {
+  event.preventDefault();
+  var fd = new FormData(form);
+  fetch('/data/fault-template-groups/api/add', { method:'POST', body:fd })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data.ok) {
+      showToast('已创建模板组', 'success');
+      var g = data.group;
+      form.style.display = 'none';
+      form.querySelector('input[name="name"]').value = '';
+      // 在故障卡片中插入新组
+      var body = document.getElementById('fault-body-' + team);
+      if (body) {
+        // 移除空状态
+        var empty = document.getElementById('fault-empty-' + team);
+        if (empty) empty.remove();
+        // 找"本组专属"标题
+        var teamLabel = body.querySelector('div:contains("📌 本组专属")');
+        // 构建新组 DOM
+        var label = document.createElement('div');
+        label.className = 'tmpl-group-label';
+        label.id = 'fg-label-' + g.id;
+        label.innerHTML = '<span id="fg-name-' + g.id + '">' + g.name + '</span>'
+          + '<span class="text-muted" style="font-weight:400;font-size:11px;">' + (g.teams ? '(' + g.teams + ')' : '全组通用') + '</span>'
+          + '<span class="tmpl-actions" style="margin-left:auto;">'
+          + '<button class="btn btn-outline-primary py-0" onclick="apiEditGroup(' + g.id + ')" title="重命名"><i class="fas fa-pen"></i></button>'
+          + '<button class="btn btn-outline-danger py-0" onclick="apiDeleteGroup(' + g.id + ',\'' + g.name.replace(/'/g,"\\'") + '\')" title="解散"><i class="fas fa-times"></i></button>'
+          + '</span>';
+        var eform = document.createElement('form');
+        eform.className = 'inline-form';
+        eform.id = 'edit-fg-' + g.id;
+        eform.style.display = 'none';
+        eform.onsubmit = function(e){ return apiEditGroupSubmit(e, g.id); };
+        eform.innerHTML = '<input type="text" name="value" value="' + g.name + '" style="flex:1;" required>'
+          + '<button class="btn btn-outline-success py-0"><i class="fas fa-check"></i></button>'
+          + '<button type="button" class="btn btn-outline-secondary py-0" onclick="apiEditGroupCancel(' + g.id + ')"><i class="fas fa-times"></i></button>';
+        var itemsDiv = document.createElement('div');
+        itemsDiv.id = 'fg-items-' + g.id;
+        // 添加项表单
+        var addForm = document.createElement('form');
+        addForm.className = 'inline-form';
+        addForm.id = 'add-fault-form-' + g.id;
+        addForm.style.marginTop = '2px';
+        addForm.onsubmit = function(e){ return apiAddFaultItem(e, g.id); };
+        addForm.innerHTML = '<select name="fault_type" class="form-select" style="width:68px;font-size:11px;padding:2px 4px;">'
+          + '<option value="软件">软件</option><option value="硬件" selected>硬件</option>'
+          + '<option value="打印机">打印机</option><option value="协助">协助</option></select>'
+          + '<input type="text" name="display_name" placeholder="故障名称" style="flex:1;" required>'
+          + '<button class="btn btn-outline-success"><i class="fas fa-plus"></i> 添加</button>';
+        // 检查是否已有"本组专属"标签
+        var hasTeamLabel = false;
+        var labels = body.querySelectorAll('div');
+        for (var i = 0; i < labels.length; i++) {
+          if (labels[i].textContent.indexOf('📌 本组专属') >= 0) { hasTeamLabel = true; break; }
+        }
+        if (!hasTeamLabel) {
+          var tl = document.createElement('div');
+          tl.style.cssText = 'font-size:11px;font-weight:600;color:#6366f1;margin-bottom:4px;';
+          tl.textContent = '📌 本组专属';
+          body.insertBefore(tl, body.querySelector('form[id^="addFaultGroupForm_"]'));
+        }
+        body.insertBefore(addForm, body.querySelector('form[id^="addFaultGroupForm_"]'));
+        body.insertBefore(itemsDiv, addForm);
+        body.insertBefore(eform, itemsDiv);
+        body.insertBefore(label, eform);
+      }
+    } else {
+      showToast(data.msg || '创建失败', 'error');
+    }
+  })
+  .catch(function(err){ showToast('请求失败: ' + err, 'error'); });
+  return false;
+}
+
+// 编辑模板组 — 切换编辑表单
+function apiEditGroup(id) {
+  var label = document.getElementById('fg-label-' + id);
+  var form = document.getElementById('edit-fg-' + id);
+  if (label) label.style.display = 'none';
+  if (form) form.style.display = 'flex';
+}
+function apiEditGroupCancel(id) {
+  var label = document.getElementById('fg-label-' + id);
+  var form = document.getElementById('edit-fg-' + id);
+  if (label) label.style.display = '';
+  if (form) form.style.display = 'none';
+}
+function apiEditGroupSubmit(event, gid) {
+  event.preventDefault();
+  var form = event.target;
+  var fd = new FormData();
+  fd.append('field', 'name');
+  fd.append('value', form.querySelector('input[name="value"]').value);
+  fetch('/data/fault-template-groups/' + gid + '/api/edit', { method:'POST', body:fd })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data.ok) {
+      showToast('已更新', 'success');
+      var g = data.group;
+      var nameSpan = document.getElementById('fg-name-' + gid);
+      if (nameSpan) nameSpan.textContent = g.name;
+      apiEditGroupCancel(gid);
+    } else {
+      showToast(data.msg || '更新失败', 'error');
+    }
+  })
+  .catch(function(err){ showToast('请求失败: ' + err, 'error'); });
+  return false;
+}
+
+// 删除模板组
+function apiDeleteGroup(gid, name) {
+  if (!confirm('删除模板组「' + name + '」及其所有故障项？')) return;
+  var fd = new FormData();
+  fetch('/data/fault-template-groups/' + gid + '/api/delete', { method:'POST', body:fd })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data.ok) {
+      showToast('已删除模板组', 'success');
+      var label = document.getElementById('fg-label-' + gid);
+      if (label) label.remove();
+      var eform = document.getElementById('edit-fg-' + gid);
+      if (eform) eform.remove();
+      var items = document.getElementById('fg-items-' + gid);
+      if (items) items.remove();
+      var addForm = document.getElementById('add-fault-form-' + gid);
+      if (addForm) addForm.remove();
+    } else {
+      showToast(data.msg || '删除失败', 'error');
+    }
+  })
+  .catch(function(err){ showToast('请求失败: ' + err, 'error'); });
+}
+
+// ========== 方案模板 API ==========
+
+// 添加方案 — 提交后关闭表单，在DOM插入新行
+function apiAddSolution(event, form, team) {
+  event.preventDefault();
+  var fd = new FormData(form);
+  fetch('/data/solutions/api/add', { method:'POST', body:fd })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data.ok) {
+      showToast('已创建方案', 'success');
+      var s = data.solution;
+      form.style.display = 'none';
+      form.querySelector('input[name="title"]').value = '';
+      form.querySelector('input[name="content"]').value = '';
+      // 在方案卡片中插入新行
+      var body = document.getElementById('sol-body-' + team);
+      if (body) {
+        var empty = document.getElementById('sol-empty-' + team);
+        if (empty) empty.remove();
+        // 检查是否已有"本组专属"标签
+        var hasTeamLabel = false;
+        var labels = body.querySelectorAll('div');
+        for (var i = 0; i < labels.length; i++) {
+          if (labels[i].textContent.indexOf('📌 本组专属') >= 0) { hasTeamLabel = true; break; }
+        }
+        if (!hasTeamLabel) {
+          var tl = document.createElement('div');
+          tl.style.cssText = 'font-size:11px;font-weight:600;color:#6366f1;margin-bottom:4px;';
+          tl.textContent = '📌 本组专属';
+          body.insertBefore(tl, body.querySelector('form[id^="addSolutionForm_"]'));
+        }
+        var row = document.createElement('div');
+        row.className = 'tmpl-row';
+        row.id = 'sol-row-' + s.id;
+        row.innerHTML = '<span class="tmpl-name">' + s.title + '</span>'
+          + '<span class="tmpl-meta">' + (s.fault_type || '') + '</span>'
+          + '<span class="tmpl-meta" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">'
+          + (s.content.length > 30 ? s.content.substring(0,30) + '…' : s.content) + '</span>'
+          + '<span class="tmpl-actions">'
+          + '<button class="btn btn-outline-primary py-0" onclick="apiEditSolution(' + s.id + ')" title="编辑"><i class="fas fa-pen"></i></button>'
+          + '<button class="btn btn-outline-danger py-0" onclick="apiDeleteSolution(' + s.id + ',\'' + s.title.replace(/'/g,"\\'") + '\')" title="删除"><i class="fas fa-times"></i></button>'
+          + '</span>';
+        body.insertBefore(row, body.querySelector('form[id^="addSolutionForm_"]'));
+        // 编辑表单
+        var eform = document.createElement('form');
+        eform.className = 'inline-form flex-wrap';
+        eform.id = 'edit-sol-' + s.id;
+        eform.style.display = 'none';
+        eform.onsubmit = function(e){ return apiEditSolutionSubmit(e, s.id); };
+        eform.innerHTML = '<input type="text" name="title" value="' + s.title + '" placeholder="标题" style="flex:1;min-width:100px;" required>'
+          + '<input type="text" name="fault_type" value="' + (s.fault_type || '') + '" placeholder="故障类型" style="width:80px;">'
+          + '<input type="text" name="content" value="' + s.content + '" placeholder="方案内容" style="flex:2;min-width:150px;" required>'
+          + '<button class="btn btn-outline-success py-0"><i class="fas fa-check"></i></button>'
+          + '<button type="button" class="btn btn-outline-secondary py-0" onclick="apiEditSolutionCancel(' + s.id + ')"><i class="fas fa-times"></i></button>';
+        body.insertBefore(eform, body.querySelector('form[id^="addSolutionForm_"]'));
+      }
+    } else {
+      showToast(data.msg || '创建失败', 'error');
+    }
+  })
+  .catch(function(err){ showToast('请求失败: ' + err, 'error'); });
+  return false;
+}
+
+// 编辑方案 — 切换编辑表单
+function apiEditSolution(id) {
+  var row = document.getElementById('sol-row-' + id);
+  var form = document.getElementById('edit-sol-' + id);
+  if (row) row.style.display = 'none';
+  if (form) form.style.display = 'flex';
+}
+function apiEditSolutionCancel(id) {
+  var row = document.getElementById('sol-row-' + id);
+  var form = document.getElementById('edit-sol-' + id);
+  if (row) row.style.display = '';
+  if (form) form.style.display = 'none';
+}
+function apiEditSolutionSubmit(event, sid) {
+  event.preventDefault();
+  var form = event.target;
+  var fd = new FormData(form);
+  fetch('/data/solutions/' + sid + '/api/edit', { method:'POST', body:fd })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data.ok) {
+      showToast('已更新', 'success');
+      var s = data.solution;
+      var row = document.getElementById('sol-row-' + sid);
+      if (row) {
+        row.querySelector('.tmpl-name').textContent = s.title;
+        var metas = row.querySelectorAll('.tmpl-meta');
+        if (metas.length > 0) metas[0].textContent = s.fault_type || '';
+        if (metas.length > 1) metas[1].textContent = s.content.length > 30 ? s.content.substring(0,30) + '…' : s.content;
+        row.style.display = '';
+      }
+      var eform = document.getElementById('edit-sol-' + sid);
+      if (eform) eform.style.display = 'none';
+    } else {
+      showToast(data.msg || '更新失败', 'error');
+    }
+  })
+  .catch(function(err){ showToast('请求失败: ' + err, 'error'); });
+  return false;
+}
+
+// 删除方案
+function apiDeleteSolution(sid, title) {
+  if (!confirm('删除方案「' + title + '」？')) return;
+  var fd = new FormData();
+  fetch('/data/solutions/' + sid + '/api/delete', { method:'POST', body:fd })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data.ok) {
+      showToast('已删除', 'success');
+      var row = document.getElementById('sol-row-' + sid);
+      if (row) row.remove();
+      var eform = document.getElementById('edit-sol-' + sid);
+      if (eform) eform.remove();
+    } else {
+      showToast(data.msg || '删除失败', 'error');
+    }
+  })
+  .catch(function(err){ showToast('请求失败: ' + err, 'error'); });
+}
+
+// ========== 复制模板 ==========
+function apiCopyTemplates(event, team, type) {
+  event.preventDefault();
+  var typeLabel = type === 'fault' ? '故障模板' : '方案模板';
+  if (!confirm('从华博复制' + typeLabel + '到「' + team + '」？')) return false;
+  var fd = new FormData();
+  fetch('/data/templates/copy-to/' + encodeURIComponent(team) + '?template_type=' + type, { method:'POST', body:fd })
+  .then(function(r){
+    // 复制后刷新页面（涉及大量数据变更，刷新更可靠）
+    window.location.reload();
+  })
+  .catch(function(err){ showToast('请求失败: ' + err, 'error'); });
+  return false;
+}
+
+// ===== 页面加载后恢复hash =====
+document.addEventListener('DOMContentLoaded', function() {
+  if (!window.location.hash && !CURRENT_TEAM) return;
+  if (window.location.hash) restoreTeamFromHash();
+});
+</script>
+{% endblock %}

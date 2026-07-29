@@ -44,24 +44,31 @@ def list_persons():
 
 def add_person(name):
     """新增人员，返回 (ok, msg)"""
+    from flask import g
     if not name:
         return False, '人员姓名不能为空'
     if User.query.filter_by(display_name=name).first():
         return False, f'人员 "{name}" 已存在'
-    db.session.add(User(display_name=name))
+    hid = getattr(g, 'hospital_id', None)
+    db.session.add(User(display_name=name, hospital_id=hid))
     db.session.commit()
     return True, f'已添加人员 "{name}"'
 
 
 def import_persons_from_orders():
     """从工单中导入人员"""
+    from flask import g
     persons_in_orders = db.session.query(WorkOrder.person).distinct().all()
     imported = 0
+    hid = getattr(g, 'hospital_id', None)
     for (name,) in persons_in_orders:
         if name and name.strip():
             name = name.strip()
             if not User.query.filter_by(display_name=name).first():
-                db.session.add(User(display_name=name, is_active=True))
+                # 尝试从工单获取该人员的 hospital_id，fallback 到当前上下文
+                wo = WorkOrder.query.filter(WorkOrder.person == name).first()
+                person_hid = wo.hospital_id if wo else hid
+                db.session.add(User(display_name=name, is_active=True, hospital_id=person_hid))
                 imported += 1
     db.session.commit()
     return imported
@@ -140,6 +147,7 @@ def person_account_info(pid):
 
 def person_account_save(pid, username, password, display_name, is_admin, hospital_ids=None, group_id=None):
     """创建或更新人员的登录账号"""
+    from flask import g
     p = User.query.get_or_404(pid)
     if not username:
         return False, '用户名不能为空'
@@ -177,6 +185,7 @@ def person_account_save(pid, username, password, display_name, is_admin, hospita
         user = User(
             username=username, display_name=display_name or p.display_name,
             is_admin=is_admin, group_id=group_id,  # ← 保存角色组
+            hospital_id=getattr(g, 'hospital_id', None),
         )
         user.set_password(password)
         db.session.add(user)
@@ -261,14 +270,29 @@ def list_solutions(keyword='', device_filter='', fault_filter='', page=1, per_pa
     return query.order_by(SolutionTemplate.id).paginate(page=page, per_page=per_page, error_out=False)
 
 
-def get_team_options():
-    """获取系统设置的组别列表"""
-    from models import SystemSetting
+def get_team_options(hospital_id=None):
+    """获取指定医院的组别列表"""
+    from models import SystemSetting, User
+    from flask import g
     import re
-    setting = SystemSetting.query.filter_by(key='person_teams').first()
-    if setting and setting.value:
-        return [x.strip() for x in re.split(r'[,，]', setting.value) if x.strip()]
-    return ['信息科', '后勤', '外包服务']
+    if hospital_id is None:
+        try:
+            hospital_id = getattr(g, 'hospital_id', None)
+        except RuntimeError:
+            hospital_id = None
+    # 优先从系统设置获取
+    if hospital_id:
+        setting = SystemSetting.query.filter_by(key='person_teams', hospital_id=hospital_id).first()
+        if setting and setting.value:
+            return [x.strip() for x in re.split(r'[,，]', setting.value) if x.strip()]
+    # 没有设置时从 User 表推导
+    q = User.query.filter(User.team != '', User.team.isnot(None))
+    if hospital_id:
+        q = q.filter(User.hospital_id == hospital_id)
+    teams = sorted(set(t[0] for t in q.with_entities(User.team).distinct().all() if t[0]))
+    if teams:
+        return list(teams)
+    return ['华博']
 
 
 def add_solution(title, content, keywords, device_type, fault_type, fault_subcategory, teams=''):
@@ -1120,7 +1144,8 @@ def sync_users_from_persons(operator_name):
             pinyin = p.display_name
             if not User.query.filter_by(username=pinyin).first():
                 user = User(username=pinyin, display_name=p.display_name, phone=p.phone,
-                            group=p.group or 'IT', is_admin=False)
+                            group=p.group or 'IT', is_admin=False,
+                            hospital_id=getattr(p, 'hospital_id', None))
                 user.set_password('123456')
                 db.session.add(user)
                 created += 1

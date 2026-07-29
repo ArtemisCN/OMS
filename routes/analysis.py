@@ -1,10 +1,11 @@
 """重复单分析路由"""
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, g
 from flask_login import login_required, current_user
-from models import WorkOrder, db, can_access, SystemSetting
+from models import WorkOrder, User, db, can_access, SystemSetting
+from sqlalchemy import func
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
-from utils.time_helpers import fmt_dt, now, fmt_date
+from utils.time_helpers import fmt_dt, now, fmt_date, resolve_team
 
 analysis_bp = Blueprint('analysis', __name__, url_prefix='/analysis')
 
@@ -62,7 +63,17 @@ def api_repeats():
         else:
             end = datetime(year, month + 1, 1)
 
+    # 获取当前用户的 hospital_id
+    hid = getattr(g, 'hospital_id', None)
+
     # 查询重复单：按位置+故障分组，计数>=min_count
+    filters = [
+        WorkOrder.created_at >= start,
+        WorkOrder.created_at < end,
+    ]
+    if hid:
+        filters.append(WorkOrder.hospital_id == hid)
+
     rows = db.session.query(
         WorkOrder.building,
         WorkOrder.floor,
@@ -74,8 +85,7 @@ def api_repeats():
         db.func.min(WorkOrder.created_at).label('first_time'),
         db.func.max(WorkOrder.created_at).label('last_time'),
     ).filter(
-        WorkOrder.created_at >= start,
-        WorkOrder.created_at < end,
+        *filters,
     ).group_by(
         WorkOrder.building,
         WorkOrder.floor,
@@ -169,25 +179,46 @@ def heatmap():
     """故障热力图"""
     from flask import g
     hid = getattr(g, 'hospital_id', None)
+    team = resolve_team(request, current_user)
+    team_names = set()
+    if team:
+        team_names = {u.display_name for u in User.query.filter(
+            User.team == team, User.is_active == True).all()}
     q = WorkOrder.query
     if hid:
         q = q.filter_by(hospital_id=hid)
-    orders = q.all()
-    # 按楼栋统计
+    if team_names:
+        q = q.filter(WorkOrder.person.in_(team_names))
+
+    # 按楼栋统计（SQL聚合，避免全表加载到Python）
+    building_rows = q.with_entities(
+        func.coalesce(WorkOrder.building, '未知').label('building'),
+        func.count(WorkOrder.id).label('cnt'),
+    ).group_by(WorkOrder.building).order_by(func.count(WorkOrder.id).desc()).all()
+
     building_stats = {}
-    for o in orders:
-        b = o.building or '未知'
-        if b not in building_stats:
-            building_stats[b] = {'count': 0, 'departments': {}}
-        building_stats[b]['count'] += 1
-        d = o.department or '未知'
-        building_stats[b]['departments'][d] = building_stats[b]['departments'].get(d, 0) + 1
+    for row in building_rows:
+        building_stats[row.building] = {'count': row.cnt, 'departments': {}}
+
+    # 楼栋+科室明细（二次聚合）
+    dept_rows = q.with_entities(
+        func.coalesce(WorkOrder.building, '未知').label('building'),
+        func.coalesce(WorkOrder.department, '未知').label('department'),
+        func.count(WorkOrder.id).label('cnt'),
+    ).group_by(WorkOrder.building, WorkOrder.department).all()
+
+    for row in dept_rows:
+        if row.building in building_stats:
+            building_stats[row.building]['departments'][row.department] = row.cnt
+
     heatmap_data = sorted(building_stats.items(), key=lambda x: -x[1]['count'])
+
     # 按楼层统计
-    floor_data = {}
-    for o in orders:
-        fl = o.floor or '0'
-        floor_data[fl] = floor_data.get(fl, 0) + 1
-    floor_ranking = sorted(floor_data.items(), key=lambda x: -x[1])
+    floor_rows = q.with_entities(
+        func.coalesce(WorkOrder.floor, '0').label('floor'),
+        func.count(WorkOrder.id).label('cnt'),
+    ).group_by(WorkOrder.floor).order_by(func.count(WorkOrder.id).desc()).all()
+
+    floor_ranking = [(r.floor, r.cnt) for r in floor_rows]
     return render_template('analysis/heatmap.html', heatmap_data=heatmap_data,
                            floor_ranking=floor_ranking)

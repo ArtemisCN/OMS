@@ -1,7 +1,7 @@
 """服务器监控路由 - 仅管理员可见"""
 from flask import current_app,  Blueprint, render_template, jsonify, request
 from flask_login import login_required, current_user
-from models import can_access
+from models import can_access, AuditLog
 import psutil
 import os, subprocess
 from datetime import datetime, timedelta
@@ -508,6 +508,22 @@ def data():
         'net_conns': net_conns,
         'online_users': online_users,
         'listen_ports': listen_ports,
+        'audit': {
+            'total': AuditLog.query.count(),
+            'today': AuditLog.query.filter(AuditLog.created_at >= datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)).count(),
+            'recent': [
+                {
+                    'id': log.id,
+                    'action': log.action,
+                    'target_type': log.target_type,
+                    'target_desc': log.target_desc,
+                    'detail': (log.detail or '')[:80],
+                    'operator': log.operator,
+                    'time': log.created_at.strftime('%m-%d %H:%M') if log.created_at else '',
+                }
+                for log in AuditLog.query.order_by(AuditLog.id.desc()).limit(20).all()
+            ],
+        },
         'ts': datetime.now().strftime('%H:%M:%S'),
     })
 

@@ -692,6 +692,50 @@ RAW_ADDRESS_TABLE = """
 
 # 引入正则表达式模块用于地址文本解析
 import re
+import os
+import json
+
+
+# ==================== 地址解析规则（JSON配置前置层） ====================
+
+_ADDRESS_RULES_CACHE = None  # 模块级缓存，避免每次解析都读文件
+
+def _load_address_rules():
+    """加载 config/address_parser_rules.json。缓存到模块级变量。"""
+    global _ADDRESS_RULES_CACHE
+    if _ADDRESS_RULES_CACHE is not None:
+        return _ADDRESS_RULES_CACHE
+    rules_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'address_parser_rules.json')
+    if os.path.exists(rules_path):
+        try:
+            with open(rules_path, encoding='utf-8') as f:
+                _ADDRESS_RULES_CACHE = json.load(f)
+        except Exception:
+            _ADDRESS_RULES_CACHE = {}
+    else:
+        _ADDRESS_RULES_CACHE = {}
+    return _ADDRESS_RULES_CACHE
+
+def _match_rule_dept(title, dept_rules):
+    """按优先级从 JSON 规则匹配科室。返回 (科室名, priority) 或 (None, 0)。"""
+    best_dept = None
+    best_priority = 0
+    for rule in dept_rules:
+        for kw in rule.get('keywords', []):
+            if kw in title:
+                pri = rule.get('priority', 5)
+                if pri > best_priority:
+                    best_dept = rule['department']
+                    best_priority = pri
+    return best_dept, best_priority
+
+def _match_rule_building(title, building_rules):
+    """从 JSON 规则匹配楼区名。"""
+    for rule in building_rules:
+        for kw in rule.get('keywords', []):
+            if kw in title:
+                return rule['normalize_to']
+    return None
 
 
 # ==================== 地址表格解析 ====================
@@ -735,8 +779,24 @@ def parse_addresses_from_text(text):
     return addresses
 
 
-# 将原始地址表格解析为结构化列表，供全局使用
-ADDRESS_LIST = parse_addresses_from_text(RAW_ADDRESS_TABLE)
+# 从 JSON 文件加载地址数据，不存在时回退到硬编码表格
+_ADDRESS_JSON_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config', 'address_mapping.json')
+
+def _load_address_list():
+    """加载地址数据：优先从 JSON 文件，回退到 RAW_ADDRESS_TABLE"""
+    if os.path.exists(_ADDRESS_JSON_PATH):
+        try:
+            with open(_ADDRESS_JSON_PATH, 'r') as f:
+                data = json.load(f)
+            import logging
+            logging.getLogger(__name__).info(f'从 {_ADDRESS_JSON_PATH} 加载地址数据（{len(data)} 条）')
+            return data
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f'加载地址 JSON 失败: {e}，回退到硬编码')
+    return parse_addresses_from_text(RAW_ADDRESS_TABLE)
+
+ADDRESS_LIST = _load_address_list()
 
 
 # ==================== 地址查询接口 ====================
@@ -813,15 +873,18 @@ def get_merged_addresses(hospital_id=None, team=''):
         except RuntimeError:
             hospital_id = None
 
-    # 1. 以 RAW_ADDRESS_TABLE 为基础
-    # 使用 dict 以 base_index 为键，方便替换和删除
-    base_map = {}  # base_index → entry
-    for i, addr in enumerate(ADDRESS_LIST):
-        entry = dict(addr)
-        entry['_override_id'] = None
-        entry['_base_index'] = i
-        entry['_teams'] = ''  # 基础地址默认为通用
-        base_map[i] = entry
+    # 1. 以 RAW_ADDRESS_TABLE 为基础（仅七院）
+    base_map = {}
+    if hospital_id and hospital_id != 1:
+        # 非七院的医院：不加载硬编码地址，只使用数据库数据
+        pass
+    else:
+        for i, addr in enumerate(ADDRESS_LIST):
+            entry = dict(addr)
+            entry['_override_id'] = None
+            entry['_base_index'] = i
+            entry['_teams'] = ''
+            base_map[i] = entry
 
     # 2. 加载数据库覆盖记录
     query = AddressOverride.query
@@ -965,6 +1028,23 @@ def extract_address_from_title(title, hospital_id=None):
 
     # 初始化结果字典，四个字段均为空字符串
     result = {'building': '', 'floor': '', 'department': '', 'location': ''}
+
+    # 0. 先查 JSON 配置规则（前置层），命中则直接返回
+    rules = _load_address_rules()
+    dept_rules = rules.get('department_rules', [])
+    bld_rules = rules.get('building_rules', [])
+    if dept_rules or bld_rules:
+        rule_dept, rule_pri = _match_rule_dept(title, dept_rules)
+        rule_bld = _match_rule_building(title, bld_rules)
+        # 如果规则既匹配到科室又匹配到楼区，且优先级较高（>=8），直接返回
+        if rule_dept and rule_bld and rule_pri >= 8:
+            result['department'] = rule_dept
+            result['building'] = rule_bld
+            return result
+        # 如果只匹配到科室（优先级>=9），也直接返回科室字段
+        if rule_dept and rule_pri >= 9:
+            result['department'] = rule_dept
+            # 不return，让后续楼层定位继续补全
 
     # 从数据库获取合并后的地址列表（含用户新增的地址），按医院隔离
     merged = get_merged_addresses(hospital_id=hospital_id)

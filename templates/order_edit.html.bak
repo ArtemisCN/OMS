@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>维修管理 - 编辑</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body { padding-top: 0; background: #fff; overflow-x: hidden; }
+        * { box-sizing: border-box; }
+
+        /* ========== 布局 ========== */
+        .editor-layout { display: flex; width: 100%; min-height: calc(100vh - 50px); position: relative; }
+        /* 左侧画布 */
+        .editor-canvas-wrap { flex: 1; background: #f0f2f5; padding: 20px; overflow-y: auto; min-height: calc(100vh - 50px); }
+        /* 右侧调色板 */
+        .field-palette { width: 280px; min-width: 280px; background: #fff; border-left: 1px solid #d0d5dd; padding: 16px; overflow-y: auto; max-height: calc(100vh - 50px); position: sticky; top: 0; }
+
+        /* ========== 工具栏 ========== */
+        .editor-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .editor-toolbar .btn-group { display: flex; gap: 4px; }
+        .editor-toolbar .btn-sm { font-size: 12px; padding: 4px 10px; }
+
+        /* ========== 纸张预览区 — z-index 提高，不受侧边栏影响 ========== */
+        .paper-controls { 
+            position: relative; 
+            z-index: 1060;
+            display: flex; 
+            align-items: center; 
+            gap: 6px; 
+            margin-bottom: 4px;
+        }
+        .paper-controls .label { font-size: 12px; color: #666; font-weight: normal; }
+        .paper-controls select,
+        .paper-controls input { height: 28px; font-size: 12px; padding: 2px 6px; border: 1px solid #d0d5dd; border-radius: 4px; }
+        .paper-controls input { width: 60px; }
+
+        .page-box {
+            background: #fff;
+            box-shadow: 0 1px 4px rgba(0,0,0,.15);
+            margin: 0 auto;
+            transition: width .2s, min-height .2s;
+            position: relative;
+            overflow: hidden;
+        }
+        .page-box .field-row {
+            padding: 6px 10px;
+            border-bottom: 1px dashed #e8e8e8;
+            cursor: pointer;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            min-height: 32px;
+        }
+        .page-box .field-row:hover { background: #f5f8ff; }
+        .page-box .field-row.selected { background: #e6f0ff; outline: 2px solid #1890ff; outline-offset: -2px; }
+        .field-row .field-label { font-weight: 600; min-width: 80px; color: #333; font-size: 13px; }
+        .field-row .field-value { color: #555; font-size: 13px; flex: 1; word-break: break-all; }
+        .field-row .field-actions { display: flex; gap: 4px; opacity: 0; }
+        .field-row:hover .field-actions { opacity: 1; }
+        .field-row .field-actions .btn-link { padding: 0 4px; font-size: 13px; color: #999; }
+        .field-row .field-actions .btn-link:hover { color: #1890ff; }
+        .field-sig-img { max-width: 200px; max-height: 60px; }
+
+        /* ========== 右侧调色板 ========== */
+        .palette-section { margin-bottom: 16px; }
+        .palette-section h5 { font-size: 13px; color: #333; font-weight: 600; margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid #eee; }
+        .palette-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .palette-grid .btn { font-size: 12px; padding: 6px 4px; text-align: center; border: 1px solid #d0d5dd; background: #fafafa; color: #333; border-radius: 4px; cursor: pointer; }
+        .palette-grid .btn:hover { border-color: #1890ff; color: #1890ff; background: #f0f5ff; }
+        .palette-grid .btn.disabled { opacity: .4; cursor: not-allowed; }
+
+        /* 字段统计 */
+        .field-stats { font-size: 12px; color: #999; margin-top: 8px; }
+
+        /* ========== 字段属性面板（右侧下方） ========== */
+        .prop-panel { margin-top: 16px; border-top: 1px solid #eee; padding-top: 12px; }
+        .prop-panel h5 { font-size: 13px; color: #333; font-weight: 600; margin: 0 0 8px; }
+        .prop-group { margin-bottom: 8px; }
+        .prop-group label { display: block; font-size: 12px; color: #666; margin-bottom: 2px; }
+        .prop-group input, .prop-group select, .prop-group textarea { width: 100%; font-size: 12px; padding: 4px 6px; border: 1px solid #d0d5dd; border-radius: 4px; }
+        .prop-group textarea { resize: vertical; min-height: 50px; }
+        .prop-group .checkbox-inline { font-size: 12px; }
+        .prop-group .help-text { font-size: 11px; color: #999; margin-top: 2px; }
+
+        /* ========== 占位符 ========== */
+        .no-field-selected { text-align: center; padding: 24px 0; color: #bbb; font-size: 13px; }
+        .empty-canvas { text-align: center; padding: 60px 20px; color: #ccc; font-size: 14px; }
+
+        /* ========== 保存提示 ========== */
+        .save-indicator { font-size: 12px; color: #999; display: inline-flex; align-items: center; gap: 4px; }
+        .save-indicator.saving { color: #1890ff; }
+        .save-indicator.saved { color: #52c41a; }
+        .save-indicator.error { color: #f5222d; }
+
+        /* 拖拽排序 */
+        .field-row.dragging { opacity: .5; background: #e6f7ff; }
+        .field-row.drag-over { border-top: 2px solid #1890ff; }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .editor-layout { flex-direction: column; }
+            .field-palette { width: 100%; min-width: unset; border-left: none; border-top: 1px solid #d0d5dd; max-height: unset; position: static; order: -1; }
+            .palette-grid { grid-template-columns: repeat(4,1fr); }
+        }
+    </style>
+</head>
+<body>
+{% include 'nav.html' %}
+
+<div class="editor-layout">
+    <!-- 左侧画布 -->
+    <div class="editor-canvas-wrap">
+        <div class="editor-toolbar">
+            <a href="/work_orders" class="btn btn-default btn-sm">&larr; 返回</a>
+            <strong style="font-size:16px; margin-right:8px;">维修管理编辑</strong>
+            <span class="save-indicator" id="saveIndicator"><i class="fa fa-circle-o"></i> 已保存</span>
+            <div class="pull-right" style="margin-left:auto;">
+                <button class="btn btn-success btn-sm" onclick="saveAll()"><i class="fa fa-save"></i> 保存</button>
+            </div>
+        </div>
+
+        <div id="paperControls" class="paper-controls">
+            <span class="label">纸张：</span>
+            <select id="paperSize" onchange="applyPaper()">
+                <option value="a4">A4</option>
+                <option value="a5">A5</option>
+                <option value="b5">B5</option>
+            </select>
+            <span class="label">缩放：</span>
+            <input type="number" id="zoomLevel" value="100" min="30" max="200" onchange="applyPaper()">
+            <span class="label">%</span>
+        </div>
+
+        <div class="page-box" id="pageBox">
+            {% if fields|length == 0 %}
+            <div class="empty-canvas" id="emptyCanvas">
+                <i class="fa fa-hand-pointer-o" style="font-size:40px;display:block;margin-bottom:12px;"></i>
+                从右侧选择一个字段类型添加到表单
+            </div>
+            {% endif %}
+            <div id="fieldList">
+            {% for f in fields %}
+                <div class="field-row" data-fid="{{ f.id }}" draggable="true">
+                    <span class="field-label">{{ f.label }}</span>
+                    <span class="field-value">{{ f.display_value }}</span>
+                    <span class="field-actions">
+                        <button class="btn btn-link" title="删除" onclick="removeField('{{ f.id }}')"><i class="fa fa-trash-o"></i></button>
+                    </span>
+                </div>
+            {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧调色板+属性 -->
+    <div class="field-palette">
+        <div class="palette-section">
+            <h5>字段类型 <span style="font-weight:normal;font-size:11px;color:#999;">点击添加到表单</span></h5>
+            <div class="palette-grid" id="paletteGrid">
+                <button class="btn" data-type="text" onclick="addField('text')">单行文本</button>
+                <button class="btn" data-type="textarea" onclick="addField('textarea')">多行文本</button>
+                <button class="btn" data-type="number" onclick="addField('number')">数字</button>
+                <button class="btn" data-type="select" onclick="addField('select')">下拉选择</button>
+                <button class="btn" data-type="date" onclick="addField('date')">日期</button>
+                <button class="btn" data-type="datetime" onclick="addField('datetime')">日期时间</button>
+                <button class="btn" data-type="switch" onclick="addField('switch')">开关</button>
+                <button class="btn" data-type="signature" onclick="addField('signature')">手写签名</button>
+            </div>
+            <div class="field-stats">共 <span id="fieldCount">{{ fields|length }}</span> 个字段</div>
+        </div>
+
+        <div class="prop-panel" id="propPanel">
+            <h5>字段属性</h5>
+            <div id="propContent" class="no-field-selected">点击画布中的字段进行编辑</div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
+<script>
+// ==================== 状态 ====================
+const TEMPLATE_ID = {{ template.id }};
+let fields = {{ fields_json|safe }};
+let selectedFid = null;
+let dirty = false;
+
+// ==================== 渲染 ====================
+function renderFields() {
+    const container = document.getElementById('fieldList');
+    const empty = document.getElementById('emptyCanvas');
+    let html = '';
+    fields.forEach((f, idx) => {
+        const val = f.display_value || '';
+        html += `<div class="field-row ${f.id === selectedFid ? 'selected' : ''}" data-fid="${f.id}" draggable="true" onclick="selectField('${f.id}')">
+            <span class="field-label">${escHtml(f.label)}</span>
+            <span class="field-value">${escHtml(val)}</span>
+            <span class="field-actions">
+                <button class="btn btn-link" title="删除" onclick="event.stopPropagation();removeField('${f.id}')"><i class="fa fa-trash-o"></i></button>
+            </span>
+        </div>`;
+    });
+    container.innerHTML = html;
+    if (empty) empty.style.display = fields.length > 0 ? 'none' : '';
+    document.getElementById('fieldCount').textContent = fields.length;
+
+    // 选中状态保持
+    if (selectedFid && fields.some(f => f.id === selectedFid)) {
+        renderProps(selectedFid);
+    } else if (fields.length > 0) {
+        selectField(fields[0].id);
+    } else {
+        selectedFid = null;
+        document.getElementById('propContent').innerHTML = '<div class="no-field-selected">点击画布中的字段进行编辑</div>';
+    }
+    dirty = true;
+    markUnsaved();
+}
+
+function selectField(fid) {
+    selectedFid = fid;
+    renderFields(); // 刷新高亮
+    renderProps(fid);
+}
+
+function renderProps(fid) {
+    const f = fields.find(x => x.id === fid);
+    if (!f) return;
+    const html = `
+        <div class="prop-group">
+            <label>字段标签</label>
+            <input type="text" value="${escHtml(f.label)}" onchange="updateProp('${fid}','label',this.value)">
+        </div>
+        <div class="prop-group">
+            <label>字段类型</label>
+            <select onchange="updateProp('${fid}','type',this.value)">
+                ${['text','textarea','number','select','date','datetime','switch','signature'].map(t =>
+                    `<option value="${t}" ${t===f.type?'selected':''}>${typeLabel(t)}</option>`
+                ).join('')}
+            </select>
+        </div>
+        <div class="prop-group">
+            <label class="checkbox-inline"><input type="checkbox" ${f.required?'checked':''} onchange="updateProp('${fid}','required',this.checked)"> 必填</label>
+        </div>
+        ${f.type === 'select' ? `
+        <div class="prop-group">
+            <label>选项列表（每行一个）</label>
+            <textarea onchange="updateProp('${fid}','options',this.value)">${escHtml(f.options_raw||'')}</textarea>
+            <div class="help-text">每行一个选项</div>
+        </div>` : ''}
+        <div class="prop-group" style="margin-top:12px;padding-top:8px;border-top:1px solid #eee;">
+            <div class="help-text">字段ID: ${f.id}</div>
+        </div>
+    `;
+    document.getElementById('propContent').innerHTML = html;
+}
+
+function updateProp(fid, key, val) {
+    const f = fields.find(x => x.id === fid);
+    if (!f) return;
+    if (key === 'required') {
+        f.required = !!val;
+    } else if (key === 'options') {
+        f.options_raw = val;
+    } else {
+        f[key] = val;
+    }
+    // 重建 display_value
+    f.display_value = getDisplayValue(f);
+    dirty = true;
+    markUnsaved();
+    renderFields();
+}
+
+function addField(type) {
+    const fid = 'fld_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+    const label = typeLabel(type);
+    const f = { id: fid, label: label, type: type, required: false, options_raw: '', display_value: '' };
+    f.display_value = getDisplayValue(f);
+    fields.push(f);
+    dirty = true;
+    markUnsaved();
+    renderFields();
+    selectField(fid);
+    // 滚动到新字段
+    setTimeout(() => {
+        const el = document.querySelector(`.field-row[data-fid="${fid}"]`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+}
+
+function removeField(fid) {
+    if (!confirm('确定删除此字段？')) return;
+    fields = fields.filter(f => f.id !== fid);
+    dirty = true;
+    markUnsaved();
+    renderFields();
+}
+
+function getDisplayValue(f) {
+    if (f.type === 'select') {
+        const opts = (f.options_raw || '').split('\n').filter(x => x.trim());
+        return opts.length > 0 ? opts[0] : '';
+    }
+    if (f.type === 'switch') return '是/否';
+    if (f.type === 'signature') return '✍ 签名区域';
+    if (f.type === 'date') return '2025-01-01';
+    if (f.type === 'datetime') return '2025-01-01 12:00';
+    if (f.type === 'number') return '123';
+    return '请输入...';
+}
+
+function typeLabel(t) {
+    const m = { text:'单行文本', textarea:'多行文本', number:'数字', select:'下拉选择', date:'日期', datetime:'日期时间', switch:'开关', signature:'手写签名' };
+    return m[t] || t;
+}
+
+function escHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ==================== 纸张 + 缩放 ====================
+function applyPaper() {
+    const size = document.getElementById('paperSize').value;
+    const zoom = parseInt(document.getElementById('zoomLevel').value) || 100;
+    const box = document.getElementById('pageBox');
+    const sizes = { a4: { w: 794, h: 1123 }, a5: { w: 559, h: 794 }, b5: { w: 663, h: 936 } };
+    const s = sizes[size] || sizes.a4;
+    const factor = zoom / 100;
+    box.style.width = (s.w * factor) + 'px';
+    box.style.minHeight = (s.h * factor) + 'px';
+}
+
+// ==================== 保存 ====================
+function markUnsaved() {
+    const el = document.getElementById('saveIndicator');
+    el.innerHTML = '<i class="fa fa-circle-o"></i> 未保存';
+    el.className = 'save-indicator saving';
+}
+
+function markSaved() {
+    const el = document.getElementById('saveIndicator');
+    el.innerHTML = '<i class="fa fa-check-circle"></i> 已保存';
+    el.className = 'save-indicator saved';
+    dirty = false;
+}
+
+function markError() {
+    const el = document.getElementById('saveIndicator');
+    el.innerHTML = '<i class="fa fa-exclamation-circle"></i> 保存失败';
+    el.className = 'save-indicator error';
+}
+
+function saveAll() {
+    // 序列化字段
+    const payload = fields.map(f => ({
+        id: f.id,
+        label: f.label,
+        type: f.type,
+        required: f.required,
+        options_raw: f.options_raw || ''
+    }));
+    fetch('/api/repair/template_save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template_id: TEMPLATE_ID, fields: payload })
+    }).then(r => r.json()).then(d => {
+        if (d.ok) { markSaved(); } else { markError(); alert('保存失败：' + (d.error||'未知错误')); }
+    }).catch(e => { markError(); alert('保存异常：'+e.message); });
+}
+
+// ==================== 拖拽排序 ====================
+let dragSrcFid = null;
+document.addEventListener('dragstart', e => {
+    const row = e.target.closest('.field-row');
+    if (!row) return;
+    dragSrcFid = row.dataset.fid;
+    row.classList.add('dragging');
+});
+document.addEventListener('dragend', e => {
+    document.querySelectorAll('.field-row').forEach(r => r.classList.remove('dragging','drag-over'));
+});
+document.addEventListener('dragover', e => {
+    const row = e.target.closest('.field-row');
+    if (!row || row.dataset.fid === dragSrcFid) return;
+    e.preventDefault();
+    document.querySelectorAll('.field-row').forEach(r => r.classList.remove('drag-over'));
+    row.classList.add('drag-over');
+});
+document.addEventListener('drop', e => {
+    e.preventDefault();
+    const row = e.target.closest('.field-row');
+    if (!row || !dragSrcFid || row.dataset.fid === dragSrcFid) return;
+    const fromIdx = fields.findIndex(f => f.id === dragSrcFid);
+    const toIdx = fields.findIndex(f => f.id === row.dataset.fid);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const [moved] = fields.splice(fromIdx, 1);
+    fields.splice(toIdx, 0, moved);
+    dirty = true;
+    markUnsaved();
+    renderFields();
+    selectField(moved.id);
+});
+
+// ==================== 初始化 ====================
+applyPaper();
+renderFields();
+
+// 定时自动保存
+setInterval(() => { if (dirty) saveAll(); }, 30000);
+
+// 页面关闭前提示
+window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+</script>
+</body>
+</html>

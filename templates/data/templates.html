@@ -55,6 +55,11 @@
 .tmpl-actions .btn { font-size:10px;padding:1px 6px;line-height:1.4; }
 
 .tmpl-empty { text-align:center; padding:24px 20px; color:#94a3b8; font-size:13px; }
+
+/* 卡片内容区限制高度 + 滚动 */
+.tmpl-scroll {
+    height: 420px; overflow-y: auto;
+}
 .copy-btn {
     display:inline-flex; align-items:center; gap:6px;
     padding:8px 20px; border-radius:10px;
@@ -107,7 +112,7 @@
         <span><i class="fas fa-cubes text-primary"></i> 故障模板组</span>
         <span class="text-muted" style="font-weight:400;font-size:12px;">共 {{ fault_groups|length }} 组</span>
       </div>
-      <div class="tmpl-card-body">
+      <div class="tmpl-card-body tmpl-scroll">
         {% for g in fault_groups %}
         <div class="tmpl-group-label">{{ g.name }}
           <span class="text-muted" style="font-weight:400;font-size:11px;">{% if g.teams %}({{ g.teams }}){% else %}全组通用{% endif %}</span>
@@ -128,7 +133,7 @@
         <span><i class="fas fa-book text-success"></i> 方案模板</span>
         <span class="text-muted" style="font-weight:400;font-size:12px;">共 {{ solutions|length }} 条</span>
       </div>
-      <div class="tmpl-card-body">
+      <div class="tmpl-card-body tmpl-scroll">
         {% for s in solutions %}
         <div class="tmpl-row">
           <span class="tmpl-name">{{ s.title }}</span>
@@ -159,7 +164,7 @@
           <button class="btn btn-sm btn-outline-success py-0" style="font-size:11px;" onclick="showAddFaultGroup('{{ t|e }}')"><i class="fas fa-plus"></i> 新建组</button>
         </div>
       </div>
-      <div class="tmpl-card-body" id="fault-body-{{ t|e }}">
+      <div class="tmpl-card-body tmpl-scroll" id="fault-body-{{ t|e }}">
         {% if team_fgs %}
         <div style="font-size:11px;font-weight:600;color:#6366f1;margin-bottom:4px;">📌 本组专属</div>
         {% for g in team_fgs %}
@@ -249,7 +254,7 @@
         <span><i class="fas fa-book text-success"></i> 方案模板 · {{ t }}</span>
         <button class="btn btn-sm btn-outline-success py-0" style="font-size:11px;" onclick="showAddSolution('{{ t|e }}')"><i class="fas fa-plus"></i> 新建</button>
       </div>
-      <div class="tmpl-card-body" id="sol-body-{{ t|e }}">
+      <div class="tmpl-card-body tmpl-scroll" id="sol-body-{{ t|e }}">
         <form id="addSolutionForm_{{ loop.index0 }}" onsubmit="return apiAddSolution(event, this, '{{ t|e }}')" style="display:none;margin-bottom:8px;" class="inline-form flex-wrap">
           <input type="hidden" name="teams" value="{{ t }}">
           <input type="text" name="title" placeholder="方案标题" required style="flex:1;min-width:120px;">

@@ -980,7 +980,7 @@ function loadData(refresh) {
     // 刷新时不弹遮罩，不重启终端，静默更新数据
     // 默认显示本院数据（可传 ?hospital_id=N 指定）
     const params = new URLSearchParams(window.location.search);
-    const hid = params.get('hospital_id') || '1';
+    const hid = params.get('hospital_id') || '{{ default_hospital_id }}';
 
     fetch('/feature/ops-screen/data?hospital_id=' + hid)
         .then(r => r.json())

@@ -443,7 +443,7 @@
             <select name="person" class="cf-select no-icon" style="padding-left:36px;">
               <option value="">请选择</option>
               {% for p in persons %}
-              <option value="{{ p.name }}" {% if p.name == (current_user.display_name or current_user.username) %}selected{% endif %}>{{ p.name }}</option>
+              <option value="{{ p.name }}">{{ p.name }}</option>
               {% endfor %}
             </select>
           </div>

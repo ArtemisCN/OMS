@@ -86,16 +86,6 @@ def select_avatar():
     return jsonify({'ok': True, 'avatar': avatar_url})
 
 
-@main_bp.route('/user/unbind-wx', methods=['POST'])
-@login_required
-def unbind_wx():
-    """解绑微信号"""
-    current_user.wx_openid = ''
-    db.session.commit()
-    flash('微信已解绑 ✅', 'success')
-    return redirect(request.referrer or url_for('main.dashboard'))
-
-
 @main_bp.route('/uploads/<path:filename>')
 def serve_upload(filename):
     """提供上传的图片文件"""
@@ -143,40 +133,43 @@ def dashboard():
 
     teams = [t[0] for t in User.query.with_entities(User.team).filter(User.team!='', User.team!=None).distinct().order_by(User.team).all()]
 
+    # 医院过滤函数
+    hid = getattr(g, 'hospital_id', None)
+    hospital_filter = (lambda q: q.filter(WorkOrder.hospital_id == hid)) if hid and hid != 0 else None
+
     # ---------- 批量统计（一次查询聚合多项） ----------
-    monthly_stats = _get_monthly_stats(first_of_month, today_start, today_end, person_filter=team_persons if team else None)
+    monthly_stats = _get_monthly_stats(first_of_month, today_start, today_end, person_filter=team_persons if team else None, hospital_filter=hospital_filter)
 
     # ---------- 本月故障分布 ----------
-    type_stats = _get_type_stats(first_of_month, person_filter=team_persons if team else None)
+    type_stats = _get_type_stats(first_of_month, person_filter=team_persons if team else None, hospital_filter=hospital_filter)
 
     # ---------- 本月故障复现（≥3次） ----------
-    repeat_faults = _get_repeat_faults(first_of_month, person_filter=team_persons if team else None)
+    repeat_faults = _get_repeat_faults(first_of_month, person_filter=team_persons if team else None, hospital_filter=hospital_filter)
 
     # ---------- 本月人员处理排行（排除admin和空白） ----------
-    person_stats = _get_person_stats(first_of_month, person_filter=team_persons if team else None)
+    person_stats = _get_person_stats(first_of_month, person_filter=team_persons if team else None, hospital_filter=hospital_filter)
 
     # ---------- 近7天趋势 ----------
-    daily_stats = _get_daily_trend(now, person_filter=team_persons if team else None)
+    daily_stats = _get_daily_trend(now, person_filter=team_persons if team else None, hospital_filter=hospital_filter)
 
     # ---------- 响应时长趋势 ----------
-    response_trend = _get_response_trend(person_filter=team_persons if team else None)
+    response_trend = _get_response_trend(person_filter=team_persons if team else None, hospital_filter=hospital_filter)
 
     # ---------- 今日工单动态 ----------
-    today_orders = _get_today_orders(today_start, person_filter=team_persons if team else None)
+    today_orders = _get_today_orders(today_start, person_filter=team_persons if team else None, hospital_filter=hospital_filter)
 
     # ---------- 楼区热度 ----------
-    building_stats = _get_building_stats(first_of_month, person_filter=team_persons if team else None)
+    building_stats = _get_building_stats(first_of_month, person_filter=team_persons if team else None, hospital_filter=hospital_filter)
 
     # ---------- 热门报修位置 Top 5 ----------
-    hot_locations = _get_hot_locations(first_of_month, person_filter=team_persons if team else None)
+    hot_locations = _get_hot_locations(first_of_month, person_filter=team_persons if team else None, hospital_filter=hospital_filter)
 
     # ---------- 科室排行 ----------
-    dept_stats = _get_dept_stats(first_of_month, person_filter=team_persons if team else None)
+    dept_stats = _get_dept_stats(first_of_month, person_filter=team_persons if team else None, hospital_filter=hospital_filter)
 
     # ---------- 待处理加急/紧急（pending工单不过滤人员） ----------
     base_pending = WorkOrder.query.filter(WorkOrder.status == 'pending')
-    if getattr(g, 'hospital_id', None) and g.hospital_id != 0:
-        base_pending = base_pending.filter(WorkOrder.hospital_id == g.hospital_id)
+    base_pending = hospital_filter(base_pending) if hospital_filter else base_pending
     pending_urgent = base_pending.filter(WorkOrder.priority == 'urgent').count()
     pending_emergency = base_pending.filter(WorkOrder.priority == 'emergency').count()
 
@@ -184,6 +177,8 @@ def dashboard():
     priority_q = WorkOrder.query.filter(WorkOrder.created_at >= first_of_month)
     if team_persons:
         priority_q = priority_q.filter(WorkOrder.person.in_(team_persons))
+    if hospital_filter:
+        priority_q = hospital_filter(priority_q)
     priority_dist = {}
     for row in priority_q.with_entities(
         WorkOrder.priority, func.count(WorkOrder.id)
@@ -198,11 +193,13 @@ def dashboard():
     )
     if team_persons:
         last_month_q = last_month_q.filter(WorkOrder.person.in_(team_persons))
+    if hospital_filter:
+        last_month_q = hospital_filter(last_month_q)
     last_month_count = last_month_q.count()
     month_change = monthly_stats['monthly_count'] - last_month_count
 
     # ---------- SLA 统计 ----------
-    sla_stats = _get_sla_stats(first_of_month, person_filter=team_persons if team else None)
+    sla_stats = _get_sla_stats(first_of_month, person_filter=team_persons if team else None, hospital_filter=hospital_filter)
     overdue_count = sla_stats.get('overdue_count', 0)
     sla_items = sla_stats.get('items', [])
     sla_distribution = sla_stats.get('distribution', {})
@@ -216,6 +213,8 @@ def dashboard():
     )
     if team_persons:
         today_resp_q = today_resp_q.filter(WorkOrder.person.in_(team_persons))
+    if hospital_filter:
+        today_resp_q = hospital_filter(today_resp_q)
     today_resp = today_resp_q.with_entities(
         func.avg(
             (func.julianday(WorkOrder.completed_at) - func.julianday(WorkOrder.created_at)) * 24 * 60
@@ -256,10 +255,18 @@ def dashboard():
                            teams=teams)
 
 
-def _get_monthly_stats(first_of_month, today_start, today_end, person_filter=None):
+def _hf(q):
+    """按当前医院过滤"""
+    hid = getattr(g, 'hospital_id', None)
+    if hid and hid != 0:
+        return q.filter(WorkOrder.hospital_id == hid)
+    return q
+
+def _get_monthly_stats(first_of_month, today_start, today_end, person_filter=None, hospital_filter=None):
     """一站式获取本月/今日各类统计"""
     def _pf(q):
-        return q.filter(WorkOrder.person.in_(person_filter)) if person_filter else q
+        q = q.filter(WorkOrder.person.in_(person_filter)) if person_filter else q
+        return hospital_filter(q) if hospital_filter else q
     # 本月总数
     monthly_count = _pf(WorkOrder.query.filter(
         WorkOrder.created_at >= first_of_month
@@ -279,14 +286,17 @@ def _get_monthly_stats(first_of_month, today_start, today_end, person_filter=Non
             WorkOrder.completed_at < today_end,
         ).label('today_completed'),
         func.count(case((WorkOrder.status == 'in_progress', 1), else_=None)).label('today_in_progress'),
-        func.count(case((WorkOrder.status == 'pending', 1))).filter(
-            WorkOrder.created_at >= today_start,
-        ).label('today_pending'),
     ).first()
 
     today_completed = today_row.today_completed or 0
     today_in_progress = today_row.today_in_progress or 0
-    today_pending = today_row.today_pending or 0
+
+    # 待接单不过滤人员（pending 工单 person='' 无人认领）
+    pending_base = WorkOrder.query.filter(WorkOrder.status == 'pending')
+    pending_base = hospital_filter(pending_base) if hospital_filter else pending_base
+    today_pending = pending_base.filter(
+        WorkOrder.created_at >= today_start,
+    ).count()
     total_completed_all = _pf(WorkOrder.query.filter_by(status='completed')).count()
     today_rate = round(total_completed_all / total_all * 100, 1) if total_all > 0 else 0
 
@@ -300,18 +310,20 @@ def _get_monthly_stats(first_of_month, today_start, today_end, person_filter=Non
     }
 
 
-def _get_type_stats(first_of_month, person_filter=None):
+def _get_type_stats(first_of_month, person_filter=None, hospital_filter=None):
     """本月各故障类型分布"""
     q = WorkOrder.query
     if person_filter:
         q = q.filter(WorkOrder.person.in_(person_filter))
+    if hospital_filter:
+        q = hospital_filter(q)
     rows = q.with_entities(
         WorkOrder.fault_type, func.count(WorkOrder.id)
     ).filter(WorkOrder.created_at >= first_of_month).group_by(WorkOrder.fault_type).all()
     return {ft: cnt for ft, cnt in rows}
 
 
-def _get_repeat_faults(first_of_month, person_filter=None):
+def _get_repeat_faults(first_of_month, person_filter=None, hospital_filter=None):
     """本月故障复现：同地址+同类型≥3次（与重复单分析逻辑一致）"""
     rows = db.session.query(
         WorkOrder.building,
@@ -325,6 +337,8 @@ def _get_repeat_faults(first_of_month, person_filter=None):
     )
     if person_filter:
         rows = rows.filter(WorkOrder.person.in_(person_filter))
+    if hospital_filter:
+        rows = hospital_filter(rows)
     rows = rows.group_by(
         WorkOrder.building,
         WorkOrder.floor,
@@ -358,7 +372,7 @@ def _get_repeat_faults(first_of_month, person_filter=None):
     return items
 
 
-def _get_person_stats(first_of_month, person_filter=None):
+def _get_person_stats(first_of_month, person_filter=None, hospital_filter=None):
     """本月人员处理排行（排除admin和空白），按当前医院+组别过滤"""
     from flask import current_app,  g
     active_person_names = set()
@@ -382,6 +396,8 @@ def _get_person_stats(first_of_month, person_filter=None):
     q = WorkOrder.query
     if person_filter:
         q = q.filter(WorkOrder.person.in_(person_filter))
+    if hospital_filter:
+        q = hospital_filter(q)
     rows = q.with_entities(
         WorkOrder.person, func.count(WorkOrder.id)
     ).filter(
@@ -393,7 +409,7 @@ def _get_person_stats(first_of_month, person_filter=None):
     return {p: cnt for p, cnt in rows}
 
 
-def _get_daily_trend(now, person_filter=None):
+def _get_daily_trend(now, person_filter=None, hospital_filter=None):
     """近7天每日工单数"""
     daily_stats = []
     for i in range(6, -1, -1):
@@ -406,6 +422,8 @@ def _get_daily_trend(now, person_filter=None):
         )
         if person_filter:
             q = q.filter(WorkOrder.person.in_(person_filter))
+        if hospital_filter:
+            q = hospital_filter(q)
         count = q.count()
         daily_stats.append({
             'date': day.strftime('%m/%d'),
@@ -414,21 +432,25 @@ def _get_daily_trend(now, person_filter=None):
     return daily_stats
 
 
-def _get_today_orders(today_start, person_filter=None):
-    """今日工单动态（最新8条）"""
+def _get_today_orders(today_start, person_filter=None, hospital_filter=None):
+    """今日工单动态（最新20条）"""
     q = WorkOrder.query.filter(
         WorkOrder.created_at >= today_start
     )
     if person_filter:
         q = q.filter(WorkOrder.person.in_(person_filter))
-    return q.order_by(WorkOrder.created_at.desc()).limit(8).all()
+    if hospital_filter:
+        q = hospital_filter(q)
+    return q.order_by(WorkOrder.created_at.desc()).limit(20).all()
 
 
-def _get_building_stats(first_of_month, person_filter=None):
+def _get_building_stats(first_of_month, person_filter=None, hospital_filter=None):
     """各楼区本月工单分布"""
     q = WorkOrder.query
     if person_filter:
         q = q.filter(WorkOrder.person.in_(person_filter))
+    if hospital_filter:
+        q = hospital_filter(q)
     rows = q.with_entities(
         WorkOrder.building, func.count(WorkOrder.id)
     ).filter(
@@ -441,11 +463,13 @@ def _get_building_stats(first_of_month, person_filter=None):
     return {b: cnt for b, cnt in rows}
 
 
-def _get_hot_locations(first_of_month, person_filter=None):
+def _get_hot_locations(first_of_month, person_filter=None, hospital_filter=None):
     """本月热门报修位置 Top 5：building+floor+location 维度"""
     q = WorkOrder.query
     if person_filter:
         q = q.filter(WorkOrder.person.in_(person_filter))
+    if hospital_filter:
+        q = hospital_filter(q)
     rows = q.with_entities(
         WorkOrder.building,
         WorkOrder.floor,
@@ -465,11 +489,13 @@ def _get_hot_locations(first_of_month, person_filter=None):
     return [(r.building or '', r.floor or '', r.location or '', r.loc_count) for r in rows]
 
 
-def _get_dept_stats(first_of_month, person_filter=None):
+def _get_dept_stats(first_of_month, person_filter=None, hospital_filter=None):
     """本月各科室工单排行"""
     q = WorkOrder.query
     if person_filter:
         q = q.filter(WorkOrder.person.in_(person_filter))
+    if hospital_filter:
+        q = hospital_filter(q)
     rows = q.with_entities(
         WorkOrder.department, func.count(WorkOrder.id)
     ).filter(
@@ -482,7 +508,7 @@ def _get_dept_stats(first_of_month, person_filter=None):
     return {d: cnt for d, cnt in rows}
 
 
-def _get_response_trend(person_filter=None):
+def _get_response_trend(person_filter=None, hospital_filter=None):
     """最近32条已完成工单的响应时长（分钟，过滤超过160分钟的异常数据）"""
     q = WorkOrder.query.with_entities(
         WorkOrder.id, WorkOrder.created_at, WorkOrder.completed_at
@@ -491,6 +517,8 @@ def _get_response_trend(person_filter=None):
     )
     if person_filter:
         q = q.filter(WorkOrder.person.in_(person_filter))
+    if hospital_filter:
+        q = hospital_filter(q)
     orders = q.order_by(
         WorkOrder.completed_at.desc()
     ).all()
@@ -532,7 +560,7 @@ def _get_sla_label(minutes):
     if minutes <= 480: return "响应较慢"
     return "响应很慢"
 
-def _get_sla_stats(first_of_month, person_filter=None):
+def _get_sla_stats(first_of_month, person_filter=None, hospital_filter=None):
     """获取本月 SLA 统计：人均响应/处理时长 + 超时工单数"""
     from flask import current_app,  g
     now = datetime.now()
@@ -556,6 +584,8 @@ def _get_sla_stats(first_of_month, person_filter=None):
     )
     if person_filter:
         q_sla = q_sla.filter(WorkOrder.person.in_(person_filter))
+    if hospital_filter:
+        q_sla = hospital_filter(q_sla)
     completed = q_sla.all()
 
     person_sla = {}
@@ -642,3 +672,10 @@ def _get_sla_stats(first_of_month, person_filter=None):
         "overdue_count": overdue_count,
         "distribution": dist,
     }
+
+
+# ====== 🥚 Easter Egg: 打砖块小游戏 ======
+@main_bp.route('/easter-egg')
+def easter_egg():
+    """隐藏小游戏页面"""
+    return render_template('easter_egg.html')

@@ -181,15 +181,36 @@ def review_data(task_id):
             val = getattr(item, key, '') or ''
             d['fields'][key] = {'label': label, 'value': val}
 
-        # 匹配资产
+        # 匹配资产（仅 issue 和 new 需要完整对比，normal 只取预览）
         asset = None
-        if item.asset_id:
-            asset = Asset.query.filter(Asset.id == item.asset_id).first()
-        if not asset and item.asset_no:
-            asset = Asset.query.filter_by(asset_no=item.asset_no, hospital_id=task.hospital_id).first()
+        diff_fields = []
+        preview = ''
+        if item.result == 'normal':
+            # 只用扫码字段拼预览，不加载资产（大幅减少JSON体积）
+            parts = []
+            for k in ['device_type', 'brand', 'department', 'location']:
+                v = (getattr(item, k, '') or '').strip()
+                if v:
+                    parts.append(v)
+            preview = ' · '.join(parts)
+        else:
+            if item.asset_id:
+                asset = Asset.query.filter(Asset.id == item.asset_id).first()
+            if not asset and item.asset_no:
+                asset = Asset.query.filter_by(asset_no=item.asset_no, hospital_id=task.hospital_id).first()
+            if asset:
+                for key, label in COMPARE_FIELDS:
+                    old_val = (getattr(asset, key, '') or '').strip()
+                    new_val = (getattr(item, key, '') or '').strip()
+                    if old_val != new_val and new_val:
+                        diff_fields.append({
+                            'key': key, 'label': label,
+                            'old': old_val, 'new': new_val,
+                        })
 
         d['asset'] = None
-        d['diff_fields'] = []
+        d['diff_fields'] = diff_fields
+        d['preview'] = preview
         if asset:
             d['asset'] = {
                 'id': asset.id,
@@ -203,15 +224,6 @@ def review_data(task_id):
                 'floor': asset.floor or '',
                 'location': asset.location or '',
             }
-            # 对比差异
-            for key, label in COMPARE_FIELDS:
-                old_val = (getattr(asset, key, '') or '').strip()
-                new_val = (getattr(item, key, '') or '').strip()
-                if old_val != new_val and new_val:
-                    d['diff_fields'].append({
-                        'key': key, 'label': label,
-                        'old': old_val, 'new': new_val,
-                    })
 
         if item.result == 'normal':
             normal_list.append(d)

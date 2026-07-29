@@ -384,16 +384,7 @@ function renderAll(data) {
 
 // ==================== 渲染正常卡片（精简） ====================
 function renderNormalCard(item) {
-  var asset = item.asset;
-  var preview = '';
-  if (asset) {
-    var parts = [];
-    if (asset.device_type) parts.push(asset.device_type);
-    if (asset.brand) parts.push(asset.brand);
-    if (asset.department) parts.push(asset.department);
-    if (asset.location) parts.push(asset.location);
-    preview = parts.join(' · ');
-  }
+  var preview = item.preview || '';
   return '<div class="item-card" id="card-' + item.id + '">' +
     '<div class="card-hd"><span class="code">' + esc(item.asset_no) + '</span><span class="badge-result normal"><i class="fas fa-check-circle"></i> 正常</span></div>' +
     '<div class="card-bd"><div class="normal-card-body">' +

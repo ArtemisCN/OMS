@@ -60,14 +60,6 @@
 .tmpl-scroll {
     height: 420px; overflow-y: auto;
 }
-.copy-btn {
-    display:inline-flex; align-items:center; gap:6px;
-    padding:8px 20px; border-radius:10px;
-    background:linear-gradient(135deg,#6366f1,#4f46e5);
-    color:#fff; border:none; font-size:13px; font-weight:600;
-    cursor:pointer; margin-top:8px;
-}
-
 .inline-form { display:flex; align-items:center; gap:6px; padding:5px 8px; }
 .inline-form input, .inline-form select {
     font-size:12px; padding:3px 8px; border-radius:6px;
@@ -105,17 +97,18 @@
     </div>
   </div>
 
-  <!-- ===== 全部组（只读概览） ===== -->
+    <!-- ===== 全部组（只读概览） ===== -->
   <div class="team-section" data-team="all">
+    <div class="tmpl-row-wrap">
     <div class="tmpl-card">
       <div class="tmpl-card-header">
         <span><i class="fas fa-cubes text-primary"></i> 故障模板组</span>
-        <span class="text-muted" style="font-weight:400;font-size:12px;">共 {{ fault_groups|length }} 组</span>
+        <span class="text-muted" style="font-weight:400;font-size:12px;">共 {{ team_fault_groups|length }} 组</span>
       </div>
       <div class="tmpl-card-body tmpl-scroll">
-        {% for g in fault_groups %}
+        {% for g in team_fault_groups %}
         <div class="tmpl-group-label">{{ g.name }}
-          <span class="text-muted" style="font-weight:400;font-size:11px;">{% if g.teams %}({{ g.teams }}){% else %}全组通用{% endif %}</span>
+          <span class="text-muted" style="font-weight:400;font-size:11px;">({{ g.teams }})</span>
         </div>
         {% for item in g.items %}
         <div class="tmpl-row">
@@ -124,42 +117,71 @@
         </div>
         {% else %}<div class="tmpl-row text-muted" style="font-size:12px;">（空组）</div>{% endfor %}
         {% else %}
-        <div class="tmpl-empty"><i class="fas fa-info-circle"></i> 暂无故障模板组</div>
+        <div class="tmpl-empty"><i class="fas fa-info-circle"></i> 暂无专属模板组</div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="tmpl-card">
+      <div class="tmpl-card-header" style="color:#6366f1;">
+        <span><i class="fas fa-globe"></i> 全组通用</span>
+        <span class="text-muted" style="font-weight:400;font-size:12px;">
+          故障组 {{ general_fault_groups|length }} &middot; 方案 {{ general_solutions|length }}
+        </span>
+      </div>
+      <div class="tmpl-card-body tmpl-scroll">
+        {% for g in general_fault_groups %}
+        <div class="tmpl-group-label" style="color:#6366f1;">{{ g.name }}</div>
+        {% for item in g.items %}
+        <div class="tmpl-row">
+          <span class="tmpl-badge-type">{{ item.fault_type }}</span>
+          <span class="tmpl-name">{{ item.display_name }}</span>
+        </div>
+        {% else %}<div class="tmpl-row text-muted" style="font-size:12px;">（空组）</div>{% endfor %}
+        {% endfor %}
+        {% if general_fault_groups and general_solutions %}<hr style="margin:8px 0;border-color:var(--border,#e5e7eb);">{% endif %}
+        {% for s in general_solutions %}
+        <div class="tmpl-row">
+          <span class="tmpl-name">{{ s.title }}</span>
+          <span class="tmpl-meta">{% if s.fault_type %}{{ s.fault_type }}{% endif %}</span>
+        </div>
+        {% else %}
+        {% if not general_fault_groups %}<div class="tmpl-empty"><i class="fas fa-globe"></i> 暂无通用模板</div>{% endif %}
         {% endfor %}
       </div>
     </div>
     <div class="tmpl-card">
       <div class="tmpl-card-header">
         <span><i class="fas fa-book text-success"></i> 方案模板</span>
-        <span class="text-muted" style="font-weight:400;font-size:12px;">共 {{ solutions|length }} 条</span>
+        <span class="text-muted" style="font-weight:400;font-size:12px;">共 {{ team_solutions|length }} 条</span>
       </div>
       <div class="tmpl-card-body tmpl-scroll">
-        {% for s in solutions %}
+        {% for s in team_solutions %}
         <div class="tmpl-row">
           <span class="tmpl-name">{{ s.title }}</span>
-          <span class="tmpl-meta">{% if s.fault_type %}{{ s.fault_type }}{% endif %} · {% if s.teams %}{{ s.teams }}{% else %}全组通用{% endif %}</span>
+          <span class="tmpl-meta">{% if s.fault_type %}{{ s.fault_type }}{% endif %} &middot; {{ s.teams }}</span>
         </div>
         {% else %}
-        <div class="tmpl-empty"><i class="fas fa-info-circle"></i> 暂无方案模板</div>
+        <div class="tmpl-empty"><i class="fas fa-info-circle"></i> 暂无专属方案模板</div>
         {% endfor %}
       </div>
     </div>
+    </div>
   </div>
-
-  <!-- ===== 按组展示（含操作按钮） ===== -->
+<!-- ===== 按组展示（含操作按钮） ===== -->
   {% for t in all_teams %}
   {% set team_fgs = fault_group_map.get(t, []) %}
   {% set gen_fgs = fault_group_map.get('', []) %}
   {% set team_sols = solution_map.get(t, []) %}
   {% set gen_sols = solution_map.get('', []) %}
-  {% set has_fault = team_fgs or gen_fgs %}
-  {% set has_solution = team_sols or gen_sols %}
+  {% set has_fault = team_fgs %}
+  {% set has_solution = team_sols %}
   <div class="team-section" data-team="{{ t|e }}" style="display:none;">
 
+    <div class="tmpl-row-wrap">
     <!-- ===== 故障模板组 ===== -->
     <div class="tmpl-card" id="fault-card-{{ t|e }}">
       <div class="tmpl-card-header">
-        <span><i class="fas fa-cubes text-primary"></i> 故障模板组 · {{ t }}</span>
+        <span><i class="fas fa-cubes text-primary"></i> 本组故障模板 · {{ t }}</span>
         <div>
           <button class="btn btn-sm btn-outline-success py-0" style="font-size:11px;" onclick="showAddFaultGroup('{{ t|e }}')"><i class="fas fa-plus"></i> 新建组</button>
         </div>
@@ -216,26 +238,10 @@
         {% endfor %}
         {% endif %}
 
-        {% if gen_fgs %}
-        <div style="font-size:11px;font-weight:600;color:#94a3b8;margin-top:{% if team_fgs %}10{% else %}0{% endif %}px;margin-bottom:4px;"><i class="fas fa-clipboard-list"></i> 全组通用</div>
-        {% for g in gen_fgs %}
-        <div class="tmpl-group-label">{{ g.name }}</div>
-        {% for item in g.items %}
-        <div class="tmpl-row">
-          <span class="tmpl-badge-type">{{ item.fault_type }}</span>
-          <span class="tmpl-name">{{ item.display_name }}</span>
-        </div>
-        {% endfor %}
-        {% endfor %}
-        {% endif %}
-
         {% if not has_fault %}
         <div class="tmpl-empty" id="fault-empty-{{ t|e }}">
           <i class="fas fa-inbox"></i>
-          <div style="margin-top:4px;">「{{ t }}」还没有故障模板</div>
-          <form onsubmit="return apiCopyTemplates(event, '{{ t|e }}', 'fault')">
-            <button type="submit" class="copy-btn"><i class="fas fa-copy"></i> 从华博复制</button>
-          </form>
+          <div style="margin-top:4px;">「{{ t }}」还没有专属故障模板</div>
         </div>
         {% endif %}
 
@@ -248,10 +254,40 @@
       </div>
     </div>
 
-    <!-- ===== 方案模板 ===== -->
+    <!-- ===== 全组通用（中间卡片） ===== -->
+    <div class="tmpl-card">
+      <div class="tmpl-card-header" style="color:#6366f1;">
+        <span><i class="fas fa-globe"></i> 全组通用</span>
+        <span class="text-muted" style="font-weight:400;font-size:12px;">
+          故障组 {{ gen_fgs|length }} &middot; 方案 {{ gen_sols|length }}
+        </span>
+      </div>
+      <div class="tmpl-card-body tmpl-scroll">
+        {% for g in gen_fgs %}
+        <div class="tmpl-group-label" style="color:#6366f1;">{{ g.name }}</div>
+        {% for item in g.items %}
+        <div class="tmpl-row">
+          <span class="tmpl-badge-type">{{ item.fault_type }}</span>
+          <span class="tmpl-name">{{ item.display_name }}</span>
+        </div>
+        {% endfor %}
+        {% endfor %}
+        {% if gen_fgs and gen_sols %}<hr style="margin:8px 0;border-color:var(--border,#e5e7eb);">{% endif %}
+        {% for s in gen_sols %}
+        <div class="tmpl-row">
+          <span class="tmpl-name">{{ s.title }}</span>
+          <span class="tmpl-meta">{% if s.fault_type %}{{ s.fault_type }}{% endif %}</span>
+        </div>
+        {% else %}
+        {% if not gen_fgs %}<div class="tmpl-empty"><i class="fas fa-globe"></i> 暂无通用模板</div>{% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- ===== 本组方案模板 ===== -->
     <div class="tmpl-card" id="sol-card-{{ t|e }}">
       <div class="tmpl-card-header">
-        <span><i class="fas fa-book text-success"></i> 方案模板 · {{ t }}</span>
+        <span><i class="fas fa-book text-success"></i> 本组方案模板 · {{ t }}</span>
         <button class="btn btn-sm btn-outline-success py-0" style="font-size:11px;" onclick="showAddSolution('{{ t|e }}')"><i class="fas fa-plus"></i> 新建</button>
       </div>
       <div class="tmpl-card-body tmpl-scroll" id="sol-body-{{ t|e }}">
@@ -289,27 +325,15 @@
         {% endfor %}
         {% endif %}
 
-        {% if gen_sols %}
-        <div style="font-size:11px;font-weight:600;color:#94a3b8;margin-top:{% if team_sols %}10{% else %}0{% endif %}px;margin-bottom:4px;"><i class="fas fa-clipboard-list"></i> 全组通用</div>
-        {% for s in gen_sols %}
-        <div class="tmpl-row">
-          <span class="tmpl-name">{{ s.title }}</span>
-          <span class="tmpl-meta">{% if s.fault_type %}{{ s.fault_type }}{% endif %}</span>
-        </div>
-        {% endfor %}
-        {% endif %}
-
         {% if not has_solution %}
         <div class="tmpl-empty" id="sol-empty-{{ t|e }}">
           <i class="fas fa-inbox"></i>
-          <div style="margin-top:4px;">「{{ t }}」还没有方案模板</div>
-          <form onsubmit="return apiCopyTemplates(event, '{{ t|e }}', 'solution')">
-            <button type="submit" class="copy-btn"><i class="fas fa-copy"></i> 从华博复制</button>
-          </form>
+          <div style="margin-top:4px;">「{{ t }}」还没有专属方案模板</div>
         </div>
         {% endif %}
       </div>
     </div>
+    </div><!-- /tmpl-row-wrap -->
   </div>
   {% endfor %}
 </div>
@@ -772,22 +796,6 @@ function apiDeleteSolution(sid, title) {
   })
   .catch(function(err){ showToast('请求失败: ' + err, 'error'); });
 }
-
-// ========== 复制模板 ==========
-function apiCopyTemplates(event, team, type) {
-  event.preventDefault();
-  var typeLabel = type === 'fault' ? '故障模板' : '方案模板';
-  if (!confirm('从华博复制' + typeLabel + '到「' + team + '」？')) return false;
-  var fd = new FormData();
-  fetch('/data/templates/copy-to/' + encodeURIComponent(team) + '?template_type=' + type, { method:'POST', body:fd })
-  .then(function(r){
-    // 复制后刷新页面（涉及大量数据变更，刷新更可靠）
-    window.location.reload();
-  })
-  .catch(function(err){ showToast('请求失败: ' + err, 'error'); });
-  return false;
-}
-
 // ===== 页面加载后恢复hash =====
 document.addEventListener('DOMContentLoaded', function() {
   if (!window.location.hash && !CURRENT_TEAM) return;

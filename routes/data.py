@@ -1324,70 +1324,29 @@ def list_templates():
         else:
             solution_map[''].append(s)
 
+    # 分离通用/专属
+    general_fault_groups = FaultTemplateGroup.query.filter(
+        (FaultTemplateGroup.teams == '') | (FaultTemplateGroup.teams.is_(None))
+    ).order_by(FaultTemplateGroup.id).all()
+    for g in general_fault_groups:
+        g.items = FaultTemplateItem.query.filter_by(
+            group_id=g.id
+        ).order_by(FaultTemplateItem.sort_order).all()
+    general_solutions = SolutionTemplate.query.filter(
+        (SolutionTemplate.teams == '') | (SolutionTemplate.teams.is_(None))
+    ).order_by(SolutionTemplate.title).all()
+
+    team_fault_groups = [g for g in fault_groups if g.teams]
+    team_solutions = [s for s in solutions if s.teams]
+
     return render_template('data/templates.html', all_teams=all_teams,
                            fault_groups=fault_groups, fault_group_map=fault_group_map,
                            solutions=solutions, solution_map=solution_map,
+                           general_fault_groups=general_fault_groups,
+                           general_solutions=general_solutions,
+                           team_fault_groups=team_fault_groups,
+                           team_solutions=team_solutions,
                            current_team=current_team)
-
-
-@data_bp.route('/templates/copy-to/<target_team>', methods=['POST'])
-@admin_required
-def copy_templates_to_team(target_team):
-    """从华博复制模板到目标组"""
-    from models import FaultTemplateGroup, FaultTemplateItem, SolutionTemplate, db
-    from urllib.parse import unquote
-    target_team = unquote(target_team)
-    source_team = '华博'
-    template_type = request.args.get('template_type', 'fault')
-
-    imported = 0
-    try:
-        if template_type == 'fault':
-            source_groups = FaultTemplateGroup.query.filter(
-                FaultTemplateGroup.teams.contains(source_team)
-            ).all()
-            for g in source_groups:
-                existing = FaultTemplateGroup.query.filter(
-                    FaultTemplateGroup.name == g.name,
-                    FaultTemplateGroup.teams.contains(target_team)
-                ).first()
-                if existing:
-                    continue
-                new_g = FaultTemplateGroup(name=g.name, teams=target_team)
-                db.session.add(new_g)
-                db.session.flush()
-                for item in FaultTemplateItem.query.filter_by(group_id=g.id).all():
-                    db.session.add(FaultTemplateItem(
-                        group_id=new_g.id, fault_type=item.fault_type,
-                        display_name=item.display_name,
-                        default_count=item.default_count, sort_order=item.sort_order,
-                    ))
-                    imported += 1
-        else:
-            source_solutions = SolutionTemplate.query.filter(
-                SolutionTemplate.teams.contains(source_team)
-            ).all()
-            for s in source_solutions:
-                existing = SolutionTemplate.query.filter(
-                    SolutionTemplate.title == s.title,
-                    SolutionTemplate.teams.contains(target_team)
-                ).first()
-                if existing:
-                    continue
-                db.session.add(SolutionTemplate(
-                    title=s.title, content=s.content, keywords=s.keywords,
-                    device_type=s.device_type, fault_type=s.fault_type,
-                    fault_subcategory=s.fault_subcategory, teams=target_team,
-                ))
-                imported += 1
-
-        db.session.commit()
-        flash(f'已从「{source_team}」复制 {imported} 条{"故障项" if template_type=="fault" else "方案"}到「{target_team}」', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'复制失败：{str(e)}', 'danger')
-
-    return redirect(url_for('data.list_templates'))
 
 
 # ==================== 故障模板组管理 ====================

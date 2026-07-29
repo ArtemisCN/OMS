@@ -38,7 +38,12 @@ def _team_filter(query, model, team):
 
 def list_persons():
     """获取人员列表（User 已合并 Person 数据）"""
-    persons = User.query.filter(User.is_admin == False).order_by(User.is_active.desc(), User.sort_order, User.display_name).all()
+    from flask import g
+    hid = getattr(g, 'hospital_id', None)
+    q = User.query.filter(User.is_admin == False)
+    if hid:
+        q = q.filter(User.hospital_id == hid)
+    persons = q.order_by(User.is_active.desc(), User.sort_order, User.display_name).all()
     return persons, {}
 
 
@@ -816,8 +821,13 @@ def export_consumables_template():
 # ===================================================================
 
 def get_duty_schedule_staff():
-    """获取在职人员列表"""
-    return User.query.filter_by(is_active=True).order_by(User.sort_order, User.id).all()
+    """获取在职人员列表（当前医院）"""
+    from flask import g
+    hid = getattr(g, 'hospital_id', None)
+    q = User.query.filter_by(is_active=True)
+    if hid:
+        q = q.filter(User.hospital_id == hid)
+    return q.order_by(User.sort_order, User.id).all()
 
 
 def get_duty_month_info(year, month):

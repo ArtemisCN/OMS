@@ -1419,11 +1419,12 @@ def timeout_reminder_check():
     now = datetime.now()
     threshold_time = now - timedelta(hours=timeout_hours)
     
-    # 查找超时未处理工单
+    # 查找超时未处理工单（仅当前医院）
     overdue_orders = WorkOrder.query.filter(
         WorkOrder.status.in_(['pending', 'in_progress']),
         WorkOrder.created_at < threshold_time,
-        WorkOrder.wecom_timeout_notified == False
+        WorkOrder.wecom_timeout_notified == False,
+        WorkOrder.hospital_id == getattr(g, 'hospital_id', 0)
     ).all()
     
     notified = 0

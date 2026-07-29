@@ -42,3 +42,4 @@ backups/
 
 # Logs
 *.log
+.secret

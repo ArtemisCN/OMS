@@ -1967,18 +1967,24 @@ def spare_part_alert_check():
 @login_required
 def inspection_routes():
     """巡检路线列表页"""
+    hid = getattr(g, 'hospital_id', 0)
     routes = InspectionRoute.query.order_by(InspectionRoute.created_at.desc()).all()
     buildings = sorted(set(
         r[0] for r in db.session.query(Department.building).filter(
-            Department.building != '', Department.building.isnot(None)
+            Department.building != '', Department.building.isnot(None),
+            Department.hospital_id == hid
         ).distinct().all()
     ))
     floors = sorted(set(
         r[0] for r in db.session.query(Department.floor).filter(
-            Department.floor != '', Department.floor.isnot(None)
+            Department.floor != '', Department.floor.isnot(None),
+            Department.hospital_id == hid
         ).distinct().all()
     ))
-    departments = [d.name for d in Department.query.filter(Department.is_active == True).order_by(Department.name).all()]
+    departments = [d.name for d in Department.query.filter(
+        Department.is_active == True,
+        Department.hospital_id == hid
+    ).order_by(Department.name).all()]
     return render_template('feature/inspection_routes.html', routes=routes,
                            routes_json=json.dumps([{
                                'id': r.id, 'name': r.name,

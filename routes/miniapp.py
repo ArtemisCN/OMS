@@ -16,6 +16,20 @@ def index():
 @miniapp_bp.route('/token')
 @login_required
 def get_token():
-    """为当前登录用户生成 API Bearer Token（供 SPA 调用 /api/mobile/*）"""
+    """生成 API Token
+    ---
+    tags:
+      - Mobile API
+    summary: 生成 API Bearer Token
+    description: 为当前 Web 登录用户生成 /api/mobile/* 接口的 Bearer Token
+    responses:
+      200:
+        description: Token
+        schema:
+          type: object
+          properties:
+            token:
+              type: string
+    """
     token_str = MobileToken.generate(current_user)
     return jsonify({'token': token_str})

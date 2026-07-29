@@ -125,7 +125,59 @@ def generate_qr():
 @api_mobile_bp.route('/login', methods=['POST'])
 @rate_limit(max_requests=5, window=60)
 def api_login():
-    """用户登录（密码），返回 token"""
+    """用户登录（密码），返回 token
+    ---
+    tags:
+      - Mobile API
+    summary: 小程序用户密码登录
+    description: 使用用户名和密码登录，返回 Bearer token 用于后续 API 调用
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - username
+            - password
+          properties:
+            username:
+              type: string
+              example: admin
+              description: 用户名
+            password:
+              type: string
+              example: admin123
+              description: 密码
+    responses:
+      200:
+        description: 登录成功，返回 token 和用户信息
+        schema:
+          type: object
+          properties:
+            token:
+              type: string
+              example: "mob_a1b2c3d4..."
+            user:
+              type: object
+              properties:
+                id:
+                  type: integer
+                username:
+                  type: string
+                display_name:
+                  type: string
+                wx_bound:
+                  type: boolean
+                is_admin:
+                  type: boolean
+                avatar:
+                  type: string
+      400:
+        description: 缺少用户名或密码
+      401:
+        description: 用户名或密码错误
+    """
     data = request.get_json(silent=True) or {}
     username = data.get('username', '').strip()
     password = data.get('password', '').strip()
@@ -158,14 +210,55 @@ def api_login():
 
 @api_mobile_bp.route('/avatars')
 def list_avatars():
-    """获取默认头像列表"""
+    """获取默认头像列表
+    ---
+    tags:
+      - Mobile API
+    summary: 默认头像列表
+    description: 返回系统提供的默认头像 URL 列表（DiceBear 卡通/猫咪头像）
+    responses:
+      200:
+        description: 头像 URL 列表
+        schema:
+          type: object
+          properties:
+            avatars:
+              type: array
+              items:
+                type: string
+              example:
+                - "https://api.dicebear.com/9.x/adventurer/svg?seed=Kitty"
+    """
     return jsonify({'avatars': DEFAULT_AVATARS})
 
 
 @api_mobile_bp.route('/avatar/select', methods=['POST'])
 @login_required_api
 def select_avatar(user):
-    """选择头像"""
+    """选择头像
+    ---
+    tags:
+      - Mobile API
+    summary: 选择头像
+    description: 从默认头像列表中选一个作为用户头像
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            avatar:
+              type: string
+              description: 头像URL
+    responses:
+      200:
+        description: 头像设置成功
+      400:
+        description: 缺少头像URL
+    """
     data = request.get_json(silent=True) or {}
     avatar = data.get('avatar', '').strip()
     if not avatar:
@@ -178,7 +271,38 @@ def select_avatar(user):
 @rate_limit(max_requests=5, window=60)
 def wx_login():
     """微信自动登录：通过 wx.login code 换取 openid
-    需先在 config.py 配置 WECHAT_APPID 和 WECHAT_SECRET
+    ---
+    tags:
+      - Mobile API
+    summary: 微信静默登录
+    description: 通过微信小程序的 wx.login 获取的 code 交换 openid 并登录。需先配置 WECHAT_APPID 和 WECHAT_SECRET。
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - code
+          properties:
+            code:
+              type: string
+              description: 微信 wx.login 返回的临时 code
+              example: 033N7U000aPHSr1CZv1009XTcI0N7U0J
+    responses:
+      200:
+        description: 登录成功
+        schema:
+          type: object
+          properties:
+            token:
+              type: string
+            user:
+              type: object
+      404:
+        description: 微信号未绑定账号，返回 openid 供后续绑定
+      400:
+        description: 未配置微信登录或缺少 code
     """
     import urllib.request, json as pyjson
     from flask import current_app
@@ -234,7 +358,41 @@ def wx_login():
 @api_mobile_bp.route('/bind_wx', methods=['POST'])
 @login_required_api
 def bind_wx(user):
-    """绑定微信号到当前用户"""
+    """绑定微信号到当前用户
+    ---
+    tags:
+      - Mobile API
+    summary: 绑定微信号
+    description: 将微信 openid 绑定到当前登录的用户账号
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - code
+          properties:
+            code:
+              type: string
+              description: 微信 wx.login 返回的临时 code
+    responses:
+      200:
+        description: 绑定成功
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: 微信绑定成功
+            wx_bound:
+              type: boolean
+              example: true
+      409:
+        description: 该微信号已绑定其他账号
+    """
     import urllib.request, json as pyjson
     from flask import current_app
 
@@ -275,7 +433,31 @@ def bind_wx(user):
 @api_mobile_bp.route('/profile')
 @login_required_api
 def profile(user):
-    """获取当前用户信息"""
+    """获取当前用户信息
+    ---
+    tags:
+      - Mobile API
+    summary: 获取当前登录用户信息
+    description: 返回当前 Bearer token 对应用户的基本信息
+    security:
+      - BearerAuth: []
+    responses:
+      200:
+        description: 用户信息
+        schema:
+          type: object
+          properties:
+            id:
+              type: integer
+            username:
+              type: string
+            display_name:
+              type: string
+            is_admin:
+              type: boolean
+      401:
+        description: 未提供认证令牌或令牌无效
+    """
     return jsonify({
         'id': user.id,
         'username': user.username,
@@ -288,13 +470,65 @@ def profile(user):
 @login_required_api
 def orders(user):
     """获取工单列表
-
-    规则：
-    - status=pending  → 显示全部待接单工单（公共池）
-    - status=in_progress  → 显示当前用户处理中的工单
-    - status=completed  → 显示当前用户已完成的工单
-    - status=completed_today  → 显示当前用户当天完成的工单
-    - 不传 status  → 返回全部统计数据（供标签页显示数量）
+    ---
+    tags:
+      - Mobile API
+    summary: 获取工单列表（含统计数据）
+    description: |
+      根据 status 参数返回不同状态的工单列表，同时返回各状态统计数量。
+      - status=pending → 待接单工单（公共池）
+      - status=in_progress → 当前用户处理中的工单
+      - status=completed → 当前用户已完成的工单
+      - status=completed_today → 当前用户当天完成的工单
+      - 不传 status → 只返回统计数量，不返回列表
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: status
+        in: query
+        type: string
+        required: false
+        enum: [pending, in_progress, completed, completed_today]
+        description: 工单状态筛选
+        example: pending
+    responses:
+      200:
+        description: 工单列表及统计
+        schema:
+          type: object
+          properties:
+            orders:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  title:
+                    type: string
+                  device_type:
+                    type: string
+                  fault_type:
+                    type: string
+                  status:
+                    type: string
+                  priority:
+                    type: string
+                  created_at:
+                    type: string
+            stats:
+              type: object
+              properties:
+                pending:
+                  type: integer
+                in_progress:
+                  type: integer
+                completed:
+                  type: integer
+                completed_today:
+                  type: integer
+      401:
+        description: 未认证
     """
     person_name = user.display_name or user.username
     status_filter = request.args.get('status', '')
@@ -403,7 +637,58 @@ def orders(user):
 @api_mobile_bp.route('/orders/<int:order_id>')
 @login_required_api
 def order_detail(user, order_id):
-    """获取工单详情（含关联电子表单）"""
+    """获取工单详情（含关联电子表单）
+    ---
+    tags:
+      - Mobile API
+    summary: 工单详情
+    description: 获取指定工单的完整信息，含关联的电子表单数据
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: order_id
+        in: path
+        type: integer
+        required: true
+        description: 工单ID
+        example: 1
+    responses:
+      200:
+        description: 工单详情
+        schema:
+          type: object
+          properties:
+            order:
+              type: object
+              properties:
+                id:
+                  type: integer
+                title:
+                  type: string
+                description:
+                  type: string
+                status:
+                  type: string
+                priority:
+                  type: string
+                building:
+                  type: string
+                department:
+                  type: string
+                person:
+                  type: string
+                solution:
+                  type: string
+                created_at:
+                  type: string
+                completed_at:
+                  type: string
+            form:
+              type: object
+              description: 关联的电子表单（如有）
+      404:
+        description: 工单不存在
+    """
     order = WorkOrder.query.get(order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
@@ -452,8 +737,38 @@ def order_detail(user, order_id):
 @login_required_api
 def accept_order(user, order_id):
     """接单：pending → in_progress
-
-    从公共池接单，自动将 person 设置为当前用户
+    ---
+    tags:
+      - Mobile API
+    summary: 接单
+    description: 从公共池接单，自动将工单负责人设置为当前用户
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: order_id
+        in: path
+        type: integer
+        required: true
+        description: 工单ID
+        example: 1
+    responses:
+      200:
+        description: 接单成功
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: 接单成功
+            status:
+              type: string
+              example: in_progress
+      403:
+        description: 无权接此医院的工单
+      404:
+        description: 工单不存在
+      400:
+        description: 当前状态不允许接单
     """
     order = WorkOrder.query.get(order_id)
     if not order:
@@ -479,7 +794,49 @@ def accept_order(user, order_id):
 @api_mobile_bp.route('/orders/<int:order_id>/solve', methods=['POST'])
 @login_required_api
 def solve_order(user, order_id):
-    """提交解决方案：in_progress → completed（表单工单请提交表单审批）"""
+    """提交解决方案：in_progress → completed（表单工单请提交表单审批）
+    ---
+    tags:
+      - Mobile API
+    summary: 完成工单
+    description: 提交解决方案并完成工单。关联电子表单的工单不允许直接完结，需通过表单提交审批。
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: order_id
+        in: path
+        type: integer
+        required: true
+        description: 工单ID
+        example: 1
+      - name: body
+        in: body
+        schema:
+          type: object
+          properties:
+            solution:
+              type: string
+              description: 解决方案描述
+              example: 经检查，内存条松动，重新安装后恢复正常
+            inspection_data:
+              type: string
+              description: 巡检数据（JSON 字符串）
+    responses:
+      200:
+        description: 完成成功
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: 提交完成
+      403:
+        description: 无权完成此工单
+      404:
+        description: 工单不存在
+      400:
+        description: 状态不允许提交
+    """
     order = WorkOrder.query.get(order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
@@ -513,7 +870,34 @@ def solve_order(user, order_id):
 @api_mobile_bp.route('/orders/<int:order_id>/inspection_submit', methods=['POST'])
 @login_required_api
 def submit_inspection(user, order_id):
-    """提交巡检结果"""
+    """提交巡视表单：记录巡检结果但不改变工单状态
+    ---
+    tags:
+      - Mobile API
+    summary: 提交巡检记录
+    description: 记录巡检结果但不改变工单状态。适用于巡检类工单的场景记录。
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: order_id
+        in: path
+        type: integer
+        required: true
+      - name: body
+        in: body
+        schema:
+          type: object
+          properties:
+            solution:
+              type: string
+            inspection_data:
+              type: string
+    responses:
+      200:
+        description: 提交成功
+      403:
+        description: 无权操作
+    """
     order = WorkOrder.query.get(order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
@@ -560,7 +944,18 @@ def match_template(user):
 @api_mobile_bp.route('/logout', methods=['POST'])
 @login_required_api
 def logout(user):
-    """退出登录，清除 token"""
+    """退出登录（清除 token）
+    ---
+    tags:
+      - Mobile API
+    summary: 退出登录
+    description: 清除当前 Bearer token，使其立即失效
+    security:
+      - BearerAuth: []
+    responses:
+      200:
+        description: 退出成功
+    """
     auth = request.headers.get('Authorization', '')
     token_str = auth[7:] if auth.startswith('Bearer ') else ''
     MobileToken.query.filter_by(token=token_str).delete()
@@ -811,7 +1206,18 @@ def send_wecom_notification(order, skip_time_check=False, is_urge=False):
 @api_mobile_bp.route('/forms')
 @login_required_api
 def form_list_api(user):
-    """获取当前用户相关表单列表"""
+    """获取当前用户相关表单列表
+    ---
+    tags:
+      - Mobile API
+    summary: 电子表单列表
+    description: 获取当前用户关联的电子表单列表
+    security:
+      - BearerAuth: []
+    responses:
+      200:
+        description: 表单列表
+    """
     person_name = user.display_name or user.username
     forms = PaperForm.query.filter(
         PaperForm.created_by == person_name
@@ -933,7 +1339,27 @@ def api_data_sources(user):
 @api_mobile_bp.route('/orders/today-summary')
 @login_required_api
 def today_summary(user):
-    """获取今日工作总结文本（已完成工单汇总），一键复制到剪贴板"""
+    """获取今日工单概况（用于小程序首页）
+    ---
+    tags:
+      - Mobile API
+    summary: 今日工单概况
+    description: 返回今日工单的数量统计，用于小程序首页仪表盘展示
+    security:
+      - BearerAuth: []
+    responses:
+      200:
+        description: 今日统计数据
+        schema:
+          type: object
+          properties:
+            total:
+              type: integer
+            completed:
+              type: integer
+            pending:
+              type: integer
+    """
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     person_name = user.display_name or user.username
 

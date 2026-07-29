@@ -103,7 +103,17 @@ def list_orders():
 @orders_bp.route('/create', methods=['GET', 'POST'])
 @login_required
 def create_order():
-    if not can_access('新建工单'):
+    """新建工单（Web页面）
+    ---
+    tags:
+      - Web 页面
+    summary: 新建工单
+    x-web-page: true
+    responses:
+      200:
+        description: 工单创建页面（GET）或创建成功重定向（POST）
+    """
+    if not can_access('work_order'):
         return "无权访问", 403
     from services.address import get_merged_addresses, get_all_buildings
     team = resolve_team(request, current_user)

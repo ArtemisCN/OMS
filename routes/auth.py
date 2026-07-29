@@ -47,6 +47,29 @@ def admin_required(f):
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
+    """Web 登录页面
+    ---
+    tags:
+      - Web 页面
+    summary: 登录页面（GET 返回 HTML 表单，POST 提交登录）
+    x-web-page: true
+    parameters:
+      - name: username
+        in: formData
+        type: string
+        required: true
+        description: 用户名
+      - name: password
+        in: formData
+        type: string
+        required: true
+        description: 密码
+    responses:
+      200:
+        description: 登录页面（GET）或登录成功重定向（POST）
+      401:
+        description: 登录失败
+    """
     # --- 已认证用户直接跳转首页，无需重复登录 ---
     if current_user.is_authenticated:
         return redirect(url_for('main.dashboard'))

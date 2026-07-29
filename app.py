@@ -49,6 +49,47 @@ def create_app():
     # ===== 初始化日志与监控系统 =====
     setup_logging(app)
 
+    # ===== 初始化 Swagger API 文档 =====
+    # 配置自定义路由: /api/docs (UI) 和 /api/openapi.json (JSON)
+    app.config['SWAGGER'] = {
+        'specs_route': '/api/docs/',
+        'specs': [
+            {
+                'endpoint': 'apispec',
+                'route': '/api/openapi.json',
+                'rule_filter': lambda rule: True,
+            }
+        ],
+        'static_url_path': '/flasgger_static',
+    }
+    from flasgger import Swagger
+    swagger_template = {
+        "info": {
+            "title": "智维工控 · 医院工单管理 API",
+            "description": "多院区工单系统 API 文档，覆盖小程序接口、Web 接口、资产管理等。\n\n认证方式：在请求头中添加 `Authorization: Bearer <token>`（登录接口返回的 token 值）",
+            "version": "2.1.0",
+            "contact": {
+                "email": "admin@demolin.cn"
+            }
+        },
+        "security": [{"BearerAuth": []}],
+        "components": {
+            "securitySchemes": {
+                "BearerAuth": {
+                    "type": "http",
+                    "scheme": "bearer",
+                    "bearerFormat": "JWT"
+                }
+            }
+        },
+        "tags": [
+            {"name": "Mobile API", "description": "微信小程序/H5 移动端接口"},
+            {"name": "健康检查", "description": "服务状态与健康检测"},
+            {"name": "Web 页面", "description": "Web 管理端页面路由（返回 HTML）", "x-web-page": True},
+        ]
+    }
+    swagger = Swagger(app, template=swagger_template)
+
     # 初始化系统参数缓存（避免每次请求查询 SystemSetting）
     with app.app_context():
         try:

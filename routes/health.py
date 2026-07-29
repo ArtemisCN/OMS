@@ -23,10 +23,32 @@ VERSION = 'v2.1'
 
 @health_bp.route('/health')
 def health_check():
-    """
-    健康检查端点
-    - 验证数据库连接
-    - 返回服务版本和时间戳
+    """健康检查端点
+    ---
+    tags:
+      - 健康检查
+    summary: 综合健康检查
+    description: 验证数据库连接并返回服务状态。供 Nginx 或外部监控系统使用。
+    responses:
+      200:
+        description: 服务正常
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: ok
+            timestamp:
+              type: string
+              example: "2026-07-14T10:30:00+08:00"
+            database:
+              type: string
+              example: ok
+            version:
+              type: string
+              example: v2.1
+      503:
+        description: 数据库异常
     """
     db_status = 'ok'
     try:
@@ -48,8 +70,25 @@ def health_check():
 
 @health_bp.route('/health/readiness')
 def readiness_check():
-    """
-    就绪检查：验证应用是否准备好处理请求
+    """就绪检查
+    ---
+    tags:
+      - 健康检查
+    summary: 就绪检查
+    description: 验证数据库连接和应用状态，判断是否准备好处理请求
+    responses:
+      200:
+        description: 就绪
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: ready
+            timestamp:
+              type: string
+      503:
+        description: 未就绪
     """
     try:
         from flask import current_app
@@ -69,8 +108,23 @@ def readiness_check():
 
 @health_bp.route('/health/liveness')
 def liveness_check():
-    """
-    存活检查：验证进程是否在运行
+    """存活检查
+    ---
+    tags:
+      - 健康检查
+    summary: 存活检查
+    description: 验证进程是否在运行，不依赖数据库
+    responses:
+      200:
+        description: 存活
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: alive
+            timestamp:
+              type: string
     """
     return jsonify({
         'status': 'alive',

@@ -32,7 +32,7 @@ QR_BASE_URL = 'https://demolin.cn/scan/1/submit?asset_id='
 @login_required
 def transfer_order(order_id):
     """转交工单给他人"""
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         return jsonify(success=False, error='工单不存在'), 404
 
@@ -63,7 +63,7 @@ def transfer_order(order_id):
 @login_required
 def transfer_page(order_id):
     """转交页面"""
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         return render_template('errors/404.html'), 404
 
@@ -77,7 +77,7 @@ def transfer_page(order_id):
 @login_required
 def history_data(order_id):
     """返回与工单同设备类型或同科室的历史工单 JSON"""
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         return jsonify(success=False, error='工单不存在'), 404
 
@@ -115,7 +115,7 @@ def history_data(order_id):
 @login_required
 def history_page(order_id):
     """历史追溯页面"""
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         return render_template('errors/404.html'), 404
     return render_template('feature/history_page.html', order=order)
@@ -350,7 +350,7 @@ def asset_qr():
 @login_required
 def asset_qr_image(asset_id):
     """生成单个资产二维码图片"""
-    asset = db.session.get(Asset, asset_id)
+    asset = Asset.query.get(asset_id)
     if not asset:
         return jsonify(success=False, error='资产不存在'), 404
 
@@ -490,11 +490,11 @@ def stock_link_to_order():
     if not part_id or not work_order_id:
         return jsonify(success=False, error='参数不完整'), 400
 
-    part = db.session.get(SparePart, part_id)
+    part = SparePart.query.get(part_id)
     if not part:
         return jsonify(success=False, error='备件不存在'), 404
 
-    work_order = db.session.get(WorkOrder, work_order_id)
+    work_order = WorkOrder.query.get(work_order_id)
     if not work_order:
         return jsonify(success=False, error='工单不存在'), 404
 
@@ -553,7 +553,7 @@ def supplier_save():
         return jsonify(success=False, error='供应商名称不能为空'), 400
 
     if supplier_id:
-        supplier = db.session.get(Supplier, supplier_id)
+        supplier = Supplier.query.get(supplier_id)
         if not supplier:
             return jsonify(success=False, error='供应商不存在'), 404
     else:
@@ -695,7 +695,7 @@ def asset_depreciation():
 @login_required
 def inspection_checkin_page(task_id):
     """巡检签到页面（扫码签到替代 NFC）"""
-    plan = db.session.get(InspectionPlan, task_id)
+    plan = InspectionPlan.query.get(task_id)
     if not plan:
         return render_template('errors/404.html'), 404
     # 查询已有的签到记录
@@ -707,7 +707,7 @@ def inspection_checkin_page(task_id):
 @login_required
 def inspection_checkin_do(task_id):
     """执行巡检签到"""
-    plan = db.session.get(InspectionPlan, task_id)
+    plan = InspectionPlan.query.get(task_id)
     if not plan:
         return jsonify(success=False, error='巡检计划不存在'), 404
 
@@ -1371,7 +1371,7 @@ def auto_assign_check():
     if _get_feature_toggle('auto_assign') != 'true':
         return jsonify(success=True, assigned=False, reason='自动派单未启用')
     
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         return jsonify(success=False, error='工单不存在'), 404
     
@@ -1545,7 +1545,7 @@ def shift_handover_save():
 @login_required
 def shift_handover_detail(hid):
     """获取交接班记录详情"""
-    h = db.session.get(ShiftHandover, hid)
+    h = ShiftHandover.query.get(hid)
     if not h:
         return jsonify(success=False, error='记录不存在'), 404
     return jsonify(success=True, data={
@@ -1616,7 +1616,7 @@ def repair_rating_detail(oid):
     rr = RepairRating.query.filter_by(work_order_id=oid).first()
     if not rr:
         return jsonify(success=False, error='未找到评价'), 404
-    wo = db.session.get(WorkOrder, oid)
+    wo = WorkOrder.query.get(oid)
     return jsonify(success=True, data={
         'id': rr.id,
         'order_id': rr.work_order_id,
@@ -1670,7 +1670,7 @@ def complaint_save():
     if not title or not complainant:
         return jsonify(success=False, error='标题和投诉人不能为空'), 400
     if cid:
-        c = db.session.get(Complaint, cid)
+        c = Complaint.query.get(cid)
         if not c:
             return jsonify(success=False, error='投诉不存在'), 404
         c.title = title
@@ -1694,7 +1694,7 @@ def complaint_handle():
     handler = data.get('handler', '').strip()
     resolution = data.get('resolution', '').strip()
     new_status = data.get('status', 'processing')
-    c = db.session.get(Complaint, cid)
+    c = Complaint.query.get(cid)
     if not c:
         return jsonify(success=False, error='投诉不存在'), 404
     c.handler = handler or current_user.display_name or current_user.username
@@ -1712,7 +1712,7 @@ def complaint_close():
     """关闭投诉"""
     data = request.get_json(silent=True) or {}
     cid = data.get('id')
-    c = db.session.get(Complaint, cid)
+    c = Complaint.query.get(cid)
     if not c:
         return jsonify(success=False, error='投诉不存在'), 404
     c.status = 'closed'
@@ -1726,7 +1726,7 @@ def complaint_reopen():
     """重新打开投诉"""
     data = request.get_json(silent=True) or {}
     cid = data.get('id')
-    c = db.session.get(Complaint, cid)
+    c = Complaint.query.get(cid)
     if not c:
         return jsonify(success=False, error='投诉不存在'), 404
     c.status = 'processing'
@@ -1806,7 +1806,7 @@ def stock_request_approve():
     """审批通过领用申请"""
     data = request.get_json(silent=True) or {}
     rid = data.get('id')
-    sr = db.session.get(StockRequest, rid)
+    sr = StockRequest.query.get(rid)
     if not sr:
         return jsonify(success=False, error='申请不存在'), 404
     sr.status = 'approved'
@@ -1818,7 +1818,7 @@ def stock_request_approve():
             part_id = item.get('part_id')
             qty = item.get('quantity', 1)
             if part_id:
-                part = db.session.get(SparePart, part_id)
+                part = SparePart.query.get(part_id)
                 if part and part.stock:
                     part.stock = max(0, (part.stock or 0) - qty)
     db.session.commit()
@@ -1831,7 +1831,7 @@ def stock_request_reject():
     """拒绝领用申请"""
     data = request.get_json(silent=True) or {}
     rid = data.get('id')
-    sr = db.session.get(StockRequest, rid)
+    sr = StockRequest.query.get(rid)
     if not sr:
         return jsonify(success=False, error='申请不存在'), 404
     sr.status = 'rejected'
@@ -1882,7 +1882,7 @@ def spare_part_alert_save():
     if not part_id:
         return jsonify(success=False, error='请选择备件'), 400
     if aid:
-        a = db.session.get(SparePartAlert, aid)
+        a = SparePartAlert.query.get(aid)
         if a:
             a.part_id = part_id
             a.min_threshold = min_threshold
@@ -1905,7 +1905,7 @@ def spare_part_alert_toggle():
     """切换预警开关"""
     data = request.get_json(silent=True) or {}
     aid = data.get('id')
-    a = db.session.get(SparePartAlert, aid)
+    a = SparePartAlert.query.get(aid)
     if not a:
         return jsonify(success=False, error='预警配置不存在'), 404
     a.enabled = not a.enabled
@@ -1918,7 +1918,7 @@ def spare_part_alert_toggle():
 def spare_part_alert_get():
     """获取单条预警配置"""
     aid = request.args.get('id', type=int)
-    a = db.session.get(SparePartAlert, aid)
+    a = SparePartAlert.query.get(aid)
     if not a:
         return jsonify(success=False, error='预警配置不存在'), 404
     return jsonify(success=True, data={
@@ -1934,7 +1934,7 @@ def spare_part_alert_get():
 @login_required
 def spare_part_alert_delete(aid):
     """删除预警配置"""
-    a = db.session.get(SparePartAlert, aid)
+    a = SparePartAlert.query.get(aid)
     if not a:
         return jsonify(success=False, error='预警配置不存在'), 404
     db.session.delete(a)
@@ -2000,7 +2000,7 @@ def inspection_route_save():
     if not name:
         return jsonify(success=False, error='路线名称不能为空'), 400
     if rid:
-        r = db.session.get(InspectionRoute, rid)
+        r = InspectionRoute.query.get(rid)
         if r:
             r.name = name
             r.points = points
@@ -2018,7 +2018,7 @@ def inspection_route_toggle():
     """切换路线启用状态"""
     data = request.get_json(silent=True) or {}
     rid = data.get('id') or data.get('rid')
-    r = db.session.get(InspectionRoute, rid)
+    r = InspectionRoute.query.get(rid)
     if not r:
         return jsonify(success=False, error='路线不存在'), 404
     r.is_active = not r.is_active
@@ -2031,7 +2031,7 @@ def inspection_route_toggle():
 def inspection_route_delete():
     """删除巡检路线"""
     rid = request.form.get('rid', type=int) or request.args.get('rid', type=int)
-    r = db.session.get(InspectionRoute, rid)
+    r = InspectionRoute.query.get(rid)
     if not r:
         return jsonify(success=False, error='路线不存在'), 404
     db.session.delete(r)
@@ -2043,7 +2043,7 @@ def inspection_route_delete():
 @login_required
 def inspection_route_data(rid):
     """获取单条路线数据"""
-    r = db.session.get(InspectionRoute, rid)
+    r = InspectionRoute.query.get(rid)
     if not r:
         return jsonify(success=False, error='路线不存在'), 404
     return jsonify(success=True, data={
@@ -2141,7 +2141,7 @@ def asset_lifecycle():
     asset_id = request.args.get('asset_id', type=int)
     if not asset_id:
         asset_id = request.args.get('id', type=int)
-    asset = db.session.get(Asset, asset_id) if asset_id else None
+    asset = Asset.query.get(asset_id) if asset_id else None
     if not asset:
         return render_template('errors/404.html'), 404
     logs = AssetLog.query.filter_by(asset_id=asset.id).order_by(AssetLog.created_at.desc()).all()

@@ -38,7 +38,7 @@ def asset_qr():
 @login_required
 def asset_qr_image(asset_id):
     """生成单个资产二维码图片"""
-    asset = db.session.get(Asset, asset_id)
+    asset = Asset.query.get(asset_id)
     if not asset:
         return jsonify(success=False, error='资产不存在'), 404
 
@@ -178,11 +178,11 @@ def stock_link_to_order():
     if not part_id or not work_order_id:
         return jsonify(success=False, error='参数不完整'), 400
 
-    part = db.session.get(SparePart, part_id)
+    part = SparePart.query.get(part_id)
     if not part:
         return jsonify(success=False, error='备件不存在'), 404
 
-    work_order = db.session.get(WorkOrder, work_order_id)
+    work_order = WorkOrder.query.get(work_order_id)
     if not work_order:
         return jsonify(success=False, error='工单不存在'), 404
 
@@ -241,7 +241,7 @@ def supplier_save():
         return jsonify(success=False, error='供应商名称不能为空'), 400
 
     if supplier_id:
-        supplier = db.session.get(Supplier, supplier_id)
+        supplier = Supplier.query.get(supplier_id)
         if not supplier:
             return jsonify(success=False, error='供应商不存在'), 404
     else:
@@ -269,7 +269,7 @@ def supplier_save():
 @login_required
 def supplier_delete(id):
     """删除供应商"""
-    supplier = db.session.get(Supplier, id)
+    supplier = Supplier.query.get(id)
     if not supplier:
         return jsonify(success=False, error='供应商不存在'), 404
     db.session.delete(supplier)
@@ -429,7 +429,7 @@ def stock_request_approve():
     """审批通过领用申请"""
     data = request.get_json(silent=True) or {}
     rid = data.get('id')
-    sr = db.session.get(StockRequest, rid)
+    sr = StockRequest.query.get(rid)
     if not sr:
         return jsonify(success=False, error='申请不存在'), 404
     sr.status = 'approved'
@@ -441,7 +441,7 @@ def stock_request_approve():
             part_id = item.get('part_id')
             qty = item.get('quantity', 1)
             if part_id:
-                part = db.session.get(SparePart, part_id)
+                part = SparePart.query.get(part_id)
                 if part and part.stock:
                     part.stock = max(0, (part.stock or 0) - qty)
     db.session.commit()
@@ -454,7 +454,7 @@ def stock_request_reject():
     """拒绝领用申请"""
     data = request.get_json(silent=True) or {}
     rid = data.get('id')
-    sr = db.session.get(StockRequest, rid)
+    sr = StockRequest.query.get(rid)
     if not sr:
         return jsonify(success=False, error='申请不存在'), 404
     sr.status = 'rejected'
@@ -505,7 +505,7 @@ def spare_part_alert_save():
     if not part_id:
         return jsonify(success=False, error='请选择备件'), 400
     if aid:
-        a = db.session.get(SparePartAlert, aid)
+        a = SparePartAlert.query.get(aid)
         if a:
             a.part_id = part_id
             a.min_threshold = min_threshold
@@ -528,7 +528,7 @@ def spare_part_alert_toggle():
     """切换预警开关"""
     data = request.get_json(silent=True) or {}
     aid = data.get('id')
-    a = db.session.get(SparePartAlert, aid)
+    a = SparePartAlert.query.get(aid)
     if not a:
         return jsonify(success=False, error='预警配置不存在'), 404
     a.enabled = not a.enabled
@@ -541,7 +541,7 @@ def spare_part_alert_toggle():
 def spare_part_alert_get():
     """获取单条预警配置"""
     aid = request.args.get('id', type=int)
-    a = db.session.get(SparePartAlert, aid)
+    a = SparePartAlert.query.get(aid)
     if not a:
         return jsonify(success=False, error='预警配置不存在'), 404
     return jsonify(success=True, data={
@@ -557,7 +557,7 @@ def spare_part_alert_get():
 @login_required
 def spare_part_alert_delete(aid):
     """删除预警配置"""
-    a = db.session.get(SparePartAlert, aid)
+    a = SparePartAlert.query.get(aid)
     if not a:
         return jsonify(success=False, error='预警配置不存在'), 404
     db.session.delete(a)
@@ -671,7 +671,7 @@ def asset_lifecycle():
     asset_id = request.args.get('asset_id', type=int)
     if not asset_id:
         asset_id = request.args.get('id', type=int)
-    asset = db.session.get(Asset, asset_id) if asset_id else None
+    asset = Asset.query.get(asset_id) if asset_id else None
     if not asset:
         return render_template('errors/404.html'), 404
     logs = AssetLog.query.filter_by(asset_id=asset.id).order_by(AssetLog.created_at.desc()).all()

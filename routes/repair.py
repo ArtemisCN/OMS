@@ -223,7 +223,7 @@ def order_stats_api():
 @repair_bp.route('/<int:oid>')
 @login_required_repair
 def order_view(oid):
-    order = db.session.get(RepairOrder, oid)
+    order = RepairOrder.query.get(oid)
     if not order:
         flash('维修单不存在', 'danger')
         return redirect(url_for('repair.order_list'))
@@ -233,7 +233,7 @@ def order_view(oid):
 @repair_bp.route('/<int:oid>/print')
 @login_required_repair
 def order_print(oid):
-    order = db.session.get(RepairOrder, oid)
+    order = RepairOrder.query.get(oid)
     if not order:
         flash('维修单不存在', 'danger')
         return redirect(url_for('repair.order_list'))
@@ -243,7 +243,7 @@ def order_print(oid):
 @repair_bp.route('/<int:oid>/save_fields', methods=['POST'])
 @login_required_repair
 def order_save_fields(oid):
-    order = db.session.get(RepairOrder, oid)
+    order = RepairOrder.query.get(oid)
     if not order:
         return jsonify({'error': 'not found'}), 404
     data = request.get_json(silent=True) or {}
@@ -256,7 +256,7 @@ def order_save_fields(oid):
 @repair_bp.route('/<int:oid>/submit', methods=['POST'])
 @login_required_repair
 def order_submit(oid):
-    order = db.session.get(RepairOrder, oid)
+    order = RepairOrder.query.get(oid)
     if not order:
         return jsonify({'error': 'not found'}), 404
     order.status = 'pending'
@@ -267,7 +267,7 @@ def order_submit(oid):
 @repair_bp.route('/<int:oid>/approve', methods=['POST'])
 @login_required_repair
 def order_approve(oid):
-    order = db.session.get(RepairOrder, oid)
+    order = RepairOrder.query.get(oid)
     if not order:
         return jsonify({'error': 'not found'}), 404
     order.status = 'approved'
@@ -280,7 +280,7 @@ def order_approve(oid):
 @repair_bp.route('/<int:oid>/reject', methods=['POST'])
 @login_required_repair
 def order_reject(oid):
-    order = db.session.get(RepairOrder, oid)
+    order = RepairOrder.query.get(oid)
     if not order:
         return jsonify({'error': 'not found'}), 404
     order.status = 'draft'
@@ -291,7 +291,7 @@ def order_reject(oid):
 @repair_bp.route('/<int:oid>/delete', methods=['POST'])
 @login_required_repair
 def order_delete(oid):
-    order = db.session.get(RepairOrder, oid)
+    order = RepairOrder.query.get(oid)
     if not order:
         return jsonify({'error': 'not found'}), 404
     if order.status != 'draft':
@@ -305,7 +305,7 @@ def order_delete(oid):
 @login_required_repair
 def order_sign(oid):
     """保存签名图片"""
-    order = db.session.get(RepairOrder, oid)
+    order = RepairOrder.query.get(oid)
     if not order:
         return jsonify({'error': 'not found'}), 404
     data = request.get_json(silent=True) or {}

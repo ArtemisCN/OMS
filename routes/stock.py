@@ -600,7 +600,7 @@ def request_create():
         if not part_id:
             flash('请选择备件', 'danger')
             return redirect(url_for('stock.request_create'))
-        part = db.session.get(SparePart, part_id)
+        part = SparePart.query.get(part_id)
         if not part:
             flash('备件不存在', 'danger')
             return redirect(url_for('stock.request_create'))

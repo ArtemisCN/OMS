@@ -71,7 +71,7 @@ def template_create():
 @forms_bp.route('/templates/<int:tid>/edit', methods=['GET', 'POST'])
 @login_required_forms
 def template_edit(tid):
-    t = db.session.get(FormTemplate, tid)
+    t = FormTemplate.query.get(tid)
     if not t:
         flash('模板不存在', 'danger')
         return redirect(url_for('forms.template_list'))
@@ -231,7 +231,7 @@ def template_import_excel():
 @forms_bp.route('/templates/<int:tid>/delete', methods=['POST'])
 @login_required_forms
 def template_delete(tid):
-    t = db.session.get(FormTemplate, tid)
+    t = FormTemplate.query.get(tid)
     if not t:
         flash('模板不存在', 'danger')
         return redirect(url_for('forms.template_list'))
@@ -310,7 +310,7 @@ def form_create():
         return redirect(url_for('forms.form_view', fid=form.id))
     templates = FormTemplate.query.order_by(FormTemplate.updated_at.desc()).all()
     work_order_id = request.args.get('work_order_id', type=int)
-    wo = db.session.get(WorkOrder, work_order_id) if work_order_id else None
+    wo = WorkOrder.query.get(work_order_id) if work_order_id else None
     return render_template('forms/form_create.html', templates=templates, wo=wo)
 
 
@@ -319,7 +319,7 @@ def form_create():
 @forms_bp.route('/<int:fid>')
 @login_required_forms
 def form_view(fid):
-    form = db.session.get(PaperForm, fid)
+    form = PaperForm.query.get(fid)
     if not form:
         flash('表单不存在', 'danger')
         return redirect(url_for('forms.form_list'))
@@ -404,7 +404,7 @@ def form_field_sign(fid):
 @login_required_forms
 def form_print(fid):
     """打印动态表单"""
-    form = db.session.get(PaperForm, fid)
+    form = PaperForm.query.get(fid)
     if not form:
         flash('表单不存在', 'danger')
         return redirect(url_for('forms.form_list'))
@@ -462,7 +462,7 @@ def form_list():
 @login_required_forms
 def form_publish(fid):
     """发布表单：draft → active，创建关联工单"""
-    form = db.session.get(PaperForm, fid)
+    form = PaperForm.query.get(fid)
     if not form:
         flash('表单不存在', 'danger')
         return redirect(url_for('forms.form_list'))
@@ -502,7 +502,7 @@ def form_publish(fid):
 @login_required_forms
 def form_approve(fid):
     """审批通过表单：submitted → completed，同时完结关联工单"""
-    form = db.session.get(PaperForm, fid)
+    form = PaperForm.query.get(fid)
     if not form:
         flash('表单不存在', 'danger')
         return redirect(url_for('forms.form_list'))
@@ -514,7 +514,7 @@ def form_approve(fid):
     form.updated_at = datetime.now()
 
     if form.work_order_id:
-        wo = db.session.get(WorkOrder, form.work_order_id)
+        wo = WorkOrder.query.get(form.work_order_id)
         if wo and wo.status in ('in_progress', 'submitted'):
             wo.status = 'completed'
             wo.completed_at = datetime.now()
@@ -537,7 +537,7 @@ def api_template_list():
 @forms_bp.route('/api/<int:fid>')
 @login_required_forms
 def form_api_detail(fid):
-    form = db.session.get(PaperForm, fid)
+    form = PaperForm.query.get(fid)
     if not form:
         return jsonify({'error': 'not found'}), 404
     return jsonify(form.to_dict())
@@ -546,7 +546,7 @@ def form_api_detail(fid):
 @forms_bp.route('/api/<int:fid>/save', methods=['POST'])
 @login_required_forms
 def form_api_save(fid):
-    form = db.session.get(PaperForm, fid)
+    form = PaperForm.query.get(fid)
     if not form:
         return jsonify({'error': 'not found'}), 404
     if form.status != 'active':
@@ -563,7 +563,7 @@ def form_api_save(fid):
 @forms_bp.route('/api/<int:fid>/sign', methods=['POST'])
 @login_required_forms
 def form_api_sign(fid):
-    form = db.session.get(PaperForm, fid)
+    form = PaperForm.query.get(fid)
     if not form:
         return jsonify({'error': 'not found'}), 404
     data = request.get_json(silent=True) or {}
@@ -581,7 +581,7 @@ def form_api_sign(fid):
 @login_required_forms
 def form_api_submit(fid):
     """提交表单待审批：active → submitted"""
-    form = db.session.get(PaperForm, fid)
+    form = PaperForm.query.get(fid)
     if not form:
         return jsonify({'error': 'not found'}), 404
     if form.status not in ('active', 'submitted'):
@@ -663,7 +663,7 @@ def form_data_sources():
 @forms_bp.route('/<int:fid>/delete', methods=['POST'])
 @login_required_forms
 def form_delete(fid):
-    form = db.session.get(PaperForm, fid)
+    form = PaperForm.query.get(fid)
     if form:
         db.session.delete(form)
         db.session.commit()
@@ -682,7 +682,7 @@ def mobile_sign_page(token):
         field_id = '-'.join(parts[1:])
     except (ValueError, IndexError):
         return '无效的签名链接', 400
-    form = db.session.get(PaperForm, form_id)
+    form = PaperForm.query.get(form_id)
     if not form:
         return '表单不存在', 404
     return render_template('forms/sign_page.html',
@@ -699,7 +699,7 @@ def check_signature(token):
     except (ValueError, IndexError):
         return jsonify({'signed': False}), 400
     import json
-    form = db.session.get(PaperForm, form_id)
+    form = PaperForm.query.get(form_id)
     if not form:
         return jsonify({'signed': False}), 404
     field_sig = (form.form_data or {}).get(field_id, '')

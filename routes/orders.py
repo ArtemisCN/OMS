@@ -750,7 +750,7 @@ def delete_photo(order_id, photo_id):
     """删除工单照片"""
     from models import WorkOrderPhoto
     from utils.photo import delete_photo_file
-    photo = db.session.get(WorkOrderPhoto, photo_id)
+    photo = WorkOrderPhoto.query.get(photo_id)
     if photo and photo.work_order_id == int(order_id):
         if photo.filepath:
             delete_photo_file(photo.filepath)

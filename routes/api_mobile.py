@@ -404,7 +404,7 @@ def orders(user):
 @login_required_api
 def order_detail(user, order_id):
     """获取工单详情（含关联电子表单）"""
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
 
@@ -455,7 +455,7 @@ def accept_order(user, order_id):
 
     从公共池接单，自动将 person 设置为当前用户
     """
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
 
@@ -480,7 +480,7 @@ def accept_order(user, order_id):
 @login_required_api
 def solve_order(user, order_id):
     """提交解决方案：in_progress → completed（表单工单请提交表单审批）"""
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
 
@@ -514,7 +514,7 @@ def solve_order(user, order_id):
 @login_required_api
 def submit_inspection(user, order_id):
     """提交巡检结果"""
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
 
@@ -825,7 +825,7 @@ def form_list_api(user):
 @login_required_api
 def form_detail_api(user, fid):
     """获取表单详情（含模板字段定义）"""
-    form = db.session.get(PaperForm, fid)
+    form = PaperForm.query.get(fid)
     if not form:
         return jsonify({'error': '表单不存在', 'code': 404}), 404
     fd = form.to_dict()
@@ -840,7 +840,7 @@ def form_detail_api(user, fid):
 @login_required_api
 def form_save_api(user, fid):
     """保存表单字段值（手机端编辑）"""
-    form = db.session.get(PaperForm, fid)
+    form = PaperForm.query.get(fid)
     if not form:
         return jsonify({'error': '表单不存在', 'code': 404}), 404
     if form.status != 'active':
@@ -859,7 +859,7 @@ def form_save_api(user, fid):
 @login_required_api
 def form_sign_api(user, fid):
     """手机端手写签名"""
-    form = db.session.get(PaperForm, fid)
+    form = PaperForm.query.get(fid)
     if not form:
         return jsonify({'error': '表单不存在', 'code': 404}), 404
     if form.status != 'active':
@@ -882,7 +882,7 @@ def form_sign_api(user, fid):
 @login_required_api
 def form_submit_api(user, fid):
     """手机端提交表单：active → submitted，等待审批"""
-    form = db.session.get(PaperForm, fid)
+    form = PaperForm.query.get(fid)
     if not form:
         return jsonify({'error': '表单不存在', 'code': 404}), 404
     if form.status not in ('active', 'submitted'):
@@ -898,7 +898,7 @@ def form_submit_api(user, fid):
 @login_required_api
 def form_approve_api(user, fid):
     """审批通过表单：submitted → completed，同时完结关联工单"""
-    form = db.session.get(PaperForm, fid)
+    form = PaperForm.query.get(fid)
     if not form:
         return jsonify({'error': '表单不存在', 'code': 404}), 404
     if form.status != 'submitted':
@@ -909,7 +909,7 @@ def form_approve_api(user, fid):
 
     # 完结关联工单
     if form.work_order_id:
-        wo = db.session.get(WorkOrder, form.work_order_id)
+        wo = WorkOrder.query.get(form.work_order_id)
         if wo and wo.status in ('in_progress', 'submitted'):
             wo.status = 'completed'
             wo.completed_at = datetime.now()
@@ -971,7 +971,7 @@ def today_summary(user):
 @login_required_api
 def order_transfers(user, order_id):
     """获取工单流转记录"""
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
     logs = WorkOrderTransferLog.query.filter_by(
@@ -994,7 +994,7 @@ def order_transfers(user, order_id):
 @login_required_api
 def return_order(user, order_id):
     """退回到未接单"""
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
     if order.status != 'in_progress':
@@ -1021,7 +1021,7 @@ def return_order(user, order_id):
 @login_required_api
 def transfer_order(user, order_id):
     """转派工单给其他人"""
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
     if order.status != 'in_progress':
@@ -1055,7 +1055,7 @@ def transfer_order(user, order_id):
 @login_required_api
 def order_personnel(user, order_id):
     """获取当前医院同组可选转派人选（排除当前接单人）"""
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
 
@@ -1213,7 +1213,7 @@ def api_addresses(user):
 def list_photos(user, order_id):
     """获取工单图片列表"""
     from utils.photo import get_photo_url
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
     photos = WorkOrderPhoto.query.filter_by(
@@ -1237,7 +1237,7 @@ def list_photos(user, order_id):
 @login_required_api
 def upload_photo(user, order_id):
     """上传工单图片（支持多图）"""
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
 
@@ -1288,10 +1288,10 @@ def upload_photo(user, order_id):
 @login_required_api
 def delete_photo(user, order_id, photo_id):
     """删除工单图片"""
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
-    photo = db.session.get(WorkOrderPhoto, photo_id)
+    photo = WorkOrderPhoto.query.get(photo_id)
     if not photo or photo.work_order_id != order.id:
         return jsonify({'error': '图片不存在', 'code': 404}), 404
 
@@ -1455,7 +1455,7 @@ def inv_scan(user):
     if not task_id or not asset_no:
         return jsonify({'error': '参数不完整', 'code': 400}), 400
 
-    task = db.session.get(InventoryTask, task_id)
+    task = InventoryTask.query.get(task_id)
     if not task:
         return jsonify({'error': '盘点任务不存在', 'code': 404}), 404
     if not user.is_admin and user.hospital_id != task.hospital_id:
@@ -1563,7 +1563,7 @@ def inv_asset_lookup(user, asset_no):
     task_id = request.args.get('task_id', type=int)
     hid = None
     if task_id:
-        task = db.session.get(InventoryTask, task_id)
+        task = InventoryTask.query.get(task_id)
         if task:
             hid = task.hospital_id
     if hid:
@@ -1666,7 +1666,7 @@ def mobile_exam_list(user):
 @login_required_api
 def mobile_exam_questions(user, exam_id):
     """小程序 - 获取考试题目"""
-    exam = db.session.get(Exam, exam_id)
+    exam = Exam.query.get(exam_id)
     if not exam or exam.status not in ('published', 'closed'):
         return jsonify({'error': '考试不存在或未发布'}), 404
     if not exam.check_access(user):
@@ -1730,7 +1730,7 @@ def mobile_exam_questions(user, exam_id):
 @login_required_api
 def mobile_save_answer(user, submission_id):
     """小程序 - 保存答案"""
-    submission = db.session.get(ExamSubmission, submission_id)
+    submission = ExamSubmission.query.get(submission_id)
     if not submission or submission.user_id != user.id:
         return jsonify({'error': '答卷不存在'}), 404
     data = request.get_json(silent=True) or {}
@@ -1754,7 +1754,7 @@ def mobile_submit_exam(user):
     answers = data.get('answers', {})
     duration_seconds = data.get('duration_seconds', 0)
 
-    submission = db.session.get(ExamSubmission, submission_id)
+    submission = ExamSubmission.query.get(submission_id)
     if not submission or submission.user_id != user.id:
         return jsonify({'error': '答卷不存在'}), 404
     if submission.status != 'in_progress':
@@ -1797,7 +1797,7 @@ def mobile_submit_exam(user):
 @login_required_api
 def mobile_exam_result(user, submission_id):
     """小程序 - 查看考试结果"""
-    submission = db.session.get(ExamSubmission, submission_id)
+    submission = ExamSubmission.query.get(submission_id)
     if not submission or submission.user_id != user.id:
         return jsonify({'error': '答卷不存在'}), 404
     if submission.status != 'submitted':

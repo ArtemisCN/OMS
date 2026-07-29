@@ -222,7 +222,7 @@ def add_department(name, building, floor, phone, operator_name):
 
 def edit_department(dept_id, name, building, floor, phone):
     """编辑科室"""
-    dept = db.session.get(Department, dept_id)
+    dept = Department.query.get(dept_id)
     if not dept:
         return False, '科室不存在'
     if name and name != dept.name:
@@ -238,7 +238,7 @@ def edit_department(dept_id, name, building, floor, phone):
 
 def delete_department(dept_id, operator_name):
     """删除科室"""
-    dept = db.session.get(Department, dept_id)
+    dept = Department.query.get(dept_id)
     if not dept:
         return False, '科室不存在'
     log_audit('delete', 'department', operator_name, target_desc=f'删除科室: {dept.name}')
@@ -1282,7 +1282,7 @@ def add_hospital(name, code, address, phone):
 
 def edit_hospital(hid, name, code, address, phone):
     """编辑医院"""
-    h = db.session.get(Hospital, hid)
+    h = Hospital.query.get(hid)
     if not h:
         return False, '医院不存在'
     h.name = name or h.name
@@ -1298,7 +1298,7 @@ def edit_hospital(hid, name, code, address, phone):
 
 def toggle_hospital(hid):
     """切换医院启用/禁用"""
-    h = db.session.get(Hospital, hid)
+    h = Hospital.query.get(hid)
     if h:
         h.is_active = not h.is_active
         db.session.commit()

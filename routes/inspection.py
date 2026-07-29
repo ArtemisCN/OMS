@@ -208,7 +208,7 @@ def export_plan(pid):
     # 根据计划关联的工单 ID 查询对应工单
     orders = []
     if plan.work_order_id:
-        order = db.session.get(WorkOrder, plan.work_order_id)
+        order = WorkOrder.query.get(plan.work_order_id)
         if order:
             orders = [order]
     elif plan.work_order_ids:

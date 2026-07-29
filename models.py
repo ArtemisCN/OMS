@@ -324,7 +324,7 @@ class User(UserMixin, db.Model):
             return multi
         # 兼容旧数据：如果 user_hospitals 为空但 hospital_id 有值
         if self.hospital_id:
-            h = db.session.get(Hospital, self.hospital_id)
+            h = Hospital.query.get(self.hospital_id)
             return [h] if h else []
         return []
 
@@ -1741,7 +1741,7 @@ class Exam(db.Model):
         # 人员组别检查
         teams = self.get_allowed_teams()
         if teams:
-            person = db.session.get(User, u.id)
+            person = User.query.get(u.id)
             if not person or person.team not in teams:
                 return False
 

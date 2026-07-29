@@ -94,7 +94,7 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
 @admin_required
 def upload_hospital_logo(hid):
     """上传医院头像"""
-    hospital = db.session.get(Hospital, hid)
+    hospital = Hospital.query.get(hid)
     if not hospital:
         return jsonify({'error': '医院不存在'}), 404
     if 'logo' not in request.files:
@@ -139,7 +139,7 @@ def switch_hospital(hid):
             session['user_hospital_id'] = 0
         flash('已切换到: 全部医院', 'success')
         return redirect(request.referrer or url_for('main.dashboard'))
-    h = db.session.get(Hospital, hid)
+    h = Hospital.query.get(hid)
     if not h:
         flash('医院不存在', 'danger')
         return redirect(request.referrer or url_for('main.dashboard'))
@@ -529,7 +529,7 @@ def edit_solution(sid):
 def edit_solution_full(sid):
     """编辑方案模板全部字段"""
     from models import SolutionTemplate
-    s = db.session.get(SolutionTemplate, sid)
+    s = SolutionTemplate.query.get(sid)
     if not s:
         flash('方案不存在', 'danger')
         return redirect(url_for('data.list_templates'))
@@ -1445,7 +1445,7 @@ def edit_fault_template_group_api(gid):
         request.form.get('field', ''),
         request.form.get('value', ''))
     from models import FaultTemplateGroup
-    g = db.session.get(FaultTemplateGroup, gid)
+    g = FaultTemplateGroup.query.get(gid)
     return jsonify({'ok': True, 'group': {
         'id': g.id, 'name': g.name, 'teams': g.teams or ''
     }})
@@ -1488,7 +1488,7 @@ def edit_fault_template_item_api(gid, iid):
         request.form.get('display_name', ''),
         int(request.form.get('default_count', 1)))
     from models import FaultTemplateItem
-    item = db.session.get(FaultTemplateItem, iid)
+    item = FaultTemplateItem.query.get(iid)
     return jsonify({'ok': True, 'item': {
         'id': item.id, 'fault_type': item.fault_type,
         'display_name': item.display_name, 'group_id': item.group_id
@@ -1532,7 +1532,7 @@ def add_solution_api():
 def edit_solution_api(sid):
     """API：编辑方案模板，返回JSON"""
     from models import SolutionTemplate
-    s = db.session.get(SolutionTemplate, sid)
+    s = SolutionTemplate.query.get(sid)
     if not s:
         return jsonify({'ok': False, 'msg': '方案不存在'}), 404
     s.title = request.form.get('title', s.title)
@@ -1584,7 +1584,7 @@ def approve_registration(rid):
     if not can_access('注册审批'):
         flash('无权限访问', 'danger')
         return redirect(url_for('data.index'))
-    req = db.session.get(RegistrationRequest, rid)
+    req = RegistrationRequest.query.get(rid)
     if not req or req.status != 'pending':
         flash('申请不存在或已处理', 'danger')
         return redirect(url_for('data.list_registration_approvals'))
@@ -1618,7 +1618,7 @@ def approve_registration(rid):
         user_obj = User(display_name=req.display_name, is_active=True, team='')
         db.session.add(user_obj)
     # 分配医院（同时写入多对多关联表，确保 get_assigned_hospitals 能查到）
-    h = db.session.get(Hospital, target_hospital_id)
+    h = Hospital.query.get(target_hospital_id)
     if h:
         user.hospitals.append(h)
     req.status = 'approved'
@@ -1638,7 +1638,7 @@ def reject_registration(rid):
     if not can_access('注册审批'):
         flash('无权限访问', 'danger')
         return redirect(url_for('data.index'))
-    req = db.session.get(RegistrationRequest, rid)
+    req = RegistrationRequest.query.get(rid)
     if not req or req.status != 'pending':
         flash('申请不存在或已处理', 'danger')
         return redirect(url_for('data.list_registration_approvals'))

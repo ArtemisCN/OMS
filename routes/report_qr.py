@@ -17,7 +17,7 @@ def scan_index():
 @scan_bp.route('/<int:hospital_id>')
 def scan_department(hospital_id):
     """选科室页"""
-    hospital = db.session.get(Hospital, hospital_id)
+    hospital = Hospital.query.get(hospital_id)
     if not hospital:
         return "医院不存在", 404
     depts = db.session.query(WorkOrder.department).filter(
@@ -32,7 +32,7 @@ def scan_department(hospital_id):
 @scan_bp.route('/<int:hospital_id>/submit', methods=['GET', 'POST'])
 def scan_submit(hospital_id):
     """提交报修"""
-    hospital = db.session.get(Hospital, hospital_id)
+    hospital = Hospital.query.get(hospital_id)
     if not hospital:
         return "医院不存在", 404
 
@@ -41,7 +41,7 @@ def scan_submit(hospital_id):
     asset = None
     if asset_id:
         from models import Asset
-        asset = db.session.get(Asset, asset_id)
+        asset = Asset.query.get(asset_id)
 
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
@@ -97,7 +97,7 @@ def scan_submit(hospital_id):
 @scan_bp.route('/qr/<int:hospital_id>/<path:department>')
 def qr_page(hospital_id, department=None):
     """生成报修二维码页面"""
-    hospital = db.session.get(Hospital, hospital_id)
+    hospital = Hospital.query.get(hospital_id)
     if not hospital:
         return "医院不存在", 404
     return render_template('scan/qr.html', hospital=hospital, department=department)
@@ -107,7 +107,7 @@ def qr_page(hospital_id, department=None):
 def qr_image(hospital_id):
     """生成报修二维码图片"""
     import qrcode
-    hospital = db.session.get(Hospital, hospital_id)
+    hospital = Hospital.query.get(hospital_id)
     if not hospital:
         return "医院不存在", 404
 

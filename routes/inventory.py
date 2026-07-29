@@ -182,7 +182,7 @@ def review_data(task_id):
         # 匹配资产
         asset = None
         if item.asset_id:
-            asset = db.session.get(Asset, item.asset_id)
+            asset = Asset.query.get(item.asset_id)
         if not asset and item.asset_no:
             asset = Asset.query.filter_by(asset_no=item.asset_no, hospital_id=task.hospital_id).first()
 

@@ -86,7 +86,7 @@ def dashboard():
 @login_required
 def order_detail(order_id):
     """工单详情"""
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         flash('工单不存在', 'danger')
         return redirect(url_for('mobile.dashboard'))
@@ -104,7 +104,7 @@ def order_detail(order_id):
 @login_required
 def accept_order(order_id):
     """接单：pending → in_progress，认领到当前用户"""
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         flash('工单不存在', 'danger')
         return redirect(url_for('mobile.dashboard'))
@@ -131,7 +131,7 @@ def accept_order(order_id):
 @login_required
 def solve_order(order_id):
     """提交解决方案：in_progress → completed（表单工单请填表提交）"""
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         flash('工单不存在', 'danger')
         return redirect(url_for('mobile.dashboard'))
@@ -165,7 +165,7 @@ def solve_order(order_id):
 def quick_solve(order_id):
     """一键结单：自动匹配方案模板直接完成"""
     from services.matcher import get_solution_by_title
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         flash('工单不存在', 'danger')
         return redirect(url_for('mobile.dashboard'))
@@ -195,7 +195,7 @@ def quick_solve(order_id):
 @login_required
 def submit_inspection(order_id):
     """提交巡检结果（含签名）"""
-    order = db.session.get(WorkOrder, order_id)
+    order = WorkOrder.query.get(order_id)
     if not order:
         flash('工单不存在', 'danger')
         return redirect(url_for('mobile.dashboard'))

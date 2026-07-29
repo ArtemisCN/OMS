@@ -364,7 +364,7 @@ def select_asset(draft_id):
     draft = FinanceDraft.query.get_or_404(draft_id)
     asset_id = request.form.get('asset_id', type=int)
     if asset_id:
-        asset = db.session.get(Asset, asset_id)
+        asset = Asset.query.get(asset_id)
         if asset:
             draft.asset_id = asset.id
             db.session.commit()

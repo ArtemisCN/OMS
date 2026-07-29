@@ -958,7 +958,7 @@ def recent_logs():
             query = AssetLog.query.filter(AssetLog.action == action).order_by(AssetLog.created_at.desc()).limit(50)
         logs = []
         for log in query.all():
-            asset = db.session.get(Asset, log.asset_id)
+            asset = Asset.query.get(log.asset_id)
             logs.append({
                 'id': log.id,
                 'asset_id': log.asset_id,

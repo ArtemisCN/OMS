@@ -71,7 +71,7 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(user_id):
-        return db.session.get(User, int(user_id))
+        return User.query.get(int(user_id))
 
     from routes.auth import auth_bp
     from routes.main import main_bp
@@ -133,7 +133,7 @@ def create_app():
         current_hospital = None
         hid = getattr(g, 'hospital_id', None)
         if hid:
-            current_hospital = db.session.get(Hospital, hid)
+            current_hospital = Hospital.query.get(hid)
         else:
             # 全部医院模式：构建一个虚拟对象用于显示
             class AllHospitals:

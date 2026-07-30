@@ -4,6 +4,14 @@ import secrets
 # ==================== 路径计算 ====================
 _basedir = os.path.abspath(os.path.dirname(__file__))
 
+# 自动创建 instance 目录（防止 git clone 后该目录缺失导致数据库打不开）
+_instance_dir = os.path.join(_basedir, 'instance')
+if not os.path.isdir(_instance_dir):
+    try:
+        os.makedirs(_instance_dir, exist_ok=True)
+    except OSError:
+        pass  # 权限不足时静默失败，后续 SQLite 会报更明确的错误
+
 # ==================== Flask 配置 ====================
 # SECRET_KEY: 优先从环境变量读取，否则运行时生成并持久化到 .secret 文件
 _secret_key = os.environ.get('SECRET_KEY')

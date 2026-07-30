@@ -93,9 +93,9 @@ def create_app():
     # 初始化系统参数缓存（避免每次请求查询 SystemSetting）
     with app.app_context():
         from models import SystemSetting
+        # 自动建表（放在 try 外，失败时直接报错，不会被静默吞掉）
+        db.create_all()
         try:
-            # 自动建表（防止首次运行或空数据库时表不存在）
-            db.create_all()
             st = SystemSetting.query.filter_by(key='session_timeout_minutes').first()
             if st and st.value:
                 timeout = max(60, min(1440, int(st.value)))

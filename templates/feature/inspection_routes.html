@@ -209,11 +209,7 @@
                 {% for b in buildings or [] %}
                 <option value="{{ b }}">{{ b }}</option>
                 {% else %}
-                <option value="A栋">A栋</option>
-                <option value="B栋">B栋</option>
-                <option value="C栋">C栋</option>
-                <option value="门诊楼">门诊楼</option>
-                <option value="住院楼">住院楼</option>
+                <option value="">— 暂无楼栋 —</option>
                 {% endfor %}
               </select>
             </div>
@@ -223,14 +219,7 @@
                 {% for f in floors or [] %}
                 <option value="{{ f }}">{{ f }}</option>
                 {% else %}
-                <option value="1F">1F</option>
-                <option value="2F">2F</option>
-                <option value="3F">3F</option>
-                <option value="4F">4F</option>
-                <option value="5F">5F</option>
-                <option value="6F">6F</option>
-                <option value="B1">B1</option>
-                <option value="B2">B2</option>
+                <option value="">— 暂无楼层 —</option>
                 {% endfor %}
               </select>
             </div>

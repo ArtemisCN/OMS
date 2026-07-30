@@ -390,6 +390,26 @@
             <input type="text" id="otherDeviceInput" class="cf-input" placeholder="请输入其他设备类型" style="font-size:13px;padding:6px 12px;">
           </div>
         </div>
+        <div class="cf-field full">
+          <label><i class="fas fa-server"></i> 关联资产 <small style="font-weight:400;color:var(--text-muted,#94a3b8);">（可选，输入编号/品牌/型号搜索）</small></label>
+          <div class="cf-input-wrap" style="position:relative;">
+            <i class="fas fa-search cf-icon" style="left:12px;"></i>
+            <input type="text" class="cf-input" id="assetSearchInput"
+                   placeholder="输入资产编号搜索…" autocomplete="off"
+                   style="padding-left:36px;">
+            <input type="hidden" name="asset_id" id="assetIdInput" value="">
+            <span id="assetClearBtn" style="display:none;position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#94a3b8;cursor:pointer;padding:4px;" onclick="clearAsset()">&times;</span>
+          </div>
+          <div id="assetDropdown"
+               style="position:absolute;top:100%;left:0;right:0;z-index:50;max-height:240px;overflow-y:auto;
+                      background:var(--modal-bg,#fff);border:1px solid var(--card-border,#e5e7eb);
+                      border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,0.1);display:none;"></div>
+          <div id="assetSelected" style="display:none;margin-top:6px;">
+            <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:6px;background:rgba(79,70,229,0.08);color:var(--primary,#4f46e5);font-size:13px;font-weight:500;">
+              <i class="fas fa-check-circle"></i> <span id="assetSelectedText"></span>
+            </span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -878,6 +898,90 @@ document.getElementById('orderForm').addEventListener('submit', function() {
         var el = document.getElementById(id);
         if (el.disabled) el.disabled = false;
     });
+});
+
+// ===== 资产搜索选择器 =====
+var assetSearchInput = document.getElementById('assetSearchInput');
+var assetDropdown = document.getElementById('assetDropdown');
+var assetIdInput = document.getElementById('assetIdInput');
+var assetSelected = document.getElementById('assetSelected');
+var assetSelectedText = document.getElementById('assetSelectedText');
+var assetClearBtn = document.getElementById('assetClearBtn');
+var assetTimer = null;
+
+function clearAsset() {
+    assetIdInput.value = '';
+    assetSearchInput.value = '';
+    assetDropdown.style.display = 'none';
+    assetSelected.style.display = 'none';
+    assetClearBtn.style.display = 'none';
+}
+
+function selectAsset(id, text) {
+    assetIdInput.value = id;
+    assetSelectedText.textContent = text;
+    assetSelected.style.display = '';
+    assetSearchInput.value = text;
+    assetDropdown.style.display = 'none';
+    assetClearBtn.style.display = '';
+}
+
+if (assetSearchInput) {
+    assetSearchInput.addEventListener('input', function() {
+        var q = this.value.trim();
+        if (assetTimer) clearTimeout(assetTimer);
+        if (q.length < 1) {
+            assetDropdown.style.display = 'none';
+            return;
+        }
+        assetTimer = setTimeout(function() {
+            fetch('/assets/asset/search?q=' + encodeURIComponent(q))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data.success || !data.assets || data.assets.length === 0) {
+                        assetDropdown.innerHTML = '<div style="padding:12px 16px;color:#94a3b8;font-size:13px;">未找到匹配资产</div>';
+                        assetDropdown.style.display = '';
+                        return;
+                    }
+                    var html = '';
+                    data.assets.forEach(function(a) {
+                        html += '<div class="asset-option" data-id="' + a.id + '" data-text="' + (a.asset_no || '') + ' ' + (a.device_type || '') + '" style="padding:10px 16px;cursor:pointer;border-bottom:1px solid #f1f5f9;transition:background .1s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'">';
+                        html += '<div style="font-weight:600;font-size:13px;color:#1e293b;">' + a.asset_no + '</div>';
+                        html += '<div style="font-size:12px;color:#64748b;margin-top:2px;">' + (a.device_type||'') + ' · ' + (a.brand||'') + ' ' + (a.model_no||'') + '</div>';
+                        html += '<div style="font-size:11px;color:#94a3b8;">' + (a.department||'-') + ' · ' + (a.location||'-') + '</div>';
+                        html += '</div>';
+                    });
+                    assetDropdown.innerHTML = html;
+                    assetDropdown.style.display = '';
+                })
+                .catch(function() {});
+        }, 300);
+    });
+
+    assetSearchInput.addEventListener('blur', function() {
+        setTimeout(function() { assetDropdown.style.display = 'none'; }, 200);
+    });
+
+    assetSearchInput.addEventListener('focus', function() {
+        if (this.value.trim().length > 0 && assetDropdown.children.length > 0) {
+            assetDropdown.style.display = '';
+        }
+    });
+}
+
+// ===== 深色模式同步（资产下拉）=====
+document.addEventListener('DOMContentLoaded', function() {
+    var obs = new MutationObserver(function() {
+        var theme = document.documentElement.getAttribute('data-theme');
+        if (theme === 'dark') {
+            assetDropdown.style.background = '#1a1d27';
+            assetDropdown.style.borderColor = '#2a2e3a';
+        } else {
+            assetDropdown.style.background = '#fff';
+            assetDropdown.style.borderColor = '#e5e7eb';
+        }
+    });
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 });
 </script>
 {% endblock %}

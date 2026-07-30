@@ -34,7 +34,7 @@
         <button class="btn btn-sm btn-outline-secondary" onclick="recalc({{ task.id }})">
             <i class="fas fa-sync"></i> 重新统计
         </button>
-        {% if task.status == 'pending' and current_user.is_admin %}
+        {% if task.status == 'pending' and has_permission('biz:inspection') %}
         <button class="btn btn-sm btn-success" onclick="finishTask({{ task.id }})">
             <i class="fas fa-check"></i> 结束盘点
         </button>
@@ -209,7 +209,7 @@
                     {% elif item.result == 'new' %}<span class="stat-chip stat-new">新盘</span>{% endif %}
                 </span>
                 {% if item.notes %}<small class="text-muted">{{ item.notes }}</small>{% endif %}
-                {% if current_user.is_admin %}
+                {% if has_permission('biz:inspection') %}
                 <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteItem({{ item.id }})">
                     <i class="fas fa-trash-alt"></i>
                 </button>

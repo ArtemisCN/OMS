@@ -18,7 +18,7 @@
             <a href="{{ url_for('asset.calendar', status='expiring', cat=cat_filter) }}" class="btn btn-outline-warning {{ 'active' if status_filter=='expiring' else '' }}">即将到期</a>
             <a href="{{ url_for('asset.calendar', status='expired', cat=cat_filter) }}" class="btn btn-outline-danger {{ 'active' if status_filter=='expired' else '' }}">已过期</a>
         </div>
-        {% if current_user.is_admin %}
+        {% if has_permission('asset:create') %}
         <a href="{{ url_for('asset.add') }}" class="btn btn-sm btn-primary"><i class="fas fa-plus"></i> 添加</a>
         {% endif %}
         <a href="{{ url_for('asset.list_view') }}" class="btn btn-sm btn-outline-success"><i class="fas fa-server"></i> 资产台账</a>
@@ -113,7 +113,7 @@ function setFilter(type, val) {
                 <a href="{{ url_for('asset.detail', asset_id=a.id) }}" class="btn btn-sm btn-outline-primary flex-fill" style="font-size:12px;">
                     <i class="fas fa-info-circle"></i> 详情
                 </a>
-                {% if current_user.is_admin %}
+                {% if has_permission('asset:edit') %}
                 <a href="{{ url_for('asset.edit', asset_id=a.id) }}" class="btn btn-sm btn-outline-secondary" style="font-size:12px;">
                     <i class="fas fa-edit"></i>
                 </a>
@@ -128,7 +128,7 @@ function setFilter(type, val) {
     {% if not assets %}
     <div class="col-12 text-center py-5" style="color:#9ca3af;">
         <i class="fas fa-box-open" style="font-size:48px; display:block; margin-bottom:12px;"></i>
-        还没有数据{% if current_user.is_admin %}，<a href="{{ url_for('asset.add') }}">添加第一条</a>{% endif %}
+        还没有数据{% if has_permission('asset:create') %}，<a href="{{ url_for('asset.add') }}">添加第一条</a>{% endif %}
     </div>
     {% endif %}
 </div>

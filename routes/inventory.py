@@ -1,3 +1,4 @@
+from utils.permissions import has_permission
 """盘点管理：PC端盘点任务管理、盘盈盘亏核对"""
 from datetime import datetime
 import json, io, os
@@ -35,7 +36,7 @@ def list_view():
 @login_required
 def create():
     """新建盘点任务"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'biz:inspection'):
         flash('仅管理员可操作', 'danger')
         return redirect(url_for('inventory.list_view'))
 
@@ -342,7 +343,7 @@ def confirm_item(item_id):
 @login_required
 def finish(task_id):
     """结束盘点（新版本：校验所有异常/新盘均已确认）"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'biz:inspection'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
     task = InventoryTask.query.get_or_404(task_id)
     if task.status == 'completed':
@@ -604,7 +605,7 @@ def export_excel(task_id):
 @inv_bp.route('/<int:task_id>/delete', methods=['POST'])
 @login_required
 def delete(task_id):
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'biz:inspection'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
     task = InventoryTask.query.get_or_404(task_id)
     log_audit('delete', 'inventory', current_user.display_name,
@@ -669,7 +670,7 @@ def _calc_surplus_loss(task):
 @inv_bp.route('/item/<int:item_id>/delete', methods=['POST'])
 @login_required
 def delete_item(item_id):
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'biz:inspection'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
     item = InventoryItem.query.get_or_404(item_id)
     db.session.delete(item)
@@ -682,7 +683,7 @@ def delete_item(item_id):
 @inv_bp.route('/<int:task_id>/recalc', methods=['POST'])
 @login_required
 def recalc(task_id):
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'biz:inspection'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
     task = InventoryTask.query.get_or_404(task_id)
     task.scanned_count = InventoryItem.query.filter_by(task_id=task_id).count()

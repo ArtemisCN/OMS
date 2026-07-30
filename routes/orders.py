@@ -12,6 +12,7 @@ from models import db, WorkOrder, SystemSetting, WorkOrderChatMessage, WorkOrder
 from services import order_service as svc
 from services.fault_matcher import match_fault
 from routes.auth import admin_required
+from utils.permissions import permission_required, has_permission
 from utils.time_helpers import fmt_dt, now, fmt_date, resolve_team
 
 orders_bp = Blueprint('orders', __name__, url_prefix='/orders')
@@ -20,7 +21,7 @@ orders_bp = Blueprint('orders', __name__, url_prefix='/orders')
 # ==================== 工单列表 ====================
 
 @orders_bp.route('/')
-@login_required
+@permission_required('order:view')
 def list_orders():
     page = request.args.get('page', 1, type=int)
     per_page = 20
@@ -101,7 +102,7 @@ def list_orders():
 # ==================== 新建工单 ====================
 
 @orders_bp.route('/create', methods=['GET', 'POST'])
-@login_required
+@permission_required('order:create')
 def create_order():
     """新建工单（Web页面）
     ---
@@ -148,7 +149,7 @@ def create_order():
 # ==================== 发布工单（匿名/登录通用） ====================
 
 @orders_bp.route('/publish', methods=['GET', 'POST'])
-@login_required
+@permission_required('order:create')
 def publish_order():
     if request.method == 'POST':
         try:
@@ -242,7 +243,7 @@ def api_address_options():
 # ==================== 批量生成 ====================
 
 @orders_bp.route('/batch', methods=['GET', 'POST'])
-@admin_required
+@permission_required('order:batch')
 def batch_create():
     selected_team = request.args.get('team', 'all')
     persons, templates, fault_groups, fault_group_items, team_groups, teams, default_team = \
@@ -352,7 +353,7 @@ def batch_undo():
 # ==================== 详情 / 编辑 / 删除 ====================
 
 @orders_bp.route('/<int:order_id>')
-@login_required
+@permission_required('order:view')
 def detail(order_id):
     order = svc.get_order_or_404(order_id)
     photos = svc.get_order_photos(order_id)
@@ -364,7 +365,7 @@ def detail(order_id):
 
 
 @orders_bp.route('/<int:order_id>/solution', methods=['POST'])
-@login_required
+@permission_required('order:solve')
 def update_solution(order_id):
     """更新工单解决方案（AJAX）"""
     order = WorkOrder.query.get_or_404(order_id)
@@ -382,7 +383,7 @@ def update_solution(order_id):
 
 
 @orders_bp.route('/<int:order_id>/edit', methods=['GET', 'POST'])
-@login_required
+@permission_required('order:edit')
 def edit_order(order_id):
     order = svc.get_order_or_404(order_id)
     if request.method == 'POST':
@@ -396,7 +397,7 @@ def edit_order(order_id):
 
 
 @orders_bp.route('/<int:order_id>/delete', methods=['POST'])
-@login_required
+@permission_required('order:delete')
 def delete_order(order_id):
     svc.delete_order(order_id,
                      current_user.display_name or current_user.username)
@@ -643,7 +644,7 @@ def calendar_view():
 
     # 组别筛选
     team = ''
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'order:batch'):
         _person = User.query.filter_by(id=current_user.id).first()
         if _person and _person.team:
             team = _person.team
@@ -697,7 +698,7 @@ def calendar_day_api():
         WorkOrder.created_at >= dt,
         WorkOrder.created_at < next_dt,
     )
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'order:batch'):
         _person = User.query.filter_by(id=current_user.id).first()
         if _person and _person.team:
             tp = User.query.filter(
@@ -721,7 +722,7 @@ def calendar_day_api():
 # ==================== 工单照片上传/删除 ====================
 
 @orders_bp.route('/<int:order_id>/photos/upload', methods=['POST'])
-@login_required
+@permission_required('order:edit')
 def upload_photo(order_id):
     """上传工单照片"""
     order = WorkOrder.query.get_or_404(order_id)
@@ -755,7 +756,7 @@ def upload_photo(order_id):
 
 
 @orders_bp.route('/<int:order_id>/photos/<int:photo_id>/delete', methods=['POST'])
-@login_required
+@permission_required('order:delete')
 def delete_photo(order_id, photo_id):
     """删除工单照片"""
     from models import WorkOrderPhoto

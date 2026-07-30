@@ -133,6 +133,14 @@
   '短信':'fas fa-sms', '关键词':'fas fa-key', '功能开关':'fas fa-toggle-on',
   '运维大屏':'fas fa-tv', '日志':'fas fa-history',
 } %}
+{% set param_bool_keys = [
+  'sms_enabled', 'daily_summary_enabled', 'notify_order_assign',
+  'notify_order_complete', 'heatmap_enabled', 'cos_enabled',
+  'enable_console_log', 'show_system_version', 'animation_enabled',
+  'hide_closed_orders', 'confirm_destructive', 'maintenance_mode',
+  'feature_toggle_auto_assign', 'feature_toggle_timeout_reminder',
+  'sidebar_default_expand', 'person_show_inactive',
+] %}
 {% set param_meta = {
   'auto_refresh_interval':     {'icon':'sync-alt','label':'自动刷新间隔','desc':'每隔多少秒自动刷新仪表盘数据？设为 0 则改为手动刷新','unit':'秒'},
   'default_fault_type':        {'icon':'tools','label':'默认故障类型','desc':'创建工单时自动选中的故障类型，仍可在发布页修改'},
@@ -453,11 +461,11 @@
           <option value="ERROR" {% if s.value == 'ERROR' %}selected{% endif %}>🚨 ERROR（错误）</option>
         </select>
 
-        {% elif s.value == '0' or s.value == '1' %}
+        {% elif s.value == '0' or s.value == '1' or s.value.lower() in ('true', 'false') or s.key in param_bool_keys %}
         <div class="form-check form-switch" style="margin:0;">
           <input class="form-check-input" type="checkbox" role="switch"
                  id="switch-{{ s.id }}" style="width:44px;height:24px;cursor:pointer;"
-                 {{ 'checked' if s.value == '1' else '' }}
+                 {{ 'checked' if s.value == '1' or s.value|lower == 'true' else '' }}
                  onchange="saveBoolSetting({{ s.id }}, this)">
         </div>
 
@@ -470,6 +478,16 @@
           <button onclick="stepper({{ s.id }}, {{ cfg.step }}, {{ cfg.min }}, {{ cfg.max }})">+</button>
         </div>
         {% if meta.unit %}<span style="font-size:12px;color:var(--set-muted);min-width:20px;">{{ meta.unit }}</span>{% endif %}
+
+        {% elif s.key == 'primary_color' %}
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="color" value="{{ s.value or '#4f46e5' }}" data-key="{{ s.key }}"
+                 style="width:40px;height:40px;border:none;border-radius:8px;cursor:pointer;padding:0;background:none;"
+                 onchange="saveSetting({{ s.id }}, this)">
+          <input type="text" class="set-text" value="{{ s.value or '#4f46e5' }}" data-key="{{ s.key }}"
+                 style="min-width:110px;font-family:monospace;font-size:13px;"
+                 onchange="saveSetting({{ s.id }}, this)" placeholder="#4f46e5">
+        </div>
 
         {% elif s.key in ('fault_keywords', 'device_keywords') %}
         <div style="width:100%;max-width:420px;">

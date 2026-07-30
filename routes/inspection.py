@@ -4,6 +4,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from models import db, InspectionTemplate, InspectionPlan, WorkOrder, User
 from routes.auth import admin_required
+from utils.permissions import permission_required
 from services.address import get_all_buildings, get_floors_by_building, get_departments_by_building, get_locations_by_building_dept
 from utils.time_helpers import fmt_dt, now, fmt_date
 
@@ -27,7 +28,7 @@ def create_template_page():
 
 
 @inspection_bp.route('/templates/create', methods=['POST'])
-@admin_required
+@permission_required("biz:inspection")
 def create_template():
     """新建巡检模板（POST 处理）"""
     name = request.form.get('name', '').strip()
@@ -48,7 +49,7 @@ def create_template():
 
 
 @inspection_bp.route('/templates/<int:tid>/edit', methods=['POST'])
-@admin_required
+@permission_required("biz:inspection")
 def edit_template(tid):
     """编辑巡检模板（POST 处理）"""
     tpl = InspectionTemplate.query.get_or_404(tid)
@@ -69,7 +70,7 @@ def edit_template(tid):
 
 
 @inspection_bp.route('/templates/<int:tid>/delete', methods=['POST'])
-@admin_required
+@permission_required("biz:inspection")
 def delete_template(tid):
     """删除巡检模板"""
     # 查询模板并删除

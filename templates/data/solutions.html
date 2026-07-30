@@ -2,7 +2,44 @@
 {% block content %}
 <style>
 .solution-form .form-control-sm { font-size:13px; }
+/* 表格内编辑 - 紧凑不黏连 */
+.table-solutions { font-size: 12px; }
+.table-solutions th {
+    white-space: nowrap;
+    font-size: 11px;
+    padding: 6px 4px !important;
+    vertical-align: middle;
+}
+.table-solutions td {
+    padding: 4px 3px !important;
+    vertical-align: middle;
+}
+.table-solutions td .form-control-sm,
+.table-solutions td .form-select-sm {
+    font-size: 11px;
+    padding: 2px 4px;
+    height: 28px;
+    min-width: 0;
+    border-radius: 4px;
+}
+/* 分类/设备/组列宽调整 */
+.col-fault { min-width: 70px; }
+.col-sub   { min-width: 80px; }
+.col-device { min-width: 60px; }
+.col-teams { min-width: 60px; }
+.col-keys  { min-width: 80px; }
+.col-content { min-width: 140px; }
+/* 方案标题列 */
+.col-title { min-width: 100px; }
+/* 深色模式适配 */
+[data-theme="dark"] .table-solutions td .form-control-sm,
+[data-theme="dark"] .table-solutions td .form-select-sm {
+    background: #1a1d27;
+    border-color: #2a2e3a;
+    color: #e2e8f0;
+}
 </style>
+
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h5 class="mb-0 fw-bold" style="font-size:15px;">
         <i class="fas fa-book text-success"></i> 方案模板管理
@@ -17,7 +54,7 @@
     <div class="card-header bg-white py-2 fw-bold" style="font-size:14px;"><i class="fas fa-plus text-success"></i> 新增方案模板</div>
     <div class="card-body">
         <form method="post" action="{{ url_for('data.add_solution') }}" class="row g-2 solution-form">
-            <div class="col-md-2">
+            <div class="col-md-3">
                 <input type="text" name="title" class="form-control form-control-sm" placeholder="方案标题" required>
             </div>
             <div class="col-md-1">
@@ -45,17 +82,16 @@
                     <option value="其他">其他</option>
                 </select>
             </div>
-            <div class="col-md-2">
-                <select name="teams" class="form-select form-select-sm" multiple style="height:auto;min-height:32px;">
-                    <option value="" style="font-style:italic;color:#999;">— 全部组通用 —</option>
+            <div class="col-md-1">
+                <input type="text" name="keywords" class="form-control form-control-sm" placeholder="关键词">
+            </div>
+            <div class="col-md-1">
+                <select name="teams" class="form-select form-select-sm" style="font-size:12px;">
+                    <option value="">全部组通用</option>
                     {% for t in all_teams %}
                     <option value="{{ t }}">{{ t }}</option>
                     {% endfor %}
                 </select>
-                <small class="text-muted" style="font-size:10px;">按住 Ctrl 多选；不选则为全部组通用</small>
-            </div>
-            <div class="col-md-1">
-                <input type="text" name="keywords" class="form-control form-control-sm" placeholder="关键词">
             </div>
             <div class="col-md-2">
                 <input type="text" name="content" class="form-control form-control-sm" placeholder="方案内容" required>
@@ -116,7 +152,7 @@
                     <option value="其他" {{ 'selected' if device_filter=='其他' }}>其他</option>
                 </select>
             </div>
-            <div class="col-md-2">
+            <div class="col-md-1">
                 <button type="submit" class="btn btn-sm btn-primary w-100"><i class="fas fa-search"></i> 搜索</button>
             </div>
         </form>
@@ -126,45 +162,54 @@
 <!-- 方案列表 -->
 <div class="card" style="border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.06);border:1px solid #e5e7eb;">
     <div class="table-responsive">
-        <table class="table table-hover mb-0" style="font-size:12px;">
+        <table class="table table-hover mb-0 table-solutions">
             <thead class="table-light">
                 <tr>
-                    <th>标题</th>
-                    <th style="width:70px;">故障类型</th>
-                    <th style="width:80px;">二级分类</th>
-                    <th style="width:70px;">设备类型</th>
-                    <th style="width:60px;">绑定组</th>
-                    <th>关键词</th>
-                    <th>方案内容</th>
-                    <th style="width:45px;">操作</th>
+                    <th class="col-title">标题</th>
+                    <th class="col-fault">故障</th>
+                    <th class="col-sub">二级分类</th>
+                    <th class="col-device">设备</th>
+                    <th class="col-teams">组别</th>
+                    <th class="col-keys">关键词</th>
+                    <th class="col-content">方案内容</th>
+                    <th style="width:40px;">操作</th>
                 </tr>
             </thead>
             <tbody>
                 {% for s in pagination.items %}
                 <tr>
-                    <td>
-                        <form method="post" action="{{ url_for('data.edit_solution', sid=s.id) }}">
+                    <td class="col-title">
+                        <form method="post" action="{{ url_for('data.edit_solution', sid=s.id) }}" style="display:flex;gap:2px;">
                             <input type="hidden" name="field" value="title">
-                            <input type="text" name="value" class="form-control form-control-sm" value="{{ s.title }}" style="min-width:100px;">
+                            <input type="text" name="value" class="form-control form-control-sm" value="{{ s.title }}" style="min-width:0;">
+                            <button type="submit" class="btn btn-sm btn-outline-primary py-0" style="font-size:10px;padding:0 4px;"><i class="fas fa-save"></i></button>
+                        </form>
                     </td>
-                    <td>
+                    <td class="col-fault">
+                        <form method="post" action="{{ url_for('data.edit_solution', sid=s.id) }}" style="display:flex;gap:2px;">
                             <input type="hidden" name="field" value="fault_type">
-                            <select name="value" class="form-select form-select-sm" style="font-size:11px;">
-                                <option value="">通用</option>
+                            <select name="value" class="form-select form-select-sm" style="font-size:11px;padding:2px 4px;{% if not s.fault_type %}color:#94a3b8;{% endif %}">
+                                <option value="" {% if not s.fault_type %}selected{% endif %}>未设置</option>
                                 <option value="软件" {{ 'selected' if s.fault_type=='软件' }}>软件</option>
                                 <option value="硬件" {{ 'selected' if s.fault_type=='硬件' }}>硬件</option>
                                 <option value="打印机" {{ 'selected' if s.fault_type=='打印机' }}>打印机</option>
                                 <option value="协助" {{ 'selected' if s.fault_type=='协助' }}>协助</option>
                                 <option value="网络" {{ 'selected' if s.fault_type=='网络' }}>网络</option>
                             </select>
+                            <button type="submit" class="btn btn-sm btn-outline-primary py-0" style="font-size:10px;padding:0 4px;"><i class="fas fa-save"></i></button>
+                        </form>
                     </td>
-                    <td>
+                    <td class="col-sub">
+                        <form method="post" action="{{ url_for('data.edit_solution', sid=s.id) }}" style="display:flex;gap:2px;">
                             <input type="hidden" name="field" value="fault_subcategory">
-                            <input type="text" name="value" class="form-control form-control-sm" value="{{ s.fault_subcategory or '' }}" style="min-width:60px;" placeholder="二级分类">
+                            <input type="text" name="value" class="form-control form-control-sm" value="{{ s.fault_subcategory or '' }}" placeholder="未设置" style="color:{{ 'var(--text-muted,#94a3b8)' if not s.fault_subcategory else 'inherit' }};">
+                            <button type="submit" class="btn btn-sm btn-outline-primary py-0" style="font-size:10px;padding:0 4px;"><i class="fas fa-save"></i></button>
+                        </form>
                     </td>
-                    <td>
+                    <td class="col-device">
+                        <form method="post" action="{{ url_for('data.edit_solution', sid=s.id) }}" style="display:flex;gap:2px;">
                             <input type="hidden" name="field" value="device_type">
-                            <select name="value" class="form-select form-select-sm" style="font-size:11px;">
+                            <select name="value" class="form-select form-select-sm" style="font-size:11px;padding:2px 4px;">
                                 <option value="">通用</option>
                                 <option value="PC" {{ 'selected' if s.device_type=='PC' }}>PC</option>
                                 <option value="NB" {{ 'selected' if s.device_type=='NB' }}>NB</option>
@@ -174,32 +219,39 @@
                                 <option value="网络" {{ 'selected' if s.device_type=='网络' }}>网络</option>
                                 <option value="其他" {{ 'selected' if s.device_type=='其他' }}>其他</option>
                             </select>
-                    </td>
-                    <td>
-                        <form method="post" action="{{ url_for('data.edit_solution', sid=s.id) }}">
-                            <input type="hidden" name="field" value="teams">
-                            <select name="value" class="form-select form-select-sm" multiple style="height:auto;min-height:28px;font-size:11px;max-width:90px;">
-                                <option value="" style="font-style:italic;color:#888;">通用</option>
-                                {% for t in all_teams %}
-                                <option value="{{ t }}" {{ 'selected' if t in (s.teams or '').split(',') }}>{{ t }}</option>
-                                {% endfor %}
-                            </select>
-                            <button type="submit" class="btn btn-sm btn-outline-primary py-0 ms-1"><i class="fas fa-save" style="font-size:11px;"></i></button>
+                            <button type="submit" class="btn btn-sm btn-outline-primary py-0" style="font-size:10px;padding:0 4px;"><i class="fas fa-save"></i></button>
                         </form>
                     </td>
-                    <td>
-                            <input type="hidden" name="field" value="keywords">
-                            <input type="text" name="value" class="form-control form-control-sm" value="{{ s.keywords or '' }}" style="min-width:80px;" placeholder="关键词">
+                    <td class="col-teams">
+                        <form method="post" action="{{ url_for('data.edit_solution', sid=s.id) }}" style="display:flex;gap:2px;align-items:center;">
+                            <input type="hidden" name="field" value="teams">
+                            <select name="value" class="form-select form-select-sm" style="font-size:11px;padding:2px 4px;height:28px;max-width:70px;{% if not s.teams %}color:#94a3b8;{% endif %}">
+                                <option value="" {% if not s.teams %}selected{% endif %}>未设置</option>
+                                {% for t in all_teams %}
+                                <option value="{{ t }}" {{ 'selected' if s.teams == t }}>{{ t[:4] }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-outline-primary py-0" style="font-size:10px;padding:0 4px;"><i class="fas fa-save"></i></button>
+                        </form>
                     </td>
-                    <td>
-                            <input type="text" name="value2" class="form-control form-control-sm" value="{{ s.content }}" style="min-width:160px;" placeholder="方案内容">
-                            <button type="submit" class="btn btn-sm btn-outline-primary py-0 ms-1"><i class="fas fa-save" style="font-size:11px;"></i></button>
+                    <td class="col-keys">
+                        <form method="post" action="{{ url_for('data.edit_solution', sid=s.id) }}" style="display:flex;gap:2px;">
+                            <input type="hidden" name="field" value="keywords">
+                            <input type="text" name="value" class="form-control form-control-sm" value="{{ s.keywords or '' }}" style="min-width:0;color:{{ 'var(--text-muted,#94a3b8)' if not s.keywords else 'inherit' }};" placeholder="未设置">
+                            <button type="submit" class="btn btn-sm btn-outline-primary py-0" style="font-size:10px;padding:0 4px;"><i class="fas fa-save"></i></button>
+                        </form>
+                    </td>
+                    <td class="col-content">
+                        <form method="post" action="{{ url_for('data.edit_solution', sid=s.id) }}" style="display:flex;gap:2px;">
+                            <input type="hidden" name="field" value="content">
+                            <input type="text" name="value2" class="form-control form-control-sm" value="{{ s.content }}" style="min-width:0;" placeholder="方案内容">
+                            <button type="submit" class="btn btn-sm btn-outline-primary py-0" style="font-size:10px;padding:0 4px;"><i class="fas fa-save"></i></button>
                         </form>
                     </td>
                     <td>
                         <form method="post" action="{{ url_for('data.delete_solution', sid=s.id) }}" style="display:inline;"
                               onsubmit="return confirm('确定删除方案「{{ s.title }}」？')">
-                            <button type="submit" class="btn btn-sm btn-outline-danger" title="删除"><i class="fas fa-trash"></i></button>
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="删除" style="padding:1px 6px;font-size:11px;"><i class="fas fa-trash"></i></button>
                         </form>
                     </td>
                 </tr>
@@ -233,4 +285,52 @@
     </ul>
 </nav>
 {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+    // ===== 表格内行编辑 - AJAX 保存 =====
+    document.querySelectorAll('.table-solutions form[method="post"][action*="/edit"]').forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var btn = this.querySelector('button[type="submit"]');
+            var orig = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            btn.disabled = true;
+            fetch(this.action + '?ajax=1', { method: 'POST', body: new FormData(this) })
+                .then(function(r) { return r.json().catch(function() { return {ok: true}; }); })
+                .then(function(data) {
+                    btn.innerHTML = '<i class="fas fa-check" style="color:#22c55e;"></i>';
+                    setTimeout(function() { btn.innerHTML = orig; btn.disabled = false; }, 1200);
+                })
+                .catch(function() {
+                    btn.innerHTML = '<i class="fas fa-times" style="color:#ef4444;"></i>';
+                    setTimeout(function() { btn.innerHTML = orig; btn.disabled = false; }, 1500);
+                });
+        });
+    });
+
+    // ===== 删除 - AJAX =====
+    document.querySelectorAll('.table-solutions form[action*="/delete"]').forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (!confirm('确定删除此方案模板？')) return;
+            var row = this.closest('tr');
+            fetch(this.action + '?ajax=1', { method: 'POST' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.ok !== false) {
+                        if (row) row.style.transition = 'opacity .3s';
+                        if (row) row.style.opacity = '0';
+                        setTimeout(function() { if (row) row.remove(); }, 300);
+                    } else {
+                        alert('删除失败');
+                    }
+                })
+                .catch(function() { alert('网络错误'); });
+        });
+    });
+})();
+</script>
 {% endblock %}

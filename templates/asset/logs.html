@@ -46,7 +46,7 @@
                         <th>操作类型</th>
                         <th>操作人</th>
                         <th>变更内容</th>
-                        {% if current_user.is_admin %}<th style="width:40px;">操作</th>{% endif %}
+                        {% if has_permission('asset:edit') %}<th style="width:40px;">操作</th>{% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -99,13 +99,13 @@
                                 {% endif %}
                             {% endif %}
                         </td>
-                        {% if current_user.is_admin %}
-                        <td class="text-center">
-                            <form method="post" action="{{ url_for('asset.delete_log', log_id=log.id) }}" onsubmit="return confirm('确认删除此日志？')" style="display:inline;">
-                                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1" title="删除"><i class="fas fa-trash"></i></button>
-                            </form>
-                        </td>
-                        {% endif %}
+                        {% if has_permission('asset:edit') %}
+                                                <td class="text-center">
+                                                    <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteLog({{ log.id }})">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </td>
+                                                {% endif %}
                     </tr>
                     {% endfor %}
                     {% if not logs %}

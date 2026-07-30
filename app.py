@@ -164,6 +164,8 @@ def create_app():
     from routes.assets import assets_bp
     from routes.dashboard import dashboard_bp
     from routes.health import health_bp
+    from routes.cross import cross_bp
+    from routes.global_dashboard import global_dashboard_bp
 
     from routes.finance_asset import fin_bp as finance_asset_bp
 
@@ -177,6 +179,8 @@ def create_app():
         finance_asset_bp, scan_bp, chat_bp, inv_bp, exam_bp,
         miniapp_bp, feature_bp, contracts_bp, sla_bp,
         efficiency_bp, assets_bp, dashboard_bp, health_bp,
+        cross_bp,
+        global_dashboard_bp,
     ]
     for _bp in BLUEPRINTS:
         app.register_blueprint(_bp)
@@ -191,6 +195,7 @@ def create_app():
         from flask import g
         from flask_login import current_user
         from models import can_access, Hospital
+        from utils.permissions import has_permission
         # 注入当前医院信息（供模板切换显示）
         current_hospital = None
         hid = getattr(g, 'hospital_id', None)
@@ -216,6 +221,7 @@ def create_app():
         return {
             'now': datetime.now(),
             'can_access': can_access,
+            'has_permission': lambda perm_key: has_permission(current_user, perm_key),
             'current_hospital': current_hospital,
             'all_hospitals': all_hospitals,
             'user_assigned_hospitals': user_assigned_hospitals,

@@ -44,22 +44,46 @@ def get_solution_content(title):
     return config.SOLUTION_TEMPLATES.get(title, '')
 
 
+def _get_fault_keywords():
+    """从 FaultType 表读取关键词用于自动匹配"""
+    from models import FaultType
+    try:
+        types = FaultType.query.filter(
+            FaultType.keywords.isnot(None),
+            FaultType.keywords != ''
+        ).all()
+        result = {}
+        for ft in types:
+            kws = [kw.strip() for kw in ft.keywords.split(',') if kw.strip()]
+            if ft.name not in result:
+                result[ft.name] = set()
+            result[ft.name].update(kw.lower() for kw in kws)
+        # 按匹配词数量降序排序，词多的优先匹配
+        sorted_result = dict(
+            sorted(result.items(), key=lambda x: -len(x[1]))
+        )
+        return sorted_result
+    except Exception:
+        return {}
+
+
 def guess_fault_type(title, desc=''):
-    """根据标题和描述猜测故障类型"""
+    """根据标题和描述猜测故障类型（从 FaultType.keywords 读取）"""
     text = (title + ' ' + desc).lower()
-    # 按优先级匹配
-    for fault_type, keywords in config.FAULT_KEYWORDS.items():
-        for kw in keywords:
+    keywords = _get_fault_keywords()
+    for fault_type, kws in keywords.items():
+        for kw in kws:
             if kw in text:
                 return fault_type
     return config.DEFAULT_FAULT_TYPE
 
 
 def guess_device_type(title, desc=''):
-    """根据标题和描述猜测设备类型"""
-    text = (title + ' ' + desc)
-    for device_type, keywords in config.DEVICE_KEYWORDS_PRIORITY:
-        for kw in keywords:
+    """根据标题和描述猜测设备类型（从 FaultType.keywords 读取）"""
+    text = (title + ' ' + desc).lower()
+    keywords = _get_fault_keywords()
+    for device_type, kws in keywords.items():
+        for kw in kws:
             if kw in text:
                 return device_type
     return config.DEFAULT_DEVICE_TYPE

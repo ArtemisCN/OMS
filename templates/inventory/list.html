@@ -22,10 +22,8 @@
         <a href="{{ url_for('asset.list_view') }}" class="btn btn-sm btn-outline-secondary">
             <i class="fas fa-server"></i> 返回资产台账
         </a>
-        {% if current_user.is_admin %}
-        <a href="{{ url_for('inventory.create') }}" class="btn btn-sm btn-primary">
-            <i class="fas fa-plus"></i> 新建盘点
-        </a>
+        {% if has_permission('biz:inspection') %}
+        <a href="{{ url_for('inventory.create') }}" class="btn btn-sm btn-primary"><i class="fas fa-plus"></i> 新建盘点</a>
         {% endif %}
     </div>
 </div>
@@ -63,10 +61,10 @@
         <small class="text-muted">{{ task.operator }} · {{ task.created_at }}</small>
         <div class="d-flex gap-1">
             <a href="{{ url_for('inventory.detail', task_id=task.id) }}" class="btn btn-sm btn-outline-primary">查看详情</a>
-            {% if task.status == 'pending' and current_user.is_admin %}
+            {% if task.status == 'pending' and has_permission('biz:inspection') %}
             <button class="btn btn-sm btn-success" onclick="finishTask({{ task.id }})">结束盘点</button>
             {% endif %}
-            {% if current_user.is_admin %}
+            {% if has_permission('biz:inspection') %}
             <button class="btn btn-sm btn-outline-danger" onclick="deleteTask({{ task.id }})">删除</button>
             {% endif %}
         </div>

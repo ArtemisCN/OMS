@@ -193,6 +193,7 @@ def create_order(form_data, created_by):
         person=form_data.get('person', ''),
         solution=form_data.get('solution', ''),
         created_by=created_by,
+        asset_id=form_data.get('asset_id', type=int) or None,
     )
     # 后台创建时直接指派人员视为已接单
     if order.person:
@@ -262,6 +263,7 @@ def publish_order(form_data, created_by, user_person=None):
         created_by=created_by,
         priority=form_data.get('priority', 'normal'),
         original_priority=form_data.get('priority', 'normal'),
+        asset_id=form_data.get('asset_id', type=int) or None,
     )
     db.session.add(order)
     db.session.commit()

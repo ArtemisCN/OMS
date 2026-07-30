@@ -140,6 +140,13 @@
           <div class="data-card-desc" style="color:rgba(255,255,255,0.7);">故障模板组+方案模板 · 按组查看/新建/复制 · 一站式管理</div>
         </div>
       </a>
+      <a href="{{ url_for('data.list_solutions') }}" class="data-card c-template">
+        <div class="data-card-icon"><i class="fas fa-book-medical"></i></div>
+        <div class="data-card-info">
+          <div class="data-card-title">方案模板匹配</div>
+          <div class="data-card-desc">关键词匹配 · 故障/设备类型绑定 · 自动方案推荐</div>
+        </div>
+      </a>
       <a href="{{ url_for('data.list_knowledge') }}" class="data-card c-template">
         <div class="data-card-icon"><i class="fas fa-graduation-cap"></i></div>
         <div class="data-card-info">
@@ -234,7 +241,7 @@
           <div class="data-card-desc">全局系统设置</div>
         </div>
       </a>
-      {% if can_access('自动派单') or can_access('超时催办') %}
+      {% if has_permission('order:assign') or has_permission('order:assign') %}
       <a href="{{ url_for('settings.index') }}?tab=功能开关" class="data-card c-system">
         <div class="data-card-icon"><i class="fas fa-robot"></i></div>
         <div class="data-card-info">

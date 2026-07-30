@@ -499,7 +499,7 @@
                                         title="查看详情">
                                     <i class="fas fa-eye"></i>
                                 </button>
-                                {% if can_access('评价删除') %}
+                                {% if has_permission('report:view') %}
                                 <form method="post" action="{{ url_for('feature.repair_rating_delete', id=r.id) }}"
                                       class="d-inline"
                                       onsubmit="return confirm('确定删除该评价？')">

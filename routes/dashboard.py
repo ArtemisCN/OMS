@@ -1,3 +1,4 @@
+from utils.permissions import has_permission
 """Dashboard Blueprint: 运维大屏, 院领导驾驶舱, 自定义报表, 数字孪生, 多院区协同, 运维周报月报, 运维成本核算"""
 import json
 import os
@@ -753,7 +754,7 @@ def digital_twin_data():
 @login_required
 def digital_twin_save_positions():
     """保存建筑位置（按医院隔离）"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'system:config'):
         return jsonify(success=False, error='仅管理员可操作'), 403
     data = request.get_json(silent=True) or {}
     positions = data.get('positions', {})
@@ -772,7 +773,7 @@ def digital_twin_save_positions():
 @login_required
 def digital_twin_save_map():
     """保存地图背景URL（按医院隔离）"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'system:config'):
         return jsonify(success=False, error='仅管理员可操作'), 403
     data = request.get_json(silent=True) or {}
     map_url = data.get('map_url', '')
@@ -791,7 +792,7 @@ def digital_twin_save_map():
 @login_required
 def digital_twin_upload_map():
     """上传地图背景图片（按医院隔离）"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'system:config'):
         return jsonify(success=False, error='仅管理员可操作'), 403
 
     if 'file' not in request.files:
@@ -856,7 +857,7 @@ def get_building_model(building_id):
 @login_required
 def save_building_model(building_id):
     """保存建筑的建模数据（按医院隔离）"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'system:config'):
         return jsonify(success=False, error='仅管理员可操作'), 403
     data = request.get_json(silent=True) or {}
     hid = data.get('hospital_id', 1)
@@ -875,7 +876,7 @@ def save_building_model(building_id):
 @login_required
 def upload_dt_texture():
     """上传自定义贴图"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'system:config'):
         return jsonify(success=False, error='仅管理员可操作'), 403
     if 'file' not in request.files:
         return jsonify(success=False, error='未选择文件'), 400
@@ -964,25 +965,23 @@ def cost_accounting():
                            completed_orders=completed_orders[:50])
 
 
-# ===== 多院区协同 =====
-
-@dashboard_bp.route('/multi-hospital-collab', methods=['GET'])
-@login_required
-def multi_hospital_collab():
-    """多院区协同页面"""
-    hospitals = []
-    try:
-        from models import Hospital
-        hospitals = Hospital.query.filter_by(is_active=True).all()
-    except Exception as e:
-        current_app.logger.error(f'查询医院列表失败: {e}')
-    # 跨医院工单（已转交过来的）
-    cross_orders = WorkOrder.query.filter(
-        WorkOrder.transfer_from_hospital.isnot(None),
-        WorkOrder.transfer_from_hospital != ''
-    ).order_by(WorkOrder.created_at.desc()).limit(50).all()
-    return render_template('feature/multi_hospital_collab.html',
-                           hospitals=hospitals, cross_orders=cross_orders)
+# ===== 多院区协同 [已废弃，改用借调管理+集团看板] =====
+# @dashboard_bp.route('/multi-hospital-collab', methods=['GET'])
+# @login_required
+# def multi_hospital_collab():
+#     \"\"\"多院区协同页面\"\"\"
+#     hospitals = []
+#     try:
+#         from models import Hospital
+#         hospitals = Hospital.query.filter_by(is_active=True).all()
+#     except Exception as e:
+#         current_app.logger.error(f'查询医院列表失败: {e}')
+#     cross_orders = WorkOrder.query.filter(
+#         WorkOrder.transfer_from_hospital.isnot(None),
+#         WorkOrder.transfer_from_hospital != ''
+#     ).order_by(WorkOrder.created_at.desc()).limit(50).all()
+#     return render_template('feature/multi_hospital_collab.html',
+#                            hospitals=hospitals, cross_orders=cross_orders)
 
 
 # ===== 运维周报月报 =====

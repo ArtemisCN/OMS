@@ -26,7 +26,7 @@
     </h5>
     <div class="d-flex gap-2 align-items-center flex-wrap">
         <span class="text-muted" style="font-size:12px;">{{ total_types }} 类 / {{ total_stock }} 件</span>
-        {% if current_user.is_admin %}
+        {% if has_permission('biz:stock') %}
         <a href="{{ url_for('stock.add') }}" class="btn btn-sm btn-primary"><i class="fas fa-plus"></i> 添加备件</a>
         <div class="dropdown d-inline-block">
             <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
@@ -130,13 +130,13 @@
                     <div style="height:100%; width:{{ pct if pct<=100 else 100 }}%; border-radius:999px; background:{% if is_low %}#ef4444{% else %}#8b5cf6{% endif %};"></div>
                 </div>
                 <div class="d-flex gap-2">
-                    {% if current_user.is_admin %}
+                    {% if has_permission('biz:stock') %}
                     <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="location.href='{{ url_for('stock.edit', part_id=p.id) }}'"><i class="fas fa-edit"></i></button>
                     {% endif %}
                     <button class="btn btn-sm btn-outline-success py-0 px-2" onclick="showInOut({{ p.id }},'{{ p.name }}','in',{{ p.stock }},'{{ p.unit }}')"><i class="fas fa-arrow-down"></i> 入库</button>
                     <button class="btn btn-sm btn-outline-warning py-0 px-2" onclick="showInOut({{ p.id }},'{{ p.name }}','out',{{ p.stock }},'{{ p.unit }}')"><i class="fas fa-arrow-up"></i> 出库</button>
                     <button class="btn btn-sm btn-outline-info py-0 px-2" onclick="location.href='{{ url_for('stock.detail', part_id=p.id) }}'"><i class="fas fa-list"></i></button>
-                    {% if current_user.is_admin %}
+                    {% if has_permission('biz:stock') %}
                     <form method="post" action="{{ url_for('stock.delete', part_id=p.id) }}" style="display:inline;" onsubmit="return confirm('确认删除备件「{{ p.name }}」？')">
                         <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2"><i class="fas fa-trash"></i></button>
                     </form>

@@ -12,7 +12,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <h5 class="mb-0 fw-bold" style="font-size:15px;"><i class="fas fa-info-circle" style="color:var(--primary)"></i>
                         {% if asset.category == 'software' %}软件详情{% else %}设备详情{% endif %}</h5>
-                    {% if current_user.is_admin %}
+                    {% if has_permission('asset:edit') %}
                     <a href="{{ url_for('asset.edit', asset_id=asset.id) }}" class="btn btn-sm btn-outline-primary">
                         <i class="fas fa-edit"></i> 编辑
                     </a>

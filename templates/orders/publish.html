@@ -218,12 +218,12 @@
         <div class="subtitle">发布后放入公共池，手机端可自行接单处理</div>
     </div>
     <div class="d-flex gap-2">
-        {% if can_access('新建工单') %}
+        {% if has_permission('order:create') %}
         <a href="{{ url_for('orders.create_order') }}" class="btn btn-outline-primary btn-sm">
             <i class="fas fa-plus-circle"></i> 新建工单
         </a>
         {% endif %}
-        {% if can_access('批量生成') %}
+        {% if has_permission('order:batch') %}
         <a href="{{ url_for('orders.batch_create') }}" class="btn btn-outline-primary btn-sm">
             <i class="fas fa-wand-magic-sparkles"></i> 批量生成
         </a>

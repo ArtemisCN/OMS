@@ -1,3 +1,4 @@
+from utils.permissions import has_permission
 """Feature Blueprint: 工单转交, SLA监控, 历史追溯, 效能看板, 资产二维码,
 耗材预测, 备件联动, 供应商管理, 合同管理, 资产折旧,
 NFC巡检签到, 运维大屏, 领导驾驶舱, 自定义报表, 短信通知"""
@@ -6,7 +7,7 @@ import json
 import os
 from datetime import datetime, date, timedelta
 
-from flask import current_app,  Blueprint, render_template, jsonify, request, send_file, g, redirect
+from flask import current_app, Blueprint, render_template, jsonify, request, send_file, g, redirect, flash, url_for
 from flask_login import login_required, current_user
 from sqlalchemy import func
 
@@ -517,7 +518,8 @@ def stock_link_to_order():
     db.session.add(record)
     db.session.commit()
 
-    return jsonify(success=True, message=f'已出库 {quantity} 个 {part.name} 并关联到工单 #{work_order.id}')
+    flash(f'✅ 已出库 {quantity} 个 {part.name} 并关联到工单 #{work_order.id}', 'success')
+    return redirect(url_for('orders.detail', order_id=work_order.id))
 
 
 # ===================== 8. 供应商管理 =====================
@@ -1134,7 +1136,7 @@ def sms_settings():
 @login_required
 def sms_settings_save():
     """保存短信配置"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'system:config'):
         return jsonify(success=False, error='仅管理员可修改'), 403
 
     data = request.get_json(silent=True) or request.form.to_dict()
@@ -1155,7 +1157,7 @@ def sms_settings_save():
 @login_required
 def sms_send():
     """发送短信"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'system:config'):
         return jsonify(success=False, error='仅管理员可发送'), 403
 
     data = request.get_json(silent=True) or request.form.to_dict()
@@ -1182,7 +1184,7 @@ def sms_send():
 @login_required
 def sms_test():
     """测试短信发送"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'system:config'):
         return jsonify(success=False, error='仅管理员可测试'), 403
 
     data = request.get_json(silent=True) or request.form.to_dict()
@@ -1231,7 +1233,7 @@ def digital_twin_data(*args, **kwargs):
 @login_required
 def digital_twin_save_positions():
     """保存建筑位置"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'system:config'):
         return jsonify(success=False, error='仅管理员可操作'), 403
     data = request.get_json(silent=True) or {}
     positions = data.get('positions', {})
@@ -1248,7 +1250,7 @@ def digital_twin_save_positions():
 @login_required
 def digital_twin_save_map():
     """保存地图背景URL"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'system:config'):
         return jsonify(success=False, error='仅管理员可操作'), 403
     data = request.get_json(silent=True) or {}
     map_url = data.get('map_url', '')
@@ -1265,7 +1267,7 @@ def digital_twin_save_map():
 @login_required
 def digital_twin_upload_map():
     """上传地图背景图片"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'system:config'):
         return jsonify(success=False, error='仅管理员可操作'), 403
 
     if 'file' not in request.files:
@@ -1457,7 +1459,7 @@ def get_feature_toggles():
 @login_required
 def save_feature_toggle():
     """保存功能开关"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'system:config'):
         return jsonify(success=False, error='仅管理员可操作'), 403
     key = request.form.get('key', '')
     value = request.form.get('value', 'false')
@@ -1511,7 +1513,7 @@ def shift_handover():
 @login_required
 def shift_handover_save():
     """保存交接班记录"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'system:config'):
         return jsonify(success=False, error='仅管理员可操作'), 403
     data = request.get_json(silent=True) or {}
     handover_person = data.get('handover_person', '').strip()
@@ -1969,22 +1971,25 @@ def inspection_routes():
     """巡检路线列表页"""
     hid = getattr(g, 'hospital_id', 0)
     routes = InspectionRoute.query.order_by(InspectionRoute.created_at.desc()).all()
-    buildings = sorted(set(
-        r[0] for r in db.session.query(Department.building).filter(
-            Department.building != '', Department.building.isnot(None),
-            Department.hospital_id == hid
-        ).distinct().all()
-    ))
-    floors = sorted(set(
-        r[0] for r in db.session.query(Department.floor).filter(
-            Department.floor != '', Department.floor.isnot(None),
-            Department.hospital_id == hid
-        ).distinct().all()
-    ))
-    departments = [d.name for d in Department.query.filter(
-        Department.is_active == True,
-        Department.hospital_id == hid
-    ).order_by(Department.name).all()]
+    # 楼栋：过滤本院的
+    bld_q = db.session.query(Department.building).filter(
+        Department.building != '', Department.building.isnot(None))
+    if hid and hid != 0:
+        bld_q = bld_q.filter(Department.hospital_id == hid)
+    buildings = sorted(set(r[0] for r in bld_q.distinct().all()))
+
+    # 楼层
+    fl_q = db.session.query(Department.floor).filter(
+        Department.floor != '', Department.floor.isnot(None))
+    if hid and hid != 0:
+        fl_q = fl_q.filter(Department.hospital_id == hid)
+    floors = sorted(set(r[0] for r in fl_q.distinct().all()))
+
+    # 科室
+    dept_q = Department.query.filter(Department.is_active == True)
+    if hid and hid != 0:
+        dept_q = dept_q.filter(Department.hospital_id == hid)
+    departments = [d.name for d in dept_q.order_by(Department.name).all()]
     return render_template('feature/inspection_routes.html', routes=routes,
                            routes_json=json.dumps([{
                                'id': r.id, 'name': r.name,
@@ -2270,25 +2275,23 @@ def cost_accounting():
                            completed_orders=completed_orders[:50])
 
 
-# ==== 12. 多院区协同 ====
-
-@feature_bp.route('/multi-hospital-collab', methods=['GET'])
-@login_required
-def multi_hospital_collab():
-    """多院区协同页面"""
-    hospitals = []
-    try:
-        from models import Hospital
-        hospitals = Hospital.query.filter_by(is_active=True).all()
-    except Exception as e:
-        current_app.logger.error(f'查询医院列表失败: {e}')
-    # 跨医院工单（已转交过来的）
-    cross_orders = WorkOrder.query.filter(
-        WorkOrder.transfer_from_hospital.isnot(None),
-        WorkOrder.transfer_from_hospital != ''
-    ).order_by(WorkOrder.created_at.desc()).limit(50).all()
-    return render_template('feature/multi_hospital_collab.html',
-                           hospitals=hospitals, cross_orders=cross_orders)
+# ==== 12. 多院区协同 [已废弃，改用借调管理+集团看板] ====
+# @feature_bp.route('/multi-hospital-collab', methods=['GET'])
+# @login_required
+# def multi_hospital_collab():
+#     \"\"\"多院区协同页面\"\"\"
+#     hospitals = []
+#     try:
+#         from models import Hospital
+#         hospitals = Hospital.query.filter_by(is_active=True).all()
+#     except Exception as e:
+#         current_app.logger.error(f'查询医院列表失败: {e}')
+#     cross_orders = WorkOrder.query.filter(
+#         WorkOrder.transfer_from_hospital.isnot(None),
+#         WorkOrder.transfer_from_hospital != ''
+#     ).order_by(WorkOrder.created_at.desc()).limit(50).all()
+#     return render_template('feature/multi_hospital_collab.html',
+#                            hospitals=hospitals, cross_orders=cross_orders)
 
 
 # ==== 13. 运维周报月报 ====

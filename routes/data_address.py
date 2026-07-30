@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from models import db
 from routes.auth import admin_required
+from utils.permissions import permission_required
 from services import data_service
 from services.data_service import get_team_options
 from utils.time_helpers import resolve_team
@@ -11,7 +12,7 @@ data_address_bp = Blueprint('data_address', __name__, url_prefix='/data/address'
 
 
 @data_address_bp.route('/')
-@admin_required
+@permission_required("system:config")
 def index():
     """地址数据页"""
     building = request.args.get('building', '')
@@ -27,7 +28,7 @@ def index():
 
 
 @data_address_bp.route('/edit', methods=['POST'])
-@admin_required
+@permission_required("system:config")
 def edit():
     ok, msg = data_service.edit_address(
         request.form.get('override_id', type=int),
@@ -42,7 +43,7 @@ def edit():
 
 
 @data_address_bp.route('/add', methods=['POST'])
-@admin_required
+@permission_required("system:config")
 def add():
     ok, msg = data_service.add_address(
         request.form.get('building', '').strip(),
@@ -55,7 +56,7 @@ def add():
 
 
 @data_address_bp.route('/<int:oid>/delete', methods=['POST'])
-@admin_required
+@permission_required("system:config")
 def delete(oid):
     building = data_service.delete_address(oid)
     flash('地址已删除', 'success')
@@ -63,7 +64,7 @@ def delete(oid):
 
 
 @data_address_bp.route('/delete-base', methods=['POST'])
-@admin_required
+@permission_required("system:config")
 def delete_base():
     ok, msg = data_service.delete_base_address(
         request.form.get('base_index', type=int),

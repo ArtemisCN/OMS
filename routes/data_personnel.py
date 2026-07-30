@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from models import db, User, WorkOrder, SystemSetting, Hospital, RoleGroup
 from routes.auth import admin_required
+from utils.permissions import permission_required, has_permission
 from services import data_service
 from datetime import datetime
 
@@ -10,7 +11,7 @@ data_personnel_bp = Blueprint('data_personnel', __name__, url_prefix='/data/pers
 
 
 @data_personnel_bp.route('/')
-@admin_required
+@permission_required('user:view')
 def index():
     """人员列表页"""
     persons, user_map = data_service.list_persons()
@@ -33,7 +34,7 @@ def index():
 
     team_sel = request.args.get('team', '')
     if not team_sel:
-        if current_user.is_admin:
+        if has_permission(current_user, 'user:view'):
             _def_setting = SystemSetting.query.filter_by(key='default_dashboard_team').first()
             team_sel = _def_setting.value if _def_setting and _def_setting.value else ''
         else:
@@ -67,7 +68,7 @@ def index():
 
 
 @data_personnel_bp.route('/add', methods=['POST'])
-@admin_required
+@permission_required('user:create')
 def add():
     ok, msg = data_service.add_person(request.form.get('name', '').strip())
     flash(msg, 'success' if ok else 'danger')
@@ -75,7 +76,7 @@ def add():
 
 
 @data_personnel_bp.route('/import-from-orders', methods=['POST'])
-@admin_required
+@permission_required('user:create')
 def import_from_orders():
     imported = data_service.import_persons_from_orders()
     flash(f'从工单中导入 {imported} 名新人员', 'success')
@@ -83,7 +84,7 @@ def import_from_orders():
 
 
 @data_personnel_bp.route('/<int:pid>/toggle', methods=['POST'])
-@admin_required
+@permission_required('user:edit')
 def toggle(pid):
     p = data_service.toggle_person(pid)
     flash(f'已{"停用" if not p.is_active else "启用"}「{p.display_name}」', 'success')
@@ -91,7 +92,7 @@ def toggle(pid):
 
 
 @data_personnel_bp.route('/<int:pid>/delete', methods=['POST'])
-@admin_required
+@permission_required('user:delete')
 def delete(pid):
     p = User.query.get_or_404(pid)
     if p.is_admin:
@@ -106,7 +107,7 @@ def delete(pid):
 
 
 @data_personnel_bp.route('/<int:pid>/reassign-orders', methods=['POST'])
-@admin_required
+@permission_required('user:edit')
 def reassign_orders(pid):
     p = User.query.get_or_404(pid)
     source_name = p.display_name or p.username
@@ -126,7 +127,7 @@ def reassign_orders(pid):
 
 
 @data_personnel_bp.route('/<int:pid>/edit-field', methods=['POST'])
-@admin_required
+@permission_required('user:edit')
 def edit_field(pid):
     field = request.form.get('field', '')
     value = request.form.get('value', '').strip()
@@ -139,7 +140,7 @@ def edit_field(pid):
 
 
 @data_personnel_bp.route('/batch-action', methods=['POST'])
-@admin_required
+@permission_required('user:edit')
 def batch_action():
     action = request.form.get('batch_action', '')
     ids_str = request.form.get('batch_ids', '')
@@ -195,7 +196,7 @@ def batch_action():
 
 
 @data_personnel_bp.route('/<int:pid>/account', methods=['GET', 'POST'])
-@admin_required
+@permission_required('user:create')
 def account(pid):
     if request.method == 'GET':
         return jsonify(data_service.person_account_info(pid))
@@ -211,7 +212,7 @@ def account(pid):
 
 
 @data_personnel_bp.route('/lottery-json')
-@admin_required
+@permission_required('user:view')
 def lottery_json():
     from flask import session
     hid = session.get('hospital_id')

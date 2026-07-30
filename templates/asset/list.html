@@ -85,7 +85,7 @@
         <a href="{{ url_for('asset.logs') }}" class="btn btn-sm btn-outline-info">
             <i class="fas fa-history"></i> 操作日志
         </a>
-        {% if current_user.is_admin %}
+        {% if has_permission('asset:create') %}
         <a href="{{ url_for('asset.add') }}" class="btn btn-sm btn-primary">
             <i class="fas fa-plus"></i> 添加资产
         </a>
@@ -157,7 +157,7 @@
 </form>
 
 <!-- 导入 & 批量操作区域 -->
-{% if current_user.is_admin %}
+{% if has_permission('asset:create') %}
 <div class="card mb-3 border-0" style="box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
     <div class="card-body p-3">
         <div class="row g-2 align-items-center">
@@ -203,7 +203,7 @@
                 <thead class="sticky-header" style="background:#f8fafc;">
                     <tr>
                         <th style="width:36px;">
-                            {% if current_user.is_admin %}
+                            {% if has_permission('asset:edit') %}
                             <input type="checkbox" id="selectAll" onchange="toggleAll(this)">
                             {% endif %}
                         </th>
@@ -283,9 +283,10 @@
                         </td>
                         <td onclick="event.stopPropagation();">
                             <div class="btn-group btn-group-sm">
+                                <button onclick="openLifecycle(event, {{ a.id }})" class="btn btn-outline-secondary" title="设备履历"><i class="fas fa-history"></i></button>
                                 <a href="{{ url_for('asset.edit', asset_id=a.id) }}" class="btn btn-outline-primary" title="编辑"><i class="fas fa-edit"></i></a>
                                 <a href="{{ url_for('asset.detail', asset_id=a.id) }}" class="btn btn-outline-info" title="详情"><i class="fas fa-info-circle"></i></a>
-                                {% if current_user.is_admin %}
+                                {% if has_permission('asset:delete') %}
                                 <button onclick="deleteAsset(event,{{ a.id }},'{{ a.asset_no }}')" class="btn btn-outline-danger" title="删除"><i class="fas fa-trash"></i></button>
                                 {% endif %}
                             </div>
@@ -616,6 +617,70 @@
     </div>
 </div>
 
+<!-- ===== 设备履历 Modal ===== -->
+<div class="modal fade" id="lifecycleModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header border-0" style="padding:18px 24px;">
+        <div>
+          <h6 class="modal-title fw-bold mb-1" id="lifecycleModalTitle"><i class="fas fa-history text-primary me-2"></i>设备履历</h6>
+          <div id="lifecycleAssetInfo" style="font-size:12px;color:var(--text-muted,#64748b);"></div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0" id="lifecycleBody">
+        <div id="lifecycleSummary" class="p-4 pb-0" style="display:none;">
+          <div class="d-flex flex-wrap gap-2" id="summaryFields" style="font-size:13px;"></div>
+        </div>
+        <div id="lifecycleTimeline" class="p-4">
+          <div class="text-center py-5 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>加载中…</div>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.lifecycle-timeline { position:relative; padding-left:32px; }
+.lifecycle-timeline::before { content:''; position:absolute; left:15px; top:0; bottom:0; width:2px; background:#e2e8f0; }
+body[data-theme="dark"] .lifecycle-timeline::before { background:#334155; }
+.lc-item { position:relative; padding:0 0 20px 20px; }
+.lc-item:last-child { padding-bottom:0; }
+.lc-dot { position:absolute; left:-25px; top:3px; width:12px; height:12px; border-radius:50%; border:2px solid; background:var(--card-bg,#fff); z-index:1; }
+body[data-theme="dark"] .lc-dot { background:#1e293b; }
+.lc-dot.import { border-color:#4f46e5; }
+.lc-dot.edit { border-color:#3b82f6; }
+.lc-dot.transfer { border-color:#f59e0b; }
+.lc-dot.relocate { border-color:#10b981; }
+.lc-dot.recover { border-color:#ef4444; }
+.lc-dot.swap { border-color:#a855f7; }
+.lc-dot.borrow { border-color:#ec4899; }
+.lc-dot.return { border-color:#14b8a6; }
+.lc-dot.repair { border-color:#f97316; }
+.lc-dot.inspection { border-color:#06b6d4; }
+.lc-time { font-size:11px; color:var(--text-muted,#94a3b8); margin-bottom:4px; }
+body[data-theme="dark"] .lc-time { color:#64748b; }
+.lc-header { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+.lc-action { font-size:12px; font-weight:600; color:var(--text,#1e293b); }
+body[data-theme="dark"] .lc-action { color:#e2e8f0; }
+.lc-operator { font-size:11px; color:var(--text-muted,#94a3b8); }
+body[data-theme="dark"] .lc-operator { color:#64748b; }
+.lc-detail { font-size:12px; color:var(--text-muted,#64748b); margin-top:4px; padding:8px 12px; background:var(--bg-light,#f8fafc); border-radius:8px; }
+body[data-theme="dark"] .lc-detail { background:#0f172a; color:#94a3b8; }
+.lc-detail .detail-label { font-weight:600; color:var(--text,#1e293b); display:inline-block; min-width:56px; }
+body[data-theme="dark"] .lc-detail .detail-label { color:#cbd5e1; }
+.lc-empty { text-align:center; padding:40px 20px; color:var(--text-muted,#94a3b8); }
+.lc-empty i { font-size:36px; margin-bottom:12px; opacity:0.4; display:block; }
+.summary-tag { display:inline-flex; align-items:center; gap:4px; padding:4px 12px; border-radius:6px; background:var(--bg-light,#f8fafc); font-size:12px; }
+body[data-theme="dark"] .summary-tag { background:#0f172a; }
+.summary-tag .tag-label { color:var(--text-muted,#64748b); }
+body[data-theme="dark"] .summary-tag .tag-label { color:#94a3b8; }
+.summary-tag .tag-value { font-weight:600; color:var(--text,#1e293b); }
+body[data-theme="dark"] .summary-tag .tag-value { color:#e2e8f0; }
+</style>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -1215,5 +1280,242 @@ function selectPoolDeviceType(type) {
   loadPoolAssets();
 }
 
+</script>
+
+<!-- ===== 设备履历 Modal（在 content 块尾部） ===== -->
+<div class="modal fade" id="lifecycleModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header border-0" style="padding:18px 24px;">
+        <div>
+          <h6 class="modal-title fw-bold mb-1" id="lifecycleModalTitle"><i class="fas fa-history text-primary me-2"></i>设备履历</h6>
+          <div id="lifecycleAssetInfo" style="font-size:12px;color:var(--text-muted,#64748b);"></div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0" id="lifecycleBody">
+        <div id="lifecycleSummary" class="p-4 pb-0" style="display:none;">
+          <div class="d-flex flex-wrap gap-2" id="summaryFields" style="font-size:13px;"></div>
+        </div>
+        <div id="lifecycleTimeline" class="p-4">
+          <div class="text-center py-5 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>加载中…</div>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.lifecycle-timeline { position:relative; padding-left:32px; }
+.lifecycle-timeline::before { content:''; position:absolute; left:15px; top:0; bottom:0; width:2px; background:#e2e8f0; }
+body[data-theme="dark"] .lifecycle-timeline::before { background:#334155; }
+.lc-item { position:relative; padding:0 0 20px 20px; }
+.lc-item:last-child { padding-bottom:0; }
+.lc-dot { position:absolute; left:-25px; top:3px; width:12px; height:12px; border-radius:50%; border:2px solid; background:var(--card-bg,#fff); z-index:1; }
+body[data-theme="dark"] .lc-dot { background:#1e293b; }
+.lc-dot.import { border-color:#4f46e5; }
+.lc-dot.edit { border-color:#3b82f6; }
+.lc-dot.transfer { border-color:#f59e0b; }
+.lc-dot.relocate { border-color:#10b981; }
+.lc-dot.recover { border-color:#ef4444; }
+.lc-dot.swap { border-color:#a855f7; }
+.lc-dot.borrow { border-color:#ec4899; }
+.lc-dot.return { border-color:#14b8a6; }
+.lc-dot.repair { border-color:#f97316; }
+.lc-dot.inspection { border-color:#06b6d4; }
+.lc-time { font-size:11px; color:var(--text-muted,#94a3b8); margin-bottom:4px; }
+body[data-theme="dark"] .lc-time { color:#64748b; }
+.lc-header { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+.lc-action { font-size:12px; font-weight:600; color:var(--text,#1e293b); }
+body[data-theme="dark"] .lc-action { color:#e2e8f0; }
+.lc-operator { font-size:11px; color:var(--text-muted,#94a3b8); }
+body[data-theme="dark"] .lc-operator { color:#64748b; }
+.lc-detail { font-size:12px; color:var(--text-muted,#64748b); margin-top:4px; padding:8px 12px; background:var(--bg-light,#f8fafc); border-radius:8px; }
+body[data-theme="dark"] .lc-detail { background:#0f172a; color:#94a3b8; }
+.lc-detail .detail-label { font-weight:600; color:var(--text,#1e293b); display:inline-block; min-width:56px; }
+body[data-theme="dark"] .lc-detail .detail-label { color:#cbd5e1; }
+.lc-empty { text-align:center; padding:40px 20px; color:var(--text-muted,#94a3b8); }
+.lc-empty i { font-size:36px; margin-bottom:12px; opacity:0.4; display:block; }
+.summary-tag { display:inline-flex; align-items:center; gap:4px; padding:4px 12px; border-radius:6px; background:var(--bg-light,#f8fafc); font-size:12px; }
+body[data-theme="dark"] .summary-tag { background:#0f172a; }
+.summary-tag .tag-label { color:var(--text-muted,#64748b); }
+body[data-theme="dark"] .summary-tag .tag-label { color:#94a3b8; }
+.summary-tag .tag-value { font-weight:600; color:var(--text,#1e293b); }
+body[data-theme="dark"] .summary-tag .tag-value { color:#e2e8f0; }
+</style>
+
+{{ super() }}
+<script>
+var _lifecycleModal = null;
+document.addEventListener('DOMContentLoaded', function() {
+  _lifecycleModal = new bootstrap.Modal(document.getElementById('lifecycleModal'));
+});
+
+function openLifecycle(e, assetId) {
+  if (e) e.stopPropagation();
+  var timeline = document.getElementById('lifecycleTimeline');
+  var summary = document.getElementById('lifecycleSummary');
+  var info = document.getElementById('lifecycleAssetInfo');
+  var title = document.getElementById('lifecycleModalTitle');
+
+  title.innerHTML = '<i class="fas fa-spinner fa-spin text-primary me-2"></i>加载中…';
+  timeline.innerHTML = '<div class="text-center py-5 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>加载中…</div>';
+  summary.style.display = 'none';
+  info.textContent = '';
+  _lifecycleModal.show();
+
+  fetch('/assets/api/asset-lifecycle/' + assetId)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.success) {
+        timeline.innerHTML = '<div class="lc-empty"><i class="fas fa-exclamation-triangle"></i><p>加载失败</p></div>';
+        title.innerHTML = '<i class="fas fa-history text-primary me-2"></i>设备履历';
+        return;
+      }
+      renderLifecycle(data.data);
+    })
+    .catch(function() {
+      timeline.innerHTML = '<div class="lc-empty"><i class="fas fa-exclamation-triangle"></i><p>网络错误</p></div>';
+      title.innerHTML = '<i class="fas fa-history text-primary me-2"></i>设备履历';
+    });
+}
+
+function renderLifecycle(data) {
+  var asset = data.asset;
+  var timelineData = data.timeline;
+
+  document.getElementById('lifecycleModalTitle').innerHTML = '<i class="fas fa-history text-primary me-2"></i>' + escHtml(asset.asset_no) + ' 设备履历';
+
+  document.getElementById('lifecycleAssetInfo').innerHTML =
+    escHtml((asset.brand + ' ' + asset.model_no).trim()) + ' · ' +
+    escHtml(asset.device_type) + ' · ' +
+    escHtml(asset.department) +
+    (asset.location ? ' · ' + escHtml((asset.building + ' ' + asset.floor + ' ' + asset.location).trim()) : '');
+
+  var tags = [
+    {label:'SN', val:asset.sn},
+    {label:'状态', val:STATUS_LABELS[asset.status] || asset.status},
+    {label:'购入', val:asset.purchase_date},
+    {label:'保修至', val:asset.warranty_end},
+    {label:'IP', val:asset.ip_address},
+    {label:'财务码', val:asset.financial_code},
+  ];
+  var tagHtml = '';
+  tags.forEach(function(t) {
+    if (!t.val) return;
+    tagHtml += '<span class="summary-tag"><span class="tag-label">' + t.label + ':</span> <span class="tag-value">' + escHtml(t.val) + '</span></span>';
+  });
+  document.getElementById('summaryFields').innerHTML = tagHtml;
+  document.getElementById('lifecycleSummary').style.display = tagHtml ? '' : 'none';
+
+  var container = document.getElementById('lifecycleTimeline');
+  if (!timelineData.length) {
+    container.innerHTML = '<div class="lc-empty"><i class="fas fa-inbox"></i><p>暂无操作记录</p></div>';
+    return;
+  }
+  var html2 = '<div class="lifecycle-timeline">';
+  timelineData.forEach(function(item) {
+    var actionLabel = ACTION_LABELS[item.action] || item.action;
+    var dotClass = DOT_CLASSES[item.action] || 'edit';
+    html2 += '<div class="lc-item">';
+    html2 += '<div class="lc-dot ' + dotClass + '"></div>';
+    html2 += '<div class="lc-time">' + formatTime(item.time) + '</div>';
+    html2 += '<div class="lc-header">';
+    html2 += '<span class="lc-action">' + escHtml(actionLabel) + '</span>';
+    if (item.operator) html2 += '<span class="lc-operator">by ' + escHtml(item.operator) + '</span>';
+    html2 += '</div>';
+    if (item.source === 'asset_log') {
+      var parts = [];
+      var oldParsed = null, newParsed = null;
+      try { oldParsed = JSON.parse(item.old_value); } catch(e) {}
+      try { newParsed = JSON.parse(item.new_value); } catch(e) {}
+      if (oldParsed && typeof oldParsed === 'object' && newParsed && typeof newParsed === 'object') {
+        // JSON diff mode — show only changed fields
+        var changed = [];
+        for (var k in newParsed) {
+          var ov = String(oldParsed[k] !== undefined ? oldParsed[k] : '');
+          var nv = String(newParsed[k] !== undefined ? newParsed[k] : '');
+          if (ov !== nv && k !== 'id' && k !== 'created_at' && k !== 'updated_at' && k !== 'hospital_id') {
+            changed.push({key: k, old: ov, new: nv});
+          }
+        }
+        if (changed.length) {
+          var detailHtml = '<table style="width:100%;font-size:11px;border-collapse:collapse;">';
+          for (var i = 0; i < changed.length; i++) {
+            var c = changed[i];
+            var labelMap = {'asset_no':'资产编号','device_type':'设备类型','brand':'品牌','model_no':'型号','sn':'序列号',
+              'department':'科室','building':'楼栋','floor':'楼层','location':'位置','status':'状态','purchase_date':'购入日期',
+              'price':'价格','warranty_start':'保修起始','warranty_end':'保修截止','vendor':'供应商','cpu':'CPU','memory':'内存',
+              'disk_size':'硬盘','operating_system':'操作系统','ip_address':'IP','mac_address':'MAC',
+              'financial_code':'财务码','financial_name':'财务名称','license_key':'授权码','license_seats':'授权数',
+              'notes':'备注','category':'分类'};
+            detailHtml += '<tr style="border-bottom:1px solid #f1f5f9;">';
+            detailHtml += '<td style="padding:3px 8px 3px 0;font-weight:600;color:#64748b;white-space:nowrap;width:70px;">' + (labelMap[c.key] || c.key) + '</td>';
+            detailHtml += '<td style="padding:3px 4px;color:#94a3b8;text-decoration:line-through;">' + escHtml(c.old) + '</td>';
+            detailHtml += '<td style="padding:3px 0;color:#059669;">→ ' + escHtml(c.new) + '</td>';
+            detailHtml += '</tr>';
+          }
+          detailHtml += '</table>';
+          html2 += '<div class="lc-detail" style="padding:6px 12px;">' + detailHtml + '</div>';
+        } else {
+          parts.push(item.old_value);
+          parts.push('→ ' + item.new_value);
+          if (parts.length) html2 += '<div class="lc-detail">' + escHtml(parts.join(' ')) + '</div>';
+        }
+      } else {
+        if (item.old_value) parts.push(item.old_value);
+        if (item.new_value) parts.push('→ ' + item.new_value);
+        if (parts.length) html2 += '<div class="lc-detail">' + escHtml(parts.join(' ')) + '</div>';
+      }
+    } else if (item.source === 'work_order') {
+      try {
+        html2 += renderWorkOrderDetail(item.action, JSON.parse(item.new_value));
+      } catch(e) {
+        html2 += '<div class="lc-detail">' + escHtml(item.new_value || '') + '</div>';
+      }
+    }
+    html2 += '</div>';
+  });
+  html2 += '</div>';
+  container.innerHTML = html2;
+}
+
+function renderWorkOrderDetail(action, nv) {
+  var html = '<div class="lc-detail">';
+  if (action === 'repair') {
+    html += '<div><span class="detail-label">工单:</span> <a href="/orders/detail/' + nv.id + '" target="_blank">#' + nv.id + ' ' + escHtml(nv.title) + '</a></div>';
+    if (nv.person) html += '<div><span class="detail-label">维修人:</span> ' + escHtml(nv.person) + '</div>';
+    if (nv.department) html += '<div><span class="detail-label">科室:</span> ' + escHtml(nv.department) + '</div>';
+    if (nv.repair_result) html += '<div><span class="detail-label">结果:</span> ' + escHtml(nv.repair_result) + '</div>';
+    html += '<div><span class="detail-label">状态:</span> ' + escHtml(nv.status) + '</div>';
+  } else if (action === 'inspection') {
+    html += '<div><span class="detail-label">巡检:</span> <a href="/orders/detail/' + nv.id + '" target="_blank">#' + nv.id + ' ' + escHtml(nv.title) + '</a></div>';
+    if (nv.person) html += '<div><span class="detail-label">巡检人:</span> ' + escHtml(nv.person) + '</div>';
+    if (nv.result) html += '<div><span class="detail-label">结果:</span> ' + escHtml(nv.result) + '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+var STATUS_LABELS = { 'in_use': '使用中', 'idle': '闲置', 'scrapped': '报废', 'repair': '维修' };
+var ACTION_LABELS = { 'import': '导入', 'edit': '编辑', 'transfer': '调拨', 'relocate': '移位', 'recover': '回收', 'swap': '互换', 'borrow': '借用', 'return': '归还', 'repair': '维修工单', 'inspection': '巡检任务' };
+var DOT_CLASSES = { 'import': 'import', 'edit': 'edit', 'transfer': 'transfer', 'relocate': 'relocate', 'recover': 'recover', 'swap': 'swap', 'borrow': 'borrow', 'return': 'return', 'repair': 'repair', 'inspection': 'inspection' };
+
+function formatTime(isoStr) {
+  if (!isoStr) return '';
+  var d = new Date(isoStr);
+  var pad = function(n) { return String(n).padStart(2,'0'); };
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+function escHtml(s) {
+  if (!s && s !== 0) return '';
+  var div = document.createElement('div');
+  div.appendChild(document.createTextNode(String(s)));
+  return div.innerHTML;
+}
 </script>
 {% endblock %}

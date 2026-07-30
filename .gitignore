@@ -42,4 +42,8 @@ backups/
 
 # Logs
 *.log
+logs/
 .secret
+
+# Backup files
+*.bak

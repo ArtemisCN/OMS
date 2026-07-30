@@ -15,7 +15,8 @@ import config
 from routes.auth import admin_required
 from services import data_service
 from services.data_service import get_team_options
-from utils.time_helpers import resolve_team
+from utils.time_helpers import resolve_team, fmt_dt
+from utils.permissions import permission_required, has_permission
 from flask import redirect
 
 data_bp = Blueprint('data', __name__, url_prefix='/data')
@@ -24,7 +25,7 @@ data_bp = Blueprint('data', __name__, url_prefix='/data')
 # ==================== 医院管理（预留） ====================
 
 @data_bp.route('/hospitals')
-@admin_required
+@permission_required('system:config')
 def list_hospitals():
     """医院列表（豪华卡片版）"""
     hospitals = Hospital.query.order_by(Hospital.id).all()
@@ -62,7 +63,7 @@ def list_hospitals():
 
 
 @data_bp.route('/hospitals/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_hospital():
     ok, msg = data_service.add_hospital(
         request.form.get('name', '').strip(),
@@ -74,7 +75,7 @@ def add_hospital():
 
 
 @data_bp.route('/hospitals/<int:hid>/edit', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def edit_hospital(hid):
     ok, msg = data_service.edit_hospital(hid,
         request.form.get('name', '').strip(),
@@ -91,7 +92,7 @@ from werkzeug.utils import secure_filename
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
 
 @data_bp.route('/hospitals/<int:hid>/upload_logo', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def upload_hospital_logo(hid):
     """上传医院头像"""
     hospital = Hospital.query.get(hid)
@@ -119,7 +120,7 @@ def upload_hospital_logo(hid):
 
 
 @data_bp.route('/hospitals/<int:hid>/toggle', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def toggle_hospital(hid):
     ok, msg = data_service.toggle_hospital(hid)
     flash(msg, 'success' if ok else 'danger')
@@ -133,7 +134,7 @@ def switch_hospital(hid):
     from services.cache import clear_cache
     clear_cache()
     if hid == 0:
-        if current_user.is_admin:
+        if has_permission(current_user, 'system:config'):
             session['admin_hospital_id'] = 0
         else:
             session['user_hospital_id'] = 0
@@ -143,7 +144,7 @@ def switch_hospital(hid):
     if not h:
         flash('医院不存在', 'danger')
         return redirect(request.referrer or url_for('main.dashboard'))
-    if current_user.is_admin:
+    if has_permission(current_user, 'system:config'):
         session['admin_hospital_id'] = hid
     else:
         allowed_ids = current_user.get_assigned_hospital_ids()
@@ -158,7 +159,7 @@ def switch_hospital(hid):
 # ==================== 数据管理首页 ====================
 
 @data_bp.route('/')
-@admin_required
+@permission_required('system:config')
 def index():
     """数据管理总览"""
     from services.address import get_all_buildings
@@ -184,7 +185,7 @@ def index():
 # ==================== 人员管理 ====================
 
 @data_bp.route('/persons')
-@admin_required
+@permission_required('user:view')
 def list_persons():
     persons, user_map = data_service.list_persons()
     # 按组分类
@@ -210,7 +211,7 @@ def list_persons():
     # ===== 组别筛选：默认同仪表盘 =====
     team_sel = request.args.get('team', '')
     if not team_sel:
-        if current_user.is_admin:
+        if has_permission(current_user, 'system:config'):
             _def_setting = SystemSetting.query.filter_by(key='default_dashboard_team').first()
             team_sel = _def_setting.value if _def_setting and _def_setting.value else ''
         else:
@@ -246,7 +247,7 @@ def list_persons():
 
 
 @data_bp.route('/persons/add', methods=['POST'])
-@admin_required
+@permission_required('user:create')
 def add_person():
     ok, msg = data_service.add_person(request.form.get('name', '').strip())
     flash(msg, 'success' if ok else 'danger')
@@ -254,7 +255,7 @@ def add_person():
 
 
 @data_bp.route('/persons/import-from-orders', methods=['POST'])
-@admin_required
+@permission_required('user:create')
 def import_persons_from_orders():
     imported = data_service.import_persons_from_orders()
     flash(f'从工单中导入 {imported} 名新人员', 'success')
@@ -262,7 +263,7 @@ def import_persons_from_orders():
 
 
 @data_bp.route('/persons/<int:pid>/toggle', methods=['POST'])
-@admin_required
+@permission_required('user:edit')
 def toggle_person(pid):
     p = data_service.toggle_person(pid)
     flash(f'已{"停用" if not p.is_active else "启用"}「{p.display_name}」', 'success')
@@ -270,7 +271,7 @@ def toggle_person(pid):
 
 
 @data_bp.route('/persons/<int:pid>/delete', methods=['POST'])
-@admin_required
+@permission_required('user:delete')
 def delete_person(pid):
     p = User.query.get_or_404(pid)
     if p.is_admin:
@@ -285,7 +286,7 @@ def delete_person(pid):
 
 
 @data_bp.route('/persons/<int:pid>/reassign-orders', methods=['POST'])
-@admin_required
+@permission_required('user:edit')
 def reassign_person_orders(pid):
     """将某人的工单批量转移给另一个人"""
     p = User.query.get_or_404(pid)
@@ -306,7 +307,7 @@ def reassign_person_orders(pid):
 
 
 @data_bp.route('/persons/<int:pid>/edit-field', methods=['POST'])
-@admin_required
+@permission_required('user:edit')
 def edit_person_field(pid):
     field = request.form.get('field', '')
     value = request.form.get('value', '').strip()
@@ -319,7 +320,7 @@ def edit_person_field(pid):
 
 
 @data_bp.route('/persons/batch-action', methods=['POST'])
-@admin_required
+@permission_required('user:edit')
 def batch_person_action():
     """批量操作人员：启用/禁用/改组分/删除"""
     action = request.form.get('batch_action', '')
@@ -382,7 +383,7 @@ def batch_person_action():
 
 
 @data_bp.route('/persons/<int:pid>/account', methods=['GET', 'POST'])
-@admin_required
+@permission_required('user:create')
 def person_account(pid):
     if request.method == 'GET':
         return jsonify(data_service.person_account_info(pid))
@@ -398,7 +399,7 @@ def person_account(pid):
 
 
 @data_bp.route('/persons/lottery-json')
-@admin_required
+@permission_required('user:view')
 def lottery_persons_json():
     """返回当前医院活跃人员列表（大转盘抽奖用），支持 ?team= 筛选"""
     from flask import session, jsonify
@@ -419,13 +420,13 @@ def lottery_persons_json():
 # ==================== 科室字典管理 ====================
 
 @data_bp.route('/departments')
-@admin_required
+@permission_required('system:config')
 def list_departments():
     return render_template('data/departments.html', departments=data_service.list_departments())
 
 
 @data_bp.route('/departments/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_department():
     ok, msg = data_service.add_department(
         request.form.get('name', '').strip(),
@@ -438,7 +439,7 @@ def add_department():
 
 
 @data_bp.route('/departments/edit/<int:id>', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def edit_department(id):
     ok, msg = data_service.edit_department(
         id,
@@ -451,7 +452,7 @@ def edit_department(id):
 
 
 @data_bp.route('/departments/delete/<int:id>', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_department(id):
     ok, msg = data_service.delete_department(id, current_user.display_name or current_user.username)
     flash(msg, 'success' if ok else 'danger')
@@ -461,14 +462,14 @@ def delete_department(id):
 # ==================== 方案模板管理 ====================
 
 @data_bp.route('/solutions')
-@admin_required
+@permission_required('system:config')
 def list_solutions():
     page = request.args.get('page', 1, type=int)
     keyword = request.args.get('keyword', '')
     device_filter = request.args.get('device_filter', '')
     fault_filter = request.args.get('fault_filter', '')
     team_filter = request.args.get('team_filter', '')
-    pagination = data_service.list_solutions(keyword, device_filter, fault_filter, page, team_filter)
+    pagination = data_service.list_solutions(keyword, device_filter, fault_filter, page, team_filter=team_filter)
     all_teams = data_service.get_team_options()
     return render_template('data/solutions.html', pagination=pagination,
                            keyword=keyword, device_filter=device_filter,
@@ -477,7 +478,7 @@ def list_solutions():
 
 
 @data_bp.route('/solutions/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_solution():
     teams_list = request.form.getlist('teams')
     teams = ','.join([t for t in teams_list if t]) if teams_list else ''
@@ -490,11 +491,11 @@ def add_solution():
         request.form.get('fault_subcategory', ''),
         teams)
     flash(msg, 'success' if ok else 'danger')
-    return redirect(url_for('data.list_templates'))
+    return redirect(url_for('data.list_solutions'))
 
 
 @data_bp.route('/solutions/reset', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def reset_solutions():
     count = data_service.reset_solutions()
     flash(f'已重置 {count} 条方案模板到默认值', 'success')
@@ -502,15 +503,15 @@ def reset_solutions():
 
 
 @data_bp.route('/solutions/import-from-orders', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def import_solutions_from_orders():
     imported = data_service.import_solutions_from_orders()
     flash(f'从工单中导入 {imported} 条新方案模板', 'success')
-    return redirect(url_for('data.list_templates'))
+    return redirect(url_for('data.list_solutions'))
 
 
 @data_bp.route('/solutions/<int:sid>/edit', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def edit_solution(sid):
     field = request.form.get('field', '')
     if field == 'teams':
@@ -520,12 +521,14 @@ def edit_solution(sid):
     data_service.edit_solution(
         sid, field, value,
         request.form.get('value2'))
+    if request.args.get('ajax'):
+        return jsonify({'ok': True})
     flash('方案已更新', 'success')
-    return redirect(url_for('data.list_templates'))
+    return redirect(url_for('data.list_solutions'))
 
 
 @data_bp.route('/solutions/<int:sid>/edit-full', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def edit_solution_full(sid):
     """编辑方案模板全部字段"""
     from models import SolutionTemplate
@@ -547,17 +550,19 @@ def edit_solution_full(sid):
 
 
 @data_bp.route('/solutions/<int:sid>/delete', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_solution(sid):
     title = data_service.delete_solution(sid, current_user.display_name or current_user.username)
+    if request.args.get('ajax'):
+        return jsonify({'ok': True, 'title': title})
     flash(f'方案「{title}」已删除', 'success')
-    return redirect(url_for('data.list_templates'))
+    return redirect(url_for('data.list_solutions'))
 
 
 # ==================== 地址数据查看 ====================
 
 @data_bp.route('/addresses')
-@admin_required
+@permission_required('system:config')
 def list_addresses():
     building = request.args.get('building', '')
     keyword = request.args.get('keyword', '')
@@ -572,7 +577,7 @@ def list_addresses():
 
 
 @data_bp.route('/addresses/edit', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def edit_address():
     ok, msg = data_service.edit_address(
         request.form.get('override_id', type=int),
@@ -587,7 +592,7 @@ def edit_address():
 
 
 @data_bp.route('/addresses/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_address():
     ok, msg = data_service.add_address(
         request.form.get('building', '').strip(),
@@ -600,7 +605,7 @@ def add_address():
 
 
 @data_bp.route('/addresses/<int:oid>/delete', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_address(oid):
     building = data_service.delete_address(oid)
     flash('地址已删除', 'success')
@@ -608,7 +613,7 @@ def delete_address(oid):
 
 
 @data_bp.route('/addresses/delete-base', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_base_address():
     ok, msg = data_service.delete_base_address(
         request.form.get('base_index', type=int),
@@ -620,7 +625,7 @@ def delete_base_address():
 # ==================== 故障类型管理 ====================
 
 @data_bp.route('/fault-types')
-@admin_required
+@permission_required('system:config')
 def list_fault_types():
     team = resolve_team(request, current_user)
     all_teams = get_team_options()
@@ -629,7 +634,7 @@ def list_fault_types():
 
 
 @data_bp.route('/fault-types/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_fault_type():
     ok, msg = data_service.add_fault_type(
         request.form.get('name', '').strip(),
@@ -640,7 +645,7 @@ def add_fault_type():
 
 
 @data_bp.route('/fault-types/<int:fid>/edit', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def edit_fault_type(fid):
     ok, msg = data_service.edit_fault_type(
         fid, request.form.get('name', '').strip(),
@@ -651,7 +656,7 @@ def edit_fault_type(fid):
 
 
 @data_bp.route('/fault-types/<int:fid>/delete', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_fault_type(fid):
     name = data_service.delete_fault_type(fid, current_user.display_name or current_user.username)
     flash(f'故障类型「{name}」已删除', 'success')
@@ -661,13 +666,13 @@ def delete_fault_type(fid):
 # ==================== 存放位置字典 ====================
 
 @data_bp.route('/storage-locations')
-@admin_required
+@permission_required('system:config')
 def list_storage_locations():
     return render_template('data/storage_locations.html', locations=data_service.list_storage_locations())
 
 
 @data_bp.route('/storage-locations/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_storage_location():
     ok, msg = data_service.add_storage_location(
         request.form.get('name', '').strip(),
@@ -682,7 +687,7 @@ def add_storage_location():
 
 
 @data_bp.route('/storage-locations/<int:lid>/edit', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def edit_storage_location(lid):
     ok, msg = data_service.edit_storage_location(
         lid, request.form.get('name', '').strip(),
@@ -697,14 +702,14 @@ def edit_storage_location(lid):
 
 
 @data_bp.route('/storage-locations/<int:lid>/toggle', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def toggle_storage_location(lid):
     data_service.toggle_storage_location(lid)
     return redirect(url_for('data.list_storage_locations'))
 
 
 @data_bp.route('/storage-locations/<int:lid>/delete', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_storage_location(lid):
     name = data_service.delete_storage_location(lid)
     flash(f'已删除存放位置「{name}」', 'success')
@@ -714,13 +719,13 @@ def delete_storage_location(lid):
 # ==================== 供应商管理 ====================
 
 @data_bp.route('/suppliers')
-@admin_required
+@permission_required('system:config')
 def list_suppliers():
     return render_template('data/suppliers.html', suppliers=data_service.list_suppliers())
 
 
 @data_bp.route('/suppliers/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_supplier():
     ok, msg = data_service.add_supplier(
         request.form.get('name', '').strip(),
@@ -735,7 +740,7 @@ def add_supplier():
 
 
 @data_bp.route('/suppliers/<int:sid>/edit', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def edit_supplier(sid):
     ok, msg = data_service.edit_supplier(
         sid, request.form.get('name', '').strip(),
@@ -750,14 +755,14 @@ def edit_supplier(sid):
 
 
 @data_bp.route('/suppliers/<int:sid>/toggle', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def toggle_supplier(sid):
     data_service.toggle_supplier(sid)
     return redirect(url_for('data.list_suppliers'))
 
 
 @data_bp.route('/suppliers/<int:sid>/delete', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_supplier(sid):
     name = data_service.delete_supplier(sid)
     flash(f'已删除供应商「{name}」', 'success')
@@ -767,14 +772,14 @@ def delete_supplier(sid):
 # ==================== 耗材管理 ====================
 
 @data_bp.route('/consumables')
-@admin_required
+@permission_required('system:config')
 def list_consumables():
     q = request.args.get('q', '').strip()
     return render_template('data/consumables.html', consumables=data_service.list_consumables(q), q=q)
 
 
 @data_bp.route('/consumables/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_consumable():
     ok, msg = data_service.add_consumable(
         request.form.get('name', '').strip(),
@@ -791,7 +796,7 @@ def add_consumable():
 
 
 @data_bp.route('/consumables/<int:cid>/edit', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def edit_consumable(cid):
     ok, msg = data_service.edit_consumable(
         cid, request.form.get('name', '').strip(),
@@ -808,7 +813,7 @@ def edit_consumable(cid):
 
 
 @data_bp.route('/consumables/<int:cid>/delete', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_consumable(cid):
     name = data_service.delete_consumable(cid)
     flash(f'已删除耗材「{name}」', 'success')
@@ -816,7 +821,7 @@ def delete_consumable(cid):
 
 
 @data_bp.route('/consumables/import-excel', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def import_consumables_excel():
     file = request.files.get('file')
     if not file:
@@ -839,7 +844,7 @@ def import_consumables_excel():
 
 
 @data_bp.route('/consumables/inout', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def consumable_inout():
     cid = request.form.get('cid', type=int)
     action = request.form.get('action')
@@ -853,7 +858,7 @@ def consumable_inout():
 
 
 @data_bp.route('/consumables/export-template')
-@admin_required
+@permission_required('system:config')
 def export_consumables_template():
     try:
         output = data_service.export_consumables_template()
@@ -868,7 +873,7 @@ def export_consumables_template():
 # ==================== 值班排班 ====================
 
 @data_bp.route('/duty-schedules')
-@admin_required
+@permission_required('system:config')
 def list_duty_schedules():
     from datetime import datetime, date
     from models import SystemSetting
@@ -933,7 +938,7 @@ def list_duty_schedules():
 
 
 @data_bp.route('/duty-schedules/api')
-@admin_required
+@permission_required('system:config')
 def duty_schedules_api():
     year = request.args.get('year', type=int)
     month = request.args.get('month', type=int)
@@ -944,7 +949,7 @@ def duty_schedules_api():
 
 
 @data_bp.route('/duty-schedules/api/update', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def duty_schedule_update():
     ok, msg, shift = data_service.duty_schedule_update(
         request.form.get('year', type=int),
@@ -958,7 +963,7 @@ def duty_schedule_update():
 
 
 @data_bp.route('/duty-schedules/api/batch', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def duty_schedule_batch():
     ok, msg = data_service.duty_schedule_batch(
         request.form.get('action', ''),
@@ -972,7 +977,7 @@ def duty_schedule_batch():
 
 
 @data_bp.route('/duty-schedules/api/import', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def duty_schedule_import():
     file = request.files.get('file')
     if not file:
@@ -987,7 +992,7 @@ def duty_schedule_import():
 
 
 @data_bp.route('/duty-schedules/staff', methods=['GET', 'POST'])
-@admin_required
+@permission_required('system:config')
 def duty_staff_manage():
     if request.method == 'POST':
         ok, msg = data_service.add_duty_staff(request.form.get('name', '').strip())
@@ -998,14 +1003,14 @@ def duty_staff_manage():
 
 
 @data_bp.route('/duty-schedules/staff/<int:sid>/toggle', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def duty_staff_toggle(sid):
     active = data_service.toggle_duty_staff(sid)
     return jsonify({'ok': True, 'active': active})
 
 
 @data_bp.route('/duty-schedules/staff/<int:sid>/delete', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def duty_staff_delete(sid):
     data_service.delete_duty_staff(sid)
     return jsonify({'ok': True})
@@ -1027,7 +1032,7 @@ def list_knowledge():
 
 
 @data_bp.route('/knowledge/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_knowledge():
     ok, msg = data_service.add_knowledge(
         request.form.get('title', '').strip(),
@@ -1039,7 +1044,7 @@ def add_knowledge():
 
 
 @data_bp.route('/knowledge/<int:kid>/edit', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def edit_knowledge(kid):
     ok, msg = data_service.edit_knowledge(
         kid, request.form.get('title', '').strip(),
@@ -1057,7 +1062,7 @@ def knowledge_api(kid):
 
 
 @data_bp.route('/knowledge/<int:kid>/delete', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_knowledge(kid):
     title = data_service.delete_knowledge(kid)
     flash(f'已删除文章「{title}」', 'success')
@@ -1067,12 +1072,17 @@ def delete_knowledge(kid):
 # ==================== 权限管理 ====================
 
 @data_bp.route('/permissions')
-@admin_required
+@permission_required('system:permission')
 def permissions():
-    """权限管理页面（已合并到数据管理）"""
-    from flask import redirect, url_for
-    return redirect(url_for('data.index'))
-    from models import RoleGroup
+    """权限管理页面"""
+    from models import RoleGroup, ALL_MODULE_NAMES
+    users = User.query.order_by(User.id).all()
+    persons = users
+    role_groups = RoleGroup.query.order_by(RoleGroup.id).all()
+    module_perms = get_module_permissions()
+    all_module_names = ALL_MODULE_NAMES
+
+    user_group_map = {}
     for u in users:
         if u.is_admin:
             user_group_map[u.id] = '管理员'
@@ -1081,6 +1091,38 @@ def permissions():
             user_group_map[u.id] = rg.name if rg else (u.group or '普通用户')
         else:
             user_group_map[u.id] = u.group or '普通用户'
+
+    users_by_group = {}
+    for gname in module_perms.get('groups', {}).keys():
+        users_by_group[gname] = {'users': [], 'role_groups': []}
+    for g in role_groups:
+        key = g.name
+        if key not in users_by_group:
+            users_by_group[key] = {'users': [], 'role_groups': []}
+        users_by_group[key]['role_groups'].append(g)
+        for u in users:
+            if u.group_id == g.id or (u.group == g.name and u.group_id is None):
+                if u not in users_by_group[key]['users']:
+                    users_by_group[key]['users'].append(u)
+    if '管理员' not in users_by_group:
+        users_by_group['管理员'] = {'users': [], 'role_groups': []}
+    for u in users:
+        if u.is_admin:
+            if u not in users_by_group['管理员']['users']:
+                users_by_group['管理员']['users'].append(u)
+    assigned = set()
+    for gdata in users_by_group.values():
+        for u in gdata['users']:
+            assigned.add(u.id)
+    for u in users:
+        if u.id not in assigned:
+            key = u.group or '未分组'
+            if key not in users_by_group:
+                users_by_group[key] = {'users': [], 'role_groups': []}
+            users_by_group[key]['users'].append(u)
+            if u.id not in user_group_map:
+                user_group_map[u.id] = key
+
     return render_template('data/permissions.html', users=users, module_perms=module_perms,
                            all_module_names=all_module_names, persons=persons,
                            users_by_group=users_by_group, role_groups=role_groups,
@@ -1088,7 +1130,7 @@ def permissions():
 
 
 @data_bp.route('/permissions/sync-users', methods=['POST'])
-@admin_required
+@permission_required('user:create')
 def sync_users_from_persons():
     created, msg = data_service.sync_users_from_persons(
         current_user.display_name or current_user.username)
@@ -1097,7 +1139,7 @@ def sync_users_from_persons():
 
 
 @data_bp.route('/permissions/save', methods=['POST'])
-@admin_required
+@permission_required('system:permission')
 def save_permissions():
     data = request.get_json(force=True)
     if not data or 'groups' not in data:
@@ -1107,7 +1149,7 @@ def save_permissions():
 
 
 @data_bp.route('/permissions/toggle-admin/<int:uid>', methods=['POST'])
-@admin_required
+@permission_required('user:role_assign')
 def toggle_admin(uid):
     ok, msg, _ = data_service.toggle_admin(
         uid, current_user.id, current_user.display_name or current_user.username)
@@ -1116,7 +1158,7 @@ def toggle_admin(uid):
 
 
 @data_bp.route('/permissions/set-group', methods=['POST'])
-@admin_required
+@permission_required('user:role_assign')
 def set_user_group():
     uid = request.form.get('uid', type=int)
     group_id = request.form.get('group_id', type=int)
@@ -1134,7 +1176,7 @@ def set_user_group():
 
 
 @data_bp.route('/permissions/add-group', methods=['POST'])
-@admin_required
+@permission_required('system:permission')
 def add_permission_group():
     ok, msg = data_service.add_permission_group(request.form.get('name', '').strip())
     flash(msg, 'success' if ok else 'danger')
@@ -1142,7 +1184,7 @@ def add_permission_group():
 
 
 @data_bp.route('/permissions/delete-group', methods=['POST'])
-@admin_required
+@permission_required('system:permission')
 def delete_permission_group():
     ok, msg = data_service.delete_permission_group(request.form.get('name', '').strip())
     flash(msg, 'success' if ok else 'danger')
@@ -1150,7 +1192,7 @@ def delete_permission_group():
 
 
 @data_bp.route('/permissions/add-module', methods=['POST'])
-@admin_required
+@permission_required('system:permission')
 def add_permission_module():
     ok, msg = data_service.add_permission_module(
         request.form.get('module', '').strip(),
@@ -1160,7 +1202,7 @@ def add_permission_module():
 
 
 @data_bp.route('/permissions/delete-module', methods=['POST'])
-@admin_required
+@permission_required('system:permission')
 def delete_permission_module():
     ok, msg = data_service.delete_permission_module(request.form.get('module', '').strip())
     flash(msg, 'success' if ok else 'danger')
@@ -1168,7 +1210,7 @@ def delete_permission_module():
 
 
 @data_bp.route('/permissions/rename-group', methods=['POST'])
-@admin_required
+@permission_required('system:permission')
 def rename_permission_group():
     """重命名角色组（预留）"""
     flash('功能开发中', 'info')
@@ -1178,7 +1220,7 @@ def rename_permission_group():
 # ==================== 故障二级分类管理 ====================
 
 @data_bp.route('/fault-categories')
-@admin_required
+@permission_required('system:config')
 def list_fault_categories():
     team = resolve_team(request, current_user)
     cats = data_service.list_fault_categories(team=team)
@@ -1188,7 +1230,7 @@ def list_fault_categories():
 
 
 @data_bp.route('/fault-categories/subcategory/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_fault_subcategory():
     ok, msg = data_service.add_fault_subcategory(
         request.form.get('category_id', type=int),
@@ -1199,7 +1241,7 @@ def add_fault_subcategory():
 
 
 @data_bp.route('/fault-categories/subcategory/delete/<int:sub_id>', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_fault_subcategory(sub_id):
     data_service.delete_fault_subcategory(sub_id)
     flash('已删除子分类', 'success')
@@ -1207,7 +1249,7 @@ def delete_fault_subcategory(sub_id):
 
 
 @data_bp.route('/fault-categories/keyword/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_fault_keyword():
     ok, msg = data_service.add_fault_keywords(
         request.form.get('subcategory_id', type=int),
@@ -1218,7 +1260,7 @@ def add_fault_keyword():
 
 
 @data_bp.route('/fault-categories/keyword/delete/<int:kw_id>', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_fault_keyword(kw_id):
     data_service.delete_fault_keyword(kw_id)
     flash('已删除关键词', 'success')
@@ -1228,7 +1270,7 @@ def delete_fault_keyword(kw_id):
 # ==================== 零件价格管理 ====================
 
 @data_bp.route('/parts')
-@admin_required
+@permission_required('system:config')
 def list_parts():
     q = request.args.get('q', '').strip()
     cat = request.args.get('cat', '').strip()
@@ -1239,7 +1281,7 @@ def list_parts():
 
 
 @data_bp.route('/parts/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_part():
     ok, msg = data_service.add_part(
         request.form.get('product_name', '').strip(),
@@ -1257,7 +1299,7 @@ def add_part():
 
 
 @data_bp.route('/parts/<int:part_id>/delete', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_part(part_id):
     name = data_service.delete_part(part_id, current_user.display_name or current_user.username)
     flash(f'已删除零件「{name}」', 'success')
@@ -1267,7 +1309,7 @@ def delete_part(part_id):
 # ==================== 耗材出入库记录 ====================
 
 @data_bp.route('/consumables/records')
-@admin_required
+@permission_required('system:config')
 def consumable_records_view():
     q = request.args.get('q', '').strip()
     action = request.args.get('action', '').strip()
@@ -1278,7 +1320,7 @@ def consumable_records_view():
 
 
 @data_bp.route('/consumables/records/<int:rid>/delete', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_consumable_record(rid):
     data_service.delete_consumable_record(rid)
     flash('记录已删除', 'success')
@@ -1288,7 +1330,7 @@ def delete_consumable_record(rid):
 # ==================== 统一模板管理 ====================
 
 @data_bp.route('/templates')
-@admin_required
+@permission_required('system:config')
 def list_templates():
     """统一模板管理页面（按组查看故障模板组+方案模板）"""
     from models import FaultTemplateGroup, SolutionTemplate, FaultTemplateItem
@@ -1352,14 +1394,14 @@ def list_templates():
 # ==================== 故障模板组管理 ====================
 
 @data_bp.route('/fault-template-groups')
-@admin_required
+@permission_required('system:config')
 def list_fault_template_groups():
     groups, all_teams = data_service.list_fault_template_groups()
     return render_template('data/fault_template_groups.html', groups=groups, all_teams=all_teams)
 
 
 @data_bp.route('/fault-template-groups/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_fault_template_group():
     ok, msg = data_service.add_fault_template_group(
         request.form.get('name', '').strip(),
@@ -1370,7 +1412,7 @@ def add_fault_template_group():
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/edit', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def edit_fault_template_group(gid):
     data_service.edit_fault_template_group(gid,
         request.form.get('field', ''),
@@ -1380,7 +1422,7 @@ def edit_fault_template_group(gid):
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/delete', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_fault_template_group(gid):
     name = data_service.delete_fault_template_group(gid,
         current_user.display_name or current_user.username)
@@ -1389,7 +1431,7 @@ def delete_fault_template_group(gid):
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/items/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_fault_template_item(gid):
     ok, msg = data_service.add_fault_template_item(gid,
         request.form.get('fault_type', '硬件'),
@@ -1400,7 +1442,7 @@ def add_fault_template_item(gid):
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/items/<int:iid>/edit', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def edit_fault_template_item(gid, iid):
     data_service.edit_fault_template_item(gid, iid,
         request.form.get('fault_type', ''),
@@ -1411,7 +1453,7 @@ def edit_fault_template_item(gid, iid):
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/items/<int:iid>/delete', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_fault_template_item(gid, iid):
     data_service.delete_fault_template_item(gid, iid)
     flash('故障项已删除', 'success')
@@ -1421,7 +1463,7 @@ def delete_fault_template_item(gid, iid):
 # ==================== 模板管理 JSON API ====================
 
 @data_bp.route('/fault-template-groups/api/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_fault_template_group_api():
     """API：新增故障模板组，返回JSON"""
     ok, msg = data_service.add_fault_template_group(
@@ -1438,7 +1480,7 @@ def add_fault_template_group_api():
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/api/edit', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def edit_fault_template_group_api(gid):
     """API：编辑故障模板组，返回JSON"""
     data_service.edit_fault_template_group(gid,
@@ -1452,7 +1494,7 @@ def edit_fault_template_group_api(gid):
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/api/delete', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_fault_template_group_api(gid):
     """API：删除故障模板组，返回JSON"""
     name = data_service.delete_fault_template_group(gid,
@@ -1461,7 +1503,7 @@ def delete_fault_template_group_api(gid):
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/items/api/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_fault_template_item_api(gid):
     """API：新增故障模板项，返回JSON"""
     ok, msg = data_service.add_fault_template_item(gid,
@@ -1480,7 +1522,7 @@ def add_fault_template_item_api(gid):
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/items/<int:iid>/api/edit', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def edit_fault_template_item_api(gid, iid):
     """API：编辑故障模板项，返回JSON"""
     data_service.edit_fault_template_item(gid, iid,
@@ -1496,7 +1538,7 @@ def edit_fault_template_item_api(gid, iid):
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/items/<int:iid>/api/delete', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_fault_template_item_api(gid, iid):
     """API：删除故障模板项，返回JSON"""
     data_service.delete_fault_template_item(gid, iid)
@@ -1504,7 +1546,7 @@ def delete_fault_template_item_api(gid, iid):
 
 
 @data_bp.route('/solutions/api/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_solution_api():
     """API：新增方案模板，返回JSON"""
     teams_list = request.form.getlist('teams')
@@ -1528,7 +1570,7 @@ def add_solution_api():
 
 
 @data_bp.route('/solutions/<int:sid>/api/edit', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def edit_solution_api(sid):
     """API：编辑方案模板，返回JSON"""
     from models import SolutionTemplate
@@ -1551,7 +1593,7 @@ def edit_solution_api(sid):
 
 
 @data_bp.route('/solutions/<int:sid>/api/delete', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_solution_api(sid):
     """API：删除方案模板，返回JSON"""
     data_service.delete_solution(sid, current_user.display_name or current_user.username)
@@ -1561,7 +1603,7 @@ def delete_solution_api(sid):
 # ==================== 注册审批 ====================
 
 @data_bp.route('/registration-approvals')
-@admin_required
+@permission_required('user:create')
 def list_registration_approvals():
     """注册审批列表"""
     if not can_access('注册审批'):
@@ -1578,7 +1620,7 @@ def list_registration_approvals():
 
 
 @data_bp.route('/registration-approvals/<int:rid>/approve', methods=['POST'])
-@admin_required
+@permission_required('user:create')
 def approve_registration(rid):
     """通过注册申请：创建用户"""
     if not can_access('注册审批'):
@@ -1632,7 +1674,7 @@ def approve_registration(rid):
 
 
 @data_bp.route('/registration-approvals/<int:rid>/reject', methods=['POST'])
-@admin_required
+@permission_required('user:create')
 def reject_registration(rid):
     """拒绝注册申请"""
     if not can_access('注册审批'):

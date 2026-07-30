@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required
 from models import db, SystemSetting, Department
 from routes.auth import admin_required
+from utils.permissions import permission_required
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/settings')
 
@@ -22,14 +23,15 @@ PERSONAL_PREF_KEYS = [
 
 
 @settings_bp.route('/')
-@admin_required
+@permission_required('system:config')
 def index():
     """系统参数设置页"""
     from models import Hospital, FaultType
     categories = db.session.query(SystemSetting.category).distinct().order_by(SystemSetting.category).all()
     cat_list = [c[0] for c in categories] if categories else ['基本']
     # 后端过滤隐藏参数
-    hidden_keys = ['wecom_webhook_url', 'wecom_push_enabled', 'module_permissions', 'order_prefix']
+    hidden_keys = ['wecom_webhook_url', 'wecom_push_enabled', 'module_permissions', 'order_prefix',
+                   'fault_keywords', 'device_keywords']
     all_settings = SystemSetting.query.order_by(SystemSetting.category, SystemSetting.id).all()
     settings = [s for s in all_settings if s.key not in hidden_keys]
     # 自动补全缺失的默认参数
@@ -165,7 +167,7 @@ def index():
 
 
 @settings_bp.route('/save_pref', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def save_pref():
     """保存个人偏好设置"""
     from flask_login import current_user
@@ -180,7 +182,7 @@ def save_pref():
 
 
 @settings_bp.route('/save', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def save():
     """保存单个参数"""
     key = request.form.get('key', '')
@@ -189,6 +191,9 @@ def save():
         return jsonify({'ok': False, 'msg': '参数名不能为空'}), 400
     setting = SystemSetting.query.filter_by(key=key).first()
     if setting:
+        # 布尔值归一化：统一存 0/1
+        if value and value.lower() in ('true', 'false'):
+            value = '1' if value.lower() == 'true' else '0'
         setting.value = value
     else:
         setting = SystemSetting(key=key, value=value, label=key)
@@ -218,7 +223,7 @@ def save():
 
 
 @settings_bp.route('/save_webhook', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def save_webhook():
     """保存某医院的企业微信推送地址"""
     hospital_id = request.form.get('hospital_id', type=int)
@@ -239,7 +244,7 @@ def save_webhook():
 
 
 @settings_bp.route('/save_webhook_setting', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def save_webhook_setting():
     """保存某医院的企业微信推送相关设置（开关等）"""
     hospital_id = request.form.get('hospital_id', type=int)
@@ -259,7 +264,7 @@ def save_webhook_setting():
 
 
 @settings_bp.route('/init', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def init_defaults():
     """初始化默认系统参数"""
     defaults = [
@@ -309,7 +314,7 @@ def init_defaults():
 # ==================== 科室字典 ====================
 
 @settings_bp.route('/departments')
-@admin_required
+@permission_required('system:config')
 def list_departments():
     """科室字典列表"""
     keyword = request.args.get('keyword', '')
@@ -321,7 +326,7 @@ def list_departments():
 
 
 @settings_bp.route('/departments/add', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def add_department():
     name = request.form.get('name', '').strip()
     if not name:
@@ -343,7 +348,7 @@ def add_department():
 
 
 @settings_bp.route('/departments/<int:did>/edit', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def edit_department(did):
     dept = Department.query.get_or_404(did)
     old_name = dept.name
@@ -392,7 +397,7 @@ def edit_department(did):
 
 
 @settings_bp.route('/departments/<int:did>/toggle', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def toggle_department(did):
     dept = Department.query.get_or_404(did)
     dept.is_active = not dept.is_active
@@ -402,7 +407,7 @@ def toggle_department(did):
 
 
 @settings_bp.route('/departments/<int:did>/delete', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def delete_department(did):
     dept = Department.query.get_or_404(did)
     db.session.delete(dept)
@@ -412,7 +417,7 @@ def delete_department(did):
 
 
 @settings_bp.route('/departments/import', methods=['POST'])
-@admin_required
+@permission_required('system:config')
 def import_departments():
     """从工单和地址数据中提取科室导入"""
     from models import WorkOrder
@@ -445,7 +450,7 @@ def import_departments():
 
 
 @settings_bp.route('/refresh-config')
-@admin_required
+@permission_required('system:config')
 def refresh_config():
     """刷新系统参数缓存（不重启服务即可生效，如 session_timeout）"""
     from flask import current_app

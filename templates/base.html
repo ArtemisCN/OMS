@@ -45,28 +45,28 @@
                 </div>
                 <nav class="nav flex-column">
                     <!-- ===== 工单中心 ===== -->
-                    {% set _show_s1 = can_access('仪表盘') or can_access('工单列表') %}
+                    {% set _show_s1 = has_permission('report:view') or has_permission('order:view') %}
                     {% if _show_s1 %}<div class="nav-section-label">工单中心</div>{% endif %}
-                    {% if can_access('仪表盘') %}
+                    {% if has_permission('report:view') %}
                     <a class="nav-link {% if request.endpoint and request.endpoint.startswith('main.') %}active{% endif %}"
                        href="{{ url_for('main.dashboard') }}">
                         <i class="fas fa-chart-pie"></i> 仪表盘
                     </a>
                     {% endif %}
-                    {% if can_access('工单列表') %}
+                    {% if has_permission('order:view') %}
                     <a class="nav-link {% if request.endpoint == 'orders.list_orders' %}active{% endif %}"
                        href="{{ url_for('orders.list_orders') }}">
                         <i class="fas fa-list"></i> 工单列表
                     </a>
                     {% endif %}
-                    {% if can_access('SLA监控') %}
+                    {% if has_permission('order:view') %}
                     <a class="nav-link {% if request.endpoint and request.endpoint.startswith('feature.sla') %}active{% endif %}"
                        href="{{ url_for('feature.sla_dashboard') }}">
                         <i class="fas fa-clock"></i> SLA监控
                     </a>
                     {% endif %}
 
-                    {% if can_access('发布工单') %}
+                    {% if has_permission('order:create') %}
                     <a class="nav-link {% if request.endpoint == 'orders.publish_order' %}active{% endif %}"
                        href="{{ url_for('orders.publish_order') }}">
                         <i class="fas fa-paper-plane"></i> 发布工单
@@ -74,27 +74,27 @@
                     {% endif %}
 
                     <!-- ===== 业务管理 ===== -->
-                    {% set _show_s3 = can_access('巡检管理') or can_access('维修管理') or can_access('知识库') or can_access('值班排班') or can_access('维修做账') %}
+                    {% set _show_s3 = has_permission('biz:inspection') or has_permission('biz:repair') or has_permission('biz:knowledge') or has_permission('biz:scheduling') or has_permission('biz:finance') %}
                     {% if _show_s3 %}<div class="nav-section-label">业务管理</div>{% endif %}
-                    {% if can_access('巡检管理') %}
+                    {% if has_permission('biz:inspection') %}
                     <a class="nav-link {% if request.endpoint and request.endpoint.startswith('inspection.') %}active{% endif %}"
                        href="{{ url_for('inspection.list_templates') }}">
                         <i class="fas fa-clipboard-check"></i> 巡检管理
                     </a>
                     {% endif %}
-                    {% if can_access('维修管理') or can_access('电子表单') or can_access('维修做账') %}
+                    {% if has_permission('biz:repair') or has_permission('biz:form') or has_permission('biz:finance') %}
                     <a class="nav-link {% if request.endpoint and (request.endpoint.startswith('repair.') or request.endpoint.startswith('forms.') or request.endpoint.startswith('finance.')) %}active{% endif %}"
                        href="{{ url_for('repair.order_list') }}">
                         <i class="fas fa-tools"></i> 维修管理
                     </a>
                     {% endif %}
-                    {% if can_access('知识库') %}
+                    {% if has_permission('biz:knowledge') %}
                     <a class="nav-link {% if request.endpoint == 'data.list_knowledge' %}active{% endif %}"
                        href="{{ url_for('data.list_knowledge') }}">
                         <i class="fas fa-book"></i> 知识库
                     </a>
                     {% endif %}
-                    {% if can_access('值班排班') %}
+                    {% if has_permission('biz:scheduling') %}
                     <a class="nav-link {% if request.endpoint and request.endpoint.startswith('data.') and request.endpoint == 'data.list_duty_schedules' %}active{% endif %}"
                        href="{{ url_for('data.list_duty_schedules') }}">
                         <i class="fas fa-calendar-day"></i> 值班排班
@@ -102,28 +102,28 @@
                     {% endif %}
 
                     <!-- ===== 数据中心 ===== -->
-                    {% set _show_s4 = can_access('数据管理') or can_access('资产台账') or can_access('合同维保') or can_access('备件库存') %}
+                    {% set _show_s4 = has_permission('asset:view') or has_permission('asset:view') or has_permission('biz:contract') or has_permission('biz:stock') %}
                     {% if _show_s4 %}<div class="nav-section-label">数据中心</div>{% endif %}
-                    {% if can_access('数据管理') %}
+                    {% if has_permission('asset:view') %}
                     <a class="nav-link {% if request.endpoint and request.endpoint.startswith('data.') and not request.endpoint.startswith('data.list_knowledge') %}active{% endif %}"
                        href="{{ url_for('data.index') }}">
                         <i class="fas fa-database"></i> 数据管理
                     </a>
                     {% endif %}
-                    {% if can_access('资产台账') %}
+                    {% if has_permission('asset:view') %}
                     <a class="nav-link {% if request.endpoint and request.endpoint.startswith('asset.') %}active{% endif %}"
                        href="{{ url_for('asset.list_view') }}">
                         <i class="fas fa-server"></i> 资产台账
                     </a>
                     {% endif %}
                     {# 供应商管理已合并到合同维保 #}
-                    {% if can_access('合同维保') %}
+                    {% if has_permission('biz:contract') %}
                     <a class="nav-link {% if request.endpoint == 'feature.contract_list' %}active{% endif %}"
                        href="{{ url_for('feature.contracts') }}">
                         <i class="fas fa-file-contract"></i> 合同维保
                     </a>
                     {% endif %}
-                    {% if can_access('备件库存') %}
+                    {% if has_permission('biz:stock') %}
                     <a class="nav-link {% if request.endpoint and (request.endpoint.startswith('stock.') or request.endpoint == 'feature.spare_part_alerts' or request.endpoint == 'feature.stock_requests') %}active{% endif %}"
                        href="{{ url_for('stock.index') }}">
                         <i class="fas fa-boxes"></i> 备件库存
@@ -132,10 +132,10 @@
                     {% endif %}
                     {# 出入库管理已合并到资产台账 #}
                     <!-- ===== 系统管理 ===== -->
-                    {% set _show_s5 = can_access('月度报表') or current_user.is_admin or can_access('服务器监控') %}
+                    {% set _show_s5 = has_permission('report:view') or has_permission('system:config') or has_permission('biz:monitor') %}
                     {% if _show_s5 %}<div class="nav-section-label">系统管理</div>{% endif %}
                     {# 审计日志已合并到服务器监控 #}
-                    {% if can_access('月度报表') %}
+                    {% if has_permission('report:view') %}
                     <a class="nav-link {% if request.endpoint and request.endpoint.startswith('report.') %}active{% endif %}"
                        href="{{ url_for('report.report_page') }}">
                         <i class="fas fa-file-excel"></i> 月度报表
@@ -144,7 +144,7 @@
                     {# 权限管理已合并到数据管理 #}
                     {# 注册审批已合并到数据管理 #}
                     {# 医院管理已合并到数据管理 #}
-                    {% if can_access('服务器监控') %}
+                    {% if has_permission('biz:monitor') %}
                     <a class="nav-link {% if request.endpoint and request.endpoint.startswith('monitor.') %}active{% endif %}"
                        href="{{ url_for('monitor.index') }}">
                         <i class="fas fa-server"></i> 服务器监控
@@ -157,36 +157,33 @@
                     {# 工单管理已合并（SLA监控移至工单列表区，智能开关移至数据管理） #}
 
                     <!-- ===== 运维分析 ===== -->
-                    {% set _show_s7 = can_access('数字孪生') or can_access('设备履历') or can_access('多院区协同') %}
+                    {% set _show_s7 = has_permission('report:view') or has_permission('asset:view') or has_permission('system:config') %}
                     {% if _show_s7 %}<div class="nav-section-label" style="margin-top:4px;">运维分析</div>{% endif %}
 
                     {# 运维大屏已合并到仪表盘 #}
                     {# 领导驾驶舱已合并到仪表盘 #}
                     {# 故障热力图已合并到月度报表 #}
-                    {% if can_access('数字孪生') %}
-                    <a class="nav-link {% if request.endpoint == 'feature.digital_twin' %}active{% endif %}"
-                       href="{{ url_for('feature.digital_twin') }}{% if current_hospital %}?hospital_id={{ current_hospital.id }}{% endif %}">
-                        <i class="fas fa-cube"></i> 数字孪生
+                    {% if has_permission('report:global_view') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('global_dashboard.') %}active{% endif %}"
+                       href="{{ url_for('global_dashboard.index') }}">
+                        <i class="fas fa-chart-pie"></i> 集团看板
                     </a>
                     {% endif %}
                     {# 自定义报表已合并到月度报表 #}
                     {# 交接班日志已合并到发布工单 #}
-                    {% if can_access('设备履历') %}
-                    <a class="nav-link" href="javascript:void(0)" onclick="var aid=prompt('输入资产ID查询履历');if(aid)location.href='{{ url_for('assets.asset_lifecycle') }}?asset_id='+aid">
-                        <i class="fas fa-history"></i> 设备履历
-                    </a>
-                    {% endif %}
-                    {# 维保日历已合并到合同维保 #}
+                    {# 设备履历已合并到资产台账 #}
+                    {# 合同维保已合并到资产台账 #}
                     {# 短信通知已合并到数据管理 #}
-                    {% if can_access('多院区协同') %}
-                    <a class="nav-link {% if request.endpoint == 'feature.multi_hospital_collab' %}active{% endif %}"
-                       href="{{ url_for('feature.multi_hospital_collab') }}">
-                        <i class="fas fa-network-wired"></i> 多院区协同
+                    {# 多院区协同已废弃，改用独立的借调管理+集团看板 #}
+                    {% if has_permission('biz:cross_assign') %}
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('cross.') %}active{% endif %}"
+                       href="{{ url_for('cross.assignments_page') }}">
+                        <i class="fas fa-user-friends"></i> 人员借调
                     </a>
                     {% endif %}
 
                     <!-- ===== 教育培训 ===== -->
-                    {% if can_access('考试系统') %}
+                    {% if has_permission('biz:exam') %}
                     <div class="nav-section-label">教育培训</div>
                     <a class="nav-link {% if request.endpoint and request.endpoint.startswith('exam.') %}active{% endif %}"
                        href="{{ url_for('exam.exam_list') }}">
@@ -201,7 +198,7 @@
                     </a>
                 </nav>
                 {% if False %}
-                {% set has_switcher = current_user.is_admin or user_assigned_hospitals|length > 1 %}
+                {% set has_switcher = has_permission('system:config') or user_assigned_hospitals|length > 1 %}
                 <div class="hospital-switcher" style="padding:10px 16px;border-top:1px solid rgba(255,255,255,0.08);">
                     <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:4px;">当前院区</div>
                     <div class="d-flex align-items-center gap-2" style="cursor:{{ 'pointer' if has_switcher else 'default' }};" {{ 'onclick="toggleHospitalDropdown()"' if has_switcher else '' }}>
@@ -215,7 +212,7 @@
                     </div>
                     {% if has_switcher %}
                     <div id="hospitalDropdown" style="display:none;margin-top:6px;">
-                        {% set switch_list = all_hospitals if current_user.is_admin else user_assigned_hospitals %}
+                        {% set switch_list = all_hospitals if has_permission('system:config') else user_assigned_hospitals %}
                         {% for h in switch_list %}
                         <a href="{{ url_for('data.switch_hospital', hid=h.id) }}"
                            style="display:block;padding:5px 10px;border-radius:6px;font-size:12px;color:var(--sidebar-text);text-decoration:none;
@@ -247,7 +244,7 @@
                     <div>
                         <div class="user-name">{{ current_user.display_name or current_user.username }}</div>
                         <div class="user-role">
-                            {% if current_user.is_admin %}管理员
+                            {% if has_permission('system:config') %}管理员
                             {% else %}{{ current_user.group or '普通用户' }}
                             {% endif %}
                         </div>
@@ -279,21 +276,21 @@
                     </button>
                     <div class="collapse navbar-collapse" id="mobileNav">
                         <ul class="navbar-nav">
-                            {% if can_access('仪表盘') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('main.dashboard') }}">仪表盘</a></li>{% endif %}
-                            {% if can_access('工单列表') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('orders.list_orders') }}">工单列表</a></li>{% endif %}
-                            {% if can_access('发布工单') or can_access('新建工单') or can_access('批量生成') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('orders.publish_order') }}">发布工单</a></li>{% endif %}
-                            {% if can_access('数据管理') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('data.index') }}">数据管理</a></li>{% endif %}
-                            {% if can_access('资产台账') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('asset.list_view') }}">资产台账</a></li>{% endif %}
-                            {% if can_access('备件库存') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('stock.index') }}">备件库存</a></li>{% endif %}
-                            {% if can_access('值班排班') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('data.list_duty_schedules') }}">值班排班</a></li>{% endif %}
-                            {% if can_access('知识库') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('data.list_knowledge') }}">知识库</a></li>{% endif %}
-                            {% if can_access('巡检管理') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('inspection.list_templates') }}">巡检管理</a></li>{% endif %}
-                            {% if can_access('维修管理') or can_access('电子表单') or can_access('维修做账') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('repair.order_list') }}">维修管理</a></li>{% endif %}
+                            {% if has_permission('report:view') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('main.dashboard') }}">仪表盘</a></li>{% endif %}
+                            {% if has_permission('order:view') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('orders.list_orders') }}">工单列表</a></li>{% endif %}
+                            {% if has_permission('order:create') or has_permission('order:create') or has_permission('order:batch') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('orders.publish_order') }}">发布工单</a></li>{% endif %}
+                            {% if has_permission('asset:view') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('data.index') }}">数据管理</a></li>{% endif %}
+                            {% if has_permission('asset:view') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('asset.list_view') }}">资产台账</a></li>{% endif %}
+                            {% if has_permission('biz:stock') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('stock.index') }}">备件库存</a></li>{% endif %}
+                            {% if has_permission('biz:scheduling') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('data.list_duty_schedules') }}">值班排班</a></li>{% endif %}
+                            {% if has_permission('biz:knowledge') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('data.list_knowledge') }}">知识库</a></li>{% endif %}
+                            {% if has_permission('biz:inspection') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('inspection.list_templates') }}">巡检管理</a></li>{% endif %}
+                            {% if has_permission('biz:repair') or has_permission('biz:form') or has_permission('biz:finance') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('repair.order_list') }}">维修管理</a></li>{% endif %}
                             {# 审计日志已合并到服务器监控 #}
-                            {% if can_access('月度报表') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('report.report_page') }}">月度报表</a></li>{% endif %}
+                            {% if has_permission('report:view') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('report.report_page') }}">月度报表</a></li>{% endif %}
                             {# 权限管理已合并到数据管理 #}
                             {# 注册审批已合并到数据管理 #}
-                            {% if can_access('服务器监控') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('monitor.index') }}">服务器监控</a></li>{% endif %}
+                            {% if has_permission('biz:monitor') %}<li class="nav-item"><a class="nav-link" href="{{ url_for('monitor.index') }}">服务器监控</a></li>{% endif %}
                             <li class="nav-item"><a class="nav-link" href="{{ url_for('auth.logout') }}">退出登录</a></li>
                         </ul>
                     </div>

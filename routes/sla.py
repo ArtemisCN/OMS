@@ -1,3 +1,4 @@
+from utils.permissions import has_permission
 """SLA Blueprint: SLA 时限监控"""
 from datetime import datetime, timedelta
 
@@ -131,7 +132,7 @@ def sla_data():
 @login_required
 def sla_settings():
     """保存 SLA 阈值设置"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'system:config'):
         return jsonify(success=False, error='仅管理员可修改'), 403
 
     data = request.get_json(silent=True) or {}

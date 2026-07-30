@@ -84,7 +84,7 @@
   </div>
 
   <!-- 阈值设置（管理员可见） -->
-  {% if current_user.is_admin %}
+  {% if has_permission('system:config') %}
   <div class="card shadow-sm mb-4">
     <div class="card-header bg-white">
       <a class="text-decoration-none" data-bs-toggle="collapse" href="#slaSettingsPanel" role="button">

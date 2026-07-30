@@ -1,3 +1,4 @@
+from utils.permissions import has_permission
 """Efficiency Blueprint: 人员效能看板, 自动派单+超时催办, 交接班日志, 维修评价, 投诉管理"""
 import json
 import re
@@ -319,7 +320,7 @@ def get_feature_toggles():
 @login_required
 def save_feature_toggle():
     """保存功能开关"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'system:config'):
         return jsonify(success=False, error='仅管理员可操作'), 403
     key = request.form.get('key', '')
     value = request.form.get('value', 'false')
@@ -373,7 +374,7 @@ def shift_handover():
 @login_required
 def shift_handover_save():
     """保存交接班记录"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'system:config'):
         return jsonify(success=False, error='仅管理员可操作'), 403
     data = request.get_json(silent=True) or {}
     handover_person = data.get('handover_person', '').strip()

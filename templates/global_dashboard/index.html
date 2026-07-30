@@ -1,0 +1,804 @@
+{% extends "base.html" %}
+{% block title %}集团看板 · Glass{% endblock %}
+{% block extra_head %}
+<style>
+/* ============================================================
+   Glassmorphism 集团看板 — 全屏渐变背景
+   ============================================================ */
+.gd-body {
+  font-family:'Inter','system-ui',system-ui,-apple-system,sans-serif;
+  min-height:100vh;
+  position:relative;
+  overflow-x:hidden;
+  padding:20px;
+}
+/* 伪元素：固定定位使渐变铺满全屏（侧边栏右侧→右边缘） */
+.gd-body::before {
+  content:'';
+  position:fixed;
+  top:0;
+  left:var(--sidebar-width,220px);
+  right:0;
+  bottom:0;
+  z-index:-1;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #1a1f35 70%, #0f172a 100%);
+  pointer-events:none;
+}
+body[data-theme="light"] .gd-body::before {
+  background: linear-gradient(135deg, #e0e7ff 0%, #f0f4ff 40%, #e8ecf8 70%, #dbeafe 100%);
+}
+
+/* ===== SVG 装饰背景圆 ===== */
+.gd-bg-deco {
+  position:fixed; inset:0; pointer-events:none; z-index:0; overflow:hidden;
+}
+.gd-bg-deco .blob {
+  position:absolute; border-radius:50%; filter:blur(80px); opacity:0.18;
+  animation:blobFloat 20s ease-in-out infinite alternate;
+}
+.gd-bg-deco .blob:nth-child(1) {
+  width:500px; height:500px; top:-120px; left:-80px;
+  background:radial-gradient(circle,#818cf8,#4f46e5);
+  animation-delay:0s;
+}
+.gd-bg-deco .blob:nth-child(2) {
+  width:400px; height:400px; bottom:-60px; right:-100px;
+  background:radial-gradient(circle,#34d399,#10b981);
+  animation-delay:-5s;
+}
+.gd-bg-deco .blob:nth-child(3) {
+  width:350px; height:350px; top:40%; right:15%;
+  background:radial-gradient(circle,#f472b6,#ec4899);
+  animation-delay:-10s;
+}
+.gd-bg-deco .blob:nth-child(4) {
+  width:280px; height:280px; bottom:20%; left:5%;
+  background:radial-gradient(circle,#fbbf24,#f59e0b);
+  animation-delay:-15s;
+}
+@keyframes blobFloat {
+  0%   { transform:translate(0,0) scale(1); }
+  33%  { transform:translate(30px,-40px) scale(1.1); }
+  66%  { transform:translate(-20px,20px) scale(0.95); }
+  100% { transform:translate(10px,-10px) scale(1.05); }
+}
+
+/* ===== 页面内容容器 ===== */
+.gd-content {
+  position:relative; z-index:1; max-width:1400px; margin:0 auto;
+}
+
+/* ===== 玻璃卡片 — 极细边框 ===== */
+.glass-card {
+  background:rgba(255,255,255,0.12);
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,0.06);
+  border-radius:20px;
+  padding:20px 22px;
+  transition:transform .25s ease, box-shadow .25s ease;
+}
+.glass-card:hover {
+  transform:translateY(-2px);
+  box-shadow:0 12px 40px rgba(0,0,0,0.25);
+}
+body[data-theme="light"] .glass-card {
+  background:rgba(255,255,255,0.55);
+  border-color:rgba(255,255,255,0.7);
+}
+body[data-theme="light"] .glass-card:hover {
+  box-shadow:0 12px 40px rgba(79,70,229,0.10);
+}
+
+/* ===== 标题栏 ===== */
+.gd-header {
+  display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between;
+  margin-bottom:24px; gap:12px;
+}
+.gd-header-title {
+  display:flex; align-items:center; gap:10px;
+  font-size:20px; font-weight:700; color:#fff; letter-spacing:-0.3px;
+}
+.gd-header-title i { color:#818cf8; }
+body[data-theme="light"] .gd-header-title { color:#1e293b; }
+.gd-filters { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.gd-filters .form-select {
+  background:rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.06);
+  color:#e2e8f0; font-size:12px; border-radius:10px; padding:6px 28px 6px 12px;
+  backdrop-filter:blur(10px); transition:all .2s;
+}
+.gd-filters .form-select:focus {
+  border-color:#818cf8; box-shadow:0 0 0 3px rgba(129,140,248,0.25);
+}
+body[data-theme="light"] .gd-filters .form-select {
+  background:rgba(255,255,255,0.7); color:#334155; border-color:rgba(0,0,0,0.10);
+}
+.gd-filters .btn-glass {
+  background:rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.06);
+  color:#cbd5e1; border-radius:10px; padding:6px 14px; font-size:12px;
+  backdrop-filter:blur(10px); transition:all .2s;
+}
+.gd-filters .btn-glass:hover {
+  background:rgba(255,255,255,0.18); color:#fff;
+}
+body[data-theme="light"] .gd-filters .btn-glass {
+  background:rgba(255,255,255,0.6); color:#475569; border-color:rgba(0,0,0,0.08);
+}
+body[data-theme="light"] .gd-filters .btn-glass:hover {
+  background:rgba(255,255,255,0.85); color:#1e293b;
+}
+
+/* ===== 6 个统计指标卡 ===== */
+.stats-grid {
+  display:grid; grid-template-columns:repeat(6,1fr); gap:14px; margin-bottom:24px;
+}
+.stat-card {
+  background:rgba(255,255,255,0.10);
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,0.05);
+  border-radius:18px;
+  padding:18px 14px;
+  text-align:center;
+  transition:transform .25s ease, box-shadow .25s ease;
+  position:relative; overflow:hidden;
+}
+.stat-card:hover {
+  transform:translateY(-3px);
+  box-shadow:0 12px 32px rgba(0,0,0,0.30);
+}
+.stat-card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:3px;
+  border-radius:18px 18px 0 0;
+}
+.stat-card:nth-child(1)::before { background:linear-gradient(90deg,#818cf8,#4f46e5); }
+.stat-card:nth-child(2)::before { background:linear-gradient(90deg,#34d399,#10b981); }
+.stat-card:nth-child(3)::before { background:linear-gradient(90deg,#60a5fa,#3b82f6); }
+.stat-card:nth-child(4)::before { background:linear-gradient(90deg,#fbbf24,#f59e0b); }
+.stat-card:nth-child(5)::before { background:linear-gradient(90deg,#c084fc,#a855f7); }
+.stat-card:nth-child(6)::before { background:linear-gradient(90deg,#f87171,#ef4444); }
+body[data-theme="light"] .stat-card {
+  background:rgba(255,255,255,0.60);
+  border-color:rgba(255,255,255,0.75);
+}
+.stat-icon { font-size:22px; margin-bottom:8px; }
+.stat-value {
+  font-size:28px; font-weight:800; color:#fff; line-height:1.2;
+  letter-spacing:-1px;
+}
+body[data-theme="light"] .stat-value { color:#0f172a; }
+.stat-label {
+  font-size:11px; color:rgba(255,255,255,0.55); margin-top:3px;
+  font-weight:500; letter-spacing:0.3px;
+}
+body[data-theme="light"] .stat-label { color:rgba(0,0,0,0.45); }
+
+/* ===== 区域布局 ===== */
+.gd-row { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:24px; }
+.full-width { grid-column:1/-1; }
+
+/* ===== 面板头部 ===== */
+.glass-panel-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 0 14px 0; border-bottom:1px solid rgba(255,255,255,0.06);
+  margin-bottom:16px;
+}
+body[data-theme="light"] .glass-panel-header {
+  border-color:rgba(0,0,0,0.04);
+}
+.glass-panel-title {
+  font-size:14px; font-weight:600; color:rgba(255,255,255,0.9);
+  display:flex; align-items:center; gap:8px;
+}
+body[data-theme="light"] .glass-panel-title { color:#1e293b; }
+.glass-panel-title i { font-size:15px; }
+.glass-panel-header .form-select-sm {
+  background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.06);
+  color:#cbd5e1; font-size:11px; border-radius:8px; padding:4px 24px 4px 10px;
+}
+body[data-theme="light"] .glass-panel-header .form-select-sm {
+  background:rgba(255,255,255,0.5); color:#475569; border-color:rgba(0,0,0,0.06);
+}
+
+/* ===== 趋势图容器 ===== */
+.chart-container { padding:2px 0; }
+
+/* ===== KPI 排行 ===== */
+.rank-item {
+  display:flex; align-items:center; gap:10px;
+  padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.06);
+}
+body[data-theme="light"] .rank-item {
+  border-color:rgba(0,0,0,0.04);
+}
+.rank-item:last-child { border-bottom:none; }
+.rank-badge {
+  width:24px; height:24px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:700; color:#fff; flex-shrink:0;
+}
+.rank-badge.r1 { background:linear-gradient(135deg,#fbbf24,#f59e0b); box-shadow:0 2px 8px rgba(245,158,11,0.4); }
+.rank-badge.r2 { background:linear-gradient(135deg,#cbd5e1,#94a3b8); }
+.rank-badge.r3 { background:linear-gradient(135deg,#fdba74,#d97706); }
+.rank-badge.ro { background:rgba(255,255,255,0.10); color:rgba(255,255,255,0.4); }
+body[data-theme="light"] .rank-badge.ro { background:rgba(0,0,0,0.05); color:rgba(0,0,0,0.25); }
+
+.rank-info { flex:1; min-width:0; }
+.rank-name {
+  font-size:12px; font-weight:600; color:rgba(255,255,255,0.9);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+body[data-theme="light"] .rank-name { color:#1e293b; }
+.rank-region {
+  font-size:10px; color:rgba(255,255,255,0.35); margin-top:1px;
+}
+body[data-theme="light"] .rank-region { color:rgba(0,0,0,0.3); }
+
+.rank-progress-wrap { flex:1; max-width:120px; margin:0 8px; }
+.rank-progress {
+  height:6px; background:rgba(255,255,255,0.08); border-radius:3px; overflow:hidden;
+}
+body[data-theme="light"] .rank-progress { background:rgba(0,0,0,0.06); }
+.rank-progress-fill {
+  height:100%; border-radius:3px; transition:width .6s ease;
+}
+
+.rank-stats {
+  display:flex; gap:12px; flex-shrink:0;
+}
+.rank-stat-item {
+  text-align:center; min-width:40px;
+}
+.rank-stat-val {
+  font-size:12px; font-weight:700; color:rgba(255,255,255,0.85);
+}
+body[data-theme="light"] .rank-stat-val { color:#334155; }
+.rank-stat-label {
+  font-size:9px; color:rgba(255,255,255,0.35); margin-top:1px;
+  text-transform:uppercase; letter-spacing:0.5px;
+}
+body[data-theme="light"] .rank-stat-label { color:rgba(0,0,0,0.3); }
+
+/* ===== 人员负载 — 固定宽度布局 ===== */
+.staff-item {
+  display:grid; grid-template-columns:96px 1fr 56px; gap:10px; align-items:center;
+  padding:7px 0;
+  border-bottom:1px solid rgba(255,255,255,0.06);
+}
+body[data-theme="light"] .staff-item { border-color:rgba(0,0,0,0.04); }
+.staff-item:last-child { border-bottom:none; }
+.staff-label {
+  font-size:12px; font-weight:500;
+  color:rgba(255,255,255,0.8); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis;
+}
+body[data-theme="light"] .staff-label { color:#334155; }
+.staff-track {
+  height:14px;
+  background:rgba(255,255,255,0.08); border-radius:7px; overflow:hidden;
+}
+body[data-theme="light"] .staff-track { background:rgba(0,0,0,0.05); }
+.staff-fill {
+  height:100%; border-radius:7px; transition:width .6s ease;
+}
+.staff-value {
+  font-size:11px; font-weight:600;
+  color:rgba(255,255,255,0.55); text-align:right;
+}
+body[data-theme="light"] .staff-value { color:rgba(0,0,0,0.4); }
+
+/* ===== 待处理工单 ===== */
+.pending-item {
+  display:flex; align-items:center; gap:10px;
+  padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.06);
+  cursor:pointer; transition:all .2s;
+}
+body[data-theme="light"] .pending-item { border-color:rgba(0,0,0,0.04); }
+.pending-item:hover {
+  background:rgba(255,255,255,0.05);
+  margin:0 -4px; padding:10px 4px; border-radius:10px;
+}
+.pending-item:last-child { border-bottom:none; }
+.pending-hosp-tag {
+  font-size:10px; font-weight:600; padding:2px 10px; border-radius:6px;
+  white-space:nowrap; background:rgba(79,70,229,0.3);
+  color:#a5b4fc; border:1px solid rgba(129,140,248,0.10);
+}
+body[data-theme="light"] .pending-hosp-tag {
+  background:rgba(79,70,229,0.1); color:#4f46e5; border-color:rgba(79,70,229,0.10);
+}
+.pending-title {
+  flex:1; font-size:12px; font-weight:500;
+  color:rgba(255,255,255,0.8); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis;
+}
+body[data-theme="light"] .pending-title { color:#334155; }
+.pending-meta {
+  font-size:10px; color:rgba(255,255,255,0.35); white-space:nowrap;
+}
+body[data-theme="light"] .pending-meta { color:rgba(0,0,0,0.3); }
+.pending-empty {
+  text-align:center; padding:30px 0; color:rgba(255,255,255,0.3);
+}
+.pending-empty i { font-size:28px; margin-bottom:8px; }
+body[data-theme="light"] .pending-empty { color:rgba(0,0,0,0.2); }
+
+/* ===== 区域汇总 ===== */
+.region-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:10px;
+}
+.region-card {
+  background:rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.04);
+  border-radius:14px; padding:14px 12px; text-align:center;
+  transition:all .2s;
+}
+.region-card:hover {
+  background:rgba(255,255,255,0.10);
+  transform:translateY(-1px);
+}
+body[data-theme="light"] .region-card {
+  background:rgba(255,255,255,0.3); border-color:rgba(0,0,0,0.03);
+}
+.region-name {
+  font-size:13px; font-weight:600; color:rgba(255,255,255,0.85);
+}
+body[data-theme="light"] .region-name { color:#1e293b; }
+.region-stat {
+  font-size:11px; color:rgba(255,255,255,0.45); margin-top:2px;
+}
+body[data-theme="light"] .region-stat { color:rgba(0,0,0,0.35); }
+.region-highlight {
+  font-size:16px; font-weight:700; margin-top:6px;
+}
+.region-highlight .num { color:#818cf8; }
+body[data-theme="light"] .region-highlight .num { color:#4f46e5; }
+
+/* ===== 加载 ===== */
+.loading-placeholder {
+  text-align:center; padding:24px 0;
+  color:rgba(255,255,255,0.3); font-size:13px;
+}
+body[data-theme="light"] .loading-placeholder { color:rgba(0,0,0,0.2); }
+
+/* ===== 响应式 ===== */
+@media (max-width:1200px) { .stats-grid { grid-template-columns:repeat(3,1fr); } }
+@media (max-width:768px) {
+  .stats-grid { grid-template-columns:repeat(2,1fr); gap:10px; }
+  .stat-card { padding:14px 10px; }
+  .stat-value { font-size:22px; }
+  .gd-row { grid-template-columns:1fr; gap:14px; }
+  .rank-stats { gap:6px; }
+  .rank-stat-item { min-width:30px; }
+  .rank-progress-wrap { display:none; }
+  .gd-body { padding:12px; }
+}
+@media (max-width:480px) {
+  .stats-grid { grid-template-columns:repeat(2,1fr); }
+  .gd-header-title { font-size:16px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="gd-body">
+  <!-- SVG 装饰背景 -->
+  <div class="gd-bg-deco">
+    <div class="blob"></div>
+    <div class="blob"></div>
+    <div class="blob"></div>
+    <div class="blob"></div>
+  </div>
+
+  <div class="gd-content">
+    <!-- ===== 标题 ===== -->
+    <div class="gd-header">
+      <div class="gd-header-title">
+        <i class="fas fa-chart-pie"></i>
+        集团看板
+      </div>
+      <div class="gd-filters">
+        <select class="form-select form-select-sm" id="regionFilter" onchange="refreshAll()" style="width:120px;">
+          <option value="">全市</option>
+          {% for r in regions %}
+          <option value="{{ r }}">{{ r }}</option>
+          {% endfor %}
+        </select>
+        <select class="form-select form-select-sm" id="daysFilter" onchange="refreshAll()" style="width:110px;">
+          <option value="7">近7天</option>
+          <option value="30" selected>近30天</option>
+          <option value="90">近90天</option>
+        </select>
+        <button class="btn-glass" onclick="refreshAll()"><i class="fas fa-sync-alt"></i></button>
+      </div>
+    </div>
+
+    <!-- ===== 关键指标 ===== -->
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card">
+        <div class="stat-icon" style="color:#818cf8;"><i class="fas fa-tasks"></i></div>
+        <div class="stat-value" id="statTotal">—</div>
+        <div class="stat-label">总工单</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon" style="color:#34d399;"><i class="fas fa-check-circle"></i></div>
+        <div class="stat-value" id="statCompletion">—</div>
+        <div class="stat-label">完成率</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon" style="color:#60a5fa;"><i class="fas fa-stopwatch"></i></div>
+        <div class="stat-value" id="statSla">—</div>
+        <div class="stat-label">SLA达标率</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon" style="color:#fbbf24;"><i class="fas fa-clock"></i></div>
+        <div class="stat-value" id="statResponse">—</div>
+        <div class="stat-label">平均响应</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon" style="color:#c084fc;"><i class="fas fa-user-friends"></i></div>
+        <div class="stat-value" id="statCross">—</div>
+        <div class="stat-label">借调人数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon" style="color:#f87171;"><i class="fas fa-exclamation-triangle"></i></div>
+        <div class="stat-value" id="statPending">—</div>
+        <div class="stat-label">待处理</div>
+      </div>
+    </div>
+
+    <!-- ===== 工单趋势图 ===== -->
+    <div class="glass-card full-width" style="padding:18px 22px 8px;margin-bottom:24px;">
+      <div class="glass-panel-header" style="border-color:rgba(255,255,255,0.08);">
+        <div class="glass-panel-title"><i class="fas fa-chart-line" style="color:#818cf8;"></i>工单趋势</div>
+      </div>
+      <div class="chart-container">
+        <canvas id="trendChart" height="180"></canvas>
+      </div>
+    </div>
+
+    <!-- ===== 双列：排行 + 负载 ===== -->
+    <div class="gd-row">
+      <!-- KPI排行 -->
+      <div class="glass-card" style="padding:18px 20px 12px;">
+        <div class="glass-panel-header">
+          <div class="glass-panel-title"><i class="fas fa-trophy" style="color:#fbbf24;"></i>各院KPI排行</div>
+          <select class="form-select form-select-sm" id="sortFilter" onchange="refreshRanking()" style="width:110px;">
+            <option value="order_count">按工单量</option>
+            <option value="completion_rate">按完成率</option>
+            <option value="avg_response">按响应时长</option>
+            <option value="sla_rate">按SLA达标率</option>
+          </select>
+        </div>
+        <div id="rankingBody">
+          <div class="loading-placeholder"><i class="fas fa-spinner fa-spin"></i> 加载中…</div>
+        </div>
+      </div>
+      <!-- 人员负载 -->
+      <div class="glass-card" style="padding:18px 20px 12px;">
+        <div class="glass-panel-header">
+          <div class="glass-panel-title"><i class="fas fa-users" style="color:#34d399;"></i>人员负载</div>
+        </div>
+        <div id="staffLoadBody">
+          <div class="loading-placeholder"><i class="fas fa-spinner fa-spin"></i> 加载中…</div>
+        </div>
+      </div>
+    </div>
+
+    {% if can_view_region %}
+    <!-- ===== 区域汇总 ===== -->
+    <div class="glass-card full-width" style="margin-bottom:24px;">
+      <div class="glass-panel-header">
+        <div class="glass-panel-title"><i class="fas fa-map-marked-alt" style="color:#60a5fa;"></i>区域汇总</div>
+      </div>
+      <div id="regionBody">
+        <div class="loading-placeholder"><i class="fas fa-spinner fa-spin"></i> 加载中…</div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ===== 待处理工单 ===== -->
+    <div class="glass-card full-width">
+      <div class="glass-panel-header">
+        <div class="glass-panel-title"><i class="fas fa-inbox" style="color:#f87171;"></i>待处理工单</div>
+      </div>
+      <div id="pendingBody">
+        <div class="loading-placeholder"><i class="fas fa-spinner fa-spin"></i> 加载中…</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+// ===== 全局 =====
+var trendChart = null;
+var autoRefreshTimer = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+  refreshAll();
+  autoRefreshTimer = setInterval(refreshAll, 30000);
+});
+
+function getRegion() { return document.getElementById('regionFilter').value; }
+function getDays() { return document.getElementById('daysFilter').value; }
+function getSort() { return document.getElementById('sortFilter') ? document.getElementById('sortFilter').value : 'order_count'; }
+
+function refreshAll() {
+  loadStats();
+  loadRanking();
+  loadTimeline();
+  loadStaffLoad();
+  loadRegionStats();
+  loadPendingOrders();
+}
+
+// ===== 统计卡片 =====
+function loadStats() {
+  fetch('/dashboard/global/api/stats?days=' + getDays() + '&region=' + getRegion())
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.success) return;
+      var d = data.data;
+      document.getElementById('statTotal').textContent = fmtNum(d.total_orders);
+      document.getElementById('statCompletion').textContent = d.completion_rate + '%';
+      document.getElementById('statSla').textContent = d.sla_rate + '%';
+      document.getElementById('statResponse').textContent = d.avg_response_time + 'min';
+      document.getElementById('statCross').textContent = d.active_cross_assignments;
+      document.getElementById('statPending').textContent = d.pending_orders;
+    });
+}
+
+// ===== KPI排行 =====
+function loadRanking() {
+  fetch('/dashboard/global/api/hospital-ranking?days=' + getDays() + '&region=' + getRegion() + '&sort_by=' + getSort())
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.success) return;
+      var list = data.data;
+      if (!list.length) {
+        document.getElementById('rankingBody').innerHTML = '<div class="loading-placeholder">暂无数据</div>';
+        return;
+      }
+      // 找最大值用于进度条
+      var sortKey = getSort();
+      var maxVal = list.length > 0 ? list[0][sortKey === 'avg_response' ? 'avg_response_time' : sortKey === 'completion_rate' ? 'completion_rate' : sortKey === 'sla_rate' ? 'sla_rate' : 'order_count'] : 1;
+      if (maxVal === 0) maxVal = 1;
+      if (sortKey === 'avg_response') {
+        // 响应时长越低越好，反向进度
+        var allVals = list.map(function(h) { return h.avg_response_time; });
+        maxVal = Math.max.apply(null, allVals);
+        if (maxVal === 0) maxVal = 1;
+      }
+
+      var html = '';
+      list.forEach(function(h, i) {
+        var val = sortKey === 'avg_response' ? h.avg_response_time :
+                  sortKey === 'completion_rate' ? h.completion_rate :
+                  sortKey === 'sla_rate' ? h.sla_rate :
+                  h.order_count;
+        var pct = sortKey === 'avg_response'
+          ? Math.min(100, Math.round((maxVal - val + 1) / maxVal * 100))
+          : Math.min(100, Math.round(val / maxVal * 100));
+        var barColor = sortKey === 'avg_response'
+          ? 'linear-gradient(90deg,#34d399,#10b981)'
+          : 'linear-gradient(90deg,#818cf8,#4f46e5)';
+        var badgeClass = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : 'ro';
+        html += '<div class="rank-item">';
+        html += '<span class="rank-badge ' + badgeClass + '">' + (i + 1) + '</span>';
+        html += '<div class="rank-info"><div class="rank-name">' + escHtml(h.hospital_name) + '</div><div class="rank-region">' + escHtml(h.region) + '</div></div>';
+        html += '<div class="rank-progress-wrap"><div class="rank-progress"><div class="rank-progress-fill" style="width:' + pct + '%;background:' + barColor + ';"></div></div></div>';
+        html += '<div class="rank-stats">';
+        html += '<div class="rank-stat-item"><div class="rank-stat-val">' + h.order_count + '</div><div class="rank-stat-label">工单</div></div>';
+        html += '<div class="rank-stat-item"><div class="rank-stat-val">' + h.completion_rate + '%</div><div class="rank-stat-label">完成</div></div>';
+        html += '<div class="rank-stat-item"><div class="rank-stat-val">' + h.avg_response_time + '</div><div class="rank-stat-label">响应</div></div>';
+        html += '<div class="rank-stat-item"><div class="rank-stat-val">' + h.sla_rate + '%</div><div class="rank-stat-label">SLA</div></div>';
+        html += '</div></div>';
+      });
+      document.getElementById('rankingBody').innerHTML = html;
+    });
+}
+
+function refreshRanking() { loadRanking(); }
+
+// ===== 工单趋势图 =====
+function loadTimeline() {
+  var days = getDays();
+  fetch('/dashboard/global/api/timeline?days=' + days + '&region=' + getRegion())
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.success) return;
+      renderChart(data.data.timeline);
+    });
+}
+
+function renderChart(timeline) {
+  var labels = timeline.map(function(t) { return t.date.slice(5); });
+  var totalData = timeline.map(function(t) { return t.total; });
+  var solvedData = timeline.map(function(t) { return t.solved; });
+
+  var ctx = document.getElementById('trendChart').getContext('2d');
+
+  if (trendChart) { trendChart.destroy(); }
+
+  // 半透明渐变填充
+  var gradTotal = ctx.createLinearGradient(0,0,0,180);
+  gradTotal.addColorStop(0, 'rgba(129,140,248,0.35)');
+  gradTotal.addColorStop(1, 'rgba(129,140,248,0.01)');
+  var gradSolved = ctx.createLinearGradient(0,0,0,180);
+  gradSolved.addColorStop(0, 'rgba(52,211,153,0.30)');
+  gradSolved.addColorStop(1, 'rgba(52,211,153,0.01)');
+
+  trendChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: '新增工单',
+          data: totalData,
+          borderColor: '#818cf8',
+          backgroundColor: gradTotal,
+          fill: true,
+          tension: 0.35,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          pointHoverBackgroundColor: '#818cf8',
+          pointHoverBorderColor: '#fff',
+          pointHoverBorderWidth: 2,
+          borderWidth: 2,
+        },
+        {
+          label: '已完成',
+          data: solvedData,
+          borderColor: '#34d399',
+          backgroundColor: gradSolved,
+          fill: true,
+          tension: 0.35,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          pointHoverBackgroundColor: '#34d399',
+          pointHoverBorderColor: '#fff',
+          pointHoverBorderWidth: 2,
+          borderWidth: 2,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: {
+            boxWidth: 10,
+            padding: 14,
+            font: { size: 11, family: 'system-ui' },
+            color: 'rgba(255,255,255,0.6)'
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false },
+          ticks: {
+            font: { size: 10, family: 'system-ui' },
+            maxTicksLimit: 12,
+            color: 'rgba(255,255,255,0.35)'
+          }
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false },
+          ticks: {
+            font: { size: 10, family: 'system-ui' },
+            precision: 0,
+            color: 'rgba(255,255,255,0.35)'
+          }
+        }
+      },
+      interaction: {
+        intersect: false,
+        mode: 'index'
+      }
+    }
+  });
+}
+
+// ===== 人员负载 =====
+function loadStaffLoad() {
+  fetch('/dashboard/global/api/staff-load?days=' + getDays() + '&region=' + getRegion())
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.success) return;
+      var list = data.data;
+      var el = document.getElementById('staffLoadBody');
+      if (!list.length) {
+        el.innerHTML = '<div class="loading-placeholder">暂无数据</div>';
+        return;
+      }
+      var maxLoad = Math.max.apply(null, list.map(function(h) { return h.active_load; }));
+      if (maxLoad === 0) maxLoad = 1;
+      var html = '';
+      list.forEach(function(h) {
+        var pct = Math.min(100, Math.round(h.active_load / maxLoad * 100));
+        var color = pct > 70 ? 'linear-gradient(90deg,#f87171,#ef4444)' :
+                    pct > 40 ? 'linear-gradient(90deg,#fbbf24,#f59e0b)' :
+                    'linear-gradient(90deg,#34d399,#10b981)';
+        html += '<div class="staff-item">';
+        html += '<span class="staff-label" title="' + escHtml(h.hospital_name) + '">' + escHtml(h.hospital_name) + '</span>';
+        html += '<div class="staff-track"><div class="staff-fill" style="width:' + pct + '%;background:' + color + ';"></div></div>';
+        html += '<span class="staff-value">' + h.active_load + '单/人</span>';
+        html += '</div>';
+      });
+      el.innerHTML = html;
+    });
+}
+
+// ===== 区域汇总 =====
+function loadRegionStats() {
+  var el = document.getElementById('regionBody');
+  if (!el) return;
+  fetch('/dashboard/global/api/regional-stats?days=' + getDays())
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.success) return;
+      var list = data.data;
+      if (!list.length) {
+        el.innerHTML = '<div class="loading-placeholder">暂无区域数据</div>';
+        return;
+      }
+      var html = '<div class="region-grid">';
+      list.forEach(function(r) {
+        html += '<div class="region-card">';
+        html += '<div class="region-name">' + escHtml(r.region) + '</div>';
+        html += '<div class="region-stat">' + r.hospital_count + '家医院</div>';
+        html += '<div class="region-highlight"><span class="num">' + r.total_orders + '</span></div>';
+        html += '<div class="region-stat">' + r.completion_rate + '%完成 · ' + r.avg_response_time + 'min</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+      el.innerHTML = html;
+    });
+}
+
+// ===== 待处理工单 =====
+function loadPendingOrders() {
+  fetch('/dashboard/global/api/pending-orders?days=' + getDays() + '&region=' + getRegion() + '&limit=15')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.success) return;
+      var list = data.data;
+      var el = document.getElementById('pendingBody');
+      if (!list.length) {
+        el.innerHTML = '<div class="pending-empty"><i class="fas fa-check-circle" style="color:#34d399;"></i><br>暂无待处理工单</div>';
+        return;
+      }
+      var html = '';
+      list.forEach(function(o) {
+        html += '<div class="pending-item" onclick="window.location.href=\'/orders/detail/' + o.id + '\'">';
+        html += '<span class="pending-hosp-tag">' + escHtml(o.hospital_name) + '</span>';
+        html += '<span class="pending-title">' + escHtml(o.title) + '</span>';
+        html += '<span class="pending-meta">' + escHtml(o.department || '') + ' · ' + o.age_hours.toFixed(1) + 'h</span>';
+        html += '</div>';
+      });
+      el.innerHTML = html;
+    });
+}
+
+// ===== 工具 =====
+function fmtNum(n) {
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+  return String(n);
+}
+
+function escHtml(s) {
+  if (!s && s !== 0) return '';
+  var div = document.createElement('div');
+  div.appendChild(document.createTextNode(String(s)));
+  return div.innerHTML;
+}
+</script>
+{% endblock %}

@@ -20,6 +20,7 @@ class Hospital(db.Model):
     code = db.Column(db.String(50), unique=True, nullable=False)
     address = db.Column(db.String(200), default='')
     phone = db.Column(db.String(50), default='')
+    region = db.Column(db.String(50), default='')          # 所在区域/片区
     is_active = db.Column(db.Boolean, default=True)
     logo = db.Column(db.String(200), default='')  # 自定义头像文件名
     created_at = db.Column(db.DateTime, default=datetime.now)
@@ -295,6 +296,8 @@ class User(UserMixin, db.Model):
     avatar = db.Column(db.String(500), default='')          # 头像URL
     notes = db.Column(db.Text, default='')
     sort_order = db.Column(db.Integer, default=0)
+    permissions = db.Column(db.Text, default='{}')         # JSON: {"order:delete": true, "asset:import": true}
+    is_cross_assigned = db.Column(db.Boolean, default=False)  # 是否处于跨院区借调状态
 
     @property
     def name(self):
@@ -352,6 +355,170 @@ class User(UserMixin, db.Model):
         self.preferences = json.dumps(prefs, ensure_ascii=False)
 
 
+# ======================== 细粒度操作级权限定义 ========================
+PERMISSION_DEFINITIONS = {
+    'order:view': {'label': '查看工单', 'module': '工单管理', 'default_roles': ['管理员', '工程师', '操作员', '科室主任']},
+    'order:create': {'label': '创建工单', 'module': '工单管理', 'default_roles': ['管理员', '工程师', '操作员']},
+    'order:edit': {'label': '编辑工单', 'module': '工单管理', 'default_roles': ['管理员', '工程师']},
+    'order:delete': {'label': '删除工单', 'module': '工单管理', 'default_roles': ['管理员']},
+    'order:assign': {'label': '派单/转单', 'module': '工单管理', 'default_roles': ['管理员', '工程师']},
+    'order:solve': {'label': '结单/完成', 'module': '工单管理', 'default_roles': ['管理员', '工程师']},
+    'order:audit': {'label': '审核工单', 'module': '工单管理', 'default_roles': ['管理员', '科室主任']},
+    'order:comment': {'label': '添加工单备注', 'module': '工单管理', 'default_roles': ['管理员', '工程师', '操作员']},
+    'order:batch': {'label': '批量操作', 'module': '工单管理', 'default_roles': ['管理员']},
+    'asset:view': {'label': '查看资产', 'module': '数据中心', 'default_roles': ['管理员', '工程师', '操作员']},
+    'asset:create': {'label': '新增资产', 'module': '数据中心', 'default_roles': ['管理员', '工程师']},
+    'asset:edit': {'label': '编辑资产', 'module': '数据中心', 'default_roles': ['管理员', '工程师']},
+    'asset:delete': {'label': '删除资产', 'module': '数据中心', 'default_roles': ['管理员']},
+    'asset:import': {'label': '导入资产', 'module': '数据中心', 'default_roles': ['管理员']},
+    'asset:export': {'label': '导出资产', 'module': '数据中心', 'default_roles': ['管理员']},
+    'user:view': {'label': '查看人员', 'module': '系统管理', 'default_roles': ['管理员', '科室主任']},
+    'user:create': {'label': '添加人员', 'module': '系统管理', 'default_roles': ['管理员']},
+    'user:edit': {'label': '编辑人员', 'module': '系统管理', 'default_roles': ['管理员']},
+    'user:delete': {'label': '删除人员', 'module': '系统管理', 'default_roles': ['管理员']},
+    'user:role_assign': {'label': '分配角色', 'module': '系统管理', 'default_roles': ['管理员']},
+    'report:view': {'label': '查看报表', 'module': '运维报表', 'default_roles': ['管理员', '工程师', '科室主任']},
+    'report:export': {'label': '导出报表', 'module': '运维报表', 'default_roles': ['管理员']},
+    'report:config': {'label': '配置报表', 'module': '运维报表', 'default_roles': ['管理员']},
+    'system:config': {'label': '修改系统设置', 'module': '系统管理', 'default_roles': ['管理员']},
+    'system:audit_log': {'label': '查看审计日志', 'module': '系统管理', 'default_roles': ['管理员']},
+    'system:permission': {'label': '管理权限', 'module': '系统管理', 'default_roles': ['管理员']},
+    'biz:inspection': {'label': '巡检管理', 'module': '业务管理', 'default_roles': ['管理员', '工程师', '操作员']},
+    'biz:route': {'label': '巡检路线规划', 'module': '业务管理', 'default_roles': ['管理员']},
+    'biz:knowledge': {'label': '知识库', 'module': '业务管理', 'default_roles': ['管理员', '操作员']},
+    'biz:form': {'label': '电子表单', 'module': '业务管理', 'default_roles': ['管理员']},
+    'biz:repair': {'label': '维修管理', 'module': '业务管理', 'default_roles': ['管理员', '工程师']},
+    'biz:complaint': {'label': '投诉管理', 'module': '业务管理', 'default_roles': ['管理员']},
+    'biz:handover': {'label': '交接班日志', 'module': '业务管理', 'default_roles': ['管理员', '操作员']},
+    'biz:exam': {'label': '考试系统', 'module': '教育培训', 'default_roles': ['管理员', '操作员']},
+    'biz:finance': {'label': '维修做账', 'module': '财务做账', 'default_roles': ['管理员']},
+    'biz:analysis': {'label': '重复单分析', 'module': '运维分析', 'default_roles': ['管理员']},
+    'biz:monitor': {'label': '服务器监控', 'module': '系统管理', 'default_roles': ['管理员']},
+    'biz:cross_assign': {'label': '跨院借调管理', 'module': '业务管理', 'default_roles': ['管理员', '院区管理员']},
+    'report:global_view': {'label': '全局数据查看', 'module': '运维报表', 'default_roles': ['管理员']},
+    'report:region_view': {'label': '区域数据查看', 'module': '运维报表', 'default_roles': ['管理员']},
+    'report:staff_load': {'label': '人员负载查看', 'module': '运维报表', 'default_roles': ['管理员', '院区管理员']},
+    'report:compare': {'label': '跨院对比报表', 'module': '运维报表', 'default_roles': ['管理员']},
+}
+
+ROLE_PERMISSIONS = {
+    '管理员': '*',
+    '工程师': [
+        'order:view', 'order:create', 'order:edit',
+        'order:assign', 'order:solve', 'order:comment',
+        'asset:view', 'asset:create', 'asset:edit',
+        'report:view',
+        'biz:inspection', 'biz:repair', 'biz:knowledge',
+    ],
+    '操作员': [
+        'order:view', 'order:create', 'order:comment',
+        'asset:view',
+        'biz:inspection', 'biz:knowledge', 'biz:exam', 'biz:handover',
+    ],
+    '科室主任': [
+        'order:view', 'order:audit',
+        'report:view',
+        'user:view',
+    ],
+    '常规运维权限': [
+        'order:view', 'order:create', 'order:assign',
+        'order:solve', 'order:comment',
+        'report:view',
+        'biz:inspection', 'biz:knowledge', 'biz:form',
+        'biz:repair', 'biz:scheduling',
+    ],
+    '普通用户': [
+        'order:view', 'order:create',
+        'report:view',
+        'biz:inspection', 'biz:knowledge',
+        'biz:exam',
+    ],
+    '第三方': [
+        'order:view', 'order:create',
+        'report:view',
+        'biz:inspection', 'biz:knowledge',
+    ],
+    '院区管理员': [
+        'order:view', 'order:create', 'order:edit',
+        'order:assign', 'order:solve', 'order:comment',
+        'asset:view', 'asset:create', 'asset:edit',
+        'report:view', 'report:global_view', 'report:region_view',
+        'report:staff_load', 'report:compare',
+        'biz:cross_assign',
+        'biz:inspection', 'biz:repair', 'biz:knowledge',
+    ],
+}
+
+MODULE_TO_PERM_MAP = {
+    '仪表盘': 'report:view',
+    '工单列表': 'order:view',
+    '发布工单': 'order:create',
+    '新建工单': 'order:create',
+    '批量生成': 'order:batch',
+    '工单转交': 'order:assign',
+    'SLA监控': 'order:view',
+    '历史追溯': 'order:view',
+    '自动派单': 'order:assign',
+    '超时催办': 'order:assign',
+    '巡检管理': 'biz:inspection',
+    '巡检路线规划': 'biz:route',
+    '知识库': 'biz:knowledge',
+    '电子表单': 'biz:form',
+    '维修管理': 'biz:repair',
+    '巡检签到': 'biz:inspection',
+    '投诉管理': 'biz:complaint',
+    '交接班日志': 'biz:handover',
+    '数据管理': 'asset:view',
+    '资产台账': 'asset:view',
+    '资产二维码': 'asset:view',
+    '供应商管理': 'biz:supplier',
+    '合同维保': 'biz:contract',
+    '备件库存': 'biz:stock',
+    '备件联动': 'biz:stock',
+    '备件预警': 'biz:stock',
+    '耗材管理': 'biz:consumable',
+    '耗材预测': 'biz:consumable',
+    '值班排班': 'biz:scheduling',
+    '领用审批': 'biz:approval',
+    '维保日历': 'biz:calendar',
+    '设备履历': 'asset:view',
+    '设备折旧': 'biz:depreciation',
+    '运维大屏': 'report:view',
+    '领导驾驶舱': 'report:view',
+    '维修做账': 'biz:finance',
+    'PDF导出': 'report:export',
+    '考试系统': 'biz:exam',
+    '服务器监控': 'biz:monitor',
+    '重复单分析': 'biz:analysis',
+    '故障热力图': 'report:view',
+    '效能看板': 'report:view',
+    '维修评价': 'report:view',
+    '运维成本核算': 'biz:finance',
+    '考试系统': 'biz:exam',
+}
+
+
+def has_permission(user, perm_key):
+    if not user:
+        return False
+    if user.is_admin:
+        return True
+    import json
+    user_perms = json.loads(user.permissions or '{}')
+    if perm_key in user_perms:
+        return user_perms[perm_key]
+    group_name = getattr(user, 'group', '普通用户')
+    role_perms = ROLE_PERMISSIONS.get(group_name, [])
+    if role_perms == '*':
+        return True
+    if perm_key in role_perms:
+        return True
+    prefix = perm_key.split(':')[0] + ':*'
+    if prefix in role_perms:
+        return True
+    return False
+
+
 class WorkOrder(HospitalMixin, db.Model):
     __tablename__ = 'work_orders'
     __table_args__ = (
@@ -385,6 +552,8 @@ class WorkOrder(HospitalMixin, db.Model):
     fault_subcategory = db.Column(db.String(100), nullable=False, default='')
     wecom_timeout_notified = db.Column(db.Boolean, default=False)
     last_urged_at = db.Column(db.DateTime, nullable=True)  # 最后催单时间
+    asset_id = db.Column(db.Integer, db.ForeignKey('assets.id'), nullable=True, index=True)  # 关联资产
+    asset = db.relationship('Asset', backref=db.backref('work_orders', lazy='dynamic'))
     transfer_from_hospital = db.Column(db.String(100), default='')  # 跨院区转交来源医院
 
     @property
@@ -490,12 +659,15 @@ class Department(HospitalMixin, db.Model):
     )
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    category = db.Column(db.String(50), default='其他')  # 科室类型：急诊/内科/外科/妇儿/检验/影像/门诊/行政/其他
     building = db.Column(db.String(50), default='')
     floor = db.Column(db.String(20), default='')
     phone = db.Column(db.String(50), default='')
     is_active = db.Column(db.Boolean, default=True)
     sort_order = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.now)
+    building_id = db.Column(db.Integer, db.ForeignKey('buildings.id'), nullable=True)
+    floor_number = db.Column(db.Integer, nullable=True)
 
 
 # ======================== 权限系统（多角色组） ========================
@@ -505,7 +677,7 @@ ALL_MODULES_DEFINITION = [
     ('工单管理', ['仪表盘', '工单列表', '发布工单', '新建工单', '批量生成', '工单转交', 'SLA监控', '历史追溯', '自动派单', '超时催办']),
     ('业务管理', ['巡检管理', '巡检路线规划', '知识库', '电子表单', '维修管理', '巡检签到', '投诉管理', '交接班日志']),
     ('数据中心', ['数据管理', '资产台账', '资产二维码', '供应商管理', '合同维保', '设备折旧', '备件库存', '备件联动', '备件预警', '耗材管理', '耗材预测', '值班排班', '固定资产入库', '固定资产出库', '领用审批', '维保日历', '设备履历']),
-    ('运维分析', ['运维大屏', '领导驾驶舱', '数字孪生', 'AI知识库问答', '多院区协同']),
+    ('运维分析', ['运维大屏', '领导驾驶舱', 'AI知识库问答']),
     ('运维报表', ['PDF导出']),
     ('财务做账', ['维修做账']),
     ('系统管理', ['月度报表', '服务器监控', '重复单分析', '故障热力图', '效能看板', '维修评价', '投诉管理', '运维成本核算']),
@@ -533,8 +705,8 @@ DEFAULT_GROUPS = {
         '固定资产入库': False, '固定资产出库': False,
         '领用审批': False, '维保日历': False, '设备履历': False,
         '效能看板': False, '运维大屏': False, '领导驾驶舱': False,
-        '数字孪生': False, '自定义报表': False,
-        '维修评价': False, '运维成本核算': False, 'AI知识库问答': False, '多院区协同': False,
+        '自定义报表': False,
+        '维修评价': False, '运维成本核算': False, 'AI知识库问答': False,
         '月度报表': False,
         '考试系统': True,
         '重复单分析': False,
@@ -661,15 +833,23 @@ def save_module_permissions(data):
 
 
 def can_access(module_name, user=None):
-    """判断用户是否有权访问某模块（基于 group_id）"""
+    """判断用户是否有权访问某模块/执行某操作（兼容模块名和操作级权限key）"""
     if user is None:
         from flask_login import current_user
         user = current_user
     if not user or not user.is_authenticated:
         return False
+    # 管理员全放行
     if user.is_admin:
-        return True  # 管理员全开
-    # 根据用户所属角色组判断（优先 group_id）
+        return True
+    # 如果传入的是操作级权限key（如 order:view），直接检查
+    if ':' in module_name:
+        return has_permission(user, module_name)
+    # 模块名→操作级权限映射
+    perm_key = MODULE_TO_PERM_MAP.get(module_name)
+    if perm_key:
+        return has_permission(user, perm_key)
+    # fallback: 老的 can_access 逻辑（保持兼容）
     group_name = get_group_name_by_id(user.group_id) or user.group or '普通用户'
     perms = get_module_permissions()
     group_perms = perms.get('groups', {}).get(group_name, {})
@@ -2064,4 +2244,27 @@ class SparePartAlert(HospitalMixin, db.Model):
     last_notified_at = db.Column(db.DateTime, nullable=True)       # 上次通知时间
     created_at = db.Column(db.DateTime, default=datetime.now)
     part = db.relationship('SparePart', backref=db.backref('alerts', lazy='dynamic'))
+
+
+class CrossHospitalAssignment(HospitalMixin, db.Model):
+    """跨院区人员借调/协同"""
+    __tablename__ = 'cross_hospital_assignments'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    source_hospital_id = db.Column(db.Integer, db.ForeignKey('hospitals.id'), nullable=False)
+    target_hospital_id = db.Column(db.Integer, db.ForeignKey('hospitals.id'), nullable=False)
+    start_date = db.Column(db.DateTime, nullable=False)
+    end_date = db.Column(db.DateTime, nullable=False)
+    reason = db.Column(db.String(255), default='临时借调')
+    status = db.Column(db.String(20), default='active')       # active / completed / cancelled
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    # 关系映射
+    user = db.relationship('User', foreign_keys=[user_id],
+                           backref=db.backref('cross_assignments', lazy='dynamic'))
+    source_hospital = db.relationship('Hospital', foreign_keys=[source_hospital_id])
+    target_hospital = db.relationship('Hospital', foreign_keys=[target_hospital_id])
+    creator = db.relationship('User', foreign_keys=[created_by])
 

@@ -18,7 +18,7 @@
                 {% if part.location %}<div style="font-size:12px; color:#6b7280; margin-top:8px;"><i class="fas fa-map-marker-alt"></i> {{ part.location }}</div>{% endif %}
                 {% if part.notes %}<div style="background:#f9fafb; border-radius:6px; padding:8px; font-size:12px; color:#6b7280; margin-top:12px;">{{ part.notes }}</div>{% endif %}
             </div>
-            {% if current_user.is_admin %}
+            {% if has_permission('biz:stock') %}
             <div class="card-footer bg-white p-3" style="border-top:1px solid #f3f4f6;">
                 <div class="d-flex gap-2">
                     <button onclick="showInout({{ part.id }},'{{ part.name }}','in')" class="btn btn-sm btn-success flex-fill"><i class="fas fa-plus-circle"></i> 入库</button>

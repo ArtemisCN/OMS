@@ -1,0 +1,544 @@
+{% extends "base.html" %}
+{% block title %}人员借调管理{% endblock %}
+{% block extra_head %}
+<style>
+/* ===== 布局 ===== */
+.cross-layout { display:flex; gap:20px; min-height:calc(100vh - 120px); }
+.cross-panel { flex:1; background:var(--card-bg,#fff); border-radius:16px; border:1px solid var(--border,#e2e8f0); padding:20px; }
+body[data-theme="dark"] .cross-panel { background:#1e293b; border-color:#334155; }
+
+/* ===== 面板标题 ===== */
+.panel-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid var(--border,#e2e8f0); }
+body[data-theme="dark"] .panel-header { border-color:#334155; }
+.panel-title { font-size:15px; font-weight:600; color:var(--text,#1e293b); display:flex; align-items:center; gap:8px; }
+body[data-theme="dark"] .panel-title { color:#e2e8f0; }
+.panel-badge { font-size:11px; background:var(--primary-color,#4f46e5); color:#fff; padding:1px 10px; border-radius:10px; font-weight:500; }
+
+/* ===== 搜索 ===== */
+.search-box { position:relative; margin-bottom:12px; }
+.search-box .form-control { padding-left:34px; border-radius:10px; font-size:13px; }
+.search-box .search-icon { position:absolute; left:11px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:12px; }
+
+/* ===== 医院分组 ===== */
+.hospital-group { margin-bottom:20px; }
+.hospital-group:last-child { margin-bottom:0; }
+.hospital-group-title { font-size:12px; font-weight:600; color:var(--text-muted,#64748b); margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+body[data-theme="dark"] .hospital-group-title { color:#94a3b8; }
+.hospital-group-title i { font-size:11px; }
+
+/* ===== 可借调人员 ===== */
+.available-grid { display:flex; flex-direction:column; gap:8px; }
+.user-card { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; background:var(--bg-light,#f8fafc); border:1px solid var(--border,#e2e8f0); cursor:grab; transition:all 0.15s ease; }
+body[data-theme="dark"] .user-card { background:#0f172a; border-color:#334155; }
+.user-card:hover { border-color:var(--primary-color,#4f46e5); box-shadow:0 2px 8px rgba(79,70,229,0.1); }
+.user-card:active { cursor:grabbing; transform:scale(0.97); }
+.user-card.dragging { opacity:0.5; }
+.user-avatar { width:36px; height:36px; border-radius:50%; background:var(--primary-color,#4f46e5); display:flex; align-items:center; justify-content:center; color:#fff; font-size:14px; font-weight:600; flex-shrink:0; }
+.user-info { flex:1; min-width:0; }
+.user-name { font-size:13px; font-weight:600; color:var(--text,#1e293b); }
+body[data-theme="dark"] .user-name { color:#e2e8f0; }
+.user-hospital { font-size:11px; color:var(--text-muted,#64748b); margin-top:1px; }
+body[data-theme="dark"] .user-hospital { color:#94a3b8; }
+.drag-handle { color:#94a3b8; font-size:14px; cursor:grab; padding:4px; }
+body[data-theme="dark"] .drag-handle { color:#64748b; }
+
+/* ===== 已借调人员 ===== */
+.assign-list { display:flex; flex-direction:column; gap:10px; }
+.assign-card { padding:14px; border-radius:12px; background:var(--bg-light,#f8fafc); border:1px solid var(--border,#e2e8f0); transition:all 0.15s ease; }
+body[data-theme="dark"] .assign-card { background:#0f172a; border-color:#334155; }
+.assign-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.assign-user { display:flex; align-items:center; gap:8px; }
+.assign-user .user-avatar { width:32px; height:32px; font-size:12px; }
+.assign-name { font-size:13px; font-weight:600; color:var(--text,#1e293b); }
+body[data-theme="dark"] .assign-name { color:#e2e8f0; }
+.assign-source { font-size:11px; color:var(--text-muted,#64748b); }
+body[data-theme="dark"] .assign-source { color:#94a3b8; }
+.assign-dates { font-size:11px; color:var(--text-muted,#64748b); }
+body[data-theme="dark"] .assign-dates { color:#94a3b8; }
+.assign-remaining { font-size:12px; font-weight:600; display:inline-flex; align-items:center; gap:4px; }
+.assign-remaining.green { color:#10b981; }
+.assign-remaining.red { color:#ef4444; }
+.assign-actions { display:flex; align-items:center; gap:6px; }
+.btn-sm-icon { background:none; border:none; color:#94a3b8; font-size:13px; padding:4px 8px; border-radius:6px; cursor:pointer; transition:all 0.15s; }
+.btn-sm-icon:hover { background:#fee2e2; color:#ef4444; }
+body[data-theme="dark"] .btn-sm-icon:hover { background:rgba(239,68,68,0.15); }
+
+/* ===== 空状态 ===== */
+.empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 20px; color:var(--text-muted,#94a3b8); }
+.empty-state i { font-size:36px; margin-bottom:12px; opacity:0.5; }
+.empty-state p { font-size:13px; }
+body[data-theme="dark"] .empty-state { color:#64748b; }
+
+/* ===== 投放区高亮 ===== */
+.drop-zone { border:2px dashed var(--border,#e2e8f0); border-radius:16px; padding:20px; transition:all 0.2s; min-height:200px; }
+body[data-theme="dark"] .drop-zone { border-color:#334155; }
+.drop-zone.drag-over { border-color:var(--primary-color,#4f46e5); background:rgba(79,70,229,0.04); }
+body[data-theme="dark"] .drop-zone.drag-over { background:rgba(79,70,229,0.08); }
+
+/* ===== 模态框 ===== */
+.cross-modal .modal-content { border-radius:16px; border:none; }
+body[data-theme="dark"] .cross-modal .modal-content { background:#1e293b; color:#e2e8f0; }
+body[data-theme="dark"] .cross-modal .modal-header { border-bottom-color:#334155; }
+body[data-theme="dark"] .cross-modal .modal-footer { border-top-color:#334155; }
+body[data-theme="dark"] .cross-modal .form-label { color:#cbd5e1; }
+body[data-theme="dark"] .cross-modal .form-control { background:#0f172a; border-color:#334155; color:#e2e8f0; }
+.modal-user-avatar { width:40px; height:40px; border-radius:50%; background:var(--primary-color,#4f46e5); display:flex; align-items:center; justify-content:center; color:#fff; font-size:16px; font-weight:600; flex-shrink:0; }
+.modal-user-info { font-size:13px; }
+.modal-user-info .name { font-weight:600; color:var(--text,#1e293b); }
+body[data-theme="dark"] .modal-user-info .name { color:#e2e8f0; }
+.modal-user-info .meta { color:var(--text-muted,#64748b); font-size:12px; }
+body[data-theme="dark"] .modal-user-info .meta { color:#94a3b8; }
+
+/* ===== Toast ===== */
+.toast-cross { position:fixed; top:20px; right:20px; z-index:99999; background:#fff; border-radius:12px; padding:12px 20px; box-shadow:0 8px 30px rgba(0,0,0,0.15); display:flex; align-items:center; gap:10px; font-size:13px; transform:translateX(120%); transition:transform 0.3s ease; }
+body[data-theme="dark"] .toast-cross { background:#1e293b; color:#e2e8f0; }
+.toast-cross.show { transform:translateX(0); }
+.toast-cross.success i { color:#10b981; }
+.toast-cross.error i { color:#ef4444; }
+
+/* ===== 响应式 ===== */
+@media (max-width:768px) {
+    .cross-layout { flex-direction:column; }
+    .cross-panel { min-height:auto; }
+    .drop-zone { min-height:150px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+    <!-- ===== 页面标题 ===== -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold mb-0">
+            <i class="fas fa-user-friends text-primary me-2"></i>人员借调管理
+            {% if hospital %}
+            <span style="font-size:13px;font-weight:400;color:var(--text-muted,#64748b);margin-left:8px;">
+                <i class="fas fa-hospital-alt me-1"></i>{{ hospital.name }}
+            </span>
+            {% endif %}
+        </h4>
+        <div style="font-size:12px;color:var(--text-muted,#64748b);">
+            <i class="fas fa-info-circle me-1"></i>拖拽用户到右侧面板发起借调
+        </div>
+    </div>
+
+    <!-- ===== 双面板布局 ===== -->
+    <div class="cross-layout">
+
+        <!-- ===== 左侧：可借调人员池 ===== -->
+        <div class="cross-panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <i class="fas fa-users text-primary"></i>可借调人员池
+                    <span class="panel-badge" id="availableCount">0</span>
+                </div>
+            </div>
+            <div class="search-box">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" class="form-control form-control-sm" id="searchAvailable" placeholder="搜索姓名…" oninput="filterAvailable()">
+            </div>
+            <div id="availableUsers" style="overflow-y:auto;max-height:calc(100vh - 300px);">
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <p>加载中…</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 右侧：本院已借调人员 ===== -->
+        <div class="cross-panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <i class="fas fa-user-check text-success"></i>本院已借调人员
+                    <span class="panel-badge" id="assignCount">0</span>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" onclick="refreshAssignments()" title="刷新">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+            <div class="drop-zone" id="dropZone"
+                 ondragover="onDragOver(event)"
+                 ondragleave="onDragLeave(event)"
+                 ondrop="onDrop(event)">
+                <div id="assignmentsList">
+                    <div class="empty-state">
+                        <i class="fas fa-arrow-left"></i>
+                        <p>将左侧人员拖拽到此区域发起借调</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== 借调设置模态框 ===== -->
+<div class="modal fade cross-modal" id="assignModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold"><i class="fas fa-handshake text-primary me-2"></i>设置借调时间</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="assignForm" onsubmit="submitAssign(event)">
+                <div class="modal-body">
+                    <!-- 用户信息 -->
+                    <div class="d-flex align-items-center gap-3 mb-4 p-3" style="background:var(--bg-light,#f8fafc);border-radius:12px;">
+                        <div class="modal-user-avatar" id="modalAvatar">?</div>
+                        <div class="modal-user-info">
+                            <div class="name" id="modalUserName">—</div>
+                            <div class="meta" id="modalUserHospital">—</div>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="modalUserId">
+
+                    <!-- 开始日期 -->
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">开始日期 <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="startDate" required>
+                    </div>
+
+                    <!-- 结束日期 -->
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">结束日期 <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="endDate" required>
+                    </div>
+
+                    <!-- 借调理由 -->
+                    <div class="mb-0">
+                        <label class="form-label fw-medium">借调理由</label>
+                        <input type="text" class="form-control" id="reason" placeholder="如：临时支援、项目协作…" value="临时支援">
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                        <i class="fas fa-check me-1"></i>确认借调
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Toast ===== -->
+<div class="toast-cross" id="crossToast">
+    <i class="fas fa-check-circle"></i>
+    <span id="toastMsg">成功</span>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ===== 全局变量 =====
+var gHospitalId = {{ hospital.id if hospital else 0 }};
+var gCurrentUserId = {{ current_user.id }};
+
+// ===== 初始化 =====
+document.addEventListener('DOMContentLoaded', function() {
+    loadAvailableUsers();
+    loadAssignments();
+    // 设置默认日期
+    var today = new Date();
+    var tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    var fmt = function(d) {
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+    };
+    document.getElementById('startDate').value = fmt(today);
+    document.getElementById('endDate').value = fmt(tomorrow);
+    // 60秒刷新剩余天数
+    setInterval(function() {
+        updateRemainingDays();
+    }, 60000);
+});
+
+// ===== Toast =====
+function showToast(msg, type) {
+    var el = document.getElementById('crossToast');
+    var icon = el.querySelector('i');
+    var span = document.getElementById('toastMsg');
+    icon.className = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle';
+    span.textContent = msg;
+    el.classList.remove('success', 'error');
+    el.classList.add(type, 'show');
+    setTimeout(function() { el.classList.remove('show'); }, 3000);
+}
+
+// ===== 加载可借调人员 =====
+function loadAvailableUsers() {
+    fetch('/cross/api/available-users')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.success) {
+                document.getElementById('availableUsers').innerHTML =
+                    '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>加载失败</p></div>';
+                return;
+            }
+            renderAvailableUsers(data.data);
+        })
+        .catch(function(err) {
+            console.error('加载可借调人员失败:', err);
+            document.getElementById('availableUsers').innerHTML =
+                '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>网络错误</p></div>';
+        });
+}
+
+function renderAvailableUsers(data) {
+    var container = document.getElementById('availableUsers');
+    var groups = data.users || [];
+    var total = 0;
+    if (!groups.length) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>暂无可借调人员</p></div>';
+        document.getElementById('availableCount').textContent = '0';
+        return;
+    }
+    var html = '';
+    groups.forEach(function(group) {
+        var users = group.users || [];
+        if (!users.length) return;
+        total += users.length;
+        html += '<div class="hospital-group">';
+        html += '<div class="hospital-group-title"><i class="fas fa-hospital"></i>' + escHtml(group.name) + '</div>';
+        html += '<div class="available-grid">';
+        users.forEach(function(u) {
+            var initial = (u.display_name || u.name || '?')[0];
+            html += '<div class="user-card" draggable="true" data-user-id="' + u.id + '" data-user-name="' + escHtml(u.name) + '" data-user-hospital="' + escHtml(group.name) + '" data-user-initial="' + escHtml(initial) + '"';
+            html += ' ondragstart="onDragStart(event)" ondragend="onDragEnd(event)">';
+            html += '<div class="user-avatar">' + escHtml(initial) + '</div>';
+            html += '<div class="user-info">';
+            html += '<div class="user-name">' + escHtml(u.display_name || u.name) + '</div>';
+            html += '<div class="user-hospital"><i class="fas fa-map-marker-alt me-1" style="font-size:9px;"></i>' + escHtml(group.name) + '</div>';
+            html += '</div>';
+            html += '<div class="drag-handle"><i class="fas fa-grip-vertical"></i></div>';
+            html += '</div>';
+        });
+        html += '</div></div>';
+    });
+    if (total === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>暂无可借调人员</p></div>';
+    } else {
+        container.innerHTML = html;
+    }
+    document.getElementById('availableCount').textContent = total;
+}
+
+// ===== 搜索过滤 =====
+function filterAvailable() {
+    var q = document.getElementById('searchAvailable').value.trim().toLowerCase();
+    var cards = document.querySelectorAll('#availableUsers .user-card');
+    cards.forEach(function(card) {
+        var name = (card.getAttribute('data-user-name') || '').toLowerCase();
+        card.style.display = name.includes(q) ? '' : 'none';
+    });
+    // 隐藏空分组
+    document.querySelectorAll('#availableUsers .hospital-group').forEach(function(group) {
+        var visible = group.querySelectorAll('.user-card[style*="display: none"]').length === 0;
+        if (visible === false) {
+            var totalCards = group.querySelectorAll('.user-card').length;
+            var hidden = group.querySelectorAll('.user-card[style*="display: none"]').length;
+            group.style.display = hidden === totalCards ? 'none' : '';
+        }
+    });
+}
+
+// ===== 加载已借调人员 =====
+function loadAssignments() {
+    fetch('/cross/api/assignments?status=active&per_page=100')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.success) {
+                document.getElementById('assignmentsList').innerHTML =
+                    '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>加载失败</p></div>';
+                return;
+            }
+            renderAssignments(data.data);
+        })
+        .catch(function(err) {
+            console.error('加载借调列表失败:', err);
+        });
+}
+
+function renderAssignments(data) {
+    var container = document.getElementById('assignmentsList');
+    var list = data.assignments || [];
+    document.getElementById('assignCount').textContent = list.length;
+
+    if (!list.length) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-arrow-left"></i><p>将左侧人员拖拽到此区域发起借调</p></div>';
+        return;
+    }
+    var html = '<div class="assign-list">';
+    list.forEach(function(a) {
+        var initial = (a.user_name || '?')[0];
+        html += '<div class="assign-card" data-assign-id="' + a.id + '">';
+        html += '<div class="assign-card-header">';
+        html += '<div class="assign-user">';
+        html += '<div class="user-avatar">' + escHtml(initial) + '</div>';
+        html += '<div>';
+        html += '<div class="assign-name">' + escHtml(a.user_name) + '</div>';
+        html += '<div class="assign-source"><i class="fas fa-map-marker-alt me-1" style="font-size:9px;"></i>' + escHtml(a.source_hospital_name) + '</div>';
+        html += '</div></div>';
+        html += '<div class="assign-actions">';
+        // 剩余天数
+        var remainingHtml = '';
+        if (a.status === 'active') {
+            if (a.remaining_days > 0) {
+                remainingHtml = '<span class="assign-remaining green"><i class="fas fa-hourglass-half"></i>' + a.remaining_days + '天</span>';
+            } else {
+                remainingHtml = '<span class="assign-remaining red"><i class="fas fa-exclamation-circle"></i>已过期</span>';
+            }
+        }
+        html += remainingHtml;
+        html += '<button class="btn-sm-icon" onclick="cancelAssign(' + a.id + ',\'' + escHtml(a.user_name) + '\')" title="撤销借调"><i class="fas fa-times"></i></button>';
+        html += '</div></div>';
+        html += '<div class="assign-dates"><i class="far fa-calendar-alt me-1"></i>' + escHtml(a.start_date) + ' ~ ' + escHtml(a.end_date);
+        if (a.reason) html += ' &middot; ' + escHtml(a.reason);
+        html += '</div>';
+        html += '</div>';
+    });
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// ===== 更新剩余天数 =====
+function updateRemainingDays() {
+    // 重新请求数据以刷新剩余天数
+    loadAssignments();
+}
+
+// ===== 拖拽 =====
+function onDragStart(e) {
+    var card = e.target.closest('.user-card');
+    if (!card) return;
+    var data = {
+        userId: card.getAttribute('data-user-id'),
+        userName: card.getAttribute('data-user-name'),
+        userHospital: card.getAttribute('data-user-hospital'),
+        userInitial: card.getAttribute('data-user-initial')
+    };
+    e.dataTransfer.setData('application/json', JSON.stringify(data));
+    e.dataTransfer.effectAllowed = 'move';
+    card.classList.add('dragging');
+    document.getElementById('dropZone').classList.add('drag-over');
+}
+
+function onDragEnd(e) {
+    var card = e.target.closest('.user-card');
+    if (card) card.classList.remove('dragging');
+    document.getElementById('dropZone').classList.remove('drag-over');
+}
+
+function onDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+}
+
+function onDragLeave(e) {
+    // 只有离开整个 dropZone 才移除高亮
+    var zone = document.getElementById('dropZone');
+    if (!zone.contains(e.relatedTarget)) {
+        zone.classList.remove('drag-over');
+    }
+}
+
+function onDrop(e) {
+    e.preventDefault();
+    var zone = document.getElementById('dropZone');
+    zone.classList.remove('drag-over');
+
+    var raw = e.dataTransfer.getData('application/json');
+    if (!raw) return;
+    var data;
+    try { data = JSON.parse(raw); } catch(e) { return; }
+
+    // 弹出借调设置模态框
+    document.getElementById('modalUserId').value = data.userId;
+    document.getElementById('modalUserName').textContent = data.userName;
+    document.getElementById('modalUserHospital').textContent = '原属医院：' + data.userHospital;
+    document.getElementById('modalAvatar').textContent = data.userInitial;
+
+    var modal = new bootstrap.Modal(document.getElementById('assignModal'));
+    modal.show();
+}
+
+// ===== 提交借调 =====
+function submitAssign(e) {
+    e.preventDefault();
+    var btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>提交中…';
+
+    var payload = {
+        user_id: parseInt(document.getElementById('modalUserId').value),
+        start_date: document.getElementById('startDate').value,
+        end_date: document.getElementById('endDate').value,
+        reason: document.getElementById('reason').value.trim() || '临时支援'
+    };
+
+    fetch('/cross/api/assign', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            showToast(data.data.message || '借调成功', 'success');
+            var modal = bootstrap.Modal.getInstance(document.getElementById('assignModal'));
+            if (modal) modal.hide();
+            // 刷新两侧
+            loadAvailableUsers();
+            loadAssignments();
+        } else {
+            showToast(data.error || '借调失败', 'error');
+        }
+    })
+    .catch(function(err) {
+        showToast('网络错误，请重试', 'error');
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check me-1"></i>确认借调';
+    });
+}
+
+// ===== 撤销借调 =====
+function cancelAssign(id, name) {
+    if (!confirm('确定撤销对「' + name + '」的借调吗？')) return;
+    fetch('/cross/api/assign/' + id, { method: 'DELETE' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                showToast('已撤销对 ' + name + ' 的借调', 'success');
+                loadAssignments();
+                loadAvailableUsers();
+            } else {
+                showToast(data.error || '撤销失败', 'error');
+            }
+        })
+        .catch(function() {
+            showToast('网络错误，请重试', 'error');
+        });
+}
+
+// ===== 刷新 =====
+function refreshAssignments() {
+    loadAssignments();
+    loadAvailableUsers();
+    showToast('已刷新', 'success');
+}
+
+// ===== 工具 =====
+function escHtml(s) {
+    if (!s) return '';
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(s));
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

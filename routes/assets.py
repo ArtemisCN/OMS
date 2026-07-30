@@ -23,6 +23,37 @@ assets_bp = Blueprint('assets', __name__, url_prefix='/assets')
 QR_BASE_URL = 'https://demolin.cn/scan/1/submit?asset_id='
 
 
+@assets_bp.route('/asset/search', methods=['GET'])
+@login_required
+def asset_search():
+    """资产搜索 JSON API（供工单创建页面的资产选择器使用）"""
+    q = request.args.get('q', '').strip()
+    hid = getattr(g, 'hospital_id', 0)
+    if not q:
+        return jsonify(success=True, assets=[])
+    query = Asset.query.filter(
+        db.or_(
+            Asset.asset_no.ilike(f'%{q}%'),
+            Asset.brand.ilike(f'%{q}%'),
+            Asset.model_no.ilike(f'%{q}%'),
+            Asset.sn.ilike(f'%{q}%'),
+            Asset.department.ilike(f'%{q}%'),
+        )
+    )
+    if hid and hid != 0:
+        query = query.filter(Asset.hospital_id == hid)
+    assets = query.order_by(Asset.asset_no).limit(20).all()
+    return jsonify(success=True, assets=[{
+        'id': a.id,
+        'asset_no': a.asset_no,
+        'device_type': a.device_type or '',
+        'brand': a.brand or '',
+        'model_no': a.model_no or '',
+        'department': a.department or '',
+        'location': a.location or '',
+    } for a in assets])
+
+
 # ===================== 5. 资产二维码 =====================
 
 @assets_bp.route('/asset/qr', methods=['GET'])
@@ -670,40 +701,213 @@ def asset_lifecycle():
     """设备履历页面"""
     hid = getattr(g, 'hospital_id', 0)
     asset_id = request.args.get('asset_id', type=int)
-    if not asset_id:
-        asset_id = request.args.get('id', type=int)
-    asset = Asset.query.filter(Asset.id == asset_id).first() if asset_id else None
+    asset_no = request.args.get('asset_no', '').strip()
+    q = request.args.get('q', '').strip()
+
+    asset = None
+    # 按数据库ID查找
+    if asset_id:
+        asset = Asset.query.filter(Asset.id == asset_id).first()
+    # 按资产编号查找
+    if not asset and asset_no:
+        asset = Asset.query.filter(Asset.asset_no == asset_no).first()
+    if not asset and q:
+        asset = Asset.query.filter(
+            db.or_(
+                Asset.asset_no.ilike(f'%{q}%'),
+                Asset.brand.ilike(f'%{q}%'),
+                Asset.model_no.ilike(f'%{q}%'),
+                Asset.sn.ilike(f'%{q}%'),
+                Asset.department.ilike(f'%{q}%'),
+            )
+        ).first()
+
+    if not asset and (asset_id or asset_no or q):
+        # 输入了但没找到 → 显示资产搜索列表
+        query = Asset.query
+        if hid and hid != 0:
+            query = query.filter(Asset.hospital_id == hid)
+        assets = query.order_by(Asset.asset_no).all()
+        return render_template('feature/asset_lifecycle.html',
+                               asset=None, timeline=[],
+                               assets=assets, search_hint=asset_no or q)
+
+    # 首次进入无输入 → 显示全部资产列表
     if not asset:
-        return render_template('errors/404.html'), 404
+        query = Asset.query
+        if hid and hid != 0:
+            query = query.filter(Asset.hospital_id == hid)
+        assets = query.order_by(Asset.asset_no).all()
+        return render_template('feature/asset_lifecycle.html',
+                               asset=None, timeline=[], asset_logs=[],
+                               assets=assets, search_hint='')
+
     logs = AssetLog.query.filter(
         AssetLog.asset_id == asset.id,
         AssetLog.hospital_id == hid
     ).order_by(AssetLog.created_at.desc()).all()
-    # 关联的工单
+
+    # 关联的工单（按 asset_id 直接匹配）
     work_orders = WorkOrder.query.filter(
-        WorkOrder.device_type == asset.device_type,
-        WorkOrder.department == asset.department,
-        WorkOrder.created_at >= (asset.purchase_date or date(2000, 1, 1)),
+        WorkOrder.asset_id == asset.id,
         WorkOrder.hospital_id == hid
-    ).order_by(WorkOrder.created_at.desc()).limit(20).all()
-    # 合并时间线
+    ).order_by(WorkOrder.created_at.desc()).all()
+
+    # 如果没有直接关联的工单，回退：按标题中搜索资产编号
+    if not work_orders and asset.asset_no:
+        work_orders = WorkOrder.query.filter(
+            WorkOrder.title.ilike(f'%{asset.asset_no}%'),
+            WorkOrder.hospital_id == hid
+        ).order_by(WorkOrder.created_at.desc()).limit(20).all()
+
+    # 如果没有匹配到任何工单，最后按 device_type+department 匹配（旧数据兼容）
+    if not work_orders:
+        work_orders = WorkOrder.query.filter(
+            WorkOrder.device_type == asset.device_type,
+            WorkOrder.department == asset.department,
+            WorkOrder.created_at >= (asset.purchase_date or date(2000, 1, 1)),
+            WorkOrder.hospital_id == hid
+        ).order_by(WorkOrder.created_at.desc()).limit(20).all()
+
+    # 合并统一时间线
     timeline = []
     for log in logs:
         timeline.append({
-            'type': log.action, 'time': log.created_at,
+            'action': log.action,
+            'time': log.created_at,
+            'created_at': log.created_at,  # 兼容模板 log.created_at
             'operator': log.operator,
-            'detail': f"{log.old_value or ''} → {log.new_value or ''}" if log.old_value or log.new_value else '',
+            'old_value': log.old_value,
+            'new_value': log.new_value,
             'source': 'asset_log',
         })
     for wo in work_orders:
+        # 判断是维修还是巡检
+        action = 'inspection' if wo.work_type == 'inspection' else 'repair'
+        new_val = {
+            'id': wo.id,
+            'title': wo.title,
+            'status': wo.status,
+            'person': wo.person or '',
+            'department': wo.department or '',
+        }
+        if action == 'repair':
+            new_val['fault_desc'] = wo.title
+            new_val['repair_result'] = wo.solution or ''
+        else:
+            new_val['result'] = wo.solution or '已完成'
+            # 如果有 inspection_data，取出来做详细备注
+            if wo.inspection_data:
+                if isinstance(wo.inspection_data, dict):
+                    items = wo.inspection_data.get('items', [])
+                    if items:
+                        passed = sum(1 for i in items if i.get('passed'))
+                        new_val['notes'] = f"巡检项 {passed}/{len(items)} 通过"
         timeline.append({
-            'type': 'repair' if wo.status == 'completed' else ('pending' if wo.status == 'pending' else 'processing'),
+            'action': action,
             'time': wo.created_at,
-            'operator': wo.person or wo.created_by,
-            'detail': f"工单#{wo.id}: {wo.title} ({wo.status})",
+            'created_at': wo.created_at,  # 兼容模板 log.created_at
+            'operator': wo.person or wo.created_by or '系统',
+            'old_value': '',
+            'new_value': json.dumps(new_val, ensure_ascii=False),
             'source': 'work_order',
         })
+
     timeline.sort(key=lambda x: x['time'], reverse=True)
     return render_template('feature/asset_lifecycle.html',
                            asset=asset, timeline=timeline,
-                           asset_logs=logs)
+                           assets=[], search_hint='')
+
+
+@assets_bp.route('/api/asset-lifecycle/<int:asset_id>')
+@login_required
+def api_asset_lifecycle(asset_id):
+    """设备履历 JSON API（供资产台账页面模态框使用）"""
+    hid = getattr(g, 'hospital_id', 0)
+    asset = Asset.query.filter(Asset.id == asset_id).first()
+    if not asset:
+        return jsonify(success=False, error='资产不存在'), 404
+
+    logs = AssetLog.query.filter(
+        AssetLog.asset_id == asset.id,
+    )
+    if hid and hid != 0:
+        logs = logs.filter(AssetLog.hospital_id == hid)
+    logs = logs.order_by(AssetLog.created_at.desc()).all()
+
+    work_orders = WorkOrder.query.filter(
+        WorkOrder.asset_id == asset.id,
+    )
+    if hid and hid != 0:
+        work_orders = work_orders.filter(WorkOrder.hospital_id == hid)
+    work_orders = work_orders.order_by(WorkOrder.created_at.desc()).all()
+
+    if not work_orders and asset.asset_no:
+        work_orders = WorkOrder.query.filter(
+            WorkOrder.title.ilike(f'%{asset.asset_no}%'),
+        )
+        if hid and hid != 0:
+            work_orders = work_orders.filter(WorkOrder.hospital_id == hid)
+        work_orders = work_orders.order_by(WorkOrder.created_at.desc()).limit(20).all()
+
+    timeline = []
+    for log in logs:
+        timeline.append({
+            'action': log.action,
+            'time': log.created_at.isoformat() if log.created_at else '',
+            'operator': log.operator or '',
+            'old_value': log.old_value or '',
+            'new_value': log.new_value or '',
+            'source': 'asset_log',
+        })
+    for wo in work_orders:
+        action = 'inspection' if wo.work_type == 'inspection' else 'repair'
+        new_val = {
+            'id': wo.id,
+            'title': wo.title,
+            'status': wo.status,
+            'person': wo.person or '',
+            'department': wo.department or '',
+        }
+        if action == 'repair':
+            new_val['fault_desc'] = wo.title
+            new_val['repair_result'] = wo.solution or ''
+        else:
+            new_val['result'] = wo.solution or '已完成'
+        timeline.append({
+            'action': action,
+            'time': wo.created_at.isoformat() if wo.created_at else '',
+            'operator': wo.person or wo.created_by or '系统',
+            'old_value': '',
+            'new_value': json.dumps(new_val, ensure_ascii=False),
+            'source': 'work_order',
+        })
+
+    timeline.sort(key=lambda x: x['time'], reverse=True)
+
+    asset_data = {
+        'id': asset.id,
+        'asset_no': asset.asset_no,
+        'brand': asset.brand or '',
+        'model_no': asset.model_no or '',
+        'sn': asset.sn or '',
+        'department': asset.department or '',
+        'building': asset.building or '',
+        'floor': asset.floor or '',
+        'location': asset.location or '',
+        'status': asset.status or '',
+        'device_type': asset.device_type or '',
+        'purchase_date': fmt_date(asset.purchase_date),
+        'warranty_end': fmt_date(asset.warranty_end),
+        'category': asset.category or '',
+        'financial_code': asset.financial_code or '',
+        'cpu': asset.cpu or '',
+        'memory': asset.memory or '',
+        'disk_size': asset.disk_size or '',
+        'ip_address': asset.ip_address or '',
+    }
+
+    return jsonify(success=True, data={
+        'asset': asset_data,
+        'timeline': timeline,
+    })

@@ -19,22 +19,27 @@
         </h5>
     </div>
     <div style="display:flex;gap:6px;align-items:center;">
-        {% if can_access('运维大屏') %}
+        {% if has_permission('report:view') %}
         <a href="{{ url_for('feature.ops_screen') }}{% if current_hospital %}?hospital_id={{ current_hospital.id }}{% endif %}" target="_blank" class="btn btn-sm" style="padding:6px 14px;border:1.5px solid var(--primary,#6366f1);border-radius:8px;background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(79,70,229,.08));color:var(--primary,#4f46e5);font-weight:600;font-size:12px;text-decoration:none;white-space:nowrap;">
             <i class="fas fa-tv"></i> 运维大屏
         </a>
         {% endif %}
-        {% if can_access('领导驾驶舱') %}
+        {% if has_permission('report:view') %}
         <a href="{{ url_for('feature.leadership_dashboard') }}" class="btn btn-sm" style="padding:6px 14px;border:1.5px solid #f59e0b;border-radius:8px;background:linear-gradient(135deg,rgba(245,158,11,.08),rgba(217,119,6,.08));color:#d97706;font-weight:600;font-size:12px;text-decoration:none;white-space:nowrap;">
             <i class="fas fa-tachometer-alt"></i> 工单一览
         </a>
         {% endif %}
-        {% if can_access('SLA监控') %}
+        {% if has_permission('order:view') %}
         <a href="/sla/dashboard" target="_blank" class="btn btn-sm" style="padding:6px 14px;border:1.5px solid #e11d48;border-radius:8px;background:linear-gradient(135deg,rgba(225,29,72,.08),rgba(190,18,60,.08));color:#be185d;font-weight:600;font-size:12px;text-decoration:none;white-space:nowrap;">
             <i class="fas fa-hourglass-half"></i> SLA时限监控
         </a>
         {% endif %}
-        {% if teams and current_user.is_admin %}
+        {% if has_permission('report:view') %}
+        <a href="{{ url_for('report.report_page') }}" class="btn btn-sm" style="padding:6px 14px;border:1.5px solid #059669;border-radius:8px;background:linear-gradient(135deg,rgba(5,150,105,.08),rgba(16,185,129,.08));color:#059669;font-weight:600;font-size:12px;text-decoration:none;white-space:nowrap;">
+            <i class="fas fa-file-excel"></i> 月度报表
+        </a>
+        {% endif %}
+        {% if teams and has_permission('system:config') %}
         <select name="team" id="dashTeamSelect" style="font-size:13px;padding:6px 10px;border:1px solid var(--border,#e2e8f0);border-radius:8px;outline:none;background:var(--input-bg,#fff);color:var(--text);cursor:pointer;" onchange="goDashboardTeam()">
             <option value="">全部组</option>
             {% for t in teams %}
@@ -50,7 +55,7 @@
     </div>
 </div>
 
-{% if current_user.is_admin or user_assigned_hospitals|length > 1 %}
+{% if has_permission('system:config') or user_assigned_hospitals|length > 1 %}
 <!-- 医院切换下拉 -->
 <div style="margin-bottom:10px;padding:8px 14px;background:linear-gradient(135deg,rgba(99,102,241,.06),rgba(6,182,212,.06));border:1px solid rgba(99,102,241,.15);border-radius:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
     <i class="fas fa-hospital" style="color:var(--primary);font-size:14px;"></i>
@@ -61,8 +66,8 @@
             <i class="fas fa-chevron-down" style="font-size:10px;color:var(--text-muted);"></i>
         </div>
         <div id="dashHospitalDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:100;margin-top:4px;border:1px solid var(--border,#e2e8f0);border-radius:8px;background:var(--card-bg,#fff);box-shadow:0 8px 24px rgba(0,0,0,.12);overflow:hidden;">
-            {% set switch_list = all_hospitals if current_user.is_admin else user_assigned_hospitals %}
-            {% if current_user.is_admin %}
+            {% set switch_list = all_hospitals if has_permission('system:config') else user_assigned_hospitals %}
+            {% if has_permission('system:config') %}
             <a href="{{ url_for('data.switch_hospital', hid=0) }}"
                style="display:flex;align-items:center;gap:8px;padding:8px 14px;font-size:13px;color:var(--text);text-decoration:none;transition:background .1s;
                       {% if current_hospital and current_hospital.id == 0 %}background:rgba(99,102,241,.1);font-weight:600;{% endif %}"

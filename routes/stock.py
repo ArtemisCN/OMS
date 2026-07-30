@@ -3,6 +3,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, g, abort
 from flask_login import login_required, current_user
 from routes.auth import admin_required
+from utils.permissions import permission_required, has_permission
 # 导入数据模型与审计日志工具
 from models import db, SparePart, StockRecord, StorageLocation, WorkOrder, log_audit
 from datetime import datetime
@@ -103,7 +104,7 @@ def detail(part_id):
 @stock_bp.route('/add', methods=['GET', 'POST'])
 @login_required
 def add():
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'biz:stock'):
         flash('仅管理员可操作', 'danger')
         return redirect(url_for('stock.index'))
     if request.method == 'POST':
@@ -153,7 +154,7 @@ def add():
 @stock_bp.route('/edit/<int:part_id>', methods=['GET', 'POST'])
 @login_required
 def edit(part_id):
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'biz:stock'):
         flash('仅管理员可操作', 'danger')
         return redirect(url_for('stock.index'))
     # 查询目标备件，不存在则 404
@@ -190,7 +191,7 @@ def edit(part_id):
 @stock_bp.route('/delete/<int:part_id>', methods=['POST'])
 @login_required
 def delete(part_id):
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'biz:stock'):
         flash('权限不足', 'danger')
         return redirect(url_for('stock.index'))
     # 查询目标备件
@@ -266,7 +267,7 @@ def out_records():
 @login_required
 def inout():
     """出入库操作"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'biz:stock'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
     part_id = request.form.get('part_id', type=int)
     action = request.form.get('action')  # in/out
@@ -309,7 +310,7 @@ def inout():
 @login_required
 def batch_out():
     """一键出库：选择科室，批量出库"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'biz:stock'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
     department = request.form.get('department', '').strip()
     if not department:
@@ -356,7 +357,7 @@ def batch_out_sign_init():
     """创建出库签名请求，返回token和二维码URL"""
     from models import StockSignRequest
     import secrets, json as pyjson
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'biz:stock'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
     department = request.form.get('department', '').strip()
     if not department:
@@ -396,7 +397,7 @@ def batch_out_sign_execute(token):
     from models import StockSignRequest
     import json as pyjson
     from datetime import datetime
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'biz:stock'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
     sign_req = StockSignRequest.query.filter_by(token=token).first()
     if not sign_req:
@@ -442,7 +443,7 @@ def batch_out_sign_execute(token):
 @login_required
 def import_stock_excel():
     """从Excel导入备件"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'biz:stock'):
         flash('仅管理员可操作', 'danger')
         return redirect(url_for('stock.index'))
     try:
@@ -683,7 +684,7 @@ def request_reject(rid):
 
 @stock_bp.route('/out-records/<int:rid>/delete', methods=['POST'])
 @login_required
-@admin_required
+@permission_required("biz:stock")
 def delete_out_record(rid):
     """删除出库记录"""
     from models import StockRecord

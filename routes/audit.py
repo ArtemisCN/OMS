@@ -1,11 +1,12 @@
 """操作审计日志路由"""
-from flask import Blueprint, render_template, jsonify
+from datetime import datetime
+from flask import Blueprint, render_template, jsonify, redirect, url_for
 from flask_login import login_required, current_user
+from models import db, AuditLog
+from utils.permissions import has_permission
 
 audit_bp = Blueprint('audit', __name__, url_prefix='/audit')
 
-
-from flask import redirect, url_for
 
 @audit_bp.route('/logs')
 @login_required
@@ -18,7 +19,7 @@ def audit_logs():
 @login_required
 def audit_stats():
     """审计统计 API"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'system:audit_log'):
         return jsonify({'error': '无权访问'}), 403
 
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)

@@ -1,3 +1,4 @@
+from utils.permissions import has_permission
 """仪表盘路由（优化版：合并查询+缓存）"""
 from flask import current_app,  Blueprint, render_template, request, g, jsonify
 from flask_login import login_required, current_user
@@ -88,10 +89,21 @@ def select_avatar():
 
 @main_bp.route('/uploads/<path:filename>')
 def serve_upload(filename):
-    """提供上传的图片文件"""
+    """提供上传的图片文件（本地 → COS 回退）"""
     import os
-    from flask import current_app,  send_from_directory
+    from flask import current_app, send_from_directory, redirect
     upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads')
+    local_path = os.path.join(upload_dir, filename)
+    if os.path.exists(local_path):
+        return send_from_directory(upload_dir, filename, max_age=86400)
+    # 本地没有 → 尝试 COS
+    try:
+        from utils.photo import get_photo_url
+        cos_url = get_photo_url(filename)
+        if cos_url and cos_url.startswith('http'):
+            return redirect(cos_url, code=302)
+    except Exception:
+        pass
     return send_from_directory(upload_dir, filename, max_age=86400)
 
 
@@ -118,7 +130,7 @@ def dashboard():
     team_param = request.args.get('team')  # 不加默认值，以区分None和空字符串
     if team_param is None:
         # 首次进入（URL没有?team=），应用默认组别
-        if current_user.is_admin:
+        if has_permission(current_user, 'system:config'):
             _def_setting = SystemSetting.query.filter_by(key='default_dashboard_team').first()
             team = _def_setting.value if _def_setting and _def_setting.value else ''
         else:

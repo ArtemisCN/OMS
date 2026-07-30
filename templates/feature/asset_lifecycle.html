@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}设备履历 · {{ asset.asset_no }}{% endblock %}
+{% block title %}设备履历{% if asset %} · {{ asset.asset_no }}{% endif %}{% endblock %}
 {% block extra_head %}
 <style>
     /* ===== 设备履历页面样式 ===== */
@@ -358,20 +358,70 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h5 class="mb-0">
             <i class="fas fa-history text-primary"></i> 设备履历
+            {% if asset %}
             <small class="text-muted ms-2" style="font-size:13px;font-weight:400;">
                 <i class="fas fa-chevron-right" style="font-size:10px;"></i> {{ asset.asset_no }}
             </small>
+            {% endif %}
         </h5>
         <div class="page-actions">
+            {% if asset %}
             <a href="{{ url_for('asset.detail', asset_id=asset.id) }}" class="btn btn-outline-secondary btn-sm">
                 <i class="fas fa-arrow-left"></i> 返回详情
             </a>
+            {% endif %}
             <a href="{{ url_for('asset.list_view') }}" class="btn btn-outline-primary btn-sm">
                 <i class="fas fa-list"></i> 资产台账
+            </a>
+            <a href="{{ url_for('assets.asset_lifecycle') }}" class="btn btn-outline-info btn-sm">
+                <i class="fas fa-history"></i> 全部履历
             </a>
         </div>
     </div>
 
+    {% if not asset and assets %}
+    <!-- ===== 搜索框 ===== -->
+    <div class="asset-summary-card" style="padding:16px 24px;">
+        <form method="get" action="{{ url_for('assets.asset_lifecycle') }}" style="display:flex;gap:8px;align-items:center;">
+            <i class="fas fa-search text-muted"></i>
+            <input type="text" name="q" placeholder="输入资产编号 / 品牌 / 型号 / 序列号 / 科室搜索..."
+                   value="{{ search_hint }}"
+                   style="flex:1;padding:8px 14px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;outline:none;"
+                   autofocus>
+            <button type="submit" class="btn btn-sm btn-primary">搜索</button>
+            <a href="{{ url_for('assets.asset_lifecycle') }}" class="btn btn-sm btn-outline-secondary">清除</a>
+        </form>
+    </div>
+
+    <!-- ===== 资产选择列表 ===== -->
+    <div class="asset-summary-card">
+        <div class="asset-title">
+            <div class="icon-wrap"><i class="fas fa-search"></i></div>
+            <span>选择设备</span>
+            {% if search_hint %}
+            <small class="text-muted ms-2" style="font-size:13px;font-weight:400;">搜索「{{ search_hint }}」未找到，以下为全部资产</small>
+            {% endif %}
+        </div>
+        <div class="summary-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr));">
+            {% for a in assets %}
+            <a href="{{ url_for('assets.asset_lifecycle', asset_id=a.id) }}"
+               style="display:flex;flex-direction:column;gap:4px;padding:12px 16px;border-radius:10px;border:1px solid #e5e7eb;text-decoration:none;color:inherit;transition:all .15s;background:#fff;"
+               onmouseover="this.style.borderColor='#4f46e5';this.style.boxShadow='0 2px 8px rgba(79,70,229,0.12)';"
+               onmouseout="this.style.borderColor='#e5e7eb';this.style.boxShadow='none';">
+                <div style="font-weight:600;font-size:14px;color:#1e293b;">{{ a.asset_no }}</div>
+                <div style="font-size:12px;color:#64748b;">
+                    {{ a.device_type or '?' }} · {{ a.brand or '' }} {{ a.model_no or '' }}
+                </div>
+                <div style="font-size:11px;color:#94a3b8;">
+                    {{ a.department or '-' }} · {{ a.location or '-' }}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if asset %}
     <!-- ===== ① 资产信息摘要卡片 ===== -->
     <div class="asset-summary-card">
         <div class="asset-title">
@@ -448,12 +498,12 @@
     </div>
 
     <!-- 统计摘要 -->
-    {% if asset_logs %}
+    {% if timeline %}
     <div class="lifecycle-stats">
-        {% set actions = asset_logs | map(attribute='action') | list %}
+        {% set actions = timeline | map(attribute='action') | list %}
         <div class="stat">
             <i class="fas fa-list-ul" style="color:var(--lifecycle-primary);"></i>
-            <span class="num">{{ asset_logs | length }}</span>
+            <span class="num">{{ timeline | length }}</span>
             <span>条记录</span>
         </div>
         {% if 'import' in actions %}
@@ -506,9 +556,9 @@
         <span class="filter-btn" data-filter="scrap"><i class="fas fa-trash-alt"></i> 报废</span>
     </div>
 
-    {% if asset_logs %}
+    {% if timeline %}
     <div class="timeline-container" id="timelineContainer">
-        {% for log in asset_logs %}
+        {% for log in timeline %}
         {% set _action = log.action or 'default' %}
         <div class="timeline-item" data-action="{{ _action }}">
             <!-- 图标 -->
@@ -672,6 +722,7 @@
         <i class="fas fa-history"></i>
         <p>暂无生命周期记录，该资产尚未发生任何操作日志。</p>
     </div>
+    {% endif %}
     {% endif %}
 </div>
 {% endblock %}

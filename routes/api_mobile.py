@@ -10,6 +10,7 @@ import random
 from datetime import datetime, date
 from sqlalchemy import func, case
 from utils.time_helpers import fmt_dt
+from utils.permissions import api_permission_required
 
 api_mobile_bp = Blueprint('api_mobile', __name__, url_prefix='/api/mobile')
 
@@ -793,6 +794,7 @@ def accept_order(user, order_id):
 
 @api_mobile_bp.route('/orders/<int:order_id>/solve', methods=['POST'])
 @login_required_api
+@api_permission_required('order:solve')
 def solve_order(user, order_id):
     """提交解决方案：in_progress → completed（表单工单请提交表单审批）
     ---
@@ -1302,6 +1304,7 @@ def form_submit_api(user, fid):
 
 @api_mobile_bp.route('/forms/<int:fid>/approve', methods=['POST'])
 @login_required_api
+@api_permission_required('order:audit')
 def form_approve_api(user, fid):
     """审批通过表单：submitted → completed，同时完结关联工单"""
     form = PaperForm.query.get(fid)
@@ -1445,6 +1448,7 @@ def return_order(user, order_id):
 
 @api_mobile_bp.route('/orders/<int:order_id>/transfer', methods=['POST'])
 @login_required_api
+@api_permission_required('order:assign')
 def transfer_order(user, order_id):
     """转派工单给其他人"""
     order = WorkOrder.query.get(order_id)
@@ -1514,6 +1518,7 @@ def order_personnel(user, order_id):
 
 @api_mobile_bp.route('/orders/create', methods=['POST'])
 @login_required_api
+@api_permission_required('order:create')
 def api_create_order(user):
     """小程序/手机端发布工单"""
     from services.address import extract_address_from_title
@@ -1712,6 +1717,7 @@ def upload_photo(user, order_id):
 
 @api_mobile_bp.route('/orders/<int:order_id>/photos/<int:photo_id>', methods=['DELETE'])
 @login_required_api
+@api_permission_required('order:delete')
 def delete_photo(user, order_id, photo_id):
     """删除工单图片"""
     order = WorkOrder.query.get(order_id)

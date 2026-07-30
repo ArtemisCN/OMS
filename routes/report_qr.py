@@ -1,5 +1,6 @@
 """科室报修二维码 - 扫码报修系统"""
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, send_file
+from flask_login import login_required, current_user
 from models import db, WorkOrder, Hospital, Department
 from datetime import datetime
 import io, os
@@ -8,9 +9,20 @@ scan_bp = Blueprint('scan', __name__, url_prefix='/scan')
 
 
 @scan_bp.route('/')
+@login_required
 def scan_index():
-    """报修首页 - 选择医院"""
-    hospitals = Hospital.query.filter_by(is_active=True).order_by(Hospital.id).all()
+    """报修首页 - 生成报修二维码（仅显示用户所属医院）"""
+    user = current_user
+    if user.is_admin:
+        hospitals = Hospital.query.filter_by(is_active=True).order_by(Hospital.id).all()
+    else:
+        assigned = user.get_assigned_hospitals()
+        if not assigned:
+            # fallback: 如果用户没分配医院但绑定了 hospital_id
+            if user.hospital_id:
+                h = Hospital.query.get(user.hospital_id)
+                assigned = [h] if h else []
+        hospitals = [h for h in assigned if h.is_active]
     return render_template('scan/index.html', hospitals=hospitals)
 
 
@@ -68,6 +80,7 @@ def scan_submit(hospital_id):
             priority='normal',
             created_by=f'报修-{name}',
             hospital_id=hospital_id,
+            asset_id=asset_id,
         )
         db.session.add(order)
         db.session.commit()

@@ -1411,7 +1411,7 @@ def add_fault_template_group(name, teams, operator_name):
         return False, '模板组名称不能为空'
     if FaultTemplateGroup.query.filter_by(name=name).first():
         return False, f'模板组 "{name}" 已存在'
-    g = FaultTemplateGroup(name=name, teams=','.join(teams))
+    g = FaultTemplateGroup.new_with_hospital(name=name, teams=','.join(teams))
     db.session.add(g)
     db.session.commit()
     log_audit('create', 'fault_template_group', operator_name, target_desc=f'创建故障模板组: {name}')

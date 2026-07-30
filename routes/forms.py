@@ -599,16 +599,17 @@ def form_api_submit(fid):
 def form_data_sources():
     """返回所有可用数据源的选项列表"""
     from models import User, WorkOrder, Asset, FaultType, Supplier
-    from services.keyword_config import get_device_keywords
     from datetime import datetime
 
-    dk = get_device_keywords()
-    if dk and isinstance(dk[0], (list, tuple)):
-        device_types = [d[0] for d in dk]
-    elif isinstance(dk, dict):
-        device_types = dk.get('device_types', [])
-    else:
-        device_types = []
+    # 从 FaultType.keywords 读取设备类型列表（有关键词的故障类型）
+    from sqlalchemy import func
+    types_with_kw = FaultType.query.filter(
+        FaultType.keywords.isnot(None),
+        FaultType.keywords != ''
+    ).with_entities(FaultType.name).distinct().all()
+    device_types = sorted(set(t[0] for t in types_with_kw))
+    if not device_types:
+        device_types = ['打印机', '电脑', '网络设备', '软件', '硬件', '其他']
 
     users = User.query.order_by(User.display_name).all()
     personnel = [{'value': u.display_name or u.username, 'label': f"{u.display_name or u.username}"} for u in users]

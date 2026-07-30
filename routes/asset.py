@@ -5,6 +5,7 @@ from datetime import datetime, date
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, g, abort
 from flask_login import login_required, current_user
 from routes.auth import admin_required
+from utils.permissions import permission_required, has_permission
 from models import db, Asset, AssetLog, log_audit
 
 asset_bp = Blueprint('asset', __name__, url_prefix='/asset')
@@ -150,7 +151,7 @@ def detail(asset_id):
 @login_required
 def add():
     # --- 权限校验：仅管理员可新增资产 ---
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'asset:create'):
         flash('仅管理员可操作', 'danger')
         return redirect(url_for('asset.calendar'))
     if request.method == 'POST':
@@ -205,7 +206,7 @@ def add():
 @login_required
 def edit(asset_id):
     # --- 权限校验：仅管理员可编辑资产 ---
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'asset:edit'):
         flash('仅管理员可操作', 'danger')
         return redirect(url_for('asset.calendar'))
     # --- 获取待编辑的资产记录 ---
@@ -264,7 +265,7 @@ def edit(asset_id):
 @login_required
 def delete(asset_id):
     # --- 权限校验：仅管理员可删除资产 ---
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'asset:delete'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
     # --- 查找资产并记录删除审计日志 ---
     asset = Asset.query.filter(Asset.id == asset_id).filter(Asset.hospital_id == getattr(g, 'hospital_id', None)).first()
@@ -285,7 +286,7 @@ def delete(asset_id):
 def import_excel():
     """从Excel导入资产（盘点信息参考格式）"""
     # --- 权限校验：仅管理员可导入 ---
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'asset:create'):
         flash('仅管理员可操作', 'danger')
         return redirect(url_for('asset.list_view'))
     # --- 检查 openpyxl 库是否可用 ---
@@ -584,7 +585,7 @@ def export_template():
 def batch_edit():
     """批量修改：对选中资产统一修改指定字段"""
     # --- 权限校验：仅管理员可批量修改 ---
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'asset:edit'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
     try:
         # --- 获取选中资产 ID 列表和待修改字段 ---
@@ -632,7 +633,7 @@ def batch_edit():
 def batch_transfer():
     """批量调拨：变更资产所属科室"""
     # --- 权限校验：仅管理员可调拨 ---
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'asset:edit'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
     try:
         # --- 获取选中资产和目标科室 ---
@@ -668,7 +669,7 @@ def batch_transfer():
 def batch_recover():
     """资产回收：批量改为报废状态"""
     # --- 权限校验：仅管理员可回收 ---
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'asset:delete'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
     try:
         # --- 获取选中资产 ID 列表 ---
@@ -701,7 +702,7 @@ def batch_recover():
 def batch_relocate():
     """资产移位：批量变更楼栋/楼层/存放位置"""
     # --- 权限校验：仅管理员可移位 ---
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'asset:edit'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
     try:
         # --- 获取选中资产和新位置信息 ---
@@ -748,7 +749,7 @@ def batch_relocate():
 @login_required
 def swap_location():
     """位置互换：两个资产互换位置信息"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'asset:edit'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
     try:
         ids = request.form.getlist('ids[]')
@@ -784,7 +785,7 @@ def swap_location():
 @login_required
 def batch_borrow():
     """资产借用：标记资产为借出状态"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'asset:edit'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
     try:
         ids = request.form.getlist('ids[]')
@@ -826,7 +827,7 @@ def batch_borrow():
 @login_required
 def batch_return():
     """资产归还：取消借用状态"""
-    if not current_user.is_admin:
+    if not has_permission(current_user, 'asset:edit'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
     try:
         ids = request.form.getlist('ids[]')
@@ -937,7 +938,7 @@ def logs():
 
 @asset_bp.route('/logs/<int:log_id>/delete', methods=['POST'])
 @login_required
-@admin_required
+@permission_required("asset:delete")
 def delete_log(log_id):
     """删除操作日志"""
     log = AssetLog.query.get_or_404(log_id)

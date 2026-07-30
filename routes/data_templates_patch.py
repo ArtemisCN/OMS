@@ -1,7 +1,7 @@
 # ==================== 统一模板管理 ====================
 
 @data_bp.route('/templates')
-@admin_required
+@permission_required("system:config")
 def list_templates():
     """统一模板管理页面（按组查看故障模板组+方案模板）"""
     from models import FaultTemplateGroup, SolutionTemplate, FaultTemplateItem
@@ -45,7 +45,7 @@ def list_templates():
 
 
 @data_bp.route('/templates/copy-to/<target_team>', methods=['POST'])
-@admin_required
+@permission_required("system:config")
 def copy_templates_to_team(target_team):
     """从华博复制模板到目标组"""
     from models import FaultTemplateGroup, FaultTemplateItem, SolutionTemplate, db

@@ -666,7 +666,7 @@ class Department(HospitalMixin, db.Model):
     is_active = db.Column(db.Boolean, default=True)
     sort_order = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.now)
-    building_id = db.Column(db.Integer, db.ForeignKey('buildings.id'), nullable=True)
+    building_id = db.Column(db.Integer, nullable=True)
     floor_number = db.Column(db.Integer, nullable=True)
 
 

@@ -1,4 +1,6 @@
 """操作审计日志路由"""
+
+from utils.csrf import csrf_protect
 from datetime import datetime
 from flask import Blueprint, render_template, jsonify, redirect, url_for
 from flask_login import login_required, current_user

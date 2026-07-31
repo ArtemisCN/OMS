@@ -1,4 +1,6 @@
 """Efficiency Blueprint: 人员效能看板, 自动派单+超时催办, 交接班日志, 维修评价, 投诉管理"""
+
+from utils.csrf import csrf_protect
 from utils.helpers import safe_get
 from utils.permissions import has_permission
 import json
@@ -224,6 +226,7 @@ def _set_feature_toggle(key, value):
 
 
 @efficiency_bp.route('/auto-assign/check', methods=['POST'])
+@csrf_protect
 @login_required
 def auto_assign_check():
     """自动派单检查：检查订单是否应自动分配"""
@@ -270,6 +273,7 @@ def auto_assign_check():
 
 
 @efficiency_bp.route('/timeout-reminder/check', methods=['POST'])
+@csrf_protect
 @login_required
 def timeout_reminder_check():
     """超时催办检查：检查超时工单并推送"""
@@ -318,6 +322,7 @@ def get_feature_toggles():
 
 
 @efficiency_bp.route('/feature-toggle/save', methods=['POST'])
+@csrf_protect
 @login_required
 def save_feature_toggle():
     """保存功能开关"""
@@ -372,6 +377,7 @@ def shift_handover():
 
 
 @efficiency_bp.route('/shift-handover/save', methods=['POST'])
+@csrf_protect
 @login_required
 def shift_handover_save():
     """保存交接班记录"""
@@ -448,6 +454,7 @@ def repair_ratings():
 
 
 @efficiency_bp.route('/repair-rating/save', methods=['POST'])
+@csrf_protect
 @login_required
 def repair_rating_save():
     """提交维修评价"""
@@ -523,6 +530,7 @@ def complaints():
 
 
 @efficiency_bp.route('/complaint/save', methods=['POST'])
+@csrf_protect
 @login_required
 def complaint_save():
     """保存投诉"""
@@ -551,6 +559,7 @@ def complaint_save():
 
 
 @efficiency_bp.route('/complaint/handle', methods=['POST'])
+@csrf_protect
 @login_required
 def complaint_handle():
     """处理投诉"""
@@ -572,6 +581,7 @@ def complaint_handle():
 
 
 @efficiency_bp.route('/complaint/close', methods=['POST'])
+@csrf_protect
 @login_required
 def complaint_close():
     """关闭投诉"""
@@ -586,6 +596,7 @@ def complaint_close():
 
 
 @efficiency_bp.route('/complaint/reopen', methods=['POST'])
+@csrf_protect
 @login_required
 def complaint_reopen():
     """重新打开投诉"""

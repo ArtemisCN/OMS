@@ -1,5 +1,7 @@
 """巡检管理路由"""
 
+from utils.csrf import csrf_protect
+
 from utils.helpers import safe_get, safe_get_or_404
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file
@@ -30,6 +32,7 @@ def create_template_page():
 
 
 @inspection_bp.route('/templates/create', methods=['POST'])
+@csrf_protect
 @permission_required("biz:inspection")
 def create_template():
     """新建巡检模板（POST 处理）"""
@@ -51,6 +54,7 @@ def create_template():
 
 
 @inspection_bp.route('/templates/<int:tid>/edit', methods=['POST'])
+@csrf_protect
 @permission_required("biz:inspection")
 def edit_template(tid):
     """编辑巡检模板（POST 处理）"""
@@ -72,6 +76,7 @@ def edit_template(tid):
 
 
 @inspection_bp.route('/templates/<int:tid>/delete', methods=['POST'])
+@csrf_protect
 @permission_required("biz:inspection")
 def delete_template(tid):
     """删除巡检模板"""
@@ -84,6 +89,7 @@ def delete_template(tid):
 
 
 @inspection_bp.route('/publish', methods=['GET', 'POST'])
+@csrf_protect
 @login_required
 def publish_plan():
     """发布巡检计划"""
@@ -220,6 +226,7 @@ def export_plan(pid):
 
 
 @inspection_bp.route('/plans/<int:pid>/edit', methods=['GET', 'POST'])
+@csrf_protect
 @login_required
 def edit_plan(pid):
     """编辑巡检计划"""
@@ -252,6 +259,7 @@ def edit_plan(pid):
 
 
 @inspection_bp.route('/plans/<int:pid>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 def delete_plan(pid):
     """删除巡检计划"""

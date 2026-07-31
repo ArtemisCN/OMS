@@ -32,6 +32,9 @@ SECRET_KEY = _secret_key
 SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(_basedir, 'instance', 'workorders.db')
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+# 请求体大小上限（P1-5：聊天附件/照片上传，单次请求不超过 20MB）
+MAX_CONTENT_LENGTH = 20 * 1024 * 1024  # 20MB
+
 # ==================== 设备类型关键词（按优先级排序） ====================
 DEVICE_KEYWORDS_PRIORITY = [
     ('打印机', ['打印机', '打印', '墨盒', '硒鼓', '卡纸', '一体式打印机', '惠普打印机', '京瓷', '标签打印机', '处方打印机', '病历打印机', '瓶贴打印机', '条码打印机']),

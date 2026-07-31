@@ -1,5 +1,7 @@
 """资产台账管理：列表/导入/导出/批量操作/操作日志"""
 
+from utils.csrf import csrf_protect
+
 from utils.helpers import safe_get, safe_get_or_404
 import io
 import json
@@ -150,6 +152,7 @@ def detail(asset_id):
 
 
 @asset_bp.route('/add', methods=['GET', 'POST'])
+@csrf_protect
 @login_required
 def add():
     # --- 权限校验：仅管理员可新增资产 ---
@@ -205,6 +208,7 @@ def add():
 
 
 @asset_bp.route('/edit/<int:asset_id>', methods=['GET', 'POST'])
+@csrf_protect
 @login_required
 def edit(asset_id):
     # --- 权限校验：仅管理员可编辑资产 ---
@@ -264,6 +268,7 @@ def edit(asset_id):
 
 
 @asset_bp.route('/delete/<int:asset_id>', methods=['POST'])
+@csrf_protect
 @login_required
 def delete(asset_id):
     # --- 权限校验：仅管理员可删除资产 ---
@@ -284,6 +289,7 @@ def delete(asset_id):
 # ===================== 导入 Excel =====================
 
 @asset_bp.route('/import', methods=['POST'])
+@csrf_protect
 @login_required
 def import_excel():
     """从Excel导入资产（盘点信息参考格式）"""
@@ -583,6 +589,7 @@ def export_template():
 # ===================== 批量操作 =====================
 
 @asset_bp.route('/batch-edit', methods=['POST'])
+@csrf_protect
 @login_required
 def batch_edit():
     """批量修改：对选中资产统一修改指定字段"""
@@ -631,6 +638,7 @@ def batch_edit():
 
 
 @asset_bp.route('/batch-transfer', methods=['POST'])
+@csrf_protect
 @login_required
 def batch_transfer():
     """批量调拨：变更资产所属科室"""
@@ -667,6 +675,7 @@ def batch_transfer():
 
 
 @asset_bp.route('/batch-recover', methods=['POST'])
+@csrf_protect
 @login_required
 def batch_recover():
     """资产回收：批量改为报废状态"""
@@ -700,6 +709,7 @@ def batch_recover():
 
 
 @asset_bp.route('/batch-relocate', methods=['POST'])
+@csrf_protect
 @login_required
 def batch_relocate():
     """资产移位：批量变更楼栋/楼层/存放位置"""
@@ -748,6 +758,7 @@ def batch_relocate():
 # ===================== 位置互换 =====================
 
 @asset_bp.route('/swap-location', methods=['POST'])
+@csrf_protect
 @login_required
 def swap_location():
     """位置互换：两个资产互换位置信息"""
@@ -784,6 +795,7 @@ def swap_location():
 # ===================== 资产借用 =====================
 
 @asset_bp.route('/batch-borrow', methods=['POST'])
+@csrf_protect
 @login_required
 def batch_borrow():
     """资产借用：标记资产为借出状态"""
@@ -826,6 +838,7 @@ def batch_borrow():
 
 
 @asset_bp.route('/batch-return', methods=['POST'])
+@csrf_protect
 @login_required
 def batch_return():
     """资产归还：取消借用状态"""
@@ -939,6 +952,7 @@ def logs():
 
 
 @asset_bp.route('/logs/<int:log_id>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 @permission_required("asset:delete")
 def delete_log(log_id):

@@ -341,6 +341,7 @@
     {% endwith %}
 
     <form method="post" id="reportForm" onsubmit="return validateForm()">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="form-card">
             <div class="card-label"><i class="fas fa-user"></i> 报修人</div>
             <div class="row g-2 mb-2">

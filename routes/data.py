@@ -1,5 +1,7 @@
 """基础数据管理路由（HTTP 编排层）"""
 
+from utils.csrf import csrf_protect
+
 from utils.helpers import safe_get, safe_get_or_404
 import io
 import json
@@ -74,6 +76,7 @@ def list_hospitals():
 
 
 @data_bp.route('/hospitals/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_hospital():
     ok, msg = data_service.add_hospital(
@@ -86,6 +89,7 @@ def add_hospital():
 
 
 @data_bp.route('/hospitals/<int:hid>/edit', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def edit_hospital(hid):
     ok, msg = data_service.edit_hospital(hid,
@@ -103,6 +107,7 @@ from werkzeug.utils import secure_filename
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
 
 @data_bp.route('/hospitals/<int:hid>/upload_logo', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def upload_hospital_logo(hid):
     """上传医院头像"""
@@ -131,6 +136,7 @@ def upload_hospital_logo(hid):
 
 
 @data_bp.route('/hospitals/<int:hid>/toggle', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def toggle_hospital(hid):
     ok, msg = data_service.toggle_hospital(hid)
@@ -258,6 +264,7 @@ def list_persons():
 
 
 @data_bp.route('/persons/add', methods=['POST'])
+@csrf_protect
 @permission_required('user:create')
 def add_person():
     ok, msg = data_service.add_person(request.form.get('name', '').strip())
@@ -266,6 +273,7 @@ def add_person():
 
 
 @data_bp.route('/persons/import-from-orders', methods=['POST'])
+@csrf_protect
 @permission_required('user:create')
 def import_persons_from_orders():
     imported = data_service.import_persons_from_orders()
@@ -274,6 +282,7 @@ def import_persons_from_orders():
 
 
 @data_bp.route('/persons/<int:pid>/toggle', methods=['POST'])
+@csrf_protect
 @permission_required('user:edit')
 def toggle_person(pid):
     p = data_service.toggle_person(pid)
@@ -282,6 +291,7 @@ def toggle_person(pid):
 
 
 @data_bp.route('/persons/<int:pid>/delete', methods=['POST'])
+@csrf_protect
 @permission_required('user:delete')
 def delete_person(pid):
     p = safe_get_or_404(User, pid)
@@ -297,6 +307,7 @@ def delete_person(pid):
 
 
 @data_bp.route('/persons/<int:pid>/reassign-orders', methods=['POST'])
+@csrf_protect
 @permission_required('user:edit')
 def reassign_person_orders(pid):
     """将某人的工单批量转移给另一个人"""
@@ -318,6 +329,7 @@ def reassign_person_orders(pid):
 
 
 @data_bp.route('/persons/<int:pid>/edit-field', methods=['POST'])
+@csrf_protect
 @permission_required('user:edit')
 def edit_person_field(pid):
     field = request.form.get('field', '')
@@ -331,6 +343,7 @@ def edit_person_field(pid):
 
 
 @data_bp.route('/persons/batch-action', methods=['POST'])
+@csrf_protect
 @permission_required('user:edit')
 def batch_person_action():
     """批量操作人员：启用/禁用/改组分/删除"""
@@ -394,6 +407,7 @@ def batch_person_action():
 
 
 @data_bp.route('/persons/<int:pid>/account', methods=['GET', 'POST'])
+@csrf_protect
 @permission_required('user:create')
 def person_account(pid):
     if request.method == 'GET':
@@ -437,6 +451,7 @@ def list_departments():
 
 
 @data_bp.route('/departments/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_department():
     ok, msg = data_service.add_department(
@@ -450,6 +465,7 @@ def add_department():
 
 
 @data_bp.route('/departments/edit/<int:id>', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def edit_department(id):
     ok, msg = data_service.edit_department(
@@ -463,6 +479,7 @@ def edit_department(id):
 
 
 @data_bp.route('/departments/delete/<int:id>', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_department(id):
     ok, msg = data_service.delete_department(id, current_user.display_name or current_user.username)
@@ -489,6 +506,7 @@ def list_solutions():
 
 
 @data_bp.route('/solutions/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_solution():
     teams_list = request.form.getlist('teams')
@@ -506,6 +524,7 @@ def add_solution():
 
 
 @data_bp.route('/solutions/reset', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def reset_solutions():
     count = data_service.reset_solutions()
@@ -514,6 +533,7 @@ def reset_solutions():
 
 
 @data_bp.route('/solutions/import-from-orders', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def import_solutions_from_orders():
     imported = data_service.import_solutions_from_orders()
@@ -522,6 +542,7 @@ def import_solutions_from_orders():
 
 
 @data_bp.route('/solutions/<int:sid>/edit', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def edit_solution(sid):
     field = request.form.get('field', '')
@@ -539,6 +560,7 @@ def edit_solution(sid):
 
 
 @data_bp.route('/solutions/<int:sid>/edit-full', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def edit_solution_full(sid):
     """编辑方案模板全部字段"""
@@ -561,6 +583,7 @@ def edit_solution_full(sid):
 
 
 @data_bp.route('/solutions/<int:sid>/delete', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_solution(sid):
     title = data_service.delete_solution(sid, current_user.display_name or current_user.username)
@@ -588,6 +611,7 @@ def list_addresses():
 
 
 @data_bp.route('/addresses/edit', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def edit_address():
     ok, msg = data_service.edit_address(
@@ -603,6 +627,7 @@ def edit_address():
 
 
 @data_bp.route('/addresses/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_address():
     ok, msg = data_service.add_address(
@@ -616,6 +641,7 @@ def add_address():
 
 
 @data_bp.route('/addresses/<int:oid>/delete', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_address(oid):
     building = data_service.delete_address(oid)
@@ -624,6 +650,7 @@ def delete_address(oid):
 
 
 @data_bp.route('/addresses/delete-base', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_base_address():
     ok, msg = data_service.delete_base_address(
@@ -645,6 +672,7 @@ def list_fault_types():
 
 
 @data_bp.route('/fault-types/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_fault_type():
     ok, msg = data_service.add_fault_type(
@@ -656,6 +684,7 @@ def add_fault_type():
 
 
 @data_bp.route('/fault-types/<int:fid>/edit', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def edit_fault_type(fid):
     ok, msg = data_service.edit_fault_type(
@@ -667,6 +696,7 @@ def edit_fault_type(fid):
 
 
 @data_bp.route('/fault-types/<int:fid>/delete', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_fault_type(fid):
     name = data_service.delete_fault_type(fid, current_user.display_name or current_user.username)
@@ -683,6 +713,7 @@ def list_storage_locations():
 
 
 @data_bp.route('/storage-locations/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_storage_location():
     ok, msg = data_service.add_storage_location(
@@ -698,6 +729,7 @@ def add_storage_location():
 
 
 @data_bp.route('/storage-locations/<int:lid>/edit', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def edit_storage_location(lid):
     ok, msg = data_service.edit_storage_location(
@@ -713,6 +745,7 @@ def edit_storage_location(lid):
 
 
 @data_bp.route('/storage-locations/<int:lid>/toggle', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def toggle_storage_location(lid):
     data_service.toggle_storage_location(lid)
@@ -720,6 +753,7 @@ def toggle_storage_location(lid):
 
 
 @data_bp.route('/storage-locations/<int:lid>/delete', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_storage_location(lid):
     name = data_service.delete_storage_location(lid)
@@ -736,6 +770,7 @@ def list_suppliers():
 
 
 @data_bp.route('/suppliers/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_supplier():
     ok, msg = data_service.add_supplier(
@@ -751,6 +786,7 @@ def add_supplier():
 
 
 @data_bp.route('/suppliers/<int:sid>/edit', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def edit_supplier(sid):
     ok, msg = data_service.edit_supplier(
@@ -766,6 +802,7 @@ def edit_supplier(sid):
 
 
 @data_bp.route('/suppliers/<int:sid>/toggle', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def toggle_supplier(sid):
     data_service.toggle_supplier(sid)
@@ -773,6 +810,7 @@ def toggle_supplier(sid):
 
 
 @data_bp.route('/suppliers/<int:sid>/delete', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_supplier(sid):
     name = data_service.delete_supplier(sid)
@@ -790,6 +828,7 @@ def list_consumables():
 
 
 @data_bp.route('/consumables/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_consumable():
     ok, msg = data_service.add_consumable(
@@ -807,6 +846,7 @@ def add_consumable():
 
 
 @data_bp.route('/consumables/<int:cid>/edit', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def edit_consumable(cid):
     ok, msg = data_service.edit_consumable(
@@ -824,6 +864,7 @@ def edit_consumable(cid):
 
 
 @data_bp.route('/consumables/<int:cid>/delete', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_consumable(cid):
     name = data_service.delete_consumable(cid)
@@ -832,6 +873,7 @@ def delete_consumable(cid):
 
 
 @data_bp.route('/consumables/import-excel', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def import_consumables_excel():
     file = request.files.get('file')
@@ -855,6 +897,7 @@ def import_consumables_excel():
 
 
 @data_bp.route('/consumables/inout', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def consumable_inout():
     cid = request.form.get('cid', type=int)
@@ -960,6 +1003,7 @@ def duty_schedules_api():
 
 
 @data_bp.route('/duty-schedules/api/update', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def duty_schedule_update():
     ok, msg, shift = data_service.duty_schedule_update(
@@ -974,6 +1018,7 @@ def duty_schedule_update():
 
 
 @data_bp.route('/duty-schedules/api/batch', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def duty_schedule_batch():
     ok, msg = data_service.duty_schedule_batch(
@@ -988,6 +1033,7 @@ def duty_schedule_batch():
 
 
 @data_bp.route('/duty-schedules/api/import', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def duty_schedule_import():
     file = request.files.get('file')
@@ -1003,6 +1049,7 @@ def duty_schedule_import():
 
 
 @data_bp.route('/duty-schedules/staff', methods=['GET', 'POST'])
+@csrf_protect
 @permission_required('system:config')
 def duty_staff_manage():
     if request.method == 'POST':
@@ -1014,6 +1061,7 @@ def duty_staff_manage():
 
 
 @data_bp.route('/duty-schedules/staff/<int:sid>/toggle', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def duty_staff_toggle(sid):
     active = data_service.toggle_duty_staff(sid)
@@ -1021,6 +1069,7 @@ def duty_staff_toggle(sid):
 
 
 @data_bp.route('/duty-schedules/staff/<int:sid>/delete', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def duty_staff_delete(sid):
     data_service.delete_duty_staff(sid)
@@ -1043,6 +1092,7 @@ def list_knowledge():
 
 
 @data_bp.route('/knowledge/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_knowledge():
     ok, msg = data_service.add_knowledge(
@@ -1055,6 +1105,7 @@ def add_knowledge():
 
 
 @data_bp.route('/knowledge/<int:kid>/edit', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def edit_knowledge(kid):
     ok, msg = data_service.edit_knowledge(
@@ -1073,6 +1124,7 @@ def knowledge_api(kid):
 
 
 @data_bp.route('/knowledge/<int:kid>/delete', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_knowledge(kid):
     title = data_service.delete_knowledge(kid)
@@ -1141,6 +1193,7 @@ def permissions():
 
 
 @data_bp.route('/permissions/sync-users', methods=['POST'])
+@csrf_protect
 @permission_required('user:create')
 def sync_users_from_persons():
     created, msg = data_service.sync_users_from_persons(
@@ -1150,6 +1203,7 @@ def sync_users_from_persons():
 
 
 @data_bp.route('/permissions/save', methods=['POST'])
+@csrf_protect
 @permission_required('system:permission')
 def save_permissions():
     data = request.get_json(force=True)
@@ -1160,6 +1214,7 @@ def save_permissions():
 
 
 @data_bp.route('/permissions/toggle-admin/<int:uid>', methods=['POST'])
+@csrf_protect
 @permission_required('user:role_assign')
 def toggle_admin(uid):
     ok, msg, _ = data_service.toggle_admin(
@@ -1169,6 +1224,7 @@ def toggle_admin(uid):
 
 
 @data_bp.route('/permissions/set-group', methods=['POST'])
+@csrf_protect
 @permission_required('user:role_assign')
 def set_user_group():
     uid = request.form.get('uid', type=int)
@@ -1187,6 +1243,7 @@ def set_user_group():
 
 
 @data_bp.route('/permissions/add-group', methods=['POST'])
+@csrf_protect
 @permission_required('system:permission')
 def add_permission_group():
     ok, msg = data_service.add_permission_group(request.form.get('name', '').strip())
@@ -1195,6 +1252,7 @@ def add_permission_group():
 
 
 @data_bp.route('/permissions/delete-group', methods=['POST'])
+@csrf_protect
 @permission_required('system:permission')
 def delete_permission_group():
     ok, msg = data_service.delete_permission_group(request.form.get('name', '').strip())
@@ -1203,6 +1261,7 @@ def delete_permission_group():
 
 
 @data_bp.route('/permissions/add-module', methods=['POST'])
+@csrf_protect
 @permission_required('system:permission')
 def add_permission_module():
     ok, msg = data_service.add_permission_module(
@@ -1213,6 +1272,7 @@ def add_permission_module():
 
 
 @data_bp.route('/permissions/delete-module', methods=['POST'])
+@csrf_protect
 @permission_required('system:permission')
 def delete_permission_module():
     ok, msg = data_service.delete_permission_module(request.form.get('module', '').strip())
@@ -1221,6 +1281,7 @@ def delete_permission_module():
 
 
 @data_bp.route('/permissions/rename-group', methods=['POST'])
+@csrf_protect
 @permission_required('system:permission')
 def rename_permission_group():
     """重命名角色组（预留）"""
@@ -1241,6 +1302,7 @@ def list_fault_categories():
 
 
 @data_bp.route('/fault-categories/subcategory/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_fault_subcategory():
     ok, msg = data_service.add_fault_subcategory(
@@ -1252,6 +1314,7 @@ def add_fault_subcategory():
 
 
 @data_bp.route('/fault-categories/subcategory/delete/<int:sub_id>', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_fault_subcategory(sub_id):
     data_service.delete_fault_subcategory(sub_id)
@@ -1260,6 +1323,7 @@ def delete_fault_subcategory(sub_id):
 
 
 @data_bp.route('/fault-categories/keyword/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_fault_keyword():
     ok, msg = data_service.add_fault_keywords(
@@ -1271,6 +1335,7 @@ def add_fault_keyword():
 
 
 @data_bp.route('/fault-categories/keyword/delete/<int:kw_id>', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_fault_keyword(kw_id):
     data_service.delete_fault_keyword(kw_id)
@@ -1292,6 +1357,7 @@ def list_parts():
 
 
 @data_bp.route('/parts/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_part():
     ok, msg = data_service.add_part(
@@ -1310,6 +1376,7 @@ def add_part():
 
 
 @data_bp.route('/parts/<int:part_id>/delete', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_part(part_id):
     name = data_service.delete_part(part_id, current_user.display_name or current_user.username)
@@ -1331,6 +1398,7 @@ def consumable_records_view():
 
 
 @data_bp.route('/consumables/records/<int:rid>/delete', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_consumable_record(rid):
     data_service.delete_consumable_record(rid)
@@ -1412,6 +1480,7 @@ def list_fault_template_groups():
 
 
 @data_bp.route('/fault-template-groups/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_fault_template_group():
     ok, msg = data_service.add_fault_template_group(
@@ -1423,6 +1492,7 @@ def add_fault_template_group():
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/edit', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def edit_fault_template_group(gid):
     data_service.edit_fault_template_group(gid,
@@ -1433,6 +1503,7 @@ def edit_fault_template_group(gid):
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/delete', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_fault_template_group(gid):
     name = data_service.delete_fault_template_group(gid,
@@ -1442,6 +1513,7 @@ def delete_fault_template_group(gid):
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/items/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_fault_template_item(gid):
     ok, msg = data_service.add_fault_template_item(gid,
@@ -1453,6 +1525,7 @@ def add_fault_template_item(gid):
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/items/<int:iid>/edit', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def edit_fault_template_item(gid, iid):
     data_service.edit_fault_template_item(gid, iid,
@@ -1464,6 +1537,7 @@ def edit_fault_template_item(gid, iid):
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/items/<int:iid>/delete', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_fault_template_item(gid, iid):
     data_service.delete_fault_template_item(gid, iid)
@@ -1474,6 +1548,7 @@ def delete_fault_template_item(gid, iid):
 # ==================== 模板管理 JSON API ====================
 
 @data_bp.route('/fault-template-groups/api/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_fault_template_group_api():
     """API：新增故障模板组，返回JSON"""
@@ -1491,6 +1566,7 @@ def add_fault_template_group_api():
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/api/edit', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def edit_fault_template_group_api(gid):
     """API：编辑故障模板组，返回JSON"""
@@ -1505,6 +1581,7 @@ def edit_fault_template_group_api(gid):
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/api/delete', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_fault_template_group_api(gid):
     """API：删除故障模板组，返回JSON"""
@@ -1514,6 +1591,7 @@ def delete_fault_template_group_api(gid):
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/items/api/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_fault_template_item_api(gid):
     """API：新增故障模板项，返回JSON"""
@@ -1533,6 +1611,7 @@ def add_fault_template_item_api(gid):
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/items/<int:iid>/api/edit', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def edit_fault_template_item_api(gid, iid):
     """API：编辑故障模板项，返回JSON"""
@@ -1549,6 +1628,7 @@ def edit_fault_template_item_api(gid, iid):
 
 
 @data_bp.route('/fault-template-groups/<int:gid>/items/<int:iid>/api/delete', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_fault_template_item_api(gid, iid):
     """API：删除故障模板项，返回JSON"""
@@ -1557,6 +1637,7 @@ def delete_fault_template_item_api(gid, iid):
 
 
 @data_bp.route('/solutions/api/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_solution_api():
     """API：新增方案模板，返回JSON"""
@@ -1581,6 +1662,7 @@ def add_solution_api():
 
 
 @data_bp.route('/solutions/<int:sid>/api/edit', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def edit_solution_api(sid):
     """API：编辑方案模板，返回JSON"""
@@ -1604,6 +1686,7 @@ def edit_solution_api(sid):
 
 
 @data_bp.route('/solutions/<int:sid>/api/delete', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_solution_api(sid):
     """API：删除方案模板，返回JSON"""
@@ -1631,6 +1714,7 @@ def list_registration_approvals():
 
 
 @data_bp.route('/registration-approvals/<int:rid>/approve', methods=['POST'])
+@csrf_protect
 @permission_required('user:create')
 def approve_registration(rid):
     """通过注册申请：创建用户"""
@@ -1695,6 +1779,7 @@ def approve_registration(rid):
 
 
 @data_bp.route('/registration-approvals/<int:rid>/reject', methods=['POST'])
+@csrf_protect
 @permission_required('user:create')
 def reject_registration(rid):
     """拒绝注册申请"""

@@ -1,5 +1,7 @@
 """工单管理路由（薄路由版 —— 业务逻辑委托给 services/order_service）"""
 
+from utils.csrf import csrf_protect
+
 from utils.helpers import safe_get, safe_get_or_404
 import io
 import json
@@ -104,6 +106,7 @@ def list_orders():
 # ==================== 新建工单 ====================
 
 @orders_bp.route('/create', methods=['GET', 'POST'])
+@csrf_protect
 @permission_required('order:create')
 def create_order():
     """新建工单（Web页面）
@@ -132,9 +135,12 @@ def create_order():
         except ValueError as e:
             flash(str(e), 'danger')
             from services.data_service import get_team_options
+            from services.order_service import get_create_page_data
+            persons, templates = get_create_page_data(current_user)
             all_teams = get_team_options()
             return render_template('orders/create.html',
                                    addr_list=get_merged_addresses(team=team),
+                                   persons=persons, templates=templates,
                                    buildings=get_all_buildings(team=team),
                                    team=team, all_teams=all_teams)
 
@@ -151,6 +157,7 @@ def create_order():
 # ==================== 发布工单（匿名/登录通用） ====================
 
 @orders_bp.route('/publish', methods=['GET', 'POST'])
+@csrf_protect
 @permission_required('order:create')
 def publish_order():
     if request.method == 'POST':
@@ -245,6 +252,7 @@ def api_address_options():
 # ==================== 批量生成 ====================
 
 @orders_bp.route('/batch', methods=['GET', 'POST'])
+@csrf_protect
 @permission_required('order:batch')
 def batch_create():
     selected_team = request.args.get('team', 'all')
@@ -335,6 +343,7 @@ def batch_create():
 
 
 @orders_bp.route('/batch/undo', methods=['POST'])
+@csrf_protect
 @login_required
 def batch_undo():
     ids = session.get('last_batch_ids', [])
@@ -367,6 +376,7 @@ def detail(order_id):
 
 
 @orders_bp.route('/<int:order_id>/solution', methods=['POST'])
+@csrf_protect
 @permission_required('order:solve')
 def update_solution(order_id):
     """更新工单解决方案（AJAX）"""
@@ -385,6 +395,7 @@ def update_solution(order_id):
 
 
 @orders_bp.route('/<int:order_id>/edit', methods=['GET', 'POST'])
+@csrf_protect
 @permission_required('order:edit')
 def edit_order(order_id):
     order = svc.get_order_or_404(order_id)
@@ -399,6 +410,7 @@ def edit_order(order_id):
 
 
 @orders_bp.route('/<int:order_id>/delete', methods=['POST'])
+@csrf_protect
 @permission_required('order:delete')
 def delete_order(order_id):
     svc.delete_order(order_id,
@@ -408,6 +420,7 @@ def delete_order(order_id):
 
 
 @orders_bp.route('/<int:order_id>/toggle_priority', methods=['POST'])
+@csrf_protect
 @login_required
 def toggle_priority(order_id):
     try:
@@ -464,7 +477,53 @@ def export_excel():
 
 # ==================== 发布页面（无登录报修） ====================
 
+
+def _publish_render(anonymous=False):
+    """渲染 publish.html 的统一入口：补全交接班上下文（匿名/登录通用）"""
+    from services.data_service import get_team_options
+    from utils.time_helpers import resolve_team
+    all_teams = get_team_options()
+    try:
+        team = resolve_team(request, current_user) if current_user.is_authenticated else ''
+    except Exception:
+        team = ''
+    handovers = ShiftHandover.query.order_by(ShiftHandover.created_at.desc()).limit(20).all()
+    pending_orders = WorkOrder.query.filter(
+        WorkOrder.status.in_(['pending', 'in_progress'])
+    ).order_by(WorkOrder.created_at.desc()).all()
+    persons = User.query.filter(User.is_active == True).order_by(User.display_name).all()
+    handover_person_set = set()
+    for h in handovers:
+        if h.handover_person: handover_person_set.add(h.handover_person)
+        if h.receive_person: handover_person_set.add(h.receive_person)
+    handover_records_data = [{
+        'id': h.id,
+        'handover_person': h.handover_person,
+        'receive_person': h.receive_person,
+        'content': h.content,
+        'unfinished_orders': h.unfinished_orders or [],
+        'notes': h.notes,
+        'status': h.status,
+        'created_at': h.created_at.strftime('%Y-%m-%d %H:%M') if h.created_at else '',
+    } for h in handovers]
+    handover_stats = {
+        'total': len(handovers),
+        'today': sum(1 for h in handovers if h.created_at and h.created_at.date() == datetime.now().date()),
+        'pending_orders': len(pending_orders),
+        'person_count': len(handover_person_set),
+    }
+    return render_template('orders/publish.html',
+        all_teams=all_teams, team=team,
+        handover_records=handovers,
+        handover_records_data=handover_records_data,
+        handover_stats=handover_stats,
+        handover_persons=persons,
+        handover_pending_orders=pending_orders,
+        anonymous=anonymous)
+
+
 @orders_bp.route('/anonymous_publish', methods=['GET', 'POST'])
+@csrf_protect
 def anonymous_publish():
     """匿名报修（无需登录）"""
     verification = session.get('publish_verified', False)
@@ -472,9 +531,12 @@ def anonymous_publish():
     if request.method == 'POST':
         if not verification:
             code = request.form.get('verify_code', '').strip()
-            if code != '4567':
+            # 验证码从系统设置读取（P1-6，默认 4567）
+            _an_setting = SystemSetting.query.filter_by(key='anonymous_code').first()
+            expected_code = (_an_setting.value if _an_setting and _an_setting.value else '4567')
+            if code != expected_code:
                 flash('验证码错误', 'danger')
-                return render_template('orders/publish.html', anonymous=True)
+                return _publish_render(anonymous=True)
             session['publish_verified'] = True
             verification = True
 
@@ -483,7 +545,7 @@ def anonymous_publish():
         title = request.form.get('title', '').strip()
         if not title:
             flash('请输入故障描述', 'danger')
-            return render_template('orders/publish.html', anonymous=True)
+            return _publish_render(anonymous=True)
 
         from services.keyword_config import get_fault_keywords, get_device_keywords
         fk = get_fault_keywords()
@@ -518,7 +580,7 @@ def anonymous_publish():
         flash('✅ 报修已提交，请等待工程师联系', 'success')
         return redirect(url_for('orders.anonymous_publish'))
 
-    return render_template('orders/publish.html', anonymous=True)
+    return _publish_render(anonymous=True)
 
 
 # ==================== Excel 导入工单 ====================
@@ -547,6 +609,7 @@ def download_import_template():
 
 
 @orders_bp.route('/import', methods=['GET', 'POST'])
+@csrf_protect
 @login_required
 def import_orders():
     """批量导入工单（Excel）"""
@@ -732,6 +795,7 @@ def calendar_day_api():
 # ==================== 工单照片上传/删除 ====================
 
 @orders_bp.route('/<int:order_id>/photos/upload', methods=['POST'])
+@csrf_protect
 @permission_required('order:edit')
 def upload_photo(order_id):
     """上传工单照片"""
@@ -766,6 +830,7 @@ def upload_photo(order_id):
 
 
 @orders_bp.route('/<int:order_id>/photos/<int:photo_id>/delete', methods=['POST'])
+@csrf_protect
 @permission_required('order:delete')
 def delete_photo(order_id, photo_id):
     """删除工单照片"""
@@ -844,6 +909,7 @@ def wo_chat_messages(order_id):
 
 
 @orders_bp.route('/<int:order_id>/chat/send', methods=['POST'])
+@csrf_protect
 @login_required
 def wo_chat_send(order_id):
     """发送工单聊天消息"""
@@ -875,6 +941,7 @@ def wo_chat_send(order_id):
 
 
 @orders_bp.route('/<int:order_id>/chat/upload', methods=['POST'])
+@csrf_protect
 @login_required
 def wo_chat_upload(order_id):
     """上传工单聊天文件（图片）"""
@@ -900,6 +967,7 @@ def wo_chat_upload(order_id):
 # ==================== 星标切换 ====================
 
 @orders_bp.route('/<int:order_id>/star', methods=['POST'])
+@csrf_protect
 @login_required
 def toggle_star(order_id):
     """切换工单星标状态"""
@@ -915,6 +983,7 @@ def toggle_star(order_id):
     return jsonify({'starred': is_starred})
 
 @orders_bp.route('/<int:order_id>/urge', methods=['POST'])
+@csrf_protect
 @login_required
 def urge_order(order_id):
     """催单：工单紧急程度上升为紧急 + 发送企业微信通知"""

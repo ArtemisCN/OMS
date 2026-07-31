@@ -1,6 +1,8 @@
 """Feature Blueprint: 工单转交, SLA监控, 历史追溯, 效能看板, 资产二维码,
 耗材预测, 备件联动, 供应商管理, 合同管理, 资产折旧,
 NFC巡检签到, 运维大屏, 领导驾驶舱, 自定义报表, 短信通知"""
+
+from utils.csrf import csrf_protect
 from utils.helpers import safe_get
 from utils.permissions import has_permission
 import io
@@ -31,6 +33,7 @@ QR_BASE_URL = 'https://demolin.cn/scan/1/submit?asset_id='
 # ===================== 1. 工单转交/协办 =====================
 
 @feature_bp.route('/transfer/<int:order_id>', methods=['POST'])
+@csrf_protect
 @login_required
 def transfer_order(order_id):
     """转交工单给他人"""
@@ -331,6 +334,7 @@ def sla_data():
 
 
 @feature_bp.route('/sla/settings', methods=['POST'])
+@csrf_protect
 @login_required
 def sla_settings():
     """保存 SLA 阈值设置 (已迁移至 sla 蓝图)"""
@@ -367,6 +371,7 @@ def asset_qr_image(asset_id):
 
 
 @feature_bp.route('/asset/qr/batch', methods=['POST'])
+@csrf_protect
 @login_required
 def asset_qr_batch():
     """批量生成资产二维码（返回 ZIP）"""
@@ -481,6 +486,7 @@ def consumable_forecast():
 # ===================== 7. 备件→工单联动 =====================
 
 @feature_bp.route('/stock/link_to_order', methods=['POST'])
+@csrf_protect
 @login_required
 def stock_link_to_order():
     """备件出库并关联到工单"""
@@ -547,6 +553,7 @@ def suppliers():
 
 
 @feature_bp.route('/suppliers/save', methods=['POST'])
+@csrf_protect
 @login_required
 def supplier_save():
     """创建/编辑供应商"""
@@ -581,6 +588,7 @@ def supplier_save():
 
 
 @feature_bp.route('/suppliers/<int:id>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 def supplier_delete(id):
     """已迁移至 assets 蓝图"""
@@ -599,6 +607,7 @@ def contracts():
 
 
 @feature_bp.route('/contracts/save', methods=['POST'])
+@csrf_protect
 @login_required
 def contract_save():
     """创建/编辑合同 (已迁移至 contracts 蓝图)"""
@@ -607,6 +616,7 @@ def contract_save():
 
 
 @feature_bp.route('/contracts/<int:id>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 def contract_delete(id):
     """删除合同 (已迁移至 contracts 蓝图)"""
@@ -707,6 +717,7 @@ def inspection_checkin_page(task_id):
 
 
 @feature_bp.route('/inspection/checkin/<int:task_id>', methods=['POST'])
+@csrf_protect
 @login_required
 def inspection_checkin_do(task_id):
     """执行巡检签到"""
@@ -943,6 +954,7 @@ def report_builder():
 
 
 @feature_bp.route('/report-builder/generate', methods=['POST'])
+@csrf_protect
 @login_required
 def report_builder_generate():
     """生成报表数据"""
@@ -1134,6 +1146,7 @@ def sms_settings():
 
 
 @feature_bp.route('/sms/settings/save', methods=['POST'])
+@csrf_protect
 @login_required
 def sms_settings_save():
     """保存短信配置"""
@@ -1155,6 +1168,7 @@ def sms_settings_save():
 
 
 @feature_bp.route('/sms/send', methods=['POST'])
+@csrf_protect
 @login_required
 def sms_send():
     """发送短信"""
@@ -1182,6 +1196,7 @@ def sms_send():
 
 
 @feature_bp.route('/sms/test', methods=['POST'])
+@csrf_protect
 @login_required
 def sms_test():
     """测试短信发送"""
@@ -1231,6 +1246,7 @@ def digital_twin_data(*args, **kwargs):
 
 
 @feature_bp.route('/digital-twin/save-positions', methods=['POST'])
+@csrf_protect
 @login_required
 def digital_twin_save_positions():
     """保存建筑位置"""
@@ -1248,6 +1264,7 @@ def digital_twin_save_positions():
 
 
 @feature_bp.route('/digital-twin/save-map', methods=['POST'])
+@csrf_protect
 @login_required
 def digital_twin_save_map():
     """保存地图背景URL"""
@@ -1265,6 +1282,7 @@ def digital_twin_save_map():
 
 
 @feature_bp.route('/digital-twin/upload-map', methods=['POST'])
+@csrf_protect
 @login_required
 def digital_twin_upload_map():
     """上传地图背景图片"""
@@ -1318,6 +1336,7 @@ def get_building_model(building_id):
     from flask import redirect
     return redirect(f'/dashboard/digital-twin/model/{building_id}', 301)
 @feature_bp.route('/digital-twin/model/<building_id>', methods=['POST'])
+@csrf_protect
 @login_required
 def save_building_model(building_id):
     """已迁移至 dashboard 蓝图"""
@@ -1326,6 +1345,7 @@ def save_building_model(building_id):
 
 
 @feature_bp.route('/digital-twin/upload-texture', methods=['POST'])
+@csrf_protect
 @login_required
 def upload_dt_texture():
     """已迁移至 dashboard 蓝图"""
@@ -1364,6 +1384,7 @@ def _set_feature_toggle(key, value):
                       label=key, category='功能开关')
 
 @feature_bp.route('/auto-assign/check', methods=['POST'])
+@csrf_protect
 @login_required
 def auto_assign_check():
     """自动派单检查：检查订单是否应自动分配"""
@@ -1410,6 +1431,7 @@ def auto_assign_check():
 
 
 @feature_bp.route('/timeout-reminder/check', methods=['POST'])
+@csrf_protect
 @login_required
 def timeout_reminder_check():
     """超时催办检查：检查超时工单并推送"""
@@ -1457,6 +1479,7 @@ def get_feature_toggles():
 
 
 @feature_bp.route('/feature-toggle/save', methods=['POST'])
+@csrf_protect
 @login_required
 def save_feature_toggle():
     """保存功能开关"""
@@ -1511,6 +1534,7 @@ def shift_handover():
 
 
 @feature_bp.route('/shift-handover/save', methods=['POST'])
+@csrf_protect
 @login_required
 def shift_handover_save():
     """保存交接班记录"""
@@ -1587,6 +1611,7 @@ def repair_ratings():
 
 
 @feature_bp.route('/repair-rating/save', methods=['POST'])
+@csrf_protect
 @login_required
 def repair_rating_save():
     """提交维修评价"""
@@ -1662,6 +1687,7 @@ def complaints():
 
 
 @feature_bp.route('/complaint/save', methods=['POST'])
+@csrf_protect
 @login_required
 def complaint_save():
     """保存投诉"""
@@ -1690,6 +1716,7 @@ def complaint_save():
 
 
 @feature_bp.route('/complaint/handle', methods=['POST'])
+@csrf_protect
 @login_required
 def complaint_handle():
     """处理投诉"""
@@ -1711,6 +1738,7 @@ def complaint_handle():
 
 
 @feature_bp.route('/complaint/close', methods=['POST'])
+@csrf_protect
 @login_required
 def complaint_close():
     """关闭投诉"""
@@ -1725,6 +1753,7 @@ def complaint_close():
 
 
 @feature_bp.route('/complaint/reopen', methods=['POST'])
+@csrf_protect
 @login_required
 def complaint_reopen():
     """重新打开投诉"""
@@ -1783,6 +1812,7 @@ def stock_requests():
 
 
 @feature_bp.route('/stock-request/save', methods=['POST'])
+@csrf_protect
 @login_required
 def stock_request_save():
     """保存领用申请"""
@@ -1805,6 +1835,7 @@ def stock_request_save():
 
 
 @feature_bp.route('/stock-request/approve', methods=['POST'])
+@csrf_protect
 @login_required
 def stock_request_approve():
     """审批通过领用申请"""
@@ -1830,6 +1861,7 @@ def stock_request_approve():
 
 
 @feature_bp.route('/stock-request/reject', methods=['POST'])
+@csrf_protect
 @login_required
 def stock_request_reject():
     """拒绝领用申请"""
@@ -1875,6 +1907,7 @@ def spare_part_alerts():
 
 
 @feature_bp.route('/spare-part-alert/save', methods=['POST'])
+@csrf_protect
 @login_required
 def spare_part_alert_save():
     """保存预警配置"""
@@ -1904,6 +1937,7 @@ def spare_part_alert_save():
 
 
 @feature_bp.route('/spare-part-alert/toggle', methods=['POST'])
+@csrf_protect
 @login_required
 def spare_part_alert_toggle():
     """切换预警开关"""
@@ -1935,6 +1969,7 @@ def spare_part_alert_get():
 
 
 @feature_bp.route('/spare-part-alert/<int:aid>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 def spare_part_alert_delete(aid):
     """删除预警配置"""
@@ -2003,6 +2038,7 @@ def inspection_routes():
 
 
 @feature_bp.route('/inspection-route/save', methods=['POST'])
+@csrf_protect
 @login_required
 def inspection_route_save():
     """保存巡检路线"""
@@ -2026,6 +2062,7 @@ def inspection_route_save():
 
 
 @feature_bp.route('/inspection-route/toggle', methods=['POST'])
+@csrf_protect
 @login_required
 def inspection_route_toggle():
     """切换路线启用状态"""
@@ -2040,6 +2077,7 @@ def inspection_route_toggle():
 
 
 @feature_bp.route('/inspection-route/delete', methods=['POST'])
+@csrf_protect
 @login_required
 def inspection_route_delete():
     """删除巡检路线"""
@@ -2164,6 +2202,7 @@ def ai_kb_qa():
 
 
 @feature_bp.route('/ai-kb-search', methods=['POST'])
+@csrf_protect
 @login_required
 def ai_kb_search():
     """AI知识库搜索"""

@@ -189,8 +189,29 @@ def api_login():
         return jsonify({'error': '请输入用户名和密码', 'code': 400}), 400
 
     user = User.query.filter_by(username=username).first()
+
+    # --- 账号锁定检查（P1-3：复用 login_attempts/locked_until，与 Web 端一致） ---
+    from datetime import datetime as _dt, timedelta as _td
+    if user and user.locked_until and user.locked_until > _dt.now():
+        remaining = int((user.locked_until - _dt.now()).total_seconds() // 60)
+        return jsonify({'error': f'账号已锁定，请{remaining}分钟后再试', 'code': 429}), 429
+
     if not user or not user.check_password(password):
+        # 密码错误：累计尝试次数，5 次锁定 15 分钟
+        if user:
+            user.login_attempts = (user.login_attempts or 0) + 1
+            if user.login_attempts >= 5:
+                user.locked_until = _dt.now() + _td(minutes=15)
+                db.session.commit()
+                return jsonify({'error': '密码错误次数过多，账号已锁定15分钟', 'code': 429}), 429
+            db.session.commit()
         return jsonify({'error': '用户名或密码错误', 'code': 401}), 401
+
+    # 登录成功：重置尝试次数与锁定
+    if user.login_attempts or user.locked_until is not None:
+        user.login_attempts = 0
+        user.locked_until = None
+        db.session.commit()
 
     MobileToken.query.filter_by(user_id=user.id).delete()
     db.session.commit()

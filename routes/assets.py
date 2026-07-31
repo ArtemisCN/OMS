@@ -2,6 +2,8 @@
 供应商管理, 设备折旧计算, 领用审批, 备件库存预警,
 维保日历, 设备履历"""
 
+from utils.csrf import csrf_protect
+
 from utils.helpers import safe_get
 import io
 import json
@@ -86,6 +88,7 @@ def asset_qr_image(asset_id):
 
 
 @assets_bp.route('/asset/qr/batch', methods=['POST'])
+@csrf_protect
 @login_required
 def asset_qr_batch():
     """批量生成资产二维码（返回 ZIP）"""
@@ -200,6 +203,7 @@ def consumable_forecast():
 # ===================== 7. 备件→工单联动 =====================
 
 @assets_bp.route('/stock/link_to_order', methods=['POST'])
+@csrf_protect
 @login_required
 def stock_link_to_order():
     """备件出库并关联到工单"""
@@ -265,6 +269,7 @@ def suppliers():
 
 
 @assets_bp.route('/suppliers/save', methods=['POST'])
+@csrf_protect
 @login_required
 def supplier_save():
     """创建/编辑供应商"""
@@ -299,6 +304,7 @@ def supplier_save():
 
 
 @assets_bp.route('/suppliers/<int:id>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 def supplier_delete(id):
     """删除供应商"""
@@ -433,6 +439,7 @@ def stock_requests():
 
 
 @assets_bp.route('/stock-request/save', methods=['POST'])
+@csrf_protect
 @login_required
 def stock_request_save():
     """保存领用申请"""
@@ -457,6 +464,7 @@ def stock_request_save():
 
 
 @assets_bp.route('/stock-request/approve', methods=['POST'])
+@csrf_protect
 @login_required
 def stock_request_approve():
     """审批通过领用申请"""
@@ -482,6 +490,7 @@ def stock_request_approve():
 
 
 @assets_bp.route('/stock-request/reject', methods=['POST'])
+@csrf_protect
 @login_required
 def stock_request_reject():
     """拒绝领用申请"""
@@ -527,6 +536,7 @@ def spare_part_alerts():
 
 
 @assets_bp.route('/spare-part-alert/save', methods=['POST'])
+@csrf_protect
 @login_required
 def spare_part_alert_save():
     """保存预警配置"""
@@ -556,6 +566,7 @@ def spare_part_alert_save():
 
 
 @assets_bp.route('/spare-part-alert/toggle', methods=['POST'])
+@csrf_protect
 @login_required
 def spare_part_alert_toggle():
     """切换预警开关"""
@@ -587,6 +598,7 @@ def spare_part_alert_get():
 
 
 @assets_bp.route('/spare-part-alert/<int:aid>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 def spare_part_alert_delete(aid):
     """删除预警配置"""

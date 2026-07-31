@@ -1,5 +1,7 @@
 """人员管理子蓝图（从 routes/data.py 提取）"""
 
+from utils.csrf import csrf_protect
+
 from utils.helpers import safe_get, safe_get_or_404
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
@@ -70,6 +72,7 @@ def index():
 
 
 @data_personnel_bp.route('/add', methods=['POST'])
+@csrf_protect
 @permission_required('user:create')
 def add():
     ok, msg = data_service.add_person(request.form.get('name', '').strip())
@@ -78,6 +81,7 @@ def add():
 
 
 @data_personnel_bp.route('/import-from-orders', methods=['POST'])
+@csrf_protect
 @permission_required('user:create')
 def import_from_orders():
     imported = data_service.import_persons_from_orders()
@@ -86,6 +90,7 @@ def import_from_orders():
 
 
 @data_personnel_bp.route('/<int:pid>/toggle', methods=['POST'])
+@csrf_protect
 @permission_required('user:edit')
 def toggle(pid):
     p = data_service.toggle_person(pid)
@@ -94,6 +99,7 @@ def toggle(pid):
 
 
 @data_personnel_bp.route('/<int:pid>/delete', methods=['POST'])
+@csrf_protect
 @permission_required('user:delete')
 def delete(pid):
     p = safe_get_or_404(User, pid)
@@ -109,6 +115,7 @@ def delete(pid):
 
 
 @data_personnel_bp.route('/<int:pid>/reassign-orders', methods=['POST'])
+@csrf_protect
 @permission_required('user:edit')
 def reassign_orders(pid):
     p = safe_get_or_404(User, pid)
@@ -129,6 +136,7 @@ def reassign_orders(pid):
 
 
 @data_personnel_bp.route('/<int:pid>/edit-field', methods=['POST'])
+@csrf_protect
 @permission_required('user:edit')
 def edit_field(pid):
     field = request.form.get('field', '')
@@ -142,6 +150,7 @@ def edit_field(pid):
 
 
 @data_personnel_bp.route('/batch-action', methods=['POST'])
+@csrf_protect
 @permission_required('user:edit')
 def batch_action():
     action = request.form.get('batch_action', '')
@@ -198,6 +207,7 @@ def batch_action():
 
 
 @data_personnel_bp.route('/<int:pid>/account', methods=['GET', 'POST'])
+@csrf_protect
 @permission_required('user:create')
 def account(pid):
     if request.method == 'GET':

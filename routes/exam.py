@@ -1,5 +1,7 @@
 """考试系统路由 — PC端管理 + 移动端API"""
 
+from utils.csrf import csrf_protect
+
 from utils.helpers import safe_get
 import json
 import random
@@ -57,6 +59,7 @@ def exam_list():
 
 
 @exam_bp.route('/create', methods=['GET', 'POST'])
+@csrf_protect
 @login_required
 def exam_create():
     """创建考试"""
@@ -97,6 +100,7 @@ def exam_create():
 
 
 @exam_bp.route('/<int:exam_id>/edit', methods=['GET', 'POST'])
+@csrf_protect
 @login_required
 def exam_edit(exam_id):
     """编辑考试"""
@@ -221,6 +225,7 @@ def exam_ranking(exam_id):
 
 
 @exam_bp.route('/<int:exam_id>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 def exam_delete(exam_id):
     """删除考试"""
@@ -236,6 +241,7 @@ def exam_delete(exam_id):
 
 
 @exam_bp.route('/<int:exam_id>/toggle_status', methods=['POST'])
+@csrf_protect
 @login_required
 def exam_toggle_status(exam_id):
     """切换考试状态 draft/published/closed"""
@@ -419,6 +425,7 @@ def api_exam_questions(exam_id):
 
 
 @exam_bp.route('/api/<int:submission_id>/save_answer', methods=['POST'])
+@csrf_protect
 @login_required
 def api_save_answer(submission_id):
     """保存单题答案（答题过程中）"""
@@ -438,6 +445,7 @@ def api_save_answer(submission_id):
 
 
 @exam_bp.route('/api/submit', methods=['POST'])
+@csrf_protect
 @login_required
 def api_submit_exam():
     """提交答卷"""

@@ -1,3 +1,4 @@
+from utils.csrf import csrf_protect
 # ==================== 统一模板管理 ====================
 
 @data_bp.route('/templates')
@@ -45,6 +46,7 @@ def list_templates():
 
 
 @data_bp.route('/templates/copy-to/<target_team>', methods=['POST'])
+@csrf_protect
 @permission_required("system:config")
 def copy_templates_to_team(target_team):
     """从华博复制模板到目标组"""

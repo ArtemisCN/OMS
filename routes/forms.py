@@ -1,5 +1,7 @@
 """电子表单蓝图 - 模板驱动表单系统"""
 
+from utils.csrf import csrf_protect
+
 from utils.helpers import safe_get
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import current_user
@@ -46,6 +48,7 @@ def template_list():
 
 
 @forms_bp.route('/templates/create', methods=['GET', 'POST'])
+@csrf_protect
 @login_required_forms
 def template_create():
     if request.method == 'POST':
@@ -71,6 +74,7 @@ def template_create():
 
 
 @forms_bp.route('/templates/<int:tid>/edit', methods=['GET', 'POST'])
+@csrf_protect
 @login_required_forms
 def template_edit(tid):
     t = safe_get(FormTemplate, tid)
@@ -94,6 +98,7 @@ def template_edit(tid):
 
 
 @forms_bp.route('/templates/import-excel', methods=['POST'])
+@csrf_protect
 @login_required_forms
 def template_import_excel():
     """导入Excel模板，返回解析后的字段列表"""
@@ -231,6 +236,7 @@ def template_import_excel():
 
 
 @forms_bp.route('/templates/<int:tid>/delete', methods=['POST'])
+@csrf_protect
 @login_required_forms
 def template_delete(tid):
     t = safe_get(FormTemplate, tid)
@@ -255,6 +261,7 @@ def template_delete(tid):
 # ============ 动态表单创建 ============
 
 @forms_bp.route('/create', methods=['GET', 'POST'])
+@csrf_protect
 @login_required_forms
 def form_create():
     """使用模板创建新表单"""
@@ -336,6 +343,7 @@ def form_view(fid):
 
 
 @forms_bp.route('/<int:fid>/edit', methods=['POST'])
+@csrf_protect
 @login_required_forms
 def form_save_fields(fid):
     """保存表单字段值（PC端编辑）"""
@@ -370,6 +378,7 @@ def form_save_fields(fid):
 
 
 @forms_bp.route('/<int:fid>/sign', methods=['POST'])
+@csrf_protect
 @login_required_forms
 def form_field_sign(fid):
     """保存签名"""
@@ -461,6 +470,7 @@ def form_list():
 # ============ 发布 ============
 
 @forms_bp.route('/<int:fid>/publish', methods=['POST'])
+@csrf_protect
 @login_required_forms
 def form_publish(fid):
     """发布表单：draft → active，创建关联工单"""
@@ -501,6 +511,7 @@ def form_publish(fid):
 # ============ 审批 ============
 
 @forms_bp.route('/<int:fid>/approve', methods=['POST'])
+@csrf_protect
 @login_required_forms
 def form_approve(fid):
     """审批通过表单：submitted → completed，同时完结关联工单"""
@@ -546,6 +557,7 @@ def form_api_detail(fid):
 
 
 @forms_bp.route('/api/<int:fid>/save', methods=['POST'])
+@csrf_protect
 @login_required_forms
 def form_api_save(fid):
     form = safe_get(PaperForm, fid)
@@ -563,6 +575,7 @@ def form_api_save(fid):
 
 
 @forms_bp.route('/api/<int:fid>/sign', methods=['POST'])
+@csrf_protect
 @login_required_forms
 def form_api_sign(fid):
     form = safe_get(PaperForm, fid)
@@ -580,6 +593,7 @@ def form_api_sign(fid):
     return jsonify({'message': '签名已保存'})
 
 @forms_bp.route('/api/<int:fid>/submit', methods=['POST'])
+@csrf_protect
 @login_required_forms
 def form_api_submit(fid):
     """提交表单待审批：active → submitted"""
@@ -664,6 +678,7 @@ def form_data_sources():
 # ============ 删除 ============
 
 @forms_bp.route('/<int:fid>/delete', methods=['POST'])
+@csrf_protect
 @login_required_forms
 def form_delete(fid):
     form = safe_get(PaperForm, fid)
@@ -740,6 +755,7 @@ def check_stock_sign(token):
 
 
 @forms_bp.route('/api/submit-stock-sign', methods=['POST'])
+@csrf_protect
 def submit_stock_sign():
     """手机端提交出库签名"""
     from models import StockSignRequest, db
@@ -787,6 +803,7 @@ def check_consumable_sign(token):
 
 
 @forms_bp.route('/api/submit-consumable-sign', methods=['POST'])
+@csrf_protect
 def submit_consumable_sign():
     """手机端提交耗材出库签名"""
     from models import ConsumableSignRequest, db

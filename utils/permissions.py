@@ -24,7 +24,10 @@ def has_permission(user, perm_key):
     """检查用户是否拥有指定操作级权限"""
     if not user:
         return False
-    if user.is_admin:
+    # 匿名用户（AnonymousUserMixin）无 is_admin 属性 → 视为无权限
+    if not getattr(user, 'is_authenticated', False):
+        return False
+    if getattr(user, 'is_admin', False):
         return True
     user_perms = json.loads(user.permissions or '{}')
     if perm_key in user_perms:

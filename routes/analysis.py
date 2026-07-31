@@ -1,4 +1,6 @@
 """重复单分析路由"""
+
+from utils.csrf import csrf_protect
 from flask import Blueprint, render_template, request, jsonify, g
 from flask_login import login_required, current_user
 from models import WorkOrder, User, db, can_access, SystemSetting

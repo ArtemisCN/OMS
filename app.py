@@ -212,6 +212,7 @@ def create_app():
         from flask_login import current_user
         from models import can_access, Hospital
         from utils.permissions import has_permission
+        from utils.csrf import get_csrf_token
         # 注入当前医院信息（供模板切换显示）
         current_hospital = None
         hid = getattr(g, 'hospital_id', None)
@@ -238,6 +239,7 @@ def create_app():
             'now': datetime.now(),
             'can_access': can_access,
             'has_permission': lambda perm_key: has_permission(current_user, perm_key),
+            'csrf_token': get_csrf_token,
             'current_hospital': current_hospital,
             'all_hospitals': all_hospitals,
             'user_assigned_hospitals': user_assigned_hospitals,
@@ -370,6 +372,14 @@ def create_app():
             logger.warning("403 %s %s", request.method, request.path, extra={'status_code': 403})
             return jsonify(error='无权访问'), 403
         return render_template('errors/403.html'), 403
+
+    @app.errorhandler(413)
+    def request_too_large(e):
+        """请求体超限（MAX_CONTENT_LENGTH 20MB）"""
+        from flask import render_template, jsonify, request
+        if request.path.startswith('/api/'):
+            return jsonify(error='文件过大，请压缩后重试（单次请求不超过20MB）'), 413
+        return render_template('errors/413.html'), 413
 
     return app
 

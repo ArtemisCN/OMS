@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}413 - 文件过大{% endblock %}
+{% block content %}
+<div class="text-center py-5">
+    <h1 class="display-1 text-danger">413</h1>
+    <p class="lead">上传文件过大</p>
+    <p class="text-muted">单次请求/上传不能超过 20MB，请压缩文件后重试。</p>
+    <a href="javascript:history.back()" class="btn btn-primary mt-3">
+        <i class="fas fa-arrow-left"></i> 返回上页
+    </a>
+</div>
+{% endblock %}

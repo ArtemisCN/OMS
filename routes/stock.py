@@ -1,5 +1,7 @@
 """备件库存管理"""
 
+from utils.csrf import csrf_protect
+
 from utils.helpers import safe_get, safe_get_or_404
 # 导入标准库与三方库
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, g, abort
@@ -104,6 +106,7 @@ def detail(part_id):
 
 
 @stock_bp.route('/add', methods=['GET', 'POST'])
+@csrf_protect
 @login_required
 def add():
     if not has_permission(current_user, 'biz:stock'):
@@ -154,6 +157,7 @@ def add():
 
 
 @stock_bp.route('/edit/<int:part_id>', methods=['GET', 'POST'])
+@csrf_protect
 @login_required
 def edit(part_id):
     if not has_permission(current_user, 'biz:stock'):
@@ -191,6 +195,7 @@ def edit(part_id):
 
 
 @stock_bp.route('/delete/<int:part_id>', methods=['POST'])
+@csrf_protect
 @login_required
 def delete(part_id):
     if not has_permission(current_user, 'biz:stock'):
@@ -266,6 +271,7 @@ def out_records():
 
 
 @stock_bp.route('/inout', methods=['POST'])
+@csrf_protect
 @login_required
 def inout():
     """出入库操作"""
@@ -309,6 +315,7 @@ def inout():
 
 
 @stock_bp.route('/batch-out', methods=['POST'])
+@csrf_protect
 @login_required
 def batch_out():
     """一键出库：选择科室，批量出库"""
@@ -354,6 +361,7 @@ def batch_out():
 
 
 @stock_bp.route('/batch-out-sign/init', methods=['POST'])
+@csrf_protect
 @login_required
 def batch_out_sign_init():
     """创建出库签名请求，返回token和二维码URL"""
@@ -393,6 +401,7 @@ def batch_out_sign_init():
 
 
 @stock_bp.route('/batch-out-sign/execute/<token>', methods=['POST'])
+@csrf_protect
 @login_required
 def batch_out_sign_execute(token):
     """签名完成后执行出库"""
@@ -442,6 +451,7 @@ def batch_out_sign_execute(token):
 
 
 @stock_bp.route('/import-excel', methods=['POST'])
+@csrf_protect
 @login_required
 def import_stock_excel():
     """从Excel导入备件"""
@@ -591,6 +601,7 @@ def request_list():
 
 
 @stock_bp.route('/requests/create', methods=['GET', 'POST'])
+@csrf_protect
 @login_required
 def request_create():
     """创建领用申请"""
@@ -633,6 +644,7 @@ def request_create():
 
 
 @stock_bp.route('/requests/<int:rid>/approve', methods=['POST'])
+@csrf_protect
 @login_required
 def request_approve(rid):
     """审批通过：扣减库存 + 创建出库记录"""
@@ -669,6 +681,7 @@ def request_approve(rid):
 
 
 @stock_bp.route('/requests/<int:rid>/reject', methods=['POST'])
+@csrf_protect
 @login_required
 def request_reject(rid):
     """拒绝申请"""
@@ -685,6 +698,7 @@ def request_reject(rid):
 
 
 @stock_bp.route('/out-records/<int:rid>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 @permission_required("biz:stock")
 def delete_out_record(rid):

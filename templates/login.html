@@ -158,6 +158,7 @@
         <p>{{ system_subtitle }}</p>
       </div>
       <form method="post" action="{{ url_for('auth.login') }}" id="login-form">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="err" id="error-msg" style="display:none"></div>
         {% set msgs = get_flashed_messages(with_categories=true) %}
         {% if msgs %}

@@ -1,3 +1,4 @@
+from utils.csrf import csrf_protect
 from utils.permissions import has_permission
 """SLA Blueprint: SLA 时限监控"""
 from datetime import datetime, timedelta
@@ -129,6 +130,7 @@ def sla_data():
 
 
 @sla_bp.route('/settings', methods=['POST'])
+@csrf_protect
 @login_required
 def sla_settings():
     """保存 SLA 阈值设置"""

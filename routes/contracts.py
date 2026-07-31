@@ -1,5 +1,7 @@
 """Contracts Blueprint: 合同维保管理"""
 
+from utils.csrf import csrf_protect
+
 from utils.helpers import safe_get
 import json
 from datetime import datetime, date
@@ -47,6 +49,7 @@ def contract_list():
 
 
 @contracts_bp.route('/save', methods=['POST'])
+@csrf_protect
 @login_required
 def contract_save():
     """创建/编辑合同"""
@@ -87,6 +90,7 @@ def contract_save():
 
 
 @contracts_bp.route('/<int:id>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 def contract_delete(id):
     """删除合同"""

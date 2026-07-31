@@ -1,6 +1,8 @@
 """认证相关路由"""
 import secrets
+import re
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
+from utils.csrf import csrf_protect
 from flask_login import login_user, logout_user, login_required, current_user
 from models import db, User, AuditLog, RegistrationRequest, Hospital, RoleGroup
 from datetime import datetime
@@ -46,6 +48,7 @@ def admin_required(f):
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
+@csrf_protect
 def login():
     """Web 登录页面
     ---
@@ -95,14 +98,14 @@ def login():
             log_audit('login', 'user', user.display_name or user.username,
                       target_id=user.id, target_desc=f'用户登录: {user.username}')
             return redirect(url_for('main.dashboard'))
-        # --- 密码错误，增加尝试次数 ---
+        # --- 密码错误，增加尝试次数（P1-2：99次→5次锁定15分钟） ---
         if user:
             user.login_attempts = (user.login_attempts or 0) + 1
-            if user.login_attempts >= 99:
+            if user.login_attempts >= 5:
                 user.locked_until = datetime.now() + timedelta(minutes=15)
                 flash('密码错误次数过多，账号已锁定15分钟', 'danger')
             else:
-                remaining = 99 - user.login_attempts
+                remaining = 5 - user.login_attempts
                 flash(f'用户名或密码错误，还剩{remaining}次尝试机会', 'danger')
             db.session.commit()
         else:
@@ -154,8 +157,10 @@ def register():
             errors.append('用户名至少2位')
         if User.query.filter_by(username=username).first():
             errors.append('用户名已被占用')
-        if not password or len(password) < 4:
-            errors.append('密码至少4位')
+        if not password or len(password) < 8:
+            errors.append('密码至少8位')
+        elif not re.search(r'[A-Za-z]', password) or not re.search(r'[0-9]', password):
+            errors.append('密码必须同时包含字母和数字')
         if password != confirm:
             errors.append('两次密码不一致')
         if not display_name:

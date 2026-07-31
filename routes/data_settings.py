@@ -1,5 +1,7 @@
 """系统参数设置 + 科室字典管理"""
 
+from utils.csrf import csrf_protect
+
 from utils.helpers import safe_get, safe_get_or_404
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required
@@ -169,6 +171,7 @@ def index():
 
 
 @settings_bp.route('/save_pref', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def save_pref():
     """保存个人偏好设置"""
@@ -184,6 +187,7 @@ def save_pref():
 
 
 @settings_bp.route('/save', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def save():
     """保存单个参数"""
@@ -225,6 +229,7 @@ def save():
 
 
 @settings_bp.route('/save_webhook', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def save_webhook():
     """保存某医院的企业微信推送地址"""
@@ -246,6 +251,7 @@ def save_webhook():
 
 
 @settings_bp.route('/save_webhook_setting', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def save_webhook_setting():
     """保存某医院的企业微信推送相关设置（开关等）"""
@@ -266,6 +272,7 @@ def save_webhook_setting():
 
 
 @settings_bp.route('/init', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def init_defaults():
     """初始化默认系统参数"""
@@ -288,6 +295,7 @@ def init_defaults():
         ('order_prefix', '', '工单编号前缀', '维修单编号的自定义前缀（如"七院-"），留空则不使用前缀', '工单'),
         ('default_dark_mode', 'light', '默认深色模式', '登录后默认使用的颜色主题', '界面'),
         ('upload_max_mb', '20', '上传大小限制', '单张照片最大允许上传的 MB 数', '工单'),
+        ('anonymous_code', '4567', '匿名报修验证码', '匿名报修（无需登录）页面需输入的验证码，防止恶意刷单，建议修改默认值', '工单'),
         ('feature_toggle_auto_assign', 'false', '自动派单', '新工单创建后自动根据人员空闲状态+故障类型匹配度分配处理人（需先创建好人员账号）', '功能开关'),
         ('feature_toggle_timeout_reminder', 'false', '超时催办', '工单超过设定时长未处理时自动发送企业微信催办通知', '功能开关'),
         # COS 对象存储配置
@@ -328,6 +336,7 @@ def list_departments():
 
 
 @settings_bp.route('/departments/add', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def add_department():
     name = request.form.get('name', '').strip()
@@ -350,6 +359,7 @@ def add_department():
 
 
 @settings_bp.route('/departments/<int:did>/edit', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def edit_department(did):
     dept = safe_get_or_404(Department, did)
@@ -399,6 +409,7 @@ def edit_department(did):
 
 
 @settings_bp.route('/departments/<int:did>/toggle', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def toggle_department(did):
     dept = safe_get_or_404(Department, did)
@@ -409,6 +420,7 @@ def toggle_department(did):
 
 
 @settings_bp.route('/departments/<int:did>/delete', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def delete_department(did):
     dept = safe_get_or_404(Department, did)
@@ -419,6 +431,7 @@ def delete_department(did):
 
 
 @settings_bp.route('/departments/import', methods=['POST'])
+@csrf_protect
 @permission_required('system:config')
 def import_departments():
     """从工单和地址数据中提取科室导入"""

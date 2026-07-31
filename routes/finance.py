@@ -1,5 +1,7 @@
 """维修做账 - 发票录入→清单生成→文档输出"""
 
+from utils.csrf import csrf_protect
+
 from utils.helpers import safe_get, safe_get_or_404
 import json
 import random
@@ -113,6 +115,7 @@ def index():
 # ==================== 新建批次 ====================
 
 @finance_bp.route('/create', methods=['GET', 'POST'])
+@csrf_protect
 @login_required
 def create():
     if not check_access():
@@ -177,6 +180,7 @@ def detail(batch_id):
 # ==================== 生成维修清单草稿 ====================
 
 @finance_bp.route('/<int:batch_id>/generate_drafts', methods=['POST'])
+@csrf_protect
 @login_required
 def generate_drafts(batch_id):
     """根据选中月份的已完成工单自动生成维修清单草稿"""
@@ -305,6 +309,7 @@ def generate_drafts(batch_id):
 # ==================== 编辑草稿（AJAX） ====================
 
 @finance_bp.route('/draft/<int:draft_id>/save', methods=['POST'])
+@csrf_protect
 @login_required
 def save_draft(draft_id):
     draft = safe_get_or_404(FinanceDraft, draft_id)
@@ -315,6 +320,7 @@ def save_draft(draft_id):
 
 
 @finance_bp.route('/draft/<int:draft_id>/part/add', methods=['POST'])
+@csrf_protect
 @login_required
 def add_part(draft_id):
     draft = safe_get_or_404(FinanceDraft, draft_id)
@@ -335,6 +341,7 @@ def add_part(draft_id):
 
 
 @finance_bp.route('/draft/<int:draft_id>/part/<int:part_id>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 def delete_draft_part(draft_id, part_id):
     dp = safe_get_or_404(FinanceDraftPart, part_id)
@@ -346,6 +353,7 @@ def delete_draft_part(draft_id, part_id):
 
 
 @finance_bp.route('/draft/<int:draft_id>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 def delete_draft(draft_id):
     draft = safe_get_or_404(FinanceDraft, draft_id)
@@ -360,6 +368,7 @@ def delete_draft(draft_id):
 # ==================== 选择资产 (AJAX) ====================
 
 @finance_bp.route('/draft/<int:draft_id>/select_asset', methods=['POST'])
+@csrf_protect
 @login_required
 def select_asset(draft_id):
     """手动选择/更换草稿关联的资产"""
@@ -409,6 +418,7 @@ def assets_by_dept():
 # ==================== 生成文档 ====================
 
 @finance_bp.route('/<int:batch_id>/generate_docs', methods=['POST'])
+@csrf_protect
 @login_required
 def generate_docs(batch_id):
     """标记所有清单为已生成"""
@@ -560,6 +570,7 @@ def export_acceptance_excel(batch_id):
 # ==================== 删除批次 ====================
 
 @finance_bp.route('/<int:batch_id>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 def delete_batch(batch_id):
     batch = safe_get_or_404(FinanceBatch, batch_id)
@@ -819,6 +830,7 @@ def acceptance_designer_edit(tpl_id):
 
 
 @finance_bp.route('/acceptance_designer/create', methods=['POST'])
+@csrf_protect
 @login_required
 def acceptance_designer_create():
     """新建模板"""
@@ -842,6 +854,7 @@ def acceptance_designer_create():
 
 
 @finance_bp.route('/acceptance_designer/<int:tpl_id>/save', methods=['POST'])
+@csrf_protect
 @login_required
 def acceptance_designer_save(tpl_id):
     """保存模板布局"""
@@ -863,6 +876,7 @@ def acceptance_designer_save(tpl_id):
 
 
 @finance_bp.route('/acceptance_designer/<int:tpl_id>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 def acceptance_designer_delete(tpl_id):
     """删除模板"""
@@ -923,6 +937,7 @@ def batch_acceptance_render(batch_id):
 
 
 @finance_bp.route('/acceptance_designer/import_excel', methods=['POST'])
+@csrf_protect
 @login_required
 def acceptance_designer_import_excel():
     """从 Excel 导入布局"""
@@ -980,6 +995,7 @@ def acceptance_designer_import_excel():
 
 
 @finance_bp.route('/acceptance_designer/import_word', methods=['POST'])
+@csrf_protect
 @login_required
 def acceptance_designer_import_word():
     """从 Word 导入布局"""

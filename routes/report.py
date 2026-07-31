@@ -1,4 +1,6 @@
 """月度报表导出"""
+
+from utils.csrf import csrf_protect
 import io
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, send_file, jsonify

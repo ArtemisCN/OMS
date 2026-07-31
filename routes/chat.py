@@ -1,5 +1,7 @@
 """在线聊天 REST API — 使用 Flask-Login 鉴权"""
 
+from utils.csrf import csrf_protect
+
 from utils.helpers import safe_get
 import os
 import uuid
@@ -89,6 +91,7 @@ def get_messages():
     } for m in messages]})
 
 @chat_bp.route('/send', methods=['POST'])
+@csrf_protect
 @login_required
 def send_message():
     data = request.get_json()
@@ -121,6 +124,7 @@ def send_message():
     })
 
 @chat_bp.route('/leave', methods=['POST'])
+@csrf_protect
 @login_required
 def leave_group():
     """Leave group chat"""
@@ -140,6 +144,7 @@ def leave_group():
 
 
 @chat_bp.route('/upload', methods=['POST'])
+@csrf_protect
 @login_required
 def upload_file():
     if 'file' not in request.files: return jsonify({'error': '没有上传文件'}), 400
@@ -177,6 +182,7 @@ def list_chat_users():
     return jsonify({'teams': result})
 
 @chat_bp.route('/start', methods=['POST'])
+@csrf_protect
 @login_required
 def start_conversation():
     data = request.get_json()
@@ -250,6 +256,7 @@ def unread_counts():
     return jsonify({'total_unread': total})
 
 @chat_bp.route('/mark-read', methods=['POST'])
+@csrf_protect
 @login_required
 def mark_read():
     participants = ChatParticipant.query.filter_by(user_id=current_user.id, is_active=True).all()
@@ -286,6 +293,7 @@ def read_status():
     return jsonify({'read_users': read_users})
 
 @chat_bp.route('/recall', methods=['POST'])
+@csrf_protect
 @login_required
 def recall_message():
     data = request.get_json(silent=True) or {}
@@ -328,6 +336,7 @@ def search_messages():
     return jsonify(results)
 
 @chat_bp.route('/create-group', methods=['POST'])
+@csrf_protect
 @login_required
 def create_group_chat():
     data = request.get_json()

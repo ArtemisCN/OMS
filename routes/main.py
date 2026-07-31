@@ -1,3 +1,4 @@
+from utils.csrf import csrf_protect
 from utils.permissions import has_permission
 """仪表盘路由（优化版：合并查询+缓存）"""
 from flask import current_app,  Blueprint, render_template, request, g, jsonify
@@ -74,6 +75,7 @@ def list_avatars():
 
 
 @main_bp.route('/user/avatar/select', methods=['POST'])
+@csrf_protect
 @login_required
 def select_avatar():
     """保存用户头像选择"""

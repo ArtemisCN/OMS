@@ -1,4 +1,6 @@
 """盘点管理：PC端盘点任务管理、盘盈盘亏核对"""
+
+from utils.csrf import csrf_protect
 from utils.helpers import safe_get, safe_get_or_404
 from utils.permissions import has_permission
 from datetime import datetime
@@ -34,6 +36,7 @@ def list_view():
 # ===================== 新建盘点 =====================
 
 @inv_bp.route('/create', methods=['GET', 'POST'])
+@csrf_protect
 @login_required
 def create():
     """新建盘点任务"""
@@ -252,6 +255,7 @@ def review_data(task_id):
 
 
 @inv_bp.route('/api/item/<int:item_id>/confirm', methods=['POST'])
+@csrf_protect
 @login_required
 def confirm_item(item_id):
     """确认单条盘点记录（支持采纳用户选择的字段值）"""
@@ -341,6 +345,7 @@ def confirm_item(item_id):
 
 
 @inv_bp.route('/<int:task_id>/finish', methods=['POST'])
+@csrf_protect
 @login_required
 def finish(task_id):
     """结束盘点（新版本：校验所有异常/新盘均已确认）"""
@@ -373,6 +378,7 @@ def finish(task_id):
 
 
 @inv_bp.route('/api/<int:task_id>/batch-confirm-normal', methods=['POST'])
+@csrf_protect
 @login_required
 def batch_confirm_normal(task_id):
     """一键确认全部正常项"""
@@ -421,6 +427,7 @@ def unscanned_assets(task_id):
 
 
 @inv_bp.route('/api/<int:task_id>/undo-confirm', methods=['POST'])
+@csrf_protect
 @login_required
 def undo_confirm(task_id):
     """撤销最近一次确认（5分钟内有效）"""
@@ -604,6 +611,7 @@ def export_excel(task_id):
 # ===================== 删除盘点 =====================
 
 @inv_bp.route('/<int:task_id>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 def delete(task_id):
     if not has_permission(current_user, 'biz:inspection'):
@@ -669,6 +677,7 @@ def _calc_surplus_loss(task):
 # ===================== 盘点明细删除 =====================
 
 @inv_bp.route('/item/<int:item_id>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 def delete_item(item_id):
     if not has_permission(current_user, 'biz:inspection'):
@@ -682,6 +691,7 @@ def delete_item(item_id):
 # ===================== 重新统计 =====================
 
 @inv_bp.route('/<int:task_id>/recalc', methods=['POST'])
+@csrf_protect
 @login_required
 def recalc(task_id):
     if not has_permission(current_user, 'biz:inspection'):

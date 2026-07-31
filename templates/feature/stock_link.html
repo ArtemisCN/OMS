@@ -50,6 +50,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="post" action="{{ url_for('feature.stock_link_to_order') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="work_order_id" value="{{ order.id }}">
                 <div class="modal-body">
                     <div class="mb-3">

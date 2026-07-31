@@ -1,5 +1,7 @@
 """科室报修二维码 - 扫码报修系统"""
 
+from utils.csrf import csrf_protect
+
 from utils.helpers import safe_get
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, send_file
 from flask_login import login_required, current_user
@@ -44,6 +46,7 @@ def scan_department(hospital_id):
 
 
 @scan_bp.route('/<int:hospital_id>/submit', methods=['GET', 'POST'])
+@csrf_protect
 def scan_submit(hospital_id):
     """提交报修"""
     hospital = safe_get(Hospital, hospital_id)

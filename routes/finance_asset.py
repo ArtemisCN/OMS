@@ -1,5 +1,7 @@
 """财务资产路由——固定资产入库单/出库单管理"""
 
+from utils.csrf import csrf_protect
+
 from utils.helpers import safe_get, safe_get_or_404
 import math
 from datetime import date, datetime
@@ -277,6 +279,7 @@ def receipt_list():
 # ==================== 入库单创建/编辑 ====================
 
 @fin_bp.route('/receipts/create', methods=['GET', 'POST'])
+@csrf_protect
 @login_required
 def receipt_create():
     suppliers = Supplier.query.filter_by(is_active=True).order_by(Supplier.sort_order, Supplier.name).all()
@@ -338,6 +341,7 @@ def receipt_create():
 
 
 @fin_bp.route('/receipts/<int:receipt_id>/edit', methods=['GET', 'POST'])
+@csrf_protect
 @login_required
 def receipt_edit(receipt_id):
     receipt = safe_get_or_404(FinanceReceipt, receipt_id)
@@ -409,6 +413,7 @@ def receipt_detail(receipt_id):
 
 
 @fin_bp.route('/receipts/<int:receipt_id>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 def receipt_delete(receipt_id):
     receipt = safe_get_or_404(FinanceReceipt, receipt_id)
@@ -519,6 +524,7 @@ def delivery_list():
 # ==================== 出库单创建/编辑 ====================
 
 @fin_bp.route('/deliveries/create', methods=['GET', 'POST'])
+@csrf_protect
 @login_required
 def delivery_create():
     suppliers = Supplier.query.filter_by(is_active=True).order_by(Supplier.sort_order, Supplier.name).all()
@@ -577,6 +583,7 @@ def delivery_create():
 
 
 @fin_bp.route('/deliveries/<int:delivery_id>/edit', methods=['GET', 'POST'])
+@csrf_protect
 @login_required
 def delivery_edit(delivery_id):
     delivery = safe_get_or_404(FinanceDelivery, delivery_id)
@@ -642,6 +649,7 @@ def delivery_detail(delivery_id):
 
 
 @fin_bp.route('/deliveries/<int:delivery_id>/delete', methods=['POST'])
+@csrf_protect
 @login_required
 def delivery_delete(delivery_id):
     delivery = safe_get_or_404(FinanceDelivery, delivery_id)

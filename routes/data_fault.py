@@ -1,4 +1,6 @@
 """故障类型管理子蓝图（从 routes/data.py 提取）"""
+
+from utils.csrf import csrf_protect
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from models import db
@@ -22,6 +24,7 @@ def index():
 
 
 @data_fault_bp.route('/add', methods=['POST'])
+@csrf_protect
 @permission_required("system:config")
 def add():
     ok, msg = data_service.add_fault_type(
@@ -33,6 +36,7 @@ def add():
 
 
 @data_fault_bp.route('/<int:fid>/edit', methods=['POST'])
+@csrf_protect
 @permission_required("system:config")
 def edit(fid):
     ok, msg = data_service.edit_fault_type(
@@ -44,6 +48,7 @@ def edit(fid):
 
 
 @data_fault_bp.route('/<int:fid>/delete', methods=['POST'])
+@csrf_protect
 @permission_required("system:config")
 def delete(fid):
     name = data_service.delete_fault_type(fid, current_user.display_name or current_user.username)

@@ -1,4 +1,6 @@
 """科室字典管理子蓝图（从 routes/data.py 提取）"""
+
+from utils.csrf import csrf_protect
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from models import db
@@ -17,6 +19,7 @@ def index():
 
 
 @data_department_bp.route('/add', methods=['POST'])
+@csrf_protect
 @permission_required("system:config")
 def add():
     ok, msg = data_service.add_department(
@@ -30,6 +33,7 @@ def add():
 
 
 @data_department_bp.route('/<int:id>/edit', methods=['POST'])
+@csrf_protect
 @permission_required("system:config")
 def edit(id):
     ok, msg = data_service.edit_department(
@@ -43,6 +47,7 @@ def edit(id):
 
 
 @data_department_bp.route('/<int:id>/delete', methods=['POST'])
+@csrf_protect
 @permission_required("system:config")
 def delete(id):
     ok, msg = data_service.delete_department(id, current_user.display_name or current_user.username)

@@ -1,5 +1,7 @@
 """跨院区借调管理 - 借调记录 CRUD + 权限控制 + 排班联动 + 操作日志"""
 
+from utils.csrf import csrf_protect
+
 from utils.helpers import safe_get
 import json
 from datetime import datetime, date, timedelta
@@ -356,6 +358,7 @@ def get_available_users():
 
 
 @cross_bp.route('/api/assign', methods=['POST'])
+@csrf_protect
 @login_required
 def create_assignment():
     """创建借调记录"""
@@ -638,6 +641,7 @@ def get_cross_users():
 
 
 @cross_bp.route('/api/auto-expire', methods=['POST'])
+@csrf_protect
 def auto_expire():
     """自动过期借调记录（内部/定时任务调用）"""
     token = request.headers.get('X-Internal-Token', '')

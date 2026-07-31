@@ -1,5 +1,7 @@
 """维修单管理蓝图 - 仅保留流程(创建/查看/审核/打印)，模板统一由电子表单管理"""
 
+from utils.csrf import csrf_protect
+
 from utils.helpers import safe_get
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
@@ -243,6 +245,7 @@ def order_print(oid):
 
 
 @repair_bp.route('/<int:oid>/save_fields', methods=['POST'])
+@csrf_protect
 @login_required_repair
 def order_save_fields(oid):
     order = safe_get(RepairOrder, oid)
@@ -256,6 +259,7 @@ def order_save_fields(oid):
 
 
 @repair_bp.route('/<int:oid>/submit', methods=['POST'])
+@csrf_protect
 @login_required_repair
 def order_submit(oid):
     order = safe_get(RepairOrder, oid)
@@ -267,6 +271,7 @@ def order_submit(oid):
 
 
 @repair_bp.route('/<int:oid>/approve', methods=['POST'])
+@csrf_protect
 @login_required_repair
 def order_approve(oid):
     order = safe_get(RepairOrder, oid)
@@ -280,6 +285,7 @@ def order_approve(oid):
 
 
 @repair_bp.route('/<int:oid>/reject', methods=['POST'])
+@csrf_protect
 @login_required_repair
 def order_reject(oid):
     order = safe_get(RepairOrder, oid)
@@ -291,6 +297,7 @@ def order_reject(oid):
 
 
 @repair_bp.route('/<int:oid>/delete', methods=['POST'])
+@csrf_protect
 @login_required_repair
 def order_delete(oid):
     order = safe_get(RepairOrder, oid)
@@ -304,6 +311,7 @@ def order_delete(oid):
 
 
 @repair_bp.route('/<int:oid>/sign', methods=['POST'])
+@csrf_protect
 @login_required_repair
 def order_sign(oid):
     """保存签名图片"""

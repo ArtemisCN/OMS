@@ -1,3 +1,4 @@
+from utils.csrf import csrf_protect
 from utils.permissions import has_permission
 """Dashboard Blueprint: 运维大屏, 院领导驾驶舱, 自定义报表, 数字孪生, 多院区协同, 运维周报月报, 运维成本核算"""
 import json
@@ -502,6 +503,7 @@ def report_builder():
 
 
 @dashboard_bp.route('/report-builder/generate', methods=['POST'])
+@csrf_protect
 @login_required
 def report_builder_generate():
     """生成报表数据"""
@@ -751,6 +753,7 @@ def digital_twin_data():
 
 
 @dashboard_bp.route('/digital-twin/save-positions', methods=['POST'])
+@csrf_protect
 @login_required
 def digital_twin_save_positions():
     """保存建筑位置（按医院隔离）"""
@@ -770,6 +773,7 @@ def digital_twin_save_positions():
 
 
 @dashboard_bp.route('/digital-twin/save-map', methods=['POST'])
+@csrf_protect
 @login_required
 def digital_twin_save_map():
     """保存地图背景URL（按医院隔离）"""
@@ -789,6 +793,7 @@ def digital_twin_save_map():
 
 
 @dashboard_bp.route('/digital-twin/upload-map', methods=['POST'])
+@csrf_protect
 @login_required
 def digital_twin_upload_map():
     """上传地图背景图片（按医院隔离）"""
@@ -854,6 +859,7 @@ def get_building_model(building_id):
 
 
 @dashboard_bp.route('/digital-twin/model/<building_id>', methods=['POST'])
+@csrf_protect
 @login_required
 def save_building_model(building_id):
     """保存建筑的建模数据（按医院隔离）"""
@@ -873,6 +879,7 @@ def save_building_model(building_id):
 
 
 @dashboard_bp.route('/digital-twin/upload-texture', methods=['POST'])
+@csrf_protect
 @login_required
 def upload_dt_texture():
     """上传自定义贴图"""

@@ -16,7 +16,7 @@ services:
     container_name: hospital-workorder-web
     restart: unless-stopped
     ports:
-      - "127.0.0.1:5001:5000"   # 验证阶段用 5001，避免与生产 systemd(5000) 冲突；切换后改回 5000
+      - "127.0.0.1:5000:5000"   # 生产：Nginx 代理 HTTPS→5000
     environment:
       - TZ=Asia/Shanghai
       # SESSION_COOKIE_SECURE 由 .env 控制（生产 HTTPS 设 1；本地 http 验证不设，否则 cookie 无法发送）

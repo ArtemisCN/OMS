@@ -2268,3 +2268,18 @@ class CrossHospitalAssignment(HospitalMixin, db.Model):
     target_hospital = db.relationship('Hospital', foreign_keys=[target_hospital_id])
     creator = db.relationship('User', foreign_keys=[created_by])
 
+
+class CrossAssignmentLog(db.Model):
+    """借调操作日志"""
+    __tablename__ = 'cross_assignment_logs'
+    id = db.Column(db.Integer, primary_key=True)
+    assignment_id = db.Column(db.Integer, db.ForeignKey('cross_hospital_assignments.id'), nullable=False)
+    action = db.Column(db.String(20), nullable=False)  # create/update/cancel/expire
+    operator_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    old_value = db.Column(db.Text, nullable=True)
+    new_value = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    assignment = db.relationship('CrossHospitalAssignment', backref='logs')
+    operator = db.relationship('User', foreign_keys=[operator_id])
+

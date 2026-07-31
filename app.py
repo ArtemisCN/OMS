@@ -389,6 +389,58 @@ if __name__ == '__main__':
             print("✓ 初始化完成")
             print(f"  - 管理员: admin / admin123")
             print(f"  - 方案模板: {len(app_config.SOLUTION_TEMPLATES)} 条")
+
+            # ===== 演示数据生成 =====
+            print("\n--- 生成演示数据 ---")
+
+            # 1. 创建演示医院
+            from models import Hospital as HospModel
+            pd_hosp = HospModel.query.filter_by(code='pd_hospital').first()
+            if not pd_hosp:
+                pd_hosp = HospModel(name='浦东分院', code='pd_hospital', is_active=True)
+                db.session.add(pd_hosp)
+                db.session.flush()
+                print(f"  - 创建医院: {pd_hosp.name}")
+
+            hk_hosp = HospModel.query.filter_by(code='hk_hospital').first()
+            if not hk_hosp:
+                hk_hosp = HospModel(name='虹口分院', code='hk_hospital', is_active=True)
+                db.session.add(hk_hosp)
+                db.session.flush()
+                print(f"  - 创建医院: {hk_hosp.name}")
+
+            # 2. 创建角色组
+            from models import RoleGroup
+            role_eng = RoleGroup.get_or_create('工程师')
+            role_op = RoleGroup.get_or_create('操作员')
+            print("  - 角色组: 工程师, 操作员")
+
+            # 3. 创建演示账号
+            demo_users = [
+                # (username, display_name, is_admin, hospital, group)
+                ('admin_pd', '浦东管理员', True, pd_hosp, None),
+                ('eng_pd1', '浦东工程师', False, pd_hosp, '工程师'),
+                ('op_pd1', '浦东操作员', False, pd_hosp, '操作员'),
+                ('admin_hk', '虹口管理员', True, hk_hosp, None),
+                ('eng_hk1', '虹口工程师', False, hk_hosp, '工程师'),
+                ('op_hk1', '虹口操作员', False, hk_hosp, '操作员'),
+            ]
+            for uname, dname, is_admin, hospital, group in demo_users:
+                existing = User.query.filter_by(username=uname).first()
+                if not existing:
+                    user = User(
+                        username=uname,
+                        display_name=dname,
+                        is_admin=is_admin,
+                        hospital_id=hospital.id,
+                        group=group or '',
+                    )
+                    user.set_password('demo123')
+                    db.session.add(user)
+                    print(f"  - 创建用户: {uname} / demo123 ({dname})")
+
+            db.session.commit()
+            print("✓ 演示数据生成完成")
         else:
             from models import SolutionTemplate
             if SolutionTemplate.query.count() == 0:

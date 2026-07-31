@@ -12,22 +12,29 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # 系统依赖（Pillow 编译 + cron sidecar 需要）
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 使用清华 apt 镜像加速（国内网络）
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g; s|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g; s|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         libjpeg-dev \
         zlib1g-dev \
         cron \
     && rm -rf /var/lib/apt/lists/*
 
-# 先装依赖（利用 Docker 层缓存）
+# 先装依赖（利用 Docker 层缓存，清华 pip 镜像加速）
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
 
 # 复制应用代码
 COPY . .
 
 # 创建运行目录 + 非 root 用户
+# 注意：.secret 是文件（config.py 用 open() 读写），必须预创建占位，
+# 否则 named volume 挂载到 /app/.secret 会变成空目录导致 IsADirectoryError
 RUN mkdir -p /app/instance /app/uploads /app/logs \
+    && touch /app/.secret \
+    && chmod 600 /app/.secret \
     && useradd -m -u 10001 appuser \
     && chown -R appuser:appuser /app
 

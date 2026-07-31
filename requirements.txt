@@ -11,3 +11,11 @@ requests==2.34.2
 python-dotenv==1.2.2
 flasgger==0.9.7.1
 PyYAML==6.0.3
+# ---- 项目代码实际 import 的依赖（与生产 venv 版本对齐）----
+SQLAlchemy==2.0.50
+qrcode==8.2
+Pillow==12.3.0
+chinese_calendar==1.11.0
+python-docx==1.2.0
+psutil==7.2.2
+cos-python-sdk-v5==1.9.44

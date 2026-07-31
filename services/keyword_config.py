@@ -7,7 +7,7 @@ import json
 
 def _get_fault_type_keywords():
     """从 FaultType.keywords 提取所有故障类型→关键词映射"""
-    from models import FaultType, get_cached_setting
+    from models import FaultType
     try:
         types = FaultType.query.filter(
             FaultType.keywords.isnot(None),
@@ -33,6 +33,7 @@ def get_fault_keywords():
     if result:
         return result
     # 兜底：从旧系统设置读
+    from models import get_cached_setting
     kw_val = get_cached_setting('fault_keywords')
     if kw_val:
         try:
@@ -51,6 +52,7 @@ def get_device_keywords():
         # 转成 [(设备类型, [关键词列表])] 格式
         return [[name, kws] for name, kws in result.items()]
     # 兜底
+    from models import get_cached_setting
     kw_val = get_cached_setting('device_keywords')
     if kw_val:
         try:

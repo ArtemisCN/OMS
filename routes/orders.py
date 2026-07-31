@@ -872,7 +872,9 @@ def search_orders_api():
 
 # ==================== 工单讨论（聊天） ====================
 
-WO_CHAT_UPLOAD_FOLDER = '/var/www/static/uploads/wochat'
+# 工单聊天图片上传目录：默认宿主机 nginx 静态目录（systemd 生产）；
+# Docker 部署通过环境变量 WO_CHAT_UPLOAD_FOLDER 覆盖为容器内路径（挂 uploads 卷）
+WO_CHAT_UPLOAD_FOLDER = os.environ.get('WO_CHAT_UPLOAD_FOLDER', '/var/www/static/uploads/wochat')
 os.makedirs(WO_CHAT_UPLOAD_FOLDER, exist_ok=True)
 ALLOWED_WO_CHAT_EXT = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'}
 

@@ -548,8 +548,8 @@ def renew_cert():
         return jsonify(success=False, msg=str(e))
 
 
-BACKUP_DIR = '/var/backups/hospital-workorder'
-PROJECT_DIR = '/var/www/hospital-workorder'
+BACKUP_DIR = os.environ.get('BACKUP_DIR', '/var/backups/hospital-workorder')
+PROJECT_DIR = os.environ.get('PROJECT_DIR', '/var/www/hospital-workorder')
 DB_PATH = os.path.join(PROJECT_DIR, 'instance', 'workorders.db')
 
 

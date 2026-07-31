@@ -819,7 +819,7 @@ def digital_twin_upload_map():
 
     import uuid
     filename = f'hospital_map_{hid}_{uuid.uuid4().hex[:8]}.{ext}'
-    upload_dir = '/var/www/static/hospital_maps'
+    upload_dir = os.environ.get('UPLOAD_DIR_HOSPITAL_MAPS', '/var/www/static/hospital_maps')
     os.makedirs(upload_dir, exist_ok=True)
     file.save(os.path.join(upload_dir, filename))
 
@@ -899,7 +899,7 @@ def upload_dt_texture():
         return jsonify(success=False, error='仅支持 png/jpg/gif/webp'), 400
     import uuid
     filename = f'dt_tex_{uuid.uuid4().hex[:8]}.{ext}'
-    upload_dir = '/var/www/static/dt_textures'
+    upload_dir = os.environ.get('UPLOAD_DIR_DT_TEXTURES', '/var/www/static/dt_textures')
     os.makedirs(upload_dir, exist_ok=True)
     file.save(os.path.join(upload_dir, filename))
     file_url = f'/static/dt_textures/{filename}'

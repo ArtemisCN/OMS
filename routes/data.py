@@ -122,7 +122,7 @@ def upload_hospital_logo(hid):
     if ext not in ALLOWED_EXTENSIONS:
         return jsonify({'error': '仅支持 png/jpg/gif/webp/svg 格式'}), 400
     filename = f'hospital_{hid}_{uuid.uuid4().hex[:8]}.{ext}'
-    upload_dir = '/var/www/static/uploads/hospitals'
+    upload_dir = os.environ.get('UPLOAD_DIR_HOSPITALS', '/var/www/static/uploads/hospitals')
     os.makedirs(upload_dir, exist_ok=True)
     file.save(os.path.join(upload_dir, filename))
     if hospital.logo:

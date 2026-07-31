@@ -70,10 +70,10 @@ def dashboard():
     )] + base_filter
 
     stats_row = db.session.query(
-        func.count(case(tuple(pending_filter), else_=None)).label('pending'),
-        func.count(case(tuple(in_progress_filter), else_=None)).label('in_progress'),
-        func.count(case(tuple(completed_filter), else_=None)).label('completed'),
-        func.count(case(tuple(completed_today_filter), else_=None)).label('completed_today'),
+        func.count(case((and_(*pending_filter), 1), else_=None)).label('pending'),
+        func.count(case((and_(*in_progress_filter), 1), else_=None)).label('in_progress'),
+        func.count(case((and_(*completed_filter), 1), else_=None)).label('completed'),
+        func.count(case((and_(*completed_today_filter), 1), else_=None)).label('completed_today'),
     ).first()
     stats = {
         'pending': stats_row.pending or 0,

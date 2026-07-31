@@ -1,0 +1,65 @@
+# ============================================================
+# 医院IT工单系统 — Docker Compose
+# 服务：
+#   web    — gunicorn 主服务（3 worker, WAL 已全局启用）
+#   cron   — sidecar：auto_escalate(5min) / inspection_recurring(5min)
+#             / cleanup(每周日) / health_monitor(每天)
+# 数据卷（必须持久化，否则容器重建丢数据/密钥）：
+#   workorder_data:/app/instance   — SQLite 数据库
+#   workorder_uploads:/app/uploads — 上传文件
+#   workorder_secret:/app/.secret  — SECRET_KEY（重建变化会导致全部 session 失效）
+# ============================================================
+services:
+  web:
+    build: .
+    image: hospital-workorder:latest
+    container_name: hospital-workorder-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5000:5000"   # 仅本机回环，对外由宿主 nginx 反代
+    environment:
+      - TZ=Asia/Shanghai
+      - SESSION_COOKIE_SECURE=1   # 生产 HTTPS 下启用 Secure cookie
+    env_file:
+      - .env
+    volumes:
+      - workorder_data:/app/instance
+      - workorder_uploads:/app/uploads
+      - workorder_secret:/app/.secret
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # cron sidecar：共享代码卷，执行定时脚本（需 root 写 crontab）
+  cron:
+    build: .
+    image: hospital-workorder:latest
+    container_name: hospital-workorder-cron
+    restart: unless-stopped
+    depends_on:
+      - web
+    user: root
+    environment:
+      - TZ=Asia/Shanghai
+    env_file:
+      - .env
+    volumes:
+      - workorder_data:/app/instance
+      - workorder_uploads:/app/uploads
+      - workorder_secret:/app/.secret
+    command: >
+      sh -c "
+      echo '*/5 * * * * cd /app && python scripts/auto_escalate.py >> /app/logs/auto_escalate.log 2>&1' > /etc/cron.d/workorder &&
+      echo '*/5 * * * * cd /app && python scripts/inspection_recurring.py >> /app/logs/inspection_recurring.log 2>&1' >> /etc/cron.d/workorder &&
+      echo '0 8 * * * cd /app && python scripts/health_monitor.py >> /app/logs/health.log 2>&1' >> /etc/cron.d/workorder &&
+      chmod 644 /etc/cron.d/workorder &&
+      cron -f
+      "
+
+volumes:
+  workorder_data:
+  workorder_uploads:
+  workorder_secret:

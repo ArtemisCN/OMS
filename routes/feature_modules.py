@@ -2024,25 +2024,29 @@ def inspection_routes():
     """巡检路线列表页"""
     hid = getattr(g, 'hospital_id', 0)
     routes = InspectionRoute.query.order_by(InspectionRoute.created_at.desc()).all()
-    # 楼栋：过滤本院的
-    bld_q = db.session.query(Department.building).filter(
+    # 楼栋/楼层/科室：工单数据为主（规范名称，如"7号楼"/"1F"），
+    # departments 楼栋补充（仅限非裸数字的规范名，如"住院楼""门诊楼"；
+    # 早期导入的裸数字 "1"/"2" 会污染下拉，丢弃）
+    bld_q = db.session.query(WorkOrder.building).filter(
+        WorkOrder.building != '', WorkOrder.building.isnot(None))
+    fl_q = db.session.query(WorkOrder.floor).filter(
+        WorkOrder.floor != '', WorkOrder.floor.isnot(None))
+    dept_q = db.session.query(WorkOrder.department).filter(
+        WorkOrder.department != '', WorkOrder.department.isnot(None))
+    if hid and hid != 0:
+        bld_q = bld_q.filter(WorkOrder.hospital_id == hid)
+        fl_q = fl_q.filter(WorkOrder.hospital_id == hid)
+        dept_q = dept_q.filter(WorkOrder.hospital_id == hid)
+    buildings = sorted(set(r[0] for r in bld_q.distinct().all()))
+    floors = sorted(set(r[0] for r in fl_q.distinct().all()))
+    departments = sorted(set(r[0] for r in dept_q.distinct().all()))
+    # departments 补充（仅规范楼栋名，排除裸数字/空）
+    d_bld_q = db.session.query(Department.building).filter(
         Department.building != '', Department.building.isnot(None))
     if hid and hid != 0:
-        bld_q = bld_q.filter(Department.hospital_id == hid)
-    buildings = sorted(set(r[0] for r in bld_q.distinct().all()))
-
-    # 楼层
-    fl_q = db.session.query(Department.floor).filter(
-        Department.floor != '', Department.floor.isnot(None))
-    if hid and hid != 0:
-        fl_q = fl_q.filter(Department.hospital_id == hid)
-    floors = sorted(set(r[0] for r in fl_q.distinct().all()))
-
-    # 科室
-    dept_q = Department.query.filter(Department.is_active == True)
-    if hid and hid != 0:
-        dept_q = dept_q.filter(Department.hospital_id == hid)
-    departments = [d.name for d in dept_q.order_by(Department.name).all()]
+        d_bld_q = d_bld_q.filter(Department.hospital_id == hid)
+    extra_blds = {r[0] for r in d_bld_q.distinct().all() if r[0] and not r[0].strip().isdigit()}
+    buildings = sorted(set(buildings) | extra_blds)
     return render_template('feature/inspection_routes.html', routes=routes,
                            routes_json=json.dumps([{
                                'id': r.id, 'name': r.name,

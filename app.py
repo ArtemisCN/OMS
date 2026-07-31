@@ -112,6 +112,20 @@ def create_app():
             _system_settings[s.key] = s.value
         app.config['SYSTEM_SETTINGS'] = _system_settings
 
+        # 确保 default_hospital_id 存在（旧库升级/非首次启动也能自动补上，避免借调等模块无医院上下文）
+        try:
+            if not SystemSetting.query.filter_by(key='default_hospital_id').first():
+                from models import Hospital
+                first_hosp = Hospital.query.filter_by(is_active=True).order_by(Hospital.id).first()
+                if first_hosp:
+                    db.session.add(SystemSetting(key='default_hospital_id', value=str(first_hosp.id)))
+                    db.session.commit()
+                    app.logger.info(f'自动补建 default_hospital_id={first_hosp.id} ({first_hosp.name})')
+                    _system_settings['default_hospital_id'] = str(first_hosp.id)
+        except Exception as e:
+            app.logger.warning(f'自动补建 default_hospital_id 失败: {e}')
+            db.session.rollback()
+
         # 用系统设置的日志参数覆盖环境变量默认值
         if 'log_level' in _system_settings:
             app.config['LOG_LEVEL_FROM_SETTINGS'] = _system_settings['log_level']

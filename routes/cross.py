@@ -20,7 +20,19 @@ cross_bp = Blueprint('cross', __name__, url_prefix='/cross')
 def _get_hospital_id():
     """获取当前用户作用中的院区ID"""
     hid = getattr(g, 'hospital_id', 0)
-    return hid if hid else 0
+    if hid:
+        return hid
+    # 无医院上下文时回退到默认医院，避免新库/未配置时报错
+    from models import SystemSetting
+    try:
+        default = SystemSetting.query.filter_by(key='default_hospital_id').first()
+        if default and default.value:
+            return int(default.value)
+    except Exception:
+        pass
+    from models import Hospital
+    first_hosp = Hospital.query.filter_by(is_active=True).order_by(Hospital.id).first()
+    return first_hosp.id if first_hosp else 0
 
 
 def _json_error(msg, code=400):

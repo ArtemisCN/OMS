@@ -93,7 +93,13 @@ def select_avatar():
 def serve_upload(filename):
     """提供上传的图片文件（本地 → COS 回退）"""
     import os
-    from flask import current_app, send_from_directory, redirect
+    from flask import current_app, send_from_directory, redirect, abort
+    # 扩展名白名单：只允许图片 + 常用文档，防止上传目录被当任意文件下载源
+    ALLOWED_UPLOAD_EXT = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
+                          '.pdf', '.mp3', '.wav', '.ogg', '.mp4', '.doc', '.docx',
+                          '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.zip', '.rar', '.7z'}
+    if not filename.lower().endswith(tuple(ALLOWED_UPLOAD_EXT)):
+        return abort(404)
     upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads')
     local_path = os.path.join(upload_dir, filename)
     if os.path.exists(local_path):

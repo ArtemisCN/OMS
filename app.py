@@ -44,6 +44,16 @@ def create_app():
     app.config['PERMANENT_SESSION_LIFETIME'] = 1800  # 30分钟（会被系统参数覆盖，管理员可在设置页调长）
     app.config['REMEMBER_COOKIE_DURATION'] = 604800  # 7天
 
+    # 生产 HTTPS 下启用 Secure 标志（由环境变量控制；本地 HTTP 开发模式关闭，否则登录 cookie 不生效）
+    app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', '') == '1'
+
+    # nginx 反代后正确识别 HTTPS（X-Forwarded-Proto 由 nginx 注入）
+    try:
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+    except ImportError:
+        pass
+
     db.init_app(app)
 
     # ===== 初始化日志与监控系统 =====

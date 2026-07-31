@@ -3,6 +3,9 @@ import os
 import uuid
 from datetime import datetime
 from PIL import Image
+
+# 防解压炸弹：拒绝超大像素图片（如 10000x10000+），避免内存耗尽
+Image.MAX_IMAGE_PIXELS = 40_000_000  # 约 4000 万像素上限
 from io import BytesIO
 
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads', 'photos')

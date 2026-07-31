@@ -285,7 +285,7 @@ def data():
 
     # ---------- 备份状态 ----------
     backup_info = {'latest': '', 'size_fmt': '', 'age': '', 'exists': False}
-    backup_dir = '/var/backups/hospital-workorder'
+    backup_dir = os.environ.get('BACKUP_DIR', '/var/backups/hospital-workorder')
     if os.path.isdir(backup_dir):
         try:
             files = sorted([f for f in os.listdir(backup_dir) if f.endswith(('.sql', '.db', '.tar', '.gz'))], reverse=True)
@@ -604,6 +604,20 @@ def backup_list():
     return jsonify(backups=backups)
 
 
+def _backup_sqlite(src, dst):
+    """用 SQLite 在线备份 API 做一致性备份（WAL 模式下 cp 会丢失未 checkpoint 数据）"""
+    import sqlite3
+    src_conn = sqlite3.connect(src)
+    try:
+        dst_conn = sqlite3.connect(dst)
+        try:
+            src_conn.backup(dst_conn)
+        finally:
+            dst_conn.close()
+    finally:
+        src_conn.close()
+
+
 @monitor_bp.route('/backup-create', methods=['POST'])
 @login_required
 def backup_create():
@@ -615,23 +629,24 @@ def backup_create():
         os.makedirs(BACKUP_DIR, exist_ok=True)
         if btype == 'data':
             fname = f'data-{now}.db'
-            subprocess.run(['sudo', 'cp', DB_PATH, os.path.join(BACKUP_DIR, fname)], check=True, timeout=30)
+            # 用 sqlite3 在线一致性备份 API，避免 cp 运行中 WAL 库导致备份损坏/不一致
+            _backup_sqlite(DB_PATH, os.path.join(BACKUP_DIR, fname))
         elif btype == 'system':
             fname = f'system-{now}.tar.gz'
             dst = os.path.join(BACKUP_DIR, fname)
-            subprocess.run(['sudo', 'bash', '-c',
-                f'cd {PROJECT_DIR} && tar czf {dst} --exclude=venv --exclude=__pycache__ --exclude=.git --exclude=node_modules --exclude=instance/workorders.db --exclude=instance/workorders.db-wal .'],
+            subprocess.run(['bash', '-c',
+                f'cd {PROJECT_DIR} && tar czf {dst} --exclude=venv --exclude=__pycache__ --exclude=.git --exclude=node_modules --exclude=backups --exclude=instance/workorders.db --exclude=instance/workorders.db-wal .'],
                 check=True, timeout=60)
         else:
             fname = f'full-{now}.tar.gz'
             dst = os.path.join(BACKUP_DIR, fname)
-            subprocess.run(['sudo', 'cp', DB_PATH, '/tmp/wb.db'], check=True, timeout=10)
+            _backup_sqlite(DB_PATH, '/tmp/wb.db')
             try:
-                subprocess.run(['sudo', 'bash', '-c',
-                    f'cd {PROJECT_DIR} && tar czf {dst} --exclude=venv --exclude=__pycache__ --exclude=.git --exclude=node_modules --transform "s|/tmp/wb.db|instance/workorders.db|" /tmp/wb.db .'],
+                subprocess.run(['bash', '-c',
+                    f'cd {PROJECT_DIR} && tar czf {dst} --exclude=venv --exclude=__pycache__ --exclude=.git --exclude=node_modules --exclude=backups --transform "s|/tmp/wb.db|instance/workorders.db|" /tmp/wb.db .'],
                     check=True, timeout=60)
             finally:
-                subprocess.run(['sudo', 'rm', '-f', '/tmp/wb.db'])
+                subprocess.run(['rm', '-f', '/tmp/wb.db'])
         return jsonify(success=True, msg=f'备份完成: {fname}')
     except subprocess.TimeoutExpired:
         return jsonify(success=False, msg='备份超时')
@@ -662,16 +677,16 @@ def backup_restore():
         return jsonify(success=False, msg='备份文件不存在')
     try:
         if name.startswith('data-') and name.endswith('.db'):
-            subprocess.run(['sudo', 'cp', DB_PATH, DB_PATH + '.before_restore'], check=True, timeout=10)
-            subprocess.run(['sudo', 'cp', src, DB_PATH], check=True, timeout=10)
+            subprocess.run(['cp', DB_PATH, DB_PATH + '.before_restore'], check=True, timeout=10)
+            subprocess.run(['cp', src, DB_PATH], check=True, timeout=10)
             return jsonify(success=True, msg='数据已恢复（原库备份为 .before_restore）')
         elif name.startswith('system-') and name.endswith('.tar.gz'):
-            subprocess.run(['sudo', 'cp', DB_PATH, '/tmp/db_before_restore.db'], check=True, timeout=10)
-            subprocess.run(['sudo', 'bash', '-c', f'cd {PROJECT_DIR} && tar xzf {src} --overwrite'], check=True, timeout=60)
+            subprocess.run(['cp', DB_PATH, '/tmp/db_before_restore.db'], check=True, timeout=10)
+            subprocess.run(['bash', '-c', f'cd {PROJECT_DIR} && tar xzf {src} --overwrite'], check=True, timeout=60)
             return jsonify(success=True, msg='系统已恢复')
         elif name.startswith('full-') and name.endswith('.tar.gz'):
-            subprocess.run(['sudo', 'cp', DB_PATH, DB_PATH + '.before_restore'], check=True, timeout=10)
-            subprocess.run(['sudo', 'bash', '-c', f'cd {PROJECT_DIR} && tar xzf {src} --overwrite'], check=True, timeout=60)
+            subprocess.run(['cp', DB_PATH, DB_PATH + '.before_restore'], check=True, timeout=10)
+            subprocess.run(['bash', '-c', f'cd {PROJECT_DIR} && tar xzf {src} --overwrite'], check=True, timeout=60)
             return jsonify(success=True, msg='完整备份已恢复')
         else:
             return jsonify(success=False, msg='不支持的备份格式')

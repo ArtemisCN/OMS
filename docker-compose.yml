@@ -44,6 +44,7 @@ services:
     volumes:
       - workorder_data:/app/instance
       - workorder_uploads:/app/uploads
+      - workorder_backups:/app/backups   # 备份持久化，容器重建不丢
       # 注意: SECRET_KEY 由 .env 注入环境变量, 不挂 .secret 卷
       # (.secret 是文件, Docker named volume 无法挂载文件路径)
     healthcheck:
@@ -91,6 +92,7 @@ services:
     volumes:
       - workorder_data:/app/instance
       - workorder_uploads:/app/uploads
+      - workorder_backups:/app/backups   # 备份持久化（cron 备份脚本同样需要）
       # 注意: SECRET_KEY 由 .env 注入环境变量, 不挂 .secret 卷
       # (.secret 是文件, Docker named volume 无法挂载文件路径)
     command: >
@@ -200,6 +202,7 @@ services:
 volumes:
   workorder_data:
   workorder_uploads:
+  workorder_backups:   # 备份持久化卷
   nginx_logs:
   prometheus_data:
   grafana_data:

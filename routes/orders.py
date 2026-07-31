@@ -2,6 +2,7 @@
 
 from utils.helpers import safe_get, safe_get_or_404
 import io
+import json
 import os
 import uuid
 from datetime import datetime, timedelta
@@ -184,7 +185,6 @@ def publish_order():
     for h in handovers:
         if h.handover_person: handover_person_set.add(h.handover_person)
         if h.receive_person: handover_person_set.add(h.receive_person)
-    import json
     handover_records_data = [{
         'id': h.id,
         'handover_person': h.handover_person,

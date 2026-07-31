@@ -59,6 +59,34 @@ if (window.fetch && CSRF_TOKEN) {
     };
 }
 
+// 包装 XMLHttpRequest：非 GET 自动加 X-CSRF-Token header（2026-07-31 P1 修复）
+// 工单讨论/电子表单保存等用 XHR 的 POST 之前全部 403 —— base.js 此前只包装 fetch
+if (window.XMLHttpRequest && CSRF_TOKEN) {
+    var _origOpen = XMLHttpRequest.prototype.open;
+    var _origSend = XMLHttpRequest.prototype.send;
+    var _origSetReqHeader = XMLHttpRequest.prototype.setRequestHeader;
+    XMLHttpRequest.prototype.open = function(method, url) {
+        this.__csrfMethod = (method || 'GET').toUpperCase();
+        this.__csrfHeaders = {};
+        return _origOpen.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
+        if (this.__csrfHeaders) this.__csrfHeaders[name] = value;
+        return _origSetReqHeader.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.send = function(body) {
+        var self = this;
+        if (self.__csrfMethod && self.__csrfMethod !== 'GET' && CSRF_TOKEN) {
+            var hasToken = false;
+            for (var k in (self.__csrfHeaders || {})) {
+                if (k.toLowerCase() === 'x-csrf-token') { hasToken = true; break; }
+            }
+            if (!hasToken) _origSetReqHeader.call(self, 'X-CSRF-Token', CSRF_TOKEN);
+        }
+        return _origSend.apply(this, arguments);
+    };
+}
+
 // ===== 侧边栏收起/展开 =====
 function toggleSidebar() {
     var body = document.body;

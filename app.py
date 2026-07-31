@@ -373,7 +373,7 @@ if __name__ == '__main__':
             from models import Hospital
             default_hospital = Hospital.query.first()
             if not default_hospital:
-                default_hospital = Hospital(name='默认医院', is_active=True)
+                default_hospital = Hospital(name='默认医院', code='default', is_active=True)
                 db.session.add(default_hospital)
                 db.session.flush()
                 print("  - 创建默认医院")
@@ -397,7 +397,7 @@ if __name__ == '__main__':
                 from models import Hospital
                 default_hospital = Hospital.query.first()
                 if not default_hospital:
-                    default_hospital = Hospital(name='默认医院', is_active=True)
+                    default_hospital = Hospital(name='默认医院', code='default', is_active=True)
                     db.session.add(default_hospital)
                     db.session.flush()
                 for title, content in app_config.SOLUTION_TEMPLATES.items():

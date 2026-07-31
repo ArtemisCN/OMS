@@ -6,6 +6,59 @@
 // 未登录页面兼容：USER 可能未定义
 var USER = typeof USER !== 'undefined' ? USER : { avatar: '', displayName: '' };
 
+
+// ===== CSRF Token 全局注入（配合 meta[name=csrf-token]，2026-07-31） =====
+var CSRF_TOKEN = (function() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+})();
+
+function injectCsrfTokenIntoForm(form) {
+    if (!CSRF_TOKEN || !form || form.querySelector('input[name="_csrf_token"]')) return;
+    var inp = document.createElement('input');
+    inp.type = 'hidden';
+    inp.name = '_csrf_token';
+    inp.value = CSRF_TOKEN;
+    form.appendChild(inp);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('form').forEach(injectCsrfTokenIntoForm);
+    // 动态创建的 form 也要注入
+    if (window.MutationObserver && CSRF_TOKEN) {
+        var mo = new MutationObserver(function(muts) {
+            muts.forEach(function(m) {
+                m.addedNodes.forEach(function(n) {
+                    if (n.nodeType === 1 && n.tagName === 'FORM') injectCsrfTokenIntoForm(n);
+                    else if (n.nodeType === 1 && n.querySelectorAll) {
+                        n.querySelectorAll('form').forEach(injectCsrfTokenIntoForm);
+                    }
+                });
+            });
+        });
+        mo.observe(document.body, {childList: true, subtree: true});
+    }
+});
+
+// 包装 fetch：非 GET 自动加 X-CSRF-Token header
+if (window.fetch && CSRF_TOKEN) {
+    var _origFetch = window.fetch;
+    window.fetch = function(url, opts) {
+        opts = opts || {};
+        var method = (opts.method || 'GET').toUpperCase();
+        if (method !== 'GET') {
+            var hdrs = opts.headers || {};
+            if (typeof Headers !== 'undefined' && hdrs instanceof Headers) {
+                if (!hdrs.has('X-CSRF-Token')) hdrs.set('X-CSRF-Token', CSRF_TOKEN);
+            } else {
+                if (!hdrs['X-CSRF-Token']) hdrs['X-CSRF-Token'] = CSRF_TOKEN;
+                opts.headers = hdrs;
+            }
+        }
+        return _origFetch(url, opts);
+    };
+}
+
 // ===== 侧边栏收起/展开 =====
 function toggleSidebar() {
     var body = document.body;

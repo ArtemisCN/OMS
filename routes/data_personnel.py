@@ -1,4 +1,6 @@
 """人员管理子蓝图（从 routes/data.py 提取）"""
+
+from utils.helpers import safe_get, safe_get_or_404
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from models import db, User, WorkOrder, SystemSetting, Hospital, RoleGroup
@@ -94,7 +96,7 @@ def toggle(pid):
 @data_personnel_bp.route('/<int:pid>/delete', methods=['POST'])
 @permission_required('user:delete')
 def delete(pid):
-    p = User.query.get_or_404(pid)
+    p = safe_get_or_404(User, pid)
     if p.is_admin:
         flash('管理员账号不可删除', 'danger')
         return redirect(url_for('data_personnel.index'))
@@ -109,7 +111,7 @@ def delete(pid):
 @data_personnel_bp.route('/<int:pid>/reassign-orders', methods=['POST'])
 @permission_required('user:edit')
 def reassign_orders(pid):
-    p = User.query.get_or_404(pid)
+    p = safe_get_or_404(User, pid)
     source_name = p.display_name or p.username
     target_name = request.form.get('target_name', '').strip()
     if not target_name:
@@ -171,7 +173,7 @@ def batch_action():
             protected = []
             deleted_names = []
             for pid in ids:
-                p = User.query.get(pid)
+                p = safe_get(User, pid)
                 if p:
                     name = p.display_name or p.username
                     wo_count = WorkOrder.query.filter(WorkOrder.created_by == name).count()

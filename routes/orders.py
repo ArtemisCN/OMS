@@ -1,4 +1,6 @@
 """工单管理路由（薄路由版 —— 业务逻辑委托给 services/order_service）"""
+
+from utils.helpers import safe_get, safe_get_or_404
 import io
 import os
 import uuid
@@ -48,7 +50,6 @@ def list_orders():
 
     query = svc.build_order_query(filters, current_user)
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-    filtered_all = query.all()
 
     persons, buildings, teams = svc.get_filter_data()
     stats = svc.get_order_stats()
@@ -56,7 +57,7 @@ def list_orders():
     from datetime import datetime
     now = datetime.now()
     ball_map = {}
-    for o in filtered_all:
+    for o in pagination.items:
         end_t = o.end_time or o.completed_at
         start_t = o.start_time or o.accepted_at or o.created_at
         if o.status == 'completed' and start_t and end_t:
@@ -184,19 +185,20 @@ def publish_order():
         if h.handover_person: handover_person_set.add(h.handover_person)
         if h.receive_person: handover_person_set.add(h.receive_person)
     import json
+    handover_records_data = [{
+        'id': h.id,
+        'handover_person': h.handover_person,
+        'receive_person': h.receive_person,
+        'content': h.content,
+        'unfinished_orders': h.unfinished_orders or [],
+        'notes': h.notes,
+        'status': h.status,
+        'created_at': h.created_at.strftime('%Y-%m-%d %H:%M') if h.created_at else '',
+    } for h in handovers]
     return render_template('orders/publish.html',
         all_teams=all_teams, team=team,
         handover_records=handovers,
-        handover_records_json=json.dumps([{
-            'id': h.id,
-            'handover_person': h.handover_person,
-            'receive_person': h.receive_person,
-            'content': h.content,
-            'unfinished_orders': h.unfinished_orders or [],
-            'notes': h.notes,
-            'status': h.status,
-            'created_at': h.created_at.strftime('%Y-%m-%d %H:%M') if h.created_at else '',
-        } for h in handovers], ensure_ascii=False),
+        handover_records_data=handover_records_data,
         handover_stats={
             'total': len(handovers),
             'today': sum(1 for h in handovers if h.created_at and h.created_at.date() == datetime.now().date()),
@@ -368,7 +370,7 @@ def detail(order_id):
 @permission_required('order:solve')
 def update_solution(order_id):
     """更新工单解决方案（AJAX）"""
-    order = WorkOrder.query.get_or_404(order_id)
+    order = safe_get_or_404(WorkOrder, order_id)
     solution = request.form.get('solution', '').strip()
     order.solution = solution
     if solution and order.status == 'in_progress':
@@ -733,7 +735,7 @@ def calendar_day_api():
 @permission_required('order:edit')
 def upload_photo(order_id):
     """上传工单照片"""
-    order = WorkOrder.query.get_or_404(order_id)
+    order = safe_get_or_404(WorkOrder, order_id)
     files = request.files.getlist('photos')
     if not files:
         flash('请选择图片', 'warning')
@@ -769,7 +771,7 @@ def delete_photo(order_id, photo_id):
     """删除工单照片"""
     from models import WorkOrderPhoto
     from utils.photo import delete_photo_file
-    photo = WorkOrderPhoto.query.get(photo_id)
+    photo = safe_get(WorkOrderPhoto, photo_id)
     if photo and photo.work_order_id == int(order_id):
         if photo.filepath:
             delete_photo_file(photo.filepath)
@@ -817,7 +819,7 @@ ALLOWED_WO_CHAT_EXT = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'}
 @login_required
 def wo_chat_messages(order_id):
     """获取工单聊天消息"""
-    order = WorkOrder.query.get_or_404(order_id)
+    order = safe_get_or_404(WorkOrder, order_id)
     before_id = request.args.get('before_id', type=int)
     after_id = request.args.get('after_id', type=int)
     limit = min(request.args.get('limit', 50, type=int), 100)
@@ -845,7 +847,7 @@ def wo_chat_messages(order_id):
 @login_required
 def wo_chat_send(order_id):
     """发送工单聊天消息"""
-    order = WorkOrder.query.get_or_404(order_id)
+    order = safe_get_or_404(WorkOrder, order_id)
     data = request.get_json()
     if not data:
         return jsonify({'error': '无效请求'}), 400
@@ -876,7 +878,7 @@ def wo_chat_send(order_id):
 @login_required
 def wo_chat_upload(order_id):
     """上传工单聊天文件（图片）"""
-    order = WorkOrder.query.get_or_404(order_id)
+    order = safe_get_or_404(WorkOrder, order_id)
     if 'file' not in request.files:
         return jsonify({'error': '没有上传文件'}), 400
     file = request.files['file']
@@ -916,7 +918,7 @@ def toggle_star(order_id):
 @login_required
 def urge_order(order_id):
     """催单：工单紧急程度上升为紧急 + 发送企业微信通知"""
-    order = WorkOrder.query.get_or_404(order_id)
+    order = safe_get_or_404(WorkOrder, order_id)
     
     # 检查催单间隔
     interval_setting = SystemSetting.query.filter_by(key='order_remind_interval').first()

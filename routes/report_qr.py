@@ -1,4 +1,6 @@
 """科室报修二维码 - 扫码报修系统"""
+
+from utils.helpers import safe_get
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, send_file
 from flask_login import login_required, current_user
 from models import db, WorkOrder, Hospital, Department
@@ -20,7 +22,7 @@ def scan_index():
         if not assigned:
             # fallback: 如果用户没分配医院但绑定了 hospital_id
             if user.hospital_id:
-                h = Hospital.query.get(user.hospital_id)
+                h = safe_get(Hospital, user.hospital_id)
                 assigned = [h] if h else []
         hospitals = [h for h in assigned if h.is_active]
     return render_template('scan/index.html', hospitals=hospitals)
@@ -29,7 +31,7 @@ def scan_index():
 @scan_bp.route('/<int:hospital_id>')
 def scan_department(hospital_id):
     """选科室页"""
-    hospital = Hospital.query.get(hospital_id)
+    hospital = safe_get(Hospital, hospital_id)
     if not hospital:
         return "医院不存在", 404
     depts = db.session.query(WorkOrder.department).filter(
@@ -44,7 +46,7 @@ def scan_department(hospital_id):
 @scan_bp.route('/<int:hospital_id>/submit', methods=['GET', 'POST'])
 def scan_submit(hospital_id):
     """提交报修"""
-    hospital = Hospital.query.get(hospital_id)
+    hospital = safe_get(Hospital, hospital_id)
     if not hospital:
         return "医院不存在", 404
 
@@ -53,7 +55,7 @@ def scan_submit(hospital_id):
     asset = None
     if asset_id:
         from models import Asset
-        asset = Asset.query.get(asset_id)
+        asset = safe_get(Asset, asset_id)
 
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
@@ -110,7 +112,7 @@ def scan_submit(hospital_id):
 @scan_bp.route('/qr/<int:hospital_id>/<path:department>')
 def qr_page(hospital_id, department=None):
     """生成报修二维码页面"""
-    hospital = Hospital.query.get(hospital_id)
+    hospital = safe_get(Hospital, hospital_id)
     if not hospital:
         return "医院不存在", 404
     return render_template('scan/qr.html', hospital=hospital, department=department)
@@ -120,7 +122,7 @@ def qr_page(hospital_id, department=None):
 def qr_image(hospital_id):
     """生成报修二维码图片"""
     import qrcode
-    hospital = Hospital.query.get(hospital_id)
+    hospital = safe_get(Hospital, hospital_id)
     if not hospital:
         return "医院不存在", 404
 

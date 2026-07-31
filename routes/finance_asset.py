@@ -1,4 +1,6 @@
 """财务资产路由——固定资产入库单/出库单管理"""
+
+from utils.helpers import safe_get, safe_get_or_404
 import math
 from datetime import date, datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
@@ -338,7 +340,7 @@ def receipt_create():
 @fin_bp.route('/receipts/<int:receipt_id>/edit', methods=['GET', 'POST'])
 @login_required
 def receipt_edit(receipt_id):
-    receipt = FinanceReceipt.query.get_or_404(receipt_id)
+    receipt = safe_get_or_404(FinanceReceipt, receipt_id)
     suppliers = Supplier.query.filter_by(is_active=True).order_by(Supplier.sort_order, Supplier.name).all()
 
     if request.method == 'POST':
@@ -401,7 +403,7 @@ def receipt_edit(receipt_id):
 @fin_bp.route('/receipts/<int:receipt_id>')
 @login_required
 def receipt_detail(receipt_id):
-    receipt = FinanceReceipt.query.get_or_404(receipt_id)
+    receipt = safe_get_or_404(FinanceReceipt, receipt_id)
     items = FinanceReceiptItem.query.filter_by(receipt_id=receipt_id).order_by(FinanceReceiptItem.sort_order).all()
     return render_template('finance/receipt_detail.html', receipt=receipt, items=items)
 
@@ -409,7 +411,7 @@ def receipt_detail(receipt_id):
 @fin_bp.route('/receipts/<int:receipt_id>/delete', methods=['POST'])
 @login_required
 def receipt_delete(receipt_id):
-    receipt = FinanceReceipt.query.get_or_404(receipt_id)
+    receipt = safe_get_or_404(FinanceReceipt, receipt_id)
     doc_no = receipt.doc_no
     FinanceReceiptItem.query.filter_by(receipt_id=receipt_id).delete()
     db.session.delete(receipt)
@@ -421,7 +423,7 @@ def receipt_delete(receipt_id):
 @fin_bp.route('/receipts/<int:receipt_id>/print')
 @login_required
 def receipt_print(receipt_id):
-    receipt = FinanceReceipt.query.get_or_404(receipt_id)
+    receipt = safe_get_or_404(FinanceReceipt, receipt_id)
     items = FinanceReceiptItem.query.filter_by(receipt_id=receipt_id).order_by(FinanceReceiptItem.sort_order).all()
     # 发票类型映射
     inv_types = {'0001': '增值税发票'}
@@ -434,7 +436,7 @@ def receipt_print(receipt_id):
 @login_required
 def receipt_pdf(receipt_id):
     """通过Puppeteer生成240×140mm横向PDF，直接匹配纸张尺寸"""
-    receipt = FinanceReceipt.query.get_or_404(receipt_id)
+    receipt = safe_get_or_404(FinanceReceipt, receipt_id)
     items = FinanceReceiptItem.query.filter_by(receipt_id=receipt_id).order_by(FinanceReceiptItem.sort_order).all()
     inv_types = {'0001': '增值税发票'}
     inv_type_label = inv_types.get('0001', '')
@@ -577,7 +579,7 @@ def delivery_create():
 @fin_bp.route('/deliveries/<int:delivery_id>/edit', methods=['GET', 'POST'])
 @login_required
 def delivery_edit(delivery_id):
-    delivery = FinanceDelivery.query.get_or_404(delivery_id)
+    delivery = safe_get_or_404(FinanceDelivery, delivery_id)
     suppliers = Supplier.query.filter_by(is_active=True).order_by(Supplier.sort_order, Supplier.name).all()
 
     if request.method == 'POST':
@@ -634,7 +636,7 @@ def delivery_edit(delivery_id):
 @fin_bp.route('/deliveries/<int:delivery_id>')
 @login_required
 def delivery_detail(delivery_id):
-    delivery = FinanceDelivery.query.get_or_404(delivery_id)
+    delivery = safe_get_or_404(FinanceDelivery, delivery_id)
     items = FinanceDeliveryItem.query.filter_by(delivery_id=delivery_id).order_by(FinanceDeliveryItem.sort_order).all()
     return render_template('finance/delivery_detail.html', delivery=delivery, items=items)
 
@@ -642,7 +644,7 @@ def delivery_detail(delivery_id):
 @fin_bp.route('/deliveries/<int:delivery_id>/delete', methods=['POST'])
 @login_required
 def delivery_delete(delivery_id):
-    delivery = FinanceDelivery.query.get_or_404(delivery_id)
+    delivery = safe_get_or_404(FinanceDelivery, delivery_id)
     doc_no = delivery.doc_no
     FinanceDeliveryItem.query.filter_by(delivery_id=delivery_id).delete()
     db.session.delete(delivery)
@@ -654,7 +656,7 @@ def delivery_delete(delivery_id):
 @fin_bp.route('/deliveries/<int:delivery_id>/print')
 @login_required
 def delivery_print(delivery_id):
-    delivery = FinanceDelivery.query.get_or_404(delivery_id)
+    delivery = safe_get_or_404(FinanceDelivery, delivery_id)
     items = FinanceDeliveryItem.query.filter_by(delivery_id=delivery_id).order_by(FinanceDeliveryItem.sort_order).all()
     # 从系统设置获取发票类型映射
     inv_type_map = SystemSetting.get('finance_invoice_types') or '{"0001":"增值税发票"}'

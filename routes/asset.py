@@ -1,4 +1,6 @@
 """资产台账管理：列表/导入/导出/批量操作/操作日志"""
+
+from utils.helpers import safe_get, safe_get_or_404
 import io
 import json
 from datetime import datetime, date
@@ -756,8 +758,8 @@ def swap_location():
         if len(ids) != 2:
             return jsonify({'ok': False, 'msg': '请选择恰好2个资产进行位置互换'}), 400
 
-        a1 = Asset.query.get(ids[0])
-        a2 = Asset.query.get(ids[1])
+        a1 = safe_get(Asset, ids[0])
+        a2 = safe_get(Asset, ids[1])
         if not a1 or not a2:
             return jsonify({'ok': False, 'msg': '资产不存在'}), 400
 
@@ -941,7 +943,7 @@ def logs():
 @permission_required("asset:delete")
 def delete_log(log_id):
     """删除操作日志"""
-    log = AssetLog.query.get_or_404(log_id)
+    log = safe_get_or_404(AssetLog, log_id)
     db.session.delete(log)
     db.session.commit()
     flash('已删除操作日志', 'success')
@@ -959,7 +961,7 @@ def recent_logs():
             query = AssetLog.query.filter(AssetLog.action == action).order_by(AssetLog.created_at.desc()).limit(50)
         logs = []
         for log in query.all():
-            asset = Asset.query.get(log.asset_id)
+            asset = safe_get(Asset, log.asset_id)
             logs.append({
                 'id': log.id,
                 'asset_id': log.asset_id,

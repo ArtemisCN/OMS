@@ -1,4 +1,6 @@
 """巡检管理路由"""
+
+from utils.helpers import safe_get, safe_get_or_404
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file
 from flask_login import login_required, current_user
@@ -52,7 +54,7 @@ def create_template():
 @permission_required("biz:inspection")
 def edit_template(tid):
     """编辑巡检模板（POST 处理）"""
-    tpl = InspectionTemplate.query.get_or_404(tid)
+    tpl = safe_get_or_404(InspectionTemplate, tid)
     name = request.form.get('name', '').strip()
     items_raw = request.form.get('items', '').strip()
     if not name:
@@ -74,7 +76,7 @@ def edit_template(tid):
 def delete_template(tid):
     """删除巡检模板"""
     # 查询模板并删除
-    tpl = InspectionTemplate.query.get_or_404(tid)
+    tpl = safe_get_or_404(InspectionTemplate, tid)
     db.session.delete(tpl)
     db.session.commit()
     flash('模板已删除', 'success')
@@ -103,7 +105,7 @@ def publish_plan():
             flash('请选择巡检模板', 'danger')
             return redirect(url_for('inspection.publish_plan'))
         # 校验：模板必须存在于数据库
-        tpl = InspectionTemplate.query.get(template_id)
+        tpl = safe_get(InspectionTemplate, template_id)
         if not tpl:
             flash('模板不存在', 'danger')
             return redirect(url_for('inspection.publish_plan'))
@@ -205,11 +207,11 @@ def export_plans_csv():
 def export_plan(pid):
     """巡检确认单导出/打印"""
     # 查询指定巡检计划
-    plan = InspectionPlan.query.get_or_404(pid)
+    plan = safe_get_or_404(InspectionPlan, pid)
     # 根据计划关联的工单 ID 查询对应工单
     orders = []
     if plan.work_order_id:
-        order = WorkOrder.query.get(plan.work_order_id)
+        order = safe_get(WorkOrder, plan.work_order_id)
         if order:
             orders = [order]
     elif plan.work_order_ids:
@@ -221,7 +223,7 @@ def export_plan(pid):
 @login_required
 def edit_plan(pid):
     """编辑巡检计划"""
-    plan = InspectionPlan.query.get_or_404(pid)
+    plan = safe_get_or_404(InspectionPlan, pid)
     if request.method == 'POST':
         plan.template_id = request.form.get('template_id', type=int)
         plan.building = request.form.get('building', '').strip()
@@ -253,7 +255,7 @@ def edit_plan(pid):
 @login_required
 def delete_plan(pid):
     """删除巡检计划"""
-    plan = InspectionPlan.query.get_or_404(pid)
+    plan = safe_get_or_404(InspectionPlan, pid)
     db.session.delete(plan)
     db.session.commit()
     flash('🗑️ 巡检计划已删除', 'success')

@@ -1,4 +1,6 @@
 """Contracts Blueprint: 合同维保管理"""
+
+from utils.helpers import safe_get
 import json
 from datetime import datetime, date
 
@@ -54,7 +56,7 @@ def contract_save():
         return jsonify(success=False, error='合同名称不能为空'), 400
 
     if contract_id:
-        contract = MaintenanceContract.query.get(contract_id)
+        contract = safe_get(MaintenanceContract, contract_id)
         if not contract:
             return jsonify(success=False, error='合同不存在'), 404
     else:
@@ -88,7 +90,7 @@ def contract_save():
 @login_required
 def contract_delete(id):
     """删除合同"""
-    contract = MaintenanceContract.query.get(id)
+    contract = safe_get(MaintenanceContract, id)
     if not contract:
         return jsonify(success=False, error='合同不存在'), 404
     db.session.delete(contract)

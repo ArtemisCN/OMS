@@ -1,4 +1,6 @@
 """跨院区借调管理 - 借调记录 CRUD + 权限控制 + 排班联动 + 操作日志"""
+
+from utils.helpers import safe_get
 import json
 from datetime import datetime, date, timedelta
 
@@ -150,7 +152,7 @@ def _auto_expire_overdue():
     expired_ids = []
     for assignment in overdue:
         assignment.status = 'expired'
-        user = User.query.get(assignment.user_id)
+        user = safe_get(User, assignment.user_id)
         if user:
             other_active = CrossHospitalAssignment.query.filter(
                 CrossHospitalAssignment.user_id == assignment.user_id,
@@ -182,7 +184,7 @@ def _auto_expire_overdue():
 def assignments_page():
     """借调管理页面"""
     hid = _get_hospital_id()
-    hospital = Hospital.query.get(hid) if hid else None
+    hospital = safe_get(Hospital, hid) if hid else None
 
     # 获取所有医院列表
     hospitals = Hospital.query.filter_by(is_active=True).order_by(Hospital.id).all()
@@ -377,7 +379,7 @@ def create_assignment():
     if not start_date_str or not end_date_str:
         return _json_error('请填写借调起止日期')
 
-    user = User.query.get(user_id)
+    user = safe_get(User, user_id)
     if not user:
         return _json_error('用户不存在')
     if user.is_admin:
@@ -454,7 +456,7 @@ def create_assignment():
                 'user_id': user_id, 'user_name': user.name,
                 'start_date': start_date_str, 'end_date': end_date_str,
                 'reason': reason,
-                'source_hospital_name': Hospital.query.get(user.hospital_id).name if user.hospital_id else '',
+                'source_hospital_name': safe_get(Hospital, user.hospital_id).name if user.hospital_id else '',
             }),
         )
         return _json_success({
@@ -476,7 +478,7 @@ def cancel_assignment(assignment_id):
 
     hid = _get_hospital_id()
 
-    assignment = CrossHospitalAssignment.query.get(assignment_id)
+    assignment = safe_get(CrossHospitalAssignment, assignment_id)
     if not assignment:
         return _json_error('借调记录不存在', 404)
     if assignment.hospital_id != hid:
@@ -488,7 +490,7 @@ def cancel_assignment(assignment_id):
     assignment.status = 'cancelled'
 
     # 清除用户借调标记
-    user = User.query.get(assignment.user_id)
+    user = safe_get(User, assignment.user_id)
     if user:
         other_active = CrossHospitalAssignment.query.filter(
             CrossHospitalAssignment.user_id == assignment.user_id,
@@ -538,7 +540,7 @@ def update_assignment(assignment_id):
     if not hid:
         return _json_error('请选择医院', 400)
 
-    assignment = CrossHospitalAssignment.query.get(assignment_id)
+    assignment = safe_get(CrossHospitalAssignment, assignment_id)
     if not assignment:
         return _json_error('借调记录不存在', 404)
     if assignment.hospital_id != hid:

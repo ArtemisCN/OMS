@@ -1,5 +1,6 @@
-from utils.permissions import has_permission
 """盘点管理：PC端盘点任务管理、盘盈盘亏核对"""
+from utils.helpers import safe_get, safe_get_or_404
+from utils.permissions import has_permission
 from datetime import datetime
 import json, io, os
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g, send_file
@@ -79,7 +80,7 @@ def create():
 @login_required
 def detail(task_id):
     """盘点详情：按楼区或科室分类展示"""
-    task = InventoryTask.query.get_or_404(task_id)
+    task = safe_get_or_404(InventoryTask, task_id)
     page = request.args.get('page', 1, type=int)
     result_filter = request.args.get('result', '')
     search = request.args.get('search', '').strip()
@@ -147,7 +148,7 @@ def review(task_id):
 @login_required
 def review_data(task_id):
     """获取核对数据（JSON）"""
-    task = InventoryTask.query.get_or_404(task_id)
+    task = safe_get_or_404(InventoryTask, task_id)
     items = InventoryItem.query.filter_by(task_id=task_id).order_by(
         InventoryItem.scanned_at.desc()
     ).all()
@@ -254,7 +255,7 @@ def review_data(task_id):
 @login_required
 def confirm_item(item_id):
     """确认单条盘点记录（支持采纳用户选择的字段值）"""
-    item = InventoryItem.query.get_or_404(item_id)
+    item = safe_get_or_404(InventoryItem, item_id)
     data = request.get_json() or {}
     confirm = data.get('confirmed', True)
     field_values = data.get('field_values', {})  # 用户选择的最终值
@@ -272,7 +273,7 @@ def confirm_item(item_id):
 
         # 异常项：先记录旧值 → 更新资产台账 → 记录日志
         if item.result == 'issue' and item.asset_id and field_values:
-            asset = Asset.query.get(item.asset_id)
+            asset = safe_get(Asset, item.asset_id)
             if asset:
                 old_vals = {}
                 new_vals = {}
@@ -345,7 +346,7 @@ def finish(task_id):
     """结束盘点（新版本：校验所有异常/新盘均已确认）"""
     if not has_permission(current_user, 'biz:inspection'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
-    task = InventoryTask.query.get_or_404(task_id)
+    task = safe_get_or_404(InventoryTask, task_id)
     if task.status == 'completed':
         return jsonify({'ok': False, 'msg': '该盘点已结束'}), 400
 
@@ -397,7 +398,7 @@ def batch_confirm_normal(task_id):
 @login_required
 def unscanned_assets(task_id):
     """获取未盘资产列表"""
-    task = InventoryTask.query.get_or_404(task_id)
+    task = safe_get_or_404(InventoryTask, task_id)
     scanned_ids = set()
     for item in InventoryItem.query.filter_by(task_id=task_id).all():
         if item.asset_id:
@@ -425,7 +426,7 @@ def undo_confirm(task_id):
     """撤销最近一次确认（5分钟内有效）"""
     data = request.get_json() or {}
     item_id = data.get('item_id', 0)
-    item = InventoryItem.query.get(item_id)
+    item = safe_get(InventoryItem, item_id)
     if not item:
         return jsonify({'ok': False, 'msg': '记录不存在'}), 404
     if not item.confirmed:
@@ -437,14 +438,14 @@ def undo_confirm(task_id):
 
     # 如果之前更新了资产台账，需要回滚
     if item.result == 'issue' and item.asset_id:
-        asset = Asset.query.get(item.asset_id)
+        asset = safe_get(Asset, item.asset_id)
         if asset:
             log_audit('update', 'asset', current_user.display_name,
                       target_id=asset.id,
                       target_desc=f'盘点撤销恢复: {asset.asset_no}')
     if item.asset_id and item.result == 'new':
         # 新盘入库的资产，删除它
-        asset = Asset.query.get(item.asset_id)
+        asset = safe_get(Asset, item.asset_id)
         if asset:
             db.session.delete(asset)
 
@@ -488,7 +489,7 @@ def dashboard_stats():
 @login_required
 def export_excel(task_id):
     """导出盘点报表"""
-    task = InventoryTask.query.get_or_404(task_id)
+    task = safe_get_or_404(InventoryTask, task_id)
     items = InventoryItem.query.filter_by(task_id=task_id).order_by(
         InventoryItem.result, InventoryItem.asset_no
     ).all()
@@ -555,7 +556,7 @@ def export_excel(task_id):
             cell.fill = red_fill
     for item in [i for i in items if i.result == 'issue']:
         # 比较字段
-        asset = Asset.query.get(item.asset_id) if item.asset_id else None
+        asset = safe_get(Asset, item.asset_id) if item.asset_id else None
         fields = [('device_type','设备类型'),('brand','品牌'),('model_no','型号'),
                   ('department','科室'),('building','楼区'),('floor','楼层'),('location','位置')]
         for key, label in fields:
@@ -607,7 +608,7 @@ def export_excel(task_id):
 def delete(task_id):
     if not has_permission(current_user, 'biz:inspection'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
-    task = InventoryTask.query.get_or_404(task_id)
+    task = safe_get_or_404(InventoryTask, task_id)
     log_audit('delete', 'inventory', current_user.display_name,
               target_id=task.id, target_desc=f'删除盘点 {task.name}')
     db.session.delete(task)
@@ -672,7 +673,7 @@ def _calc_surplus_loss(task):
 def delete_item(item_id):
     if not has_permission(current_user, 'biz:inspection'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
-    item = InventoryItem.query.get_or_404(item_id)
+    item = safe_get_or_404(InventoryItem, item_id)
     db.session.delete(item)
     db.session.commit()
     return jsonify({'ok': True})
@@ -685,7 +686,7 @@ def delete_item(item_id):
 def recalc(task_id):
     if not has_permission(current_user, 'biz:inspection'):
         return jsonify({'ok': False, 'msg': '权限不足'}), 403
-    task = InventoryTask.query.get_or_404(task_id)
+    task = safe_get_or_404(InventoryTask, task_id)
     task.scanned_count = InventoryItem.query.filter_by(task_id=task_id).count()
     task.normal_count = InventoryItem.query.filter_by(task_id=task_id, result='normal').count()
     task.issue_count = InventoryItem.query.filter_by(task_id=task_id, result='issue').count()

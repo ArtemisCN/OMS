@@ -6,6 +6,8 @@
   耗材、值班排班、知识库、权限、故障分类 等 CRUD
 路由层（data.py）只负责 HTTP 请求/响应编排
 """
+
+from utils.helpers import safe_get, safe_get_or_404
 import io
 import json
 from datetime import datetime, date, timedelta
@@ -121,7 +123,7 @@ def import_persons_from_orders():
 
 def toggle_person(pid):
     """切换人员启用/停用"""
-    p = User.query.get_or_404(pid)
+    p = safe_get_or_404(User, pid)
     p.is_active = not p.is_active
     db.session.commit()
     return p
@@ -129,7 +131,7 @@ def toggle_person(pid):
 
 def delete_person(pid, operator_name):
     """删除人员（检查关联工单，有则禁止删除）"""
-    p = User.query.get_or_404(pid)
+    p = safe_get_or_404(User, pid)
     name = p.display_name or p.username
 
     # 检查关联工单（操作日志是历史记录，不阻止删除）
@@ -161,7 +163,7 @@ def delete_person(pid, operator_name):
 
 def edit_person_field(pid, field, value):
     """编辑人员字段（电话/组别/备注）"""
-    p = User.query.get_or_404(pid)
+    p = safe_get_or_404(User, pid)
     if field == 'phone':
         p.phone = value
     elif field == 'team':
@@ -176,7 +178,7 @@ def edit_person_field(pid, field, value):
 
 def person_account_info(pid):
     """获取人员账号信息（JSON）"""
-    p = User.query.get_or_404(pid)
+    p = safe_get_or_404(User, pid)
     user = User.query.filter(
         (User.display_name == p.display_name) | (User.username == p.display_name)
     ).first()
@@ -193,7 +195,7 @@ def person_account_info(pid):
 def person_account_save(pid, username, password, display_name, is_admin, hospital_ids=None, group_id=None):
     """创建或更新人员的登录账号"""
     from flask import g
-    p = User.query.get_or_404(pid)
+    p = safe_get_or_404(User, pid)
     if not username:
         return False, '用户名不能为空'
 
@@ -296,7 +298,7 @@ def add_department(name, building, floor, phone, operator_name):
 
 def edit_department(dept_id, name, building, floor, phone):
     """编辑科室"""
-    dept = Department.query.get(dept_id)
+    dept = safe_get(Department, dept_id)
     if not dept:
         return False, '科室不存在'
     if name and name != dept.name:
@@ -312,7 +314,7 @@ def edit_department(dept_id, name, building, floor, phone):
 
 def delete_department(dept_id, operator_name):
     """删除科室"""
-    dept = Department.query.get(dept_id)
+    dept = safe_get(Department, dept_id)
     if not dept:
         return False, '科室不存在'
     log_audit('delete', 'department', operator_name, target_desc=f'删除科室: {dept.name}')
@@ -386,7 +388,7 @@ def add_solution(title, content, keywords, device_type, fault_type, fault_subcat
 
 def edit_solution(sid, field, value, value2=None):
     """编辑方案模板"""
-    s = SolutionTemplate.query.get_or_404(sid)
+    s = safe_get_or_404(SolutionTemplate, sid)
     if field == 'title':
         s.title = value
     elif field == 'keywords':
@@ -407,7 +409,7 @@ def edit_solution(sid, field, value, value2=None):
 
 def delete_solution(sid, operator_name):
     """删除方案模板"""
-    s = SolutionTemplate.query.get_or_404(sid)
+    s = safe_get_or_404(SolutionTemplate, sid)
     title = s.title
     db.session.delete(s)
     db.session.commit()
@@ -468,7 +470,7 @@ def edit_address(override_id, base_index, building, floor, department, location,
         return False, '所有字段不能为空'
 
     if override_id:
-        o = AddressOverride.query.get(override_id)
+        o = safe_get(AddressOverride, override_id)
         if o:
             o.building = building
             o.floor = floor
@@ -504,7 +506,7 @@ def add_address(building, floor, department, location, teams=''):
 
 def delete_address(oid):
     """软删除地址"""
-    o = AddressOverride.query.get_or_404(oid)
+    o = safe_get_or_404(AddressOverride, oid)
     o.is_deleted = True
     db.session.commit()
     return o.building
@@ -555,7 +557,7 @@ def add_fault_type(name, keywords, teams=''):
 
 def edit_fault_type(fid, name, keywords, teams=None):
     """编辑故障类型"""
-    ft = FaultType.query.get_or_404(fid)
+    ft = safe_get_or_404(FaultType, fid)
     if not name:
         return False, '请输入故障类型名称'
     existing = FaultType.query.filter(FaultType.name == name, FaultType.id != fid).first()
@@ -571,7 +573,7 @@ def edit_fault_type(fid, name, keywords, teams=None):
 
 def delete_fault_type(fid, operator_name):
     """删除故障类型"""
-    ft = FaultType.query.get_or_404(fid)
+    ft = safe_get_or_404(FaultType, fid)
     name = ft.name
     db.session.delete(ft)
     db.session.commit()
@@ -606,7 +608,7 @@ def add_storage_location(name, building, floor, area, contact, phone, is_default
 
 def edit_storage_location(lid, name, building, floor, area, contact, phone, is_default):
     """编辑存放位置"""
-    sl = StorageLocation.query.get_or_404(lid)
+    sl = safe_get_or_404(StorageLocation, lid)
     if not name:
         return False, '位置名称不能为空'
     existing = StorageLocation.query.filter(
@@ -628,14 +630,14 @@ def edit_storage_location(lid, name, building, floor, area, contact, phone, is_d
 
 def toggle_storage_location(lid):
     """切换启用/停用"""
-    sl = StorageLocation.query.get_or_404(lid)
+    sl = safe_get_or_404(StorageLocation, lid)
     sl.is_active = not sl.is_active
     db.session.commit()
 
 
 def delete_storage_location(lid):
     """删除存放位置"""
-    sl = StorageLocation.query.get_or_404(lid)
+    sl = safe_get_or_404(StorageLocation, lid)
     name = sl.name
     db.session.delete(sl)
     db.session.commit()
@@ -670,7 +672,7 @@ def add_supplier(name, contact_person, phone, address, service_scope, notes, con
 
 def edit_supplier(sid, name, contact_person, phone, address, service_scope, notes, contract_end_str):
     """编辑供应商"""
-    s = Supplier.query.get_or_404(sid)
+    s = safe_get_or_404(Supplier, sid)
     if not name:
         return False, '供应商名称不能为空'
     existing = Supplier.query.filter(Supplier.name == name, Supplier.id != sid).first()
@@ -691,14 +693,14 @@ def edit_supplier(sid, name, contact_person, phone, address, service_scope, note
 
 def toggle_supplier(sid):
     """切换供应商启用/停用"""
-    s = Supplier.query.get_or_404(sid)
+    s = safe_get_or_404(Supplier, sid)
     s.is_active = not s.is_active
     db.session.commit()
 
 
 def delete_supplier(sid):
     """删除供应商"""
-    s = Supplier.query.get_or_404(sid)
+    s = safe_get_or_404(Supplier, sid)
     name = s.name
     db.session.delete(s)
     db.session.commit()
@@ -734,7 +736,7 @@ def add_consumable(name, spec, unit, quantity, min_quantity, location, supplier_
 
 def edit_consumable(cid, name, spec, unit, quantity, min_quantity, location, supplier_name, compatible_printers, notes):
     """编辑耗材"""
-    c = Consumable.query.get_or_404(cid)
+    c = safe_get_or_404(Consumable, cid)
     c.name = name
     c.spec = spec
     c.unit = unit
@@ -750,7 +752,7 @@ def edit_consumable(cid, name, spec, unit, quantity, min_quantity, location, sup
 
 def delete_consumable(cid):
     """删除耗材"""
-    c = Consumable.query.get_or_404(cid)
+    c = safe_get_or_404(Consumable, cid)
     name = c.name
     db.session.delete(c)
     db.session.commit()
@@ -844,7 +846,7 @@ def consumable_inout(cid, action, qty, note, operator_name):
     if not cid or not action or qty <= 0:
         return False, '参数错误', None
 
-    c = Consumable.query.get_or_404(cid)
+    c = safe_get_or_404(Consumable, cid)
     if action == 'out' and c.quantity < qty:
         return False, f'库存不足（当前 {c.quantity}{c.unit}）', None
 
@@ -1118,7 +1120,7 @@ def add_duty_staff(name):
 
 def toggle_duty_staff(sid):
     """启用/禁用排班人员"""
-    s = DutyStaff.query.get_or_404(sid)
+    s = safe_get_or_404(DutyStaff, sid)
     s.is_active = not s.is_active
     db.session.commit()
     return s.is_active
@@ -1126,7 +1128,7 @@ def toggle_duty_staff(sid):
 
 def delete_duty_staff(sid):
     """删除排班人员"""
-    s = DutyStaff.query.get_or_404(sid)
+    s = safe_get_or_404(DutyStaff, sid)
     db.session.delete(s)
     db.session.commit()
 
@@ -1158,7 +1160,7 @@ def add_knowledge(title, category, content, is_pinned):
 
 def edit_knowledge(kid, title, category, content, is_pinned):
     """编辑知识库文章"""
-    a = KnowledgeBase.query.get_or_404(kid)
+    a = safe_get_or_404(KnowledgeBase, kid)
     a.title = title
     a.category = category
     a.content = content
@@ -1169,14 +1171,14 @@ def edit_knowledge(kid, title, category, content, is_pinned):
 
 def get_knowledge_api(kid):
     """获取单篇文章 JSON"""
-    a = KnowledgeBase.query.get_or_404(kid)
+    a = safe_get_or_404(KnowledgeBase, kid)
     return {'id': a.id, 'title': a.title, 'category': a.category,
             'content': a.content, 'is_pinned': a.is_pinned}
 
 
 def delete_knowledge(kid):
     """删除知识库文章"""
-    a = KnowledgeBase.query.get_or_404(kid)
+    a = safe_get_or_404(KnowledgeBase, kid)
     title = a.title
     db.session.delete(a)
     db.session.commit()
@@ -1201,7 +1203,7 @@ def get_permissions_page_data():
         else:
             # 优先用 group_id（新），兼容 group（旧字段）
             if u.group_id:
-                rg = RoleGroup.query.get(u.group_id)
+                rg = safe_get(RoleGroup, u.group_id)
                 gname = rg.name if rg else '普通用户'
             else:
                 gname = u.group or '普通用户'
@@ -1247,7 +1249,7 @@ def toggle_admin(uid, current_uid, operator_name):
     """切换用户管理员权限，返回 (ok, msg, action_desc)"""
     if uid == current_uid:
         return False, '不能撤销自己的管理员权限', None
-    user = User.query.get_or_404(uid)
+    user = safe_get_or_404(User, uid)
     user.is_admin = not user.is_admin
     action_desc = f'{"赋予" if user.is_admin else "撤销"} {user.display_name or user.username} 管理员权限'
     log_audit('toggle_admin', 'user', operator_name,
@@ -1258,7 +1260,7 @@ def toggle_admin(uid, current_uid, operator_name):
 
 def set_user_group(uid, group, operator_name):
     """设置用户角色组"""
-    user = User.query.get_or_404(uid)
+    user = safe_get_or_404(User, uid)
     user.group = group
     # 同步 group_id（根据角色组名称查找或创建 RoleGroup 记录）
     if group:
@@ -1361,7 +1363,7 @@ def add_hospital(name, code, address, phone):
 
 def edit_hospital(hid, name, code, address, phone):
     """编辑医院"""
-    h = Hospital.query.get(hid)
+    h = safe_get(Hospital, hid)
     if not h:
         return False, '医院不存在'
     h.name = name or h.name
@@ -1377,7 +1379,7 @@ def edit_hospital(hid, name, code, address, phone):
 
 def toggle_hospital(hid):
     """切换医院启用/禁用"""
-    h = Hospital.query.get(hid)
+    h = safe_get(Hospital, hid)
     if h:
         h.is_active = not h.is_active
         db.session.commit()
@@ -1424,7 +1426,7 @@ def add_part(product_name, unit, unit_price, category, spec, brand, model_no, su
 
 def delete_part(part_id, operator_name):
     """删除零件"""
-    p = PartPrice.query.get_or_404(part_id)
+    p = safe_get_or_404(PartPrice, part_id)
     name = p.product_name
     db.session.delete(p)
     db.session.commit()
@@ -1453,7 +1455,7 @@ def list_consumable_records(q='', action='', page=1, page_size=50):
 
 def delete_consumable_record(rid):
     """删除出入库记录"""
-    r = ConsumableRecord.query.get_or_404(rid)
+    r = safe_get_or_404(ConsumableRecord, rid)
     db.session.delete(r)
     db.session.commit()
     return True
@@ -1489,7 +1491,7 @@ def add_fault_template_group(name, teams, operator_name):
 
 def edit_fault_template_group(gid, field, value):
     """编辑故障模板组"""
-    g = FaultTemplateGroup.query.get_or_404(gid)
+    g = safe_get_or_404(FaultTemplateGroup, gid)
     if field == 'name':
         g.name = value
     elif field == 'teams':
@@ -1500,7 +1502,7 @@ def edit_fault_template_group(gid, field, value):
 
 def delete_fault_template_group(gid, operator_name):
     """删除故障模板组"""
-    g = FaultTemplateGroup.query.get_or_404(gid)
+    g = safe_get_or_404(FaultTemplateGroup, gid)
     name = g.name
     FaultTemplateItem.query.filter_by(group_id=gid).delete()
     db.session.delete(g)
@@ -1512,7 +1514,7 @@ def delete_fault_template_group(gid, operator_name):
 
 def add_fault_template_item(gid, fault_type, display_name, default_count):
     """新增故障模板项"""
-    g = FaultTemplateGroup.query.get_or_404(gid)
+    g = safe_get_or_404(FaultTemplateGroup, gid)
     item = FaultTemplateItem(group_id=g.id, fault_type=fault_type or '硬件',
                              display_name=display_name or fault_type or '硬件',
                              default_count=max(1, default_count or 1),
@@ -1524,7 +1526,7 @@ def add_fault_template_item(gid, fault_type, display_name, default_count):
 
 def edit_fault_template_item(gid, iid, fault_type, display_name, default_count):
     """编辑故障模板项"""
-    item = FaultTemplateItem.query.get_or_404(iid)
+    item = safe_get_or_404(FaultTemplateItem, iid)
     item.fault_type = fault_type or item.fault_type
     item.display_name = display_name or item.display_name
     item.default_count = max(1, int(default_count or item.default_count))
@@ -1534,7 +1536,7 @@ def edit_fault_template_item(gid, iid, fault_type, display_name, default_count):
 
 def delete_fault_template_item(gid, iid):
     """删除故障模板项"""
-    item = FaultTemplateItem.query.get_or_404(iid)
+    item = safe_get_or_404(FaultTemplateItem, iid)
     db.session.delete(item)
     db.session.commit()
     return True
@@ -1575,7 +1577,7 @@ def add_fault_subcategory(cat_id, name, teams=''):
     """新增子分类"""
     if not cat_id or not name:
         return False, '参数错误'
-    cat = FaultCategory.query.get(cat_id)
+    cat = safe_get(FaultCategory, cat_id)
     if not cat:
         return False, '分类不存在'
     max_order = db.session.query(db.func.max(FaultSubcategory.sort_order)).filter_by(category_id=cat_id).scalar() or 0
@@ -1587,7 +1589,7 @@ def add_fault_subcategory(cat_id, name, teams=''):
 
 def delete_fault_subcategory(sub_id):
     """删除子分类及其关键词"""
-    sub = FaultSubcategory.query.get_or_404(sub_id)
+    sub = safe_get_or_404(FaultSubcategory, sub_id)
     FaultKeyword.query.filter_by(subcategory_id=sub.id).delete()
     db.session.delete(sub)
     db.session.commit()
@@ -1598,7 +1600,7 @@ def add_fault_keywords(sub_id, keywords_raw, teams=''):
     """批量添加关键词"""
     if not sub_id or not keywords_raw:
         return False, '参数错误'
-    sub = FaultSubcategory.query.get(sub_id)
+    sub = safe_get(FaultSubcategory, sub_id)
     if not sub:
         return False, '子分类不存在'
     kw_list = [k.strip() for k in keywords_raw.replace('\\n', ',').split(',') if k.strip()]
@@ -1613,7 +1615,7 @@ def add_fault_keywords(sub_id, keywords_raw, teams=''):
 
 def delete_fault_keyword(kw_id):
     """删除关键词"""
-    kw = FaultKeyword.query.get_or_404(kw_id)
+    kw = safe_get_or_404(FaultKeyword, kw_id)
     db.session.delete(kw)
     db.session.commit()
     return True

@@ -1,4 +1,6 @@
 """基础数据管理路由（HTTP 编排层）"""
+
+from utils.helpers import safe_get, safe_get_or_404
 import io
 import json
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, session, g
@@ -59,7 +61,7 @@ def list_hospitals():
                     teams[t] = []
                 account_info = None
                 if p.id:
-                    u = User.query.get(p.id)
+                    u = safe_get(User, p.id)
                     account_info = {'username': u.username, 'active': u.is_active} if u else None
                 teams[t].append({'name': p.display_name, 'phone': p.phone or '', 'is_active': p.is_active, 'account': account_info})
             hospital_person_teams[h.id] = teams
@@ -104,7 +106,7 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
 @permission_required('system:config')
 def upload_hospital_logo(hid):
     """上传医院头像"""
-    hospital = Hospital.query.get(hid)
+    hospital = safe_get(Hospital, hid)
     if not hospital:
         return jsonify({'error': '医院不存在'}), 404
     if 'logo' not in request.files:
@@ -149,7 +151,7 @@ def switch_hospital(hid):
             session['user_hospital_id'] = 0
         flash('已切换到: 全部医院', 'success')
         return redirect(request.referrer or url_for('main.dashboard'))
-    h = Hospital.query.get(hid)
+    h = safe_get(Hospital, hid)
     if not h:
         flash('医院不存在', 'danger')
         return redirect(request.referrer or url_for('main.dashboard'))
@@ -282,7 +284,7 @@ def toggle_person(pid):
 @data_bp.route('/persons/<int:pid>/delete', methods=['POST'])
 @permission_required('user:delete')
 def delete_person(pid):
-    p = User.query.get_or_404(pid)
+    p = safe_get_or_404(User, pid)
     if p.is_admin:
         flash('管理员账号不可删除', 'danger')
         return redirect(url_for('data.list_persons'))
@@ -298,7 +300,7 @@ def delete_person(pid):
 @permission_required('user:edit')
 def reassign_person_orders(pid):
     """将某人的工单批量转移给另一个人"""
-    p = User.query.get_or_404(pid)
+    p = safe_get_or_404(User, pid)
     source_name = p.display_name or p.username
     target_name = request.form.get('target_name', '').strip()
     if not target_name:
@@ -365,7 +367,7 @@ def batch_person_action():
             protected = []
             deleted_names = []
             for pid in ids:
-                p = User.query.get(pid)
+                p = safe_get(User, pid)
                 if p:
                     name = p.display_name or p.username
                     # 检查关联记录
@@ -541,7 +543,7 @@ def edit_solution(sid):
 def edit_solution_full(sid):
     """编辑方案模板全部字段"""
     from models import SolutionTemplate
-    s = SolutionTemplate.query.get(sid)
+    s = safe_get(SolutionTemplate, sid)
     if not s:
         flash('方案不存在', 'danger')
         return redirect(url_for('data.list_templates'))
@@ -1096,7 +1098,7 @@ def permissions():
         if u.is_admin:
             user_group_map[u.id] = '管理员'
         elif u.group_id:
-            rg = RoleGroup.query.get(u.group_id)
+            rg = safe_get(RoleGroup, u.group_id)
             user_group_map[u.id] = rg.name if rg else (u.group or '普通用户')
         else:
             user_group_map[u.id] = u.group or '普通用户'
@@ -1173,7 +1175,7 @@ def set_user_group():
     group_id = request.form.get('group_id', type=int)
     from models import RoleGroup
     if group_id:
-        rg = RoleGroup.query.get(group_id)
+        rg = safe_get(RoleGroup, group_id)
         group_name = rg.name if rg else ''
     else:
         group_name = ''
@@ -1496,7 +1498,7 @@ def edit_fault_template_group_api(gid):
         request.form.get('field', ''),
         request.form.get('value', ''))
     from models import FaultTemplateGroup
-    g = FaultTemplateGroup.query.get(gid)
+    g = safe_get(FaultTemplateGroup, gid)
     return jsonify({'ok': True, 'group': {
         'id': g.id, 'name': g.name, 'teams': g.teams or ''
     }})
@@ -1539,7 +1541,7 @@ def edit_fault_template_item_api(gid, iid):
         request.form.get('display_name', ''),
         int(request.form.get('default_count', 1)))
     from models import FaultTemplateItem
-    item = FaultTemplateItem.query.get(iid)
+    item = safe_get(FaultTemplateItem, iid)
     return jsonify({'ok': True, 'item': {
         'id': item.id, 'fault_type': item.fault_type,
         'display_name': item.display_name, 'group_id': item.group_id
@@ -1583,7 +1585,7 @@ def add_solution_api():
 def edit_solution_api(sid):
     """API：编辑方案模板，返回JSON"""
     from models import SolutionTemplate
-    s = SolutionTemplate.query.get(sid)
+    s = safe_get(SolutionTemplate, sid)
     if not s:
         return jsonify({'ok': False, 'msg': '方案不存在'}), 404
     s.title = request.form.get('title', s.title)
@@ -1635,7 +1637,7 @@ def approve_registration(rid):
     if not can_access('注册审批'):
         flash('无权限访问', 'danger')
         return redirect(url_for('data.index'))
-    req = RegistrationRequest.query.get(rid)
+    req = safe_get(RegistrationRequest, rid)
     if not req or req.status != 'pending':
         flash('申请不存在或已处理', 'danger')
         return redirect(url_for('data.list_registration_approvals'))
@@ -1679,7 +1681,7 @@ def approve_registration(rid):
         user_obj.set_password(secrets.token_urlsafe(24))
         db.session.add(user_obj)
     # 分配医院（同时写入多对多关联表，确保 get_assigned_hospitals 能查到）
-    h = Hospital.query.get(target_hospital_id)
+    h = safe_get(Hospital, target_hospital_id)
     if h:
         user.hospitals.append(h)
     req.status = 'approved'
@@ -1699,7 +1701,7 @@ def reject_registration(rid):
     if not can_access('注册审批'):
         flash('无权限访问', 'danger')
         return redirect(url_for('data.index'))
-    req = RegistrationRequest.query.get(rid)
+    req = safe_get(RegistrationRequest, rid)
     if not req or req.status != 'pending':
         flash('申请不存在或已处理', 'danger')
         return redirect(url_for('data.list_registration_approvals'))

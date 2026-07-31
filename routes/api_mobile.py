@@ -1,4 +1,6 @@
 """微信小程序 REST API - 手机端工单接单功能"""
+
+from utils.helpers import safe_get, safe_get_or_404
 import threading
 import time
 import urllib.request
@@ -690,7 +692,7 @@ def order_detail(user, order_id):
       404:
         description: 工单不存在
     """
-    order = WorkOrder.query.get(order_id)
+    order = safe_get(WorkOrder, order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
 
@@ -771,7 +773,7 @@ def accept_order(user, order_id):
       400:
         description: 当前状态不允许接单
     """
-    order = WorkOrder.query.get(order_id)
+    order = safe_get(WorkOrder, order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
 
@@ -839,7 +841,7 @@ def solve_order(user, order_id):
       400:
         description: 状态不允许提交
     """
-    order = WorkOrder.query.get(order_id)
+    order = safe_get(WorkOrder, order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
 
@@ -900,7 +902,7 @@ def submit_inspection(user, order_id):
       403:
         description: 无权操作
     """
-    order = WorkOrder.query.get(order_id)
+    order = safe_get(WorkOrder, order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
 
@@ -1236,7 +1238,7 @@ def form_list_api(user):
 @login_required_api
 def form_detail_api(user, fid):
     """获取表单详情（含模板字段定义）"""
-    form = PaperForm.query.get(fid)
+    form = safe_get(PaperForm, fid)
     if not form:
         return jsonify({'error': '表单不存在', 'code': 404}), 404
     fd = form.to_dict()
@@ -1251,7 +1253,7 @@ def form_detail_api(user, fid):
 @login_required_api
 def form_save_api(user, fid):
     """保存表单字段值（手机端编辑）"""
-    form = PaperForm.query.get(fid)
+    form = safe_get(PaperForm, fid)
     if not form:
         return jsonify({'error': '表单不存在', 'code': 404}), 404
     if form.status != 'active':
@@ -1270,7 +1272,7 @@ def form_save_api(user, fid):
 @login_required_api
 def form_sign_api(user, fid):
     """手机端手写签名"""
-    form = PaperForm.query.get(fid)
+    form = safe_get(PaperForm, fid)
     if not form:
         return jsonify({'error': '表单不存在', 'code': 404}), 404
     if form.status != 'active':
@@ -1293,7 +1295,7 @@ def form_sign_api(user, fid):
 @login_required_api
 def form_submit_api(user, fid):
     """手机端提交表单：active → submitted，等待审批"""
-    form = PaperForm.query.get(fid)
+    form = safe_get(PaperForm, fid)
     if not form:
         return jsonify({'error': '表单不存在', 'code': 404}), 404
     if form.status not in ('active', 'submitted'):
@@ -1310,7 +1312,7 @@ def form_submit_api(user, fid):
 @api_permission_required('order:audit')
 def form_approve_api(user, fid):
     """审批通过表单：submitted → completed，同时完结关联工单"""
-    form = PaperForm.query.get(fid)
+    form = safe_get(PaperForm, fid)
     if not form:
         return jsonify({'error': '表单不存在', 'code': 404}), 404
     if form.status != 'submitted':
@@ -1321,7 +1323,7 @@ def form_approve_api(user, fid):
 
     # 完结关联工单
     if form.work_order_id:
-        wo = WorkOrder.query.get(form.work_order_id)
+        wo = safe_get(WorkOrder, form.work_order_id)
         if wo and wo.status in ('in_progress', 'submitted'):
             wo.status = 'completed'
             wo.completed_at = datetime.now()
@@ -1403,7 +1405,7 @@ def today_summary(user):
 @login_required_api
 def order_transfers(user, order_id):
     """获取工单流转记录"""
-    order = WorkOrder.query.get(order_id)
+    order = safe_get(WorkOrder, order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
     logs = WorkOrderTransferLog.query.filter_by(
@@ -1426,7 +1428,7 @@ def order_transfers(user, order_id):
 @login_required_api
 def return_order(user, order_id):
     """退回到未接单"""
-    order = WorkOrder.query.get(order_id)
+    order = safe_get(WorkOrder, order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
     if order.status != 'in_progress':
@@ -1454,7 +1456,7 @@ def return_order(user, order_id):
 @api_permission_required('order:assign')
 def transfer_order(user, order_id):
     """转派工单给其他人"""
-    order = WorkOrder.query.get(order_id)
+    order = safe_get(WorkOrder, order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
     if order.status != 'in_progress':
@@ -1488,7 +1490,7 @@ def transfer_order(user, order_id):
 @login_required_api
 def order_personnel(user, order_id):
     """获取当前医院同组可选转派人选（排除当前接单人）"""
-    order = WorkOrder.query.get(order_id)
+    order = safe_get(WorkOrder, order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
 
@@ -1647,7 +1649,7 @@ def api_addresses(user):
 def list_photos(user, order_id):
     """获取工单图片列表"""
     from utils.photo import get_photo_url
-    order = WorkOrder.query.get(order_id)
+    order = safe_get(WorkOrder, order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
     photos = WorkOrderPhoto.query.filter_by(
@@ -1671,7 +1673,7 @@ def list_photos(user, order_id):
 @login_required_api
 def upload_photo(user, order_id):
     """上传工单图片（支持多图）"""
-    order = WorkOrder.query.get(order_id)
+    order = safe_get(WorkOrder, order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
 
@@ -1723,10 +1725,10 @@ def upload_photo(user, order_id):
 @api_permission_required('order:delete')
 def delete_photo(user, order_id, photo_id):
     """删除工单图片"""
-    order = WorkOrder.query.get(order_id)
+    order = safe_get(WorkOrder, order_id)
     if not order:
         return jsonify({'error': '工单不存在', 'code': 404}), 404
-    photo = WorkOrderPhoto.query.get(photo_id)
+    photo = safe_get(WorkOrderPhoto, photo_id)
     if not photo or photo.work_order_id != order.id:
         return jsonify({'error': '图片不存在', 'code': 404}), 404
 
@@ -1789,7 +1791,7 @@ def inv_create(user):
 @login_required_api
 def inv_detail(user, task_id):
     """获取盘点详情：楼区/楼层列表 + 已扫描明细"""
-    task = InventoryTask.query.get_or_404(task_id)
+    task = safe_get_or_404(InventoryTask, task_id)
     if not user.is_admin and user.hospital_id != task.hospital_id:
         assigned = set(user.get_assigned_hospital_ids())
         if task.hospital_id not in assigned:
@@ -1890,7 +1892,7 @@ def inv_scan(user):
     if not task_id or not asset_no:
         return jsonify({'error': '参数不完整', 'code': 400}), 400
 
-    task = InventoryTask.query.get(task_id)
+    task = safe_get(InventoryTask, task_id)
     if not task:
         return jsonify({'error': '盘点任务不存在', 'code': 404}), 404
     if not user.is_admin and user.hospital_id != task.hospital_id:
@@ -1998,7 +2000,7 @@ def inv_asset_lookup(user, asset_no):
     task_id = request.args.get('task_id', type=int)
     hid = None
     if task_id:
-        task = InventoryTask.query.get(task_id)
+        task = safe_get(InventoryTask, task_id)
         if task:
             hid = task.hospital_id
     if hid:
@@ -2101,7 +2103,7 @@ def mobile_exam_list(user):
 @login_required_api
 def mobile_exam_questions(user, exam_id):
     """小程序 - 获取考试题目"""
-    exam = Exam.query.get(exam_id)
+    exam = safe_get(Exam, exam_id)
     if not exam or exam.status not in ('published', 'closed'):
         return jsonify({'error': '考试不存在或未发布'}), 404
     if not exam.check_access(user):
@@ -2165,7 +2167,7 @@ def mobile_exam_questions(user, exam_id):
 @login_required_api
 def mobile_save_answer(user, submission_id):
     """小程序 - 保存答案"""
-    submission = ExamSubmission.query.get(submission_id)
+    submission = safe_get(ExamSubmission, submission_id)
     if not submission or submission.user_id != user.id:
         return jsonify({'error': '答卷不存在'}), 404
     data = request.get_json(silent=True) or {}
@@ -2189,7 +2191,7 @@ def mobile_submit_exam(user):
     answers = data.get('answers', {})
     duration_seconds = data.get('duration_seconds', 0)
 
-    submission = ExamSubmission.query.get(submission_id)
+    submission = safe_get(ExamSubmission, submission_id)
     if not submission or submission.user_id != user.id:
         return jsonify({'error': '答卷不存在'}), 404
     if submission.status != 'in_progress':
@@ -2232,7 +2234,7 @@ def mobile_submit_exam(user):
 @login_required_api
 def mobile_exam_result(user, submission_id):
     """小程序 - 查看考试结果"""
-    submission = ExamSubmission.query.get(submission_id)
+    submission = safe_get(ExamSubmission, submission_id)
     if not submission or submission.user_id != user.id:
         return jsonify({'error': '答卷不存在'}), 404
     if submission.status != 'submitted':
@@ -2567,7 +2569,7 @@ def mobile_chat_messages(user):
         'sender_hospital': m.sender_hospital, 'content': m.content, 'msg_type': m.msg_type,
         'recalled': m.recalled, 'file_name': m.file_name, 'file_size': m.file_size,
         'created_at': m.created_at.isoformat(), 'is_self': m.sender_id == user.id,
-        'sender_avatar': (User.query.get(m.sender_id).avatar or '') if User.query.get(m.sender_id) else ''
+        'sender_avatar': (safe_get(User, m.sender_id).avatar or '') if safe_get(User, m.sender_id) else ''
     } for m in messages]})
 
 
@@ -2633,7 +2635,7 @@ def mobile_chat_send(user):
         file_name=data.get('file_name', ''), file_size=data.get('file_size')
     )
     db.session.add(msg)
-    conv = ChatConversation.query.get(conv_id)
+    conv = safe_get(ChatConversation, conv_id)
     if conv:
         conv.last_message = content
         conv.last_sender = user.display_name or user.username
@@ -2682,7 +2684,7 @@ def mobile_chat_start(user):
     if not target_id: return jsonify({'error': '缺少 user_id'}), 400
     target_id = int(target_id)
     if target_id == user.id: return jsonify({'error': '不能和自己聊天'}), 400
-    target = User.query.get(target_id)
+    target = safe_get(User, target_id)
     if not target: return jsonify({'error': '用户不存在'}), 404
     my_conv_ids = db.session.query(ChatParticipant.conversation_id).filter(
         ChatParticipant.user_id == user.id, ChatParticipant.is_active == True
@@ -2792,7 +2794,7 @@ def mobile_chat_recall(user):
     if not msg_id: return jsonify({'error': '缺少 message_id'}), 400
     try: msg_id = int(msg_id)
     except: return jsonify({'error': 'message_id 必须为整数'}), 400
-    msg = ChatMessage.query.get(msg_id)
+    msg = safe_get(ChatMessage, msg_id)
     if not msg: return jsonify({'error': '消息不存在'}), 404
     if msg.sender_id != user.id: return jsonify({'error': '只能撤回自己的消息'}), 403
     delta = (datetime.now() - msg.created_at).total_seconds()

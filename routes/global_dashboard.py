@@ -1,4 +1,6 @@
 """集团看板 - 全局仪表盘"""
+
+from utils.helpers import safe_get
 from datetime import datetime, timedelta, date
 from flask import Blueprint, render_template, jsonify, request, g
 from flask_login import login_required, current_user
@@ -403,7 +405,7 @@ def get_pending_orders():
 
     result = []
     for o in orders:
-        hospital = Hospital.query.get(o.hospital_id)
+        hospital = safe_get(Hospital, o.hospital_id)
         result.append({
             'id': o.id,
             'title': o.title,

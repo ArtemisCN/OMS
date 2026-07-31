@@ -5,6 +5,8 @@
   查询、创建、编辑、删除、批量、状态管理、统计
   路由层（orders.py）只负责 HTTP 请求/响应编排
 """
+
+from utils.helpers import safe_get, safe_get_or_404
 import json
 import random
 from datetime import datetime, timedelta
@@ -111,7 +113,7 @@ def build_order_query(filters, user=None):
 
 def get_order_or_404(order_id):
     """获取单个工单，不存在则抛出 404"""
-    return WorkOrder.query.get_or_404(order_id)
+    return safe_get_or_404(WorkOrder, order_id)
 
 
 def get_order_photos(order_id):
@@ -294,7 +296,7 @@ def _guess_fault_type(title, fault_keywords, device_keywords):
 
 def update_order(order_id, form_data):
     """编辑工单字段"""
-    order = WorkOrder.query.get_or_404(order_id)
+    order = safe_get_or_404(WorkOrder, order_id)
     order.title = form_data.get('title', order.title)
     order.fault_type = form_data.get('fault_type', order.fault_type)
     order.fault_subcategory = form_data.get('fault_subcategory', order.fault_subcategory or '')
@@ -325,7 +327,7 @@ def update_order(order_id, form_data):
 
 def delete_order(order_id, operator):
     """删除工单"""
-    order = WorkOrder.query.get_or_404(order_id)
+    order = safe_get_or_404(WorkOrder, order_id)
     title = order.title
     db.session.delete(order)
     db.session.commit()
@@ -337,7 +339,7 @@ def delete_order(order_id, operator):
 
 def toggle_priority(order_id):
     """轮换优先级 normal → urgent → emergency → normal"""
-    order = WorkOrder.query.get_or_404(order_id)
+    order = safe_get_or_404(WorkOrder, order_id)
     if order.status == 'completed':
         raise ValueError('已结单工单不允许修改紧急程度')
     cycle = {'normal': 'urgent', 'urgent': 'emergency', 'emergency': 'normal'}
@@ -411,7 +413,7 @@ def batch_preview(form_data, user):
                 item_id = int(key.replace('fault_count_', ''))
                 count = max(0, int(val))
                 if count > 0:
-                    item = FaultTemplateItem.query.get(item_id)
+                    item = safe_get(FaultTemplateItem, item_id)
                     if item:
                         fault_counts[item.id] = count
                         fault_details[item.id] = {
@@ -573,7 +575,7 @@ def batch_undo(batch_ids):
         raise ValueError('没有可撤回的批次')
     deleted = 0
     for oid in batch_ids:
-        order = WorkOrder.query.get(oid)
+        order = safe_get(WorkOrder, oid)
         if order:
             db.session.delete(order)
             deleted += 1

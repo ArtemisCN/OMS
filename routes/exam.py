@@ -1,4 +1,6 @@
 """考试系统路由 — PC端管理 + 移动端API"""
+
+from utils.helpers import safe_get
 import json
 import random
 from datetime import datetime
@@ -100,7 +102,7 @@ def exam_edit(exam_id):
     """编辑考试"""
     if not can_access('考试系统'):
         return "无权访问", 403
-    exam = Exam.query.get(exam_id)
+    exam = safe_get(Exam, exam_id)
     if not exam:
         flash('考试不存在', 'danger')
         return redirect(url_for('exam.exam_list'))
@@ -137,7 +139,7 @@ def exam_detail(exam_id):
     """考试详情 — 成绩列表、答案解析"""
     if not can_access('考试系统'):
         return "无权访问", 403
-    exam = Exam.query.get(exam_id)
+    exam = safe_get(Exam, exam_id)
     if not exam:
         flash('考试不存在', 'danger')
         return redirect(url_for('exam.exam_list'))
@@ -154,11 +156,11 @@ def exam_review_submission(exam_id, submission_id):
     """查看考生答卷详情 — 逐题展示对错"""
     if not can_access('考试系统'):
         return "无权访问", 403
-    exam = Exam.query.get(exam_id)
+    exam = safe_get(Exam, exam_id)
     if not exam:
         flash('考试不存在', 'danger')
         return redirect(url_for('exam.exam_list'))
-    submission = ExamSubmission.query.get(submission_id)
+    submission = safe_get(ExamSubmission, submission_id)
     if not submission or submission.exam_id != exam.id:
         flash('答卷不存在', 'danger')
         return redirect(url_for('exam.exam_detail', exam_id=exam.id))
@@ -201,7 +203,7 @@ def exam_ranking(exam_id):
     """排名页"""
     if not can_access('考试系统'):
         return "无权访问", 403
-    exam = Exam.query.get(exam_id)
+    exam = safe_get(Exam, exam_id)
     if not exam:
         flash('考试不存在', 'danger')
         return redirect(url_for('exam.exam_list'))
@@ -224,7 +226,7 @@ def exam_delete(exam_id):
     """删除考试"""
     if not can_access('考试系统'):
         return jsonify({'error': '无权访问'}), 403
-    exam = Exam.query.get(exam_id)
+    exam = safe_get(Exam, exam_id)
     if not exam:
         return jsonify({'error': '考试不存在'}), 404
     db.session.delete(exam)
@@ -239,7 +241,7 @@ def exam_toggle_status(exam_id):
     """切换考试状态 draft/published/closed"""
     if not can_access('考试系统'):
         return jsonify({'error': '无权访问'}), 403
-    exam = Exam.query.get(exam_id)
+    exam = safe_get(Exam, exam_id)
     if not exam:
         return jsonify({'error': '考试不存在'}), 404
     status_map = {'draft': 'published', 'published': 'closed', 'closed': 'draft'}
@@ -338,7 +340,7 @@ def api_exam_list():
 @login_required
 def api_exam_questions(exam_id):
     """获取考试题目（不含答案，打乱题目和选项）"""
-    exam = Exam.query.get(exam_id)
+    exam = safe_get(Exam, exam_id)
     if not exam or exam.status not in ('published', 'closed'):
         return jsonify({'error': '考试不存在或未发布'}), 404
     if not exam.check_access():
@@ -420,7 +422,7 @@ def api_exam_questions(exam_id):
 @login_required
 def api_save_answer(submission_id):
     """保存单题答案（答题过程中）"""
-    submission = ExamSubmission.query.get(submission_id)
+    submission = safe_get(ExamSubmission, submission_id)
     if not submission or submission.user_id != current_user.id:
         return jsonify({'error': '答卷不存在'}), 404
 
@@ -446,7 +448,7 @@ def api_submit_exam():
     answers = data.get('answers', {})
     duration_seconds = data.get('duration_seconds', 0)
 
-    submission = ExamSubmission.query.get(submission_id)
+    submission = safe_get(ExamSubmission, submission_id)
     if not submission or submission.user_id != current_user.id:
         return jsonify({'error': '答卷不存在'}), 404
     if submission.status != 'in_progress':
@@ -490,7 +492,7 @@ def api_submit_exam():
 @login_required
 def api_exam_result(submission_id):
     """获取考试结果（含答案和解析）"""
-    submission = ExamSubmission.query.get(submission_id)
+    submission = safe_get(ExamSubmission, submission_id)
     if not submission or submission.user_id != current_user.id:
         return jsonify({'error': '答卷不存在'}), 404
     if submission.status != 'submitted':

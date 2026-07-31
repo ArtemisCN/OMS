@@ -1,4 +1,6 @@
 """备件库存管理"""
+
+from utils.helpers import safe_get, safe_get_or_404
 # 导入标准库与三方库
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, g, abort
 from flask_login import login_required, current_user
@@ -601,7 +603,7 @@ def request_create():
         if not part_id:
             flash('请选择备件', 'danger')
             return redirect(url_for('stock.request_create'))
-        part = SparePart.query.get(part_id)
+        part = safe_get(SparePart, part_id)
         if not part:
             flash('备件不存在', 'danger')
             return redirect(url_for('stock.request_create'))
@@ -635,7 +637,7 @@ def request_create():
 def request_approve(rid):
     """审批通过：扣减库存 + 创建出库记录"""
     from models import PartRequest, StockRecord
-    req = PartRequest.query.get_or_404(rid)
+    req = safe_get_or_404(PartRequest, rid)
     if req.status != 'pending':
         flash('该申请已被处理', 'warning')
         return redirect(url_for('stock.request_list'))
@@ -671,7 +673,7 @@ def request_approve(rid):
 def request_reject(rid):
     """拒绝申请"""
     from models import PartRequest
-    req = PartRequest.query.get_or_404(rid)
+    req = safe_get_or_404(PartRequest, rid)
     if req.status != 'pending':
         flash('该申请已被处理', 'warning')
         return redirect(url_for('stock.request_list'))
@@ -688,7 +690,7 @@ def request_reject(rid):
 def delete_out_record(rid):
     """删除出库记录"""
     from models import StockRecord
-    rec = StockRecord.query.get_or_404(rid)
+    rec = safe_get_or_404(StockRecord, rid)
     db.session.delete(rec)
     db.session.commit()
     flash('已删除出库记录', 'success')

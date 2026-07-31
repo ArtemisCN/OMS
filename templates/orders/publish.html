@@ -1313,7 +1313,7 @@ document.getElementById('publishBtn').addEventListener('click', function(e) {
 });
 
 /* ====== 交接班 ====== */
-var handoverRecords = {{ handover_records_json|safe }};
+var handoverRecords = {{ handover_records_data|tojson }};
 
 function toggleHandoverSection(el) {
     var sec = document.getElementById('handoverSection');

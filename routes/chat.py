@@ -1,4 +1,6 @@
 """在线聊天 REST API — 使用 Flask-Login 鉴权"""
+
+from utils.helpers import safe_get
 import os
 import uuid
 import json
@@ -19,7 +21,7 @@ def _allowed_file(filename):
 chat_bp = Blueprint('chat', __name__, url_prefix='/chat')
 
 def _get_user_hospital_name(user_id):
-    user = User.query.get(user_id)
+    user = safe_get(User, user_id)
     if user:
         assigned = user.get_assigned_hospitals()
         if assigned:
@@ -49,7 +51,7 @@ def _serialize_conversation(conv, current_user_id):
         'last_time': conv.last_time.isoformat() if conv.last_time else '',
         'unread': unread,
         'participants': [{'id': p.user_id, 'name': p.user_name, 'hospital_id': p.hospital_id,
-                          'avatar': (User.query.get(p.user_id).avatar or '') if User.query.get(p.user_id) else ''} for p in participants]
+                          'avatar': (safe_get(User, p.user_id).avatar or '') if safe_get(User, p.user_id) else ''} for p in participants]
     }
 
 @chat_bp.route('/conversations')
@@ -83,7 +85,7 @@ def get_messages():
         'sender_hospital': m.sender_hospital, 'content': m.content, 'msg_type': m.msg_type,
         'recalled': m.recalled, 'file_name': m.file_name, 'file_size': m.file_size,
         'created_at': m.created_at.isoformat(), 'is_self': m.sender_id == current_user.id,
-        'sender_avatar': (User.query.get(m.sender_id).avatar or '') if User.query.get(m.sender_id) else ''
+        'sender_avatar': (safe_get(User, m.sender_id).avatar or '') if safe_get(User, m.sender_id) else ''
     } for m in messages]})
 
 @chat_bp.route('/send', methods=['POST'])
@@ -105,7 +107,7 @@ def send_message():
         file_name=data.get('file_name', ''), file_size=data.get('file_size')
     )
     db.session.add(msg)
-    conv = ChatConversation.query.get(conv_id)
+    conv = safe_get(ChatConversation, conv_id)
     if conv:
         conv.last_message = content
         conv.last_sender = current_user.display_name or current_user.username
@@ -182,7 +184,7 @@ def start_conversation():
     if not target_id: return jsonify({'error': '缺少 user_id'}), 400
     target_id = int(target_id)
     if target_id == current_user.id: return jsonify({'error': '不能和自己聊天'}), 400
-    target = User.query.get(target_id)
+    target = safe_get(User, target_id)
     if not target: return jsonify({'error': '用户不存在'}), 404
     my_conv_ids = db.session.query(ChatParticipant.conversation_id).filter(
         ChatParticipant.user_id == current_user.id, ChatParticipant.is_active == True
@@ -266,7 +268,7 @@ def read_status():
     last_msg = ChatMessage.query.filter_by(conversation_id=conv_id).order_by(ChatMessage.id.desc()).first()
     read_users = []
     for p in others:
-        user = User.query.get(p.user_id)
+        user = safe_get(User, p.user_id)
         if not user: continue
         name = user.display_name or user.username or '用户'
         if last_msg and p.last_read_at:
@@ -294,7 +296,7 @@ def recall_message():
         msg_id = int(msg_id)
     except (ValueError, TypeError):
         return jsonify({'error': 'message_id 必须为整数'}), 400
-    msg = ChatMessage.query.get(msg_id)
+    msg = safe_get(ChatMessage, msg_id)
     if not msg: return jsonify({'error': '消息不存在'}), 404
     if msg.sender_id != current_user.id: return jsonify({'error': '只能撤回自己的消息'}), 403
     delta = (datetime.now() - msg.created_at).total_seconds()

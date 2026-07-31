@@ -1,6 +1,8 @@
 """Assets Blueprint: 资产二维码, 耗材用量预测, 备件→工单联动,
 供应商管理, 设备折旧计算, 领用审批, 备件库存预警,
 维保日历, 设备履历"""
+
+from utils.helpers import safe_get
 import io
 import json
 import os
@@ -69,7 +71,7 @@ def asset_qr():
 @login_required
 def asset_qr_image(asset_id):
     """生成单个资产二维码图片"""
-    asset = Asset.query.get(asset_id)
+    asset = safe_get(Asset, asset_id)
     if not asset:
         return jsonify(success=False, error='资产不存在'), 404
 
@@ -209,11 +211,11 @@ def stock_link_to_order():
     if not part_id or not work_order_id:
         return jsonify(success=False, error='参数不完整'), 400
 
-    part = SparePart.query.get(part_id)
+    part = safe_get(SparePart, part_id)
     if not part:
         return jsonify(success=False, error='备件不存在'), 404
 
-    work_order = WorkOrder.query.get(work_order_id)
+    work_order = safe_get(WorkOrder, work_order_id)
     if not work_order:
         return jsonify(success=False, error='工单不存在'), 404
 
@@ -272,7 +274,7 @@ def supplier_save():
         return jsonify(success=False, error='供应商名称不能为空'), 400
 
     if supplier_id:
-        supplier = Supplier.query.get(supplier_id)
+        supplier = safe_get(Supplier, supplier_id)
         if not supplier:
             return jsonify(success=False, error='供应商不存在'), 404
     else:
@@ -300,7 +302,7 @@ def supplier_save():
 @login_required
 def supplier_delete(id):
     """删除供应商"""
-    supplier = Supplier.query.get(id)
+    supplier = safe_get(Supplier, id)
     if not supplier:
         return jsonify(success=False, error='供应商不存在'), 404
     db.session.delete(supplier)
@@ -460,7 +462,7 @@ def stock_request_approve():
     """审批通过领用申请"""
     data = request.get_json(silent=True) or {}
     rid = data.get('id')
-    sr = StockRequest.query.get(rid)
+    sr = safe_get(StockRequest, rid)
     if not sr:
         return jsonify(success=False, error='申请不存在'), 404
     sr.status = 'approved'
@@ -472,7 +474,7 @@ def stock_request_approve():
             part_id = item.get('part_id')
             qty = item.get('quantity', 1)
             if part_id:
-                part = SparePart.query.get(part_id)
+                part = safe_get(SparePart, part_id)
                 if part and part.stock:
                     part.stock = max(0, (part.stock or 0) - qty)
     db.session.commit()
@@ -485,7 +487,7 @@ def stock_request_reject():
     """拒绝领用申请"""
     data = request.get_json(silent=True) or {}
     rid = data.get('id')
-    sr = StockRequest.query.get(rid)
+    sr = safe_get(StockRequest, rid)
     if not sr:
         return jsonify(success=False, error='申请不存在'), 404
     sr.status = 'rejected'
@@ -536,7 +538,7 @@ def spare_part_alert_save():
     if not part_id:
         return jsonify(success=False, error='请选择备件'), 400
     if aid:
-        a = SparePartAlert.query.get(aid)
+        a = safe_get(SparePartAlert, aid)
         if a:
             a.part_id = part_id
             a.min_threshold = min_threshold
@@ -559,7 +561,7 @@ def spare_part_alert_toggle():
     """切换预警开关"""
     data = request.get_json(silent=True) or {}
     aid = data.get('id')
-    a = SparePartAlert.query.get(aid)
+    a = safe_get(SparePartAlert, aid)
     if not a:
         return jsonify(success=False, error='预警配置不存在'), 404
     a.enabled = not a.enabled
@@ -572,7 +574,7 @@ def spare_part_alert_toggle():
 def spare_part_alert_get():
     """获取单条预警配置"""
     aid = request.args.get('id', type=int)
-    a = SparePartAlert.query.get(aid)
+    a = safe_get(SparePartAlert, aid)
     if not a:
         return jsonify(success=False, error='预警配置不存在'), 404
     return jsonify(success=True, data={
@@ -588,7 +590,7 @@ def spare_part_alert_get():
 @login_required
 def spare_part_alert_delete(aid):
     """删除预警配置"""
-    a = SparePartAlert.query.get(aid)
+    a = safe_get(SparePartAlert, aid)
     if not a:
         return jsonify(success=False, error='预警配置不存在'), 404
     db.session.delete(a)

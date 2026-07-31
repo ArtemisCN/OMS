@@ -1,5 +1,6 @@
-from utils.permissions import has_permission
 """Efficiency Blueprint: 人员效能看板, 自动派单+超时催办, 交接班日志, 维修评价, 投诉管理"""
+from utils.helpers import safe_get
+from utils.permissions import has_permission
 import json
 import re
 from datetime import datetime, timedelta
@@ -233,7 +234,7 @@ def auto_assign_check():
     if _get_feature_toggle('auto_assign') != 'true':
         return jsonify(success=True, assigned=False, reason='自动派单未启用')
 
-    order = WorkOrder.query.get(order_id)
+    order = safe_get(WorkOrder, order_id)
     if not order:
         return jsonify(success=False, error='工单不存在'), 404
 
@@ -409,7 +410,7 @@ def shift_handover_save():
 @login_required
 def shift_handover_detail(hid):
     """获取交接班记录详情"""
-    h = ShiftHandover.query.get(hid)
+    h = safe_get(ShiftHandover, hid)
     if not h:
         return jsonify(success=False, error='记录不存在'), 404
     return jsonify(success=True, data={
@@ -480,7 +481,7 @@ def repair_rating_detail(oid):
     rr = RepairRating.query.filter_by(work_order_id=oid).first()
     if not rr:
         return jsonify(success=False, error='未找到评价'), 404
-    wo = WorkOrder.query.get(oid)
+    wo = safe_get(WorkOrder, oid)
     return jsonify(success=True, data={
         'id': rr.id,
         'order_id': rr.work_order_id,
@@ -534,7 +535,7 @@ def complaint_save():
     if not title or not complainant:
         return jsonify(success=False, error='标题和投诉人不能为空'), 400
     if cid:
-        c = Complaint.query.get(cid)
+        c = safe_get(Complaint, cid)
         if not c:
             return jsonify(success=False, error='投诉不存在'), 404
         c.title = title
@@ -558,7 +559,7 @@ def complaint_handle():
     handler = data.get('handler', '').strip()
     resolution = data.get('resolution', '').strip()
     new_status = data.get('status', 'processing')
-    c = Complaint.query.get(cid)
+    c = safe_get(Complaint, cid)
     if not c:
         return jsonify(success=False, error='投诉不存在'), 404
     c.handler = handler or current_user.display_name or current_user.username
@@ -576,7 +577,7 @@ def complaint_close():
     """关闭投诉"""
     data = request.get_json(silent=True) or {}
     cid = data.get('id')
-    c = Complaint.query.get(cid)
+    c = safe_get(Complaint, cid)
     if not c:
         return jsonify(success=False, error='投诉不存在'), 404
     c.status = 'closed'
@@ -590,7 +591,7 @@ def complaint_reopen():
     """重新打开投诉"""
     data = request.get_json(silent=True) or {}
     cid = data.get('id')
-    c = Complaint.query.get(cid)
+    c = safe_get(Complaint, cid)
     if not c:
         return jsonify(success=False, error='投诉不存在'), 404
     c.status = 'processing'

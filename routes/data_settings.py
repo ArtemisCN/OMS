@@ -1,4 +1,6 @@
 """系统参数设置 + 科室字典管理"""
+
+from utils.helpers import safe_get, safe_get_or_404
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required
 from models import db, SystemSetting, Department
@@ -350,7 +352,7 @@ def add_department():
 @settings_bp.route('/departments/<int:did>/edit', methods=['POST'])
 @permission_required('system:config')
 def edit_department(did):
-    dept = Department.query.get_or_404(did)
+    dept = safe_get_or_404(Department, did)
     old_name = dept.name
     name = request.form.get('name', '').strip()
     if not name:
@@ -399,7 +401,7 @@ def edit_department(did):
 @settings_bp.route('/departments/<int:did>/toggle', methods=['POST'])
 @permission_required('system:config')
 def toggle_department(did):
-    dept = Department.query.get_or_404(did)
+    dept = safe_get_or_404(Department, did)
     dept.is_active = not dept.is_active
     db.session.commit()
     flash(f'已{"启用" if dept.is_active else "禁用"}「{dept.name}」', 'success')
@@ -409,7 +411,7 @@ def toggle_department(did):
 @settings_bp.route('/departments/<int:did>/delete', methods=['POST'])
 @permission_required('system:config')
 def delete_department(did):
-    dept = Department.query.get_or_404(did)
+    dept = safe_get_or_404(Department, did)
     db.session.delete(dept)
     db.session.commit()
     flash('科室已删除', 'success')

@@ -1,4 +1,6 @@
 """维修做账 - 发票录入→清单生成→文档输出"""
+
+from utils.helpers import safe_get, safe_get_or_404
 import json
 import random
 from datetime import datetime, date
@@ -166,7 +168,7 @@ def create():
 def detail(batch_id):
     if not check_access():
         return redirect(url_for('main.dashboard'))
-    batch = FinanceBatch.query.get_or_404(batch_id)
+    batch = safe_get_or_404(FinanceBatch, batch_id)
     invoices = batch.invoices.all()
     drafts = batch.drafts.order_by(FinanceDraft.sort_order).all()
     return render_template('finance/detail.html', batch=batch, invoices=invoices, drafts=drafts)
@@ -181,7 +183,7 @@ def generate_drafts(batch_id):
     if not check_access():
         return jsonify({'error': '无权限'}), 403
 
-    batch = FinanceBatch.query.get_or_404(batch_id)
+    batch = safe_get_or_404(FinanceBatch, batch_id)
     target_amount = float(batch.total_amount)
     hid = getattr(g, 'hospital_id', 1) or 1
 
@@ -305,7 +307,7 @@ def generate_drafts(batch_id):
 @finance_bp.route('/draft/<int:draft_id>/save', methods=['POST'])
 @login_required
 def save_draft(draft_id):
-    draft = FinanceDraft.query.get_or_404(draft_id)
+    draft = safe_get_or_404(FinanceDraft, draft_id)
     draft.repair_content = request.form.get('repair_content', draft.repair_content)
     draft.total_amount = request.form.get('total_amount', 0, type=float)
     db.session.commit()
@@ -315,7 +317,7 @@ def save_draft(draft_id):
 @finance_bp.route('/draft/<int:draft_id>/part/add', methods=['POST'])
 @login_required
 def add_part(draft_id):
-    draft = FinanceDraft.query.get_or_404(draft_id)
+    draft = safe_get_or_404(FinanceDraft, draft_id)
     name = request.form.get('part_name', '').strip()
     price = request.form.get('unit_price', 0, type=float)
     dp = FinanceDraftPart(
@@ -335,8 +337,8 @@ def add_part(draft_id):
 @finance_bp.route('/draft/<int:draft_id>/part/<int:part_id>/delete', methods=['POST'])
 @login_required
 def delete_draft_part(draft_id, part_id):
-    dp = FinanceDraftPart.query.get_or_404(part_id)
-    draft = FinanceDraft.query.get_or_404(draft_id)
+    dp = safe_get_or_404(FinanceDraftPart, part_id)
+    draft = safe_get_or_404(FinanceDraft, draft_id)
     draft.total_amount = max(0, float(draft.total_amount or 0) - float(dp.amount or 0))
     db.session.delete(dp)
     db.session.commit()
@@ -346,7 +348,7 @@ def delete_draft_part(draft_id, part_id):
 @finance_bp.route('/draft/<int:draft_id>/delete', methods=['POST'])
 @login_required
 def delete_draft(draft_id):
-    draft = FinanceDraft.query.get_or_404(draft_id)
+    draft = safe_get_or_404(FinanceDraft, draft_id)
     batch_id = draft.batch_id
     FinanceDraftPart.query.filter_by(draft_id=draft_id).delete()
     db.session.delete(draft)
@@ -361,10 +363,10 @@ def delete_draft(draft_id):
 @login_required
 def select_asset(draft_id):
     """手动选择/更换草稿关联的资产"""
-    draft = FinanceDraft.query.get_or_404(draft_id)
+    draft = safe_get_or_404(FinanceDraft, draft_id)
     asset_id = request.form.get('asset_id', type=int)
     if asset_id:
-        asset = Asset.query.get(asset_id)
+        asset = safe_get(Asset, asset_id)
         if asset:
             draft.asset_id = asset.id
             db.session.commit()
@@ -415,7 +417,7 @@ def generate_docs(batch_id):
     drafts = FinanceDraft.query.filter_by(batch_id=batch_id).all()
     for d in drafts:
         d.status = 'generated'
-    batch = FinanceBatch.query.get_or_404(batch_id)
+    batch = safe_get_or_404(FinanceBatch, batch_id)
     batch.status = 'generated'
     db.session.commit()
     flash('文档已生成', 'success')
@@ -428,7 +430,7 @@ def print_acceptance(batch_id):
     """打印验收单（2×2 A4排版）"""
     if not check_access():
         return redirect(url_for('main.dashboard'))
-    batch = FinanceBatch.query.get_or_404(batch_id)
+    batch = safe_get_or_404(FinanceBatch, batch_id)
     drafts = batch.drafts.order_by(FinanceDraft.sort_order).all()
     return render_template('finance/print_acceptance.html', batch=batch, drafts=drafts)
 
@@ -443,7 +445,7 @@ def export_acceptance_excel(batch_id):
     from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
     from openpyxl.utils import get_column_letter
     import io
-    batch = FinanceBatch.query.get_or_404(batch_id)
+    batch = safe_get_or_404(FinanceBatch, batch_id)
     drafts = batch.drafts.order_by(FinanceDraft.sort_order).all()
     wb = openpyxl.Workbook()
     total = len(drafts)
@@ -560,7 +562,7 @@ def export_acceptance_excel(batch_id):
 @finance_bp.route('/<int:batch_id>/delete', methods=['POST'])
 @login_required
 def delete_batch(batch_id):
-    batch = FinanceBatch.query.get_or_404(batch_id)
+    batch = safe_get_or_404(FinanceBatch, batch_id)
     # 级联删除
     FinanceDraftPart.query.filter(
         FinanceDraftPart.draft_id.in_(
@@ -581,7 +583,7 @@ def delete_batch(batch_id):
 def export_excel(batch_id):
     """导出维修做账的4份文档为Excel"""
     from flask import send_file
-    batch = FinanceBatch.query.get_or_404(batch_id)
+    batch = safe_get_or_404(FinanceBatch, batch_id)
     drafts = batch.drafts.order_by(FinanceDraft.sort_order).all()
     invoices = batch.invoices.all()
 
@@ -810,7 +812,7 @@ def acceptance_designer_edit(tpl_id):
     """编辑验收单模板"""
     if not check_access():
         return redirect(url_for('main.dashboard'))
-    tpl = AcceptanceTemplate.query.get_or_404(tpl_id)
+    tpl = safe_get_or_404(AcceptanceTemplate, tpl_id)
     templates = AcceptanceTemplate.query.order_by(AcceptanceTemplate.is_default.desc(), AcceptanceTemplate.id.desc()).all()
     return render_template('finance/acceptance_designer.html', templates=templates,
                            field_defs=ACCEPTANCE_FIELD_DEFS, current_tpl=tpl)
@@ -845,7 +847,7 @@ def acceptance_designer_save(tpl_id):
     """保存模板布局"""
     if not check_access():
         return jsonify({'error': '无权限'}), 403
-    tpl = AcceptanceTemplate.query.get_or_404(tpl_id)
+    tpl = safe_get_or_404(AcceptanceTemplate, tpl_id)
     data = request.get_json(force=True) or {}
     if 'layout' in data:
         tpl.set_layout(data['layout'])
@@ -866,7 +868,7 @@ def acceptance_designer_delete(tpl_id):
     """删除模板"""
     if not check_access():
         return jsonify({'error': '无权限'}), 403
-    tpl = AcceptanceTemplate.query.get_or_404(tpl_id)
+    tpl = safe_get_or_404(AcceptanceTemplate, tpl_id)
     db.session.delete(tpl)
     db.session.commit()
     return jsonify({'ok': True})
@@ -878,7 +880,7 @@ def acceptance_designer_preview(tpl_id):
     """预览验收单模板效果（用模拟数据）"""
     if not check_access():
         return redirect(url_for('main.dashboard'))
-    tpl = AcceptanceTemplate.query.get_or_404(tpl_id)
+    tpl = safe_get_or_404(AcceptanceTemplate, tpl_id)
     layout = tpl.get_layout()
     # 模拟数据
     mock_data = {
@@ -907,7 +909,7 @@ def batch_acceptance_render(batch_id):
     """用模板渲染批次的验收单"""
     if not check_access():
         return redirect(url_for('main.dashboard'))
-    batch = FinanceBatch.query.get_or_404(batch_id)
+    batch = safe_get_or_404(FinanceBatch, batch_id)
     tpl = AcceptanceTemplate.query.filter_by(is_default=True).first()
     if not tpl:
         tpl = AcceptanceTemplate.query.first()

@@ -2,6 +2,7 @@
 # Prometheus 配置 — 医院工单系统
 # 采集: web 容器 /metrics + Prometheus 自身
 # 告警规则: docker/monitoring/alert_rules.yml
+# 告警通知: Alertmanager (127.0.0.1:9093)
 # 网络: host 模式（127.0.0.1 直通宿主机 web 端口）
 # ============================================================
 global:
@@ -13,6 +14,12 @@ global:
 # 告警规则
 rule_files:
   - /etc/prometheus/alert_rules.yml
+
+# Alertmanager 地址
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['127.0.0.1:9093']
 
 scrape_configs:
   # web 应用指标（prometheus_flask_exporter）

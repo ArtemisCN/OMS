@@ -1,0 +1,22 @@
+# ============================================================
+# Alertmanager 配置 — 医院工单系统
+# 接收 Prometheus 告警 → webhook 转发到 alert-notifier
+# alert-notifier 负责推送企业微信 + 短信
+# ============================================================
+global:
+  resolve_timeout: 5m
+  # 告警分组：按 alertname 分组，5分钟内同类合并
+  # 避免故障风暴刷屏
+
+route:
+  group_by: ['alertname', 'instance']
+  group_wait: 10s        # 同组告警首次等待10s，便于合并
+  group_interval: 5m     # 同组告警重新发送间隔
+  repeat_interval: 30m   # 告警未恢复时重复通知间隔
+  receiver: 'notifier'
+
+receivers:
+  - name: 'notifier'
+    webhook_configs:
+      - url: 'http://127.0.0.1:9119/alert'
+        send_resolved: true   # 恢复时也通知（✅ 恢复消息）

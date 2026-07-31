@@ -156,9 +156,48 @@ services:
       - ./docker/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./docker/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
 
+  # Alertmanager：接收 Prometheus 告警，转发到 alert-notifier
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: hospital-workorder-alertmanager
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    network_mode: host
+    ports: []
+    volumes:
+      - ./docker/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.listen-address=127.0.0.1:9093'
+
+  # 告警推送接收服务：企业微信 + 短信
+  alert-notifier:
+    build: ./docker/monitoring/alert-notifier
+    image: hospital-workorder-alert-notifier:latest
+    container_name: hospital-workorder-alert-notifier
+    restart: unless-stopped
+    depends_on:
+      - alertmanager
+    network_mode: host
+    ports: []
+    environment:
+      # 企业微信 webhook（医院1 已配置；替换为实际地址）
+      - WECOM_WEBHOOK=${ALERT_WECOM_WEBHOOK:-}
+      # 短信通道：API 地址/Key 从系统设置数据库读取（sms_api_url/sms_api_key/sms_enabled）
+      # 只需在系统设置页面填写，notifier 自动生效
+      - SMS_PHONE=${ALERT_SMS_PHONE:-}
+      - DB_PATH=/app/instance/workorders.db
+      - PORT=9119
+    volumes:
+      - workorder_data:/app/instance:ro   # 只读挂载数据库，读取短信配置
+
 volumes:
   workorder_data:
   workorder_uploads:
   nginx_logs:
   prometheus_data:
   grafana_data:
+  alertmanager_data:

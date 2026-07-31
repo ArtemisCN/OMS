@@ -69,6 +69,27 @@ def get_assignments():
     if not hid:
         return _json_error('请选择医院', 400)
 
+    # ===== 自动过期检查（每次加载列表时主动清理，确保过期人员回到可借调池） =====
+    now_dt = now()
+    expire_cutoff = now_dt.replace(hour=23, minute=0, second=0, microsecond=0)
+    overdue = CrossHospitalAssignment.query.filter(
+        CrossHospitalAssignment.status == 'active',
+        CrossHospitalAssignment.end_date < expire_cutoff,
+    ).all()
+    if overdue:
+        for assignment in overdue:
+            assignment.status = 'expired'
+            user = User.query.get(assignment.user_id)
+            if user:
+                other_active = CrossHospitalAssignment.query.filter(
+                    CrossHospitalAssignment.user_id == assignment.user_id,
+                    CrossHospitalAssignment.status == 'active',
+                    CrossHospitalAssignment.id != assignment.id,
+                ).count()
+                if other_active == 0:
+                    user.is_cross_assigned = False
+        db.session.commit()
+
     # 本院作为 target_hospital 的活跃借调 + 所有历史记录
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int)
@@ -393,9 +414,11 @@ def auto_expire():
         return _json_error('无效的请求令牌', 403)
 
     now_dt = now()
+    # 当日23:00以后才记为过期（避免当天0点~22:59就判定过期）
+    expire_cutoff = now_dt.replace(hour=23, minute=0, second=0, microsecond=0)
     expired = CrossHospitalAssignment.query.filter(
         CrossHospitalAssignment.status == 'active',
-        CrossHospitalAssignment.end_date < now_dt,
+        CrossHospitalAssignment.end_date < expire_cutoff,
     ).all()
 
     count = 0

@@ -462,6 +462,15 @@ function onDrop(e) {
     document.getElementById('modalUserHospital').textContent = '原属医院：' + data.userHospital;
     document.getElementById('modalAvatar').textContent = data.userInitial;
 
+    // 默认日期：明天（借调1天）
+    var tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    var ds = tomorrow.getFullYear() + '-' +
+             String(tomorrow.getMonth() + 1).padStart(2, '0') + '-' +
+             String(tomorrow.getDate()).padStart(2, '0');
+    document.getElementById('startDate').value = ds;
+    document.getElementById('endDate').value = ds;
+
     var modal = new bootstrap.Modal(document.getElementById('assignModal'));
     modal.show();
 }

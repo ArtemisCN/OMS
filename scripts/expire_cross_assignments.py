@@ -17,10 +17,12 @@ def expire_assignments():
     app = create_app()
     with app.app_context():
         now = datetime.now()
+        # 当日23:00以后才记为过期
+        expire_cutoff = now.replace(hour=23, minute=0, second=0, microsecond=0)
         # 查找所有过期的活跃借调
         expired = CrossHospitalAssignment.query.filter(
             CrossHospitalAssignment.status == 'active',
-            CrossHospitalAssignment.end_date < now
+            CrossHospitalAssignment.end_date < expire_cutoff
         ).all()
 
         count = 0

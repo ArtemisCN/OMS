@@ -204,7 +204,7 @@
                         {% if o.work_type == 'inspection' %}<span class="badge bg-info me-1" style="font-size:9px;"><i class="fas fa-search"></i>巡检</span>{% endif %}
                         <a href="{{ url_for('orders.detail', order_id=o.id) }}" class="text-decoration-none">{{ o.title }}</a>
                     </td>
-                    <td><small>{{ o.building }} {{ o.department }}</small></td>
+                    <td><small>{{ o.building }} {{ o.floor }} {{ o.department }}</small></td>
                     <td>
                         {% if o.fault_type == '软件' %}
                         <span class="badge bg-info">{{ o.fault_type }}</span>

@@ -368,13 +368,23 @@ if __name__ == '__main__':
         admin = User.query.filter_by(username='admin').first()
         if not admin:
             print("首次启动，初始化默认数据...")
+
+            # 确保至少有一个默认医院
+            from models import Hospital
+            default_hospital = Hospital.query.first()
+            if not default_hospital:
+                default_hospital = Hospital(name='默认医院', is_active=True)
+                db.session.add(default_hospital)
+                db.session.flush()
+                print("  - 创建默认医院")
+
             admin = User(username='admin', display_name='管理员', is_admin=True)
             admin.set_password('admin123')
             db.session.add(admin)
 
             from models import SolutionTemplate
             for title, content in app_config.SOLUTION_TEMPLATES.items():
-                db.session.add(SolutionTemplate(title=title, content=content))
+                db.session.add(SolutionTemplate(title=title, content=content, hospital_id=default_hospital.id))
             db.session.commit()
             print("✓ 初始化完成")
             print(f"  - 管理员: admin / admin123")
@@ -383,8 +393,15 @@ if __name__ == '__main__':
             from models import SolutionTemplate
             if SolutionTemplate.query.count() == 0:
                 print("导入方案模板...")
+                # 确保有默认医院
+                from models import Hospital
+                default_hospital = Hospital.query.first()
+                if not default_hospital:
+                    default_hospital = Hospital(name='默认医院', is_active=True)
+                    db.session.add(default_hospital)
+                    db.session.flush()
                 for title, content in app_config.SOLUTION_TEMPLATES.items():
-                    db.session.add(SolutionTemplate(title=title, content=content))
+                    db.session.add(SolutionTemplate(title=title, content=content, hospital_id=default_hospital.id))
                 db.session.commit()
                 print(f"✓ 导入了 {len(app_config.SOLUTION_TEMPLATES)} 条方案模板")
 

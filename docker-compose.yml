@@ -17,6 +17,18 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:5000:5000"   # 生产：Nginx 代理 HTTPS→5000
+    # 资源限制（compose 顶层字段，单机 compose 模式生效；deploy 块兼容 swarm）
+    cpus: '1.0'
+    mem_limit: 1024m
+    mem_reservation: 512m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1024M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     environment:
       - TZ=Asia/Shanghai
       # SESSION_COOKIE_SECURE 由 .env 控制（生产 HTTPS 设 1；本地 http 验证不设，否则 cookie 无法发送）
@@ -52,6 +64,18 @@ services:
     # cron 容器不跑 gunicorn，禁用镜像自带 HEALTHCHECK（curl 5000 会永远失败）
     healthcheck:
       disable: true
+    # 资源限制：cron 是轻量定时任务，配额小于 web
+    cpus: '0.25'
+    mem_limit: 256m
+    mem_reservation: 128m
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
     environment:
       - TZ=Asia/Shanghai
       - WO_CHAT_UPLOAD_FOLDER=/app/uploads/wochat   # 与 web 一致，容器内路径

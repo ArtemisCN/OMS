@@ -2024,29 +2024,13 @@ def inspection_routes():
     """巡检路线列表页"""
     hid = getattr(g, 'hospital_id', 0)
     routes = InspectionRoute.query.order_by(InspectionRoute.created_at.desc()).all()
-    # 楼栋/楼层/科室：工单数据为主（规范名称，如"7号楼"/"1F"），
-    # departments 楼栋补充（仅限非裸数字的规范名，如"住院楼""门诊楼"；
-    # 早期导入的裸数字 "1"/"2" 会污染下拉，丢弃）
-    bld_q = db.session.query(WorkOrder.building).filter(
-        WorkOrder.building != '', WorkOrder.building.isnot(None))
-    fl_q = db.session.query(WorkOrder.floor).filter(
-        WorkOrder.floor != '', WorkOrder.floor.isnot(None))
-    dept_q = db.session.query(WorkOrder.department).filter(
-        WorkOrder.department != '', WorkOrder.department.isnot(None))
-    if hid and hid != 0:
-        bld_q = bld_q.filter(WorkOrder.hospital_id == hid)
-        fl_q = fl_q.filter(WorkOrder.hospital_id == hid)
-        dept_q = dept_q.filter(WorkOrder.hospital_id == hid)
-    buildings = sorted(set(r[0] for r in bld_q.distinct().all()))
-    floors = sorted(set(r[0] for r in fl_q.distinct().all()))
-    departments = sorted(set(r[0] for r in dept_q.distinct().all()))
-    # departments 补充（仅规范楼栋名，排除裸数字/空）
-    d_bld_q = db.session.query(Department.building).filter(
-        Department.building != '', Department.building.isnot(None))
-    if hid and hid != 0:
-        d_bld_q = d_bld_q.filter(Department.hospital_id == hid)
-    extra_blds = {r[0] for r in d_bld_q.distinct().all() if r[0] and not r[0].strip().isdigit()}
-    buildings = sorted(set(buildings) | extra_blds)
+    # 楼栋/楼层/科室：从「数据管理-地址管理」取数（get_merged_addresses），
+    # 与工单发布/地址管理页面保持一致。不用 departments 表（早期裸数字数据）或工单表。
+    from services.address import get_merged_addresses
+    merged = get_merged_addresses(hospital_id=hid if hid and hid != 0 else None)
+    buildings = sorted({a.get('楼区', '') for a in merged if a.get('楼区')})
+    floors = sorted({a.get('所属楼层', '') for a in merged if a.get('所属楼层')})
+    departments = sorted({a.get('所属科室', '') for a in merged if a.get('所属科室')})
     return render_template('feature/inspection_routes.html', routes=routes,
                            routes_json=json.dumps([{
                                'id': r.id, 'name': r.name,

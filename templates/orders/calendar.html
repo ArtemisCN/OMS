@@ -314,12 +314,23 @@
     </div>
   </div>
 
-  <!-- 月份导航 -->
-  <div class="cal-nav" style="margin-bottom:14px;width:fit-content;">
-    <a href="{{ url_for('orders.calendar_view', year=prev_year, month=prev_month) }}" class="cal-nav-btn"><i class="fas fa-chevron-left"></i></a>
-    <span class="cal-nav-label" id="calMonthLabel">{{ year }}年{{ month }}月</span>
-    <a href="{{ url_for('orders.calendar_view', year=next_year, month=next_month) }}" class="cal-nav-btn"><i class="fas fa-chevron-right"></i></a>
-    <a href="{{ url_for('orders.calendar_view') }}" class="cal-nav-btn today" style="margin-left:4px;"><i class="fas fa-calendar-check"></i> 今天</a>
+  <!-- 月份导航 + 组别筛选 -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+    <div class="cal-nav">
+      <a href="{{ url_for('orders.calendar_view', year=prev_year, month=prev_month, team=team_sel) }}" class="cal-nav-btn"><i class="fas fa-chevron-left"></i></a>
+      <span class="cal-nav-label" id="calMonthLabel">{{ year }}年{{ month }}月</span>
+      <a href="{{ url_for('orders.calendar_view', year=next_year, month=next_month, team=team_sel) }}" class="cal-nav-btn"><i class="fas fa-chevron-right"></i></a>
+      <a href="{{ url_for('orders.calendar_view', team=team_sel) }}" class="cal-nav-btn today" style="margin-left:4px;"><i class="fas fa-calendar-check"></i> 今天</a>
+    </div>
+    {% if teams %}
+    <select class="form-select form-select-sm" style="width:auto;min-width:110px;font-size:13px;border-radius:8px;border:1px solid var(--card-border,#d0d5dd);padding:4px 10px;height:34px;background:var(--card-bg,rgba(255,255,255,0.6));color:var(--text,#1e293b);"
+            onchange="window.location.href='{{ url_for('orders.calendar_view', year=year, month=month) }}?team='+encodeURIComponent(this.value)">
+      <option value="" {% if not team_sel %}selected{% endif %}>全部组别</option>
+      {% for t in teams %}
+      <option value="{{ t }}" {% if team_sel == t %}selected{% endif %}>{{ t }}</option>
+      {% endfor %}
+    </select>
+    {% endif %}
   </div>
 
   <!-- 统计摘要 -->

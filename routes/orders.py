@@ -642,16 +642,23 @@ def calendar_view():
     _, days_in_month = monthrange(year, month)
     month_end = datetime(year, month, days_in_month, 23, 59, 59)
 
-    # 组别筛选
-    team = ''
-    if not has_permission(current_user, 'order:batch'):
-        _person = User.query.filter_by(id=current_user.id).first()
-        if _person and _person.team:
-            team = _person.team
+    # 组别筛选（与仪表盘同口径：管理员默认跟随 default_dashboard_team，非管理员固定本人组）
+    # request.args.get('team')：None=URL无team参数(首次进入) / ''=选了全部组
+    team_param = request.args.get('team')
+    if team_param is None:
+        if has_permission(current_user, 'order:batch'):
+            _def_setting = SystemSetting.query.filter_by(key='default_dashboard_team').first()
+            team = _def_setting.value if _def_setting and _def_setting.value else ''
+        else:
+            _person = User.query.filter_by(id=current_user.id).first()
+            team = _person.team if _person and _person.team else ''
+    else:
+        team = team_param
     team_persons = set()
     if team:
         tp = User.query.filter(User.team == team, User.is_active == True).all()
         team_persons = {p.display_name for p in tp if p.display_name}
+    teams = [t[0] for t in User.query.with_entities(User.team).filter(User.team!='', User.team!=None).distinct().order_by(User.team).all()]
 
     orders = WorkOrder.query.filter(
         WorkOrder.created_at >= month_start,
@@ -679,6 +686,7 @@ def calendar_view():
                            cal_data=dict(cal_data),
                            prev_month=prev_month, prev_year=prev_year,
                            next_month=next_month, next_year=next_year,
+                           teams=teams, team_sel=team,
                            now=now)
 
 

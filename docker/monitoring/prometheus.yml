@@ -1,0 +1,32 @@
+# ============================================================
+# Prometheus 配置 — 医院工单系统
+# 采集: web 容器 /metrics + Prometheus 自身
+# 告警规则: docker/monitoring/alert_rules.yml
+# 网络: host 模式（127.0.0.1 直通宿主机 web 端口）
+# ============================================================
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: hospital-workorder
+
+# 告警规则
+rule_files:
+  - /etc/prometheus/alert_rules.yml
+
+scrape_configs:
+  # web 应用指标（prometheus_flask_exporter）
+  - job_name: 'hospital-web'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['127.0.0.1:5000']
+        labels:
+          service: web
+          app: hospital-workorder
+
+  # Prometheus 自身
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: prometheus

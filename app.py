@@ -56,6 +56,17 @@ def create_app():
 
     db.init_app(app)
 
+    # ===== Prometheus 监控指标（/metrics 端点，供 Prometheus 抓取）=====
+    # 注意: 必须在蓝图注册前初始化，metrics 端点无需登录（仅监听内网）
+    try:
+        from prometheus_flask_exporter import PrometheusMetrics
+        metrics = PrometheusMetrics(app, group_by='endpoint')
+        metrics.info('app_info', '医院工单系统', version='2.1')
+    except Exception as _m_err:
+        app.logger.warning(f'Prometheus 指标初始化失败（不影响启动）: {_m_err}')
+        metrics = None
+    app.extensions['prometheus_metrics'] = metrics
+
     # ===== 初始化日志与监控系统 =====
     setup_logging(app)
 

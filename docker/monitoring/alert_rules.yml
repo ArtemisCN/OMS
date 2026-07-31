@@ -1,0 +1,68 @@
+# ============================================================
+# 告警规则 — 医院工单系统
+# 指标来自: prometheus_flask_exporter (/metrics)
+# 覆盖: Web 服务健康、CPU 高负载、请求错误率、慢响应
+# ============================================================
+groups:
+  - name: hospital-workorder
+    rules:
+      # --- 1. Web 服务健康检查（up 指标为 0 = 抓取失败）---
+      - alert: WebServiceDown
+        expr: up{job="hospital-web"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: web
+        annotations:
+          summary: "Web 服务不可达"
+          description: "Prometheus 无法抓取 web 容器 /metrics 已超过 1 分钟。应用可能已挂掉或容器重启。"
+
+      # --- 2. 容器 CPU 使用率 > 80%（基于进程 CPU 时间比例估算）---
+      - alert: HighCPUUsage
+        expr: |
+          sum(rate(process_cpu_seconds_total{job="hospital-web"}[5m])) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: web
+        annotations:
+          summary: "Web 容器 CPU 使用率过高"
+          description: "CPU 使用率超过 80% 持续 5 分钟。当前值: {{ $value | printf \"%.1f\" }}%"
+
+      # --- 3. 5xx 错误率 > 5%（最近 5 分钟）---
+      - alert: High5xxRate
+        expr: |
+          sum(rate(flask_http_request_total{job="hospital-web",status=~"5.."}[5m]))
+          /
+          (sum(rate(flask_http_request_total{job="hospital-web"}[5m])) + 1e-9) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: web
+        annotations:
+          summary: "5xx 错误率过高"
+          description: "最近 5 分钟 5xx 占比超过 5%。当前: {{ $value | printf \"%.2f\" }}%"
+
+      # --- 4. 慢响应：P95 请求耗时 > 3 秒 ---
+      - alert: SlowResponse
+        expr: |
+          histogram_quantile(0.95, sum(rate(flask_http_request_duration_seconds_bucket{job="hospital-web"}[5m])) by (le)) > 3
+        for: 5m
+        labels:
+          severity: warning
+          service: web
+        annotations:
+          summary: "响应时间过高"
+          description: "P95 请求耗时超过 3 秒持续 5 分钟。当前: {{ $value | printf \"%.2f\" }}s"
+
+      # --- 5. 请求量骤降（可能服务异常，如流量中断）---
+      - alert: RequestRateDrop
+        expr: |
+          sum(rate(flask_http_request_total{job="hospital-web"}[5m])) < 0.05
+        for: 15m
+        labels:
+          severity: warning
+          service: web
+        annotations:
+          summary: "请求量骤降"
+          description: "最近 5 分钟平均每秒请求 < 0.05，流量可能中断（正常时该值应远大于此）。"

@@ -24,7 +24,27 @@
 - **Prometheus API**: `http://127.0.0.1:9090/api/v1/query?query=<PromQL>`
 - **web /metrics**: `http://127.0.0.1:5000/metrics`（仅内网）
 
-## 告警规则（5条，docker/monitoring/alert_rules.yml）
+## 告警推送链路（Alertmanager → 企业微信 + 短信）
+
+```
+Prometheus 告警规则触发
+      ↓
+Alertmanager (127.0.0.1:9093) 分组/去重
+      ↓ webhook
+alert-notifier (127.0.0.1:9119)
+      ├── 企业微信机器人（markdown 格式）
+      └── 短信 API（仅 critical 级别，POST {phone, content, api_key}）
+```
+
+### 通道配置
+
+| 通道 | 配置方式 |
+|---|---|
+| 企业微信 | `.env` 的 `ALERT_WECOM_WEBHOOK`（当前=医院1 webhook） |
+| 短信 API | 系统设置页面填写 `sms_enabled=1` + `sms_api_url` + `sms_api_key`（notifier 只读数据库自动生效） |
+| 短信接收手机号 | `.env` 的 `ALERT_SMS_PHONE` |
+
+### 告警规则（5条，docker/monitoring/alert_rules.yml）
 
 | 规则 | 触发条件 | 严重度 |
 |---|---|---|

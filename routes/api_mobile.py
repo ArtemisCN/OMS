@@ -1073,6 +1073,7 @@ def send_new_order_notification(order):
         """后台线程推送（需要传入 app 实例以获取应用上下文）"""
         with app.app_context():
             success = 0
+            to_remove = []  # 批量收集待移除订阅，循环后统一 commit（P1-13 性能优化）
             for sub in subscribers:
                 push_data = {
                     'touser': sub.openid,
@@ -1092,17 +1093,20 @@ def send_new_order_notification(order):
                         success += 1
                         print(f'[NOTIFY] 推送成功 user_id={sub.user_id}', flush=True)
                         # 一次性订阅已消耗，自动移除
-                        db.session.delete(sub)
-                        db.session.commit()
+                        to_remove.append(sub)
                     else:
                         print(f'[NOTIFY] 推送失败 user_id={sub.user_id} errcode={result.get("errcode")} errmsg={result.get("errmsg")}', flush=True)
                         # 40001=token失效, 43101=用户拒收/取消订阅 -> 移除订阅
                         if result.get('errcode') in (40001, 43101):
-                            db.session.delete(sub)
-                            db.session.commit()
+                            to_remove.append(sub)
                             print(f'[NOTIFY] 已移除失效订阅 user_id={sub.user_id}', flush=True)
                 except Exception as e:
                     print(f'[NOTIFY] 推送异常 user_id={sub.user_id}: {e}', flush=True)
+            # 批量移除（一次 commit，避免每次推送都 fsync）
+            for s in to_remove:
+                db.session.delete(s)
+            if to_remove:
+                db.session.commit()
             print(f'[NOTIFY] 推送完成: order_id={order.id}, 成功={success}/{len(subscribers)}', flush=True)
 
     import threading

@@ -23,6 +23,7 @@ from models import (
     Department, FaultType, SmsLog, SolutionTemplate,
     ShiftHandover, RepairRating, Complaint, StockRequest,
     InspectionRoute, SparePartAlert,
+    get_cached_setting,
 )
 
 feature_bp = Blueprint('feature', __name__, url_prefix='/feature')
@@ -1102,8 +1103,7 @@ def report_builder_generate():
 
 def _send_sms(to_phone, content):
     """实际发送短信（调用配置的 API）"""
-    sms_enabled = SystemSetting.query.filter_by(key='sms_enabled').first()
-    if not sms_enabled or sms_enabled.value != '1':
+    if get_cached_setting('sms_enabled') != '1':
         return False, '短信功能未启用'
 
     api_url = SystemSetting.query.filter_by(key='sms_api_url').first()
@@ -1162,6 +1162,8 @@ def sms_settings_save():
         else:
             setting = SystemSetting(key=key, value=val, label=key, category='短信')
             db.session.add(setting)
+        from models import refresh_setting_cache
+        refresh_setting_cache(key, val)
     db.session.commit()
 
     return jsonify(success=True, message='短信配置已保存')
@@ -1438,8 +1440,7 @@ def timeout_reminder_check():
     if _get_feature_toggle('timeout_reminder') != 'true':
         return jsonify(success=True, notified=0, reason='超时催办未启用')
     
-    timeout_hours_setting = SystemSetting.query.filter_by(key='wecom_timeout_hours').first()
-    timeout_hours = float(timeout_hours_setting.value) if timeout_hours_setting and timeout_hours_setting.value else 4.0
+    timeout_hours = float(get_cached_setting('wecom_timeout_hours') or 4.0)
     
     now = datetime.now()
     threshold_time = now - timedelta(hours=timeout_hours)

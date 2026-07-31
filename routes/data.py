@@ -14,7 +14,8 @@ from models import (db, Department, SolutionTemplate, WorkOrder,
     SystemSetting, Asset, SparePart, StorageLocation, Supplier,
     Consumable, ConsumableRecord, DutySchedule, DutyStaff, KnowledgeBase,
     RegistrationRequest, RoleGroup,
-    log_audit, get_module_permissions, save_module_permissions, can_access)
+    log_audit, get_module_permissions, save_module_permissions, can_access,
+    get_cached_setting)
 import config
 from routes.auth import admin_required
 from services import data_service
@@ -39,8 +40,7 @@ def list_hospitals():
     _saved_hid = getattr(flask_g, 'hospital_id', None)
     flask_g.hospital_id = None
     # 系统参数「显示离职人员」person_show_inactive：'1'=显示离职/停用人员，'0'=仅在职
-    _s = SystemSetting.query.filter_by(key='person_show_inactive').first()
-    include_inactive = bool(_s and _s.value == '1')
+    include_inactive = get_cached_setting('person_show_inactive') == '1'
     try:
         # 各医院人员数
         person_counts = {}
@@ -229,8 +229,7 @@ def list_persons():
     team_sel = request.args.get('team', '')
     if not team_sel:
         if has_permission(current_user, 'system:config'):
-            _def_setting = SystemSetting.query.filter_by(key='default_dashboard_team').first()
-            team_sel = _def_setting.value if _def_setting and _def_setting.value else ''
+            team_sel = get_cached_setting('default_dashboard_team') or ''
         else:
             if current_user.team:
                 team_sel = current_user.team

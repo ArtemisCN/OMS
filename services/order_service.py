@@ -12,7 +12,7 @@ import random
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-from models import db, WorkOrder, SolutionTemplate, User, WorkOrderPhoto
+from models import db, WorkOrder, SolutionTemplate, User, WorkOrderPhoto, get_cached_setting
 from models import log_audit
 from services.address import get_merged_addresses, get_all_buildings
 from services.fault_matcher import match_fault
@@ -141,9 +141,9 @@ def get_filter_data():
     # 团队过滤（不用 resolve_team 因为它需要 request）
     team = current_user.team
     if not team:
-        s = SystemSetting.query.filter_by(key='default_dashboard_team').first()
-        if s and s.value:
-            team = s.value
+        team_val = get_cached_setting('default_dashboard_team')
+        if team_val:
+            team = team_val
     if team:
         base_q = base_q.filter(User.team == team)
 
@@ -393,8 +393,7 @@ def get_batch_form_data(user, selected_team=None):
 
     # 默认组
     from models import SystemSetting
-    default_team_setting = SystemSetting.query.filter_by(key='default_dashboard_team').first()
-    default_team_val = default_team_setting.value if default_team_setting and default_team_setting.value else ''
+    default_team_val = get_cached_setting('default_dashboard_team') or ''
 
     return persons, templates, fault_groups, fault_group_items, team_groups, teams, default_team_val
 

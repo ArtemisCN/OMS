@@ -82,8 +82,11 @@ def ops_screen_data():
 
     # SLA 达标率（已完成工单中，未超时的比例）
     # 注意：is_overdue 是 @property（内存计算），不能在 SQL 里过滤
+    # P1-9：加 90 天时间窗，避免历史数据全量加载
+    sla_cutoff = now - timedelta(days=90)
     all_completed = _filter(WorkOrder.query.filter(
         WorkOrder.status == 'completed',
+        WorkOrder.completed_at >= sla_cutoff,
     )).all()
     sla_compliant = sum(1 for wo in all_completed if not wo.is_overdue)
     sla_total = len(all_completed)

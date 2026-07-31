@@ -20,7 +20,7 @@ from models import (
     DutySchedule, DutyStaff, KnowledgeBase, Hospital,
     FaultTemplateGroup, FaultTemplateItem, PartPrice,
     SystemSetting, log_audit, get_module_permissions, save_module_permissions,
-    RoleGroup
+    RoleGroup, get_cached_setting,
 )
 
 
@@ -48,8 +48,7 @@ def list_persons(include_inactive=False):
     from models import SystemSetting
     # 系统参数「显示离职人员」person_show_inactive：'1'=显示离职/停用人员，'0'=仅在职
     if not include_inactive:
-        _s = SystemSetting.query.filter_by(key='person_show_inactive').first()
-        include_inactive = bool(_s and _s.value == '1')
+        include_inactive = get_cached_setting('person_show_inactive') == '1'
     hid = getattr(g, 'hospital_id', None)
     q = User.query.filter(User.is_admin == False)
     if hid:
@@ -74,8 +73,7 @@ def add_person(name):
     hid = getattr(g, 'hospital_id', None)
     # 新建人员默认组别（系统参数 person_default_team，留空则不自动选择）
     from models import SystemSetting
-    _dt = SystemSetting.query.filter_by(key='person_default_team').first()
-    default_team = _dt.value.strip() if _dt and _dt.value else ''
+    default_team = (get_cached_setting('person_default_team') or '').strip()
     # User 已合并 Person 数据：users.username/password_hash 为 NOT NULL，
     # 纯人员（无登录需求）自动生成唯一 username + 随机密码占位
     base = name

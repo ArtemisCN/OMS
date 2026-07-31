@@ -5,7 +5,7 @@ from flask import current_app,  Blueprint, render_template, request, g, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import func, case
 from datetime import datetime, timedelta
-from models import WorkOrder, User, db, SystemSetting
+from models import WorkOrder, User, db, SystemSetting, get_cached_setting
 from services.cache import cached
 
 main_bp = Blueprint('main', __name__)
@@ -133,8 +133,7 @@ def dashboard():
     if team_param is None:
         # 首次进入（URL没有?team=），应用默认组别
         if has_permission(current_user, 'system:config'):
-            _def_setting = SystemSetting.query.filter_by(key='default_dashboard_team').first()
-            team = _def_setting.value if _def_setting and _def_setting.value else ''
+            team = get_cached_setting('default_dashboard_team') or ''
         else:
             team = current_user.team if current_user.team else ''
     else:

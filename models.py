@@ -894,6 +894,32 @@ class SystemSetting(db.Model):
         db.session.commit()
 
 
+def get_cached_setting(key, default=None):
+    """从 SYSTEM_SETTINGS 缓存读取系统设置（设置页保存时同步更新缓存）
+
+    P1-11 优化：避免每次请求都查 SystemSetting 表。
+    注意：仅适用于全局（无 hospital_id 维度）的纯 key 直查。
+    带 hospital_id 的查询、like 批量查询（如 SLA 阈值）保持直查 DB。
+    """
+    from flask import current_app
+    settings = current_app.config.get('SYSTEM_SETTINGS')
+    if settings and key in settings:
+        return settings[key]
+    setting = SystemSetting.query.filter_by(key=key).first()
+    return setting.value if setting else default
+
+
+def refresh_setting_cache(key, value):
+    """写 SystemSetting 后同步更新 SYSTEM_SETTINGS 缓存（防止读到陈旧值）
+
+    所有非设置页的写路径（sla.py / dashboard.py / feature_modules.py 等）
+    保存设置后必须调用本函数，否则 get_cached_setting 读到启动时快照。
+    """
+    from flask import current_app
+    settings = current_app.config.setdefault('SYSTEM_SETTINGS', {})
+    settings[key] = str(value)
+
+
 class SolutionTemplate(HospitalMixin, db.Model):
     """方案模板（可自定义）"""
     __tablename__ = 'solution_templates'

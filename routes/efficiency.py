@@ -11,7 +11,7 @@ from flask import Blueprint, render_template, jsonify, request, g
 from flask_login import login_required, current_user
 from sqlalchemy import func, text
 
-from models import db, WorkOrder, User, SystemSetting, RoleGroup, ShiftHandover, RepairRating, Complaint
+from models import db, WorkOrder, User, SystemSetting, RoleGroup, ShiftHandover, RepairRating, Complaint, get_cached_setting
 from utils.time_helpers import fmt_dt, resolve_team
 
 efficiency_bp = Blueprint('efficiency', __name__, url_prefix='/efficiency')
@@ -46,6 +46,14 @@ def personnel_data():
     if team is None:
         team = resolve_team(request, current_user, setting_key='personnel_default_team')
     hid = getattr(g, 'hospital_id', None)
+
+    # SLA 阈值缓存版（只读一次，避免每次调用都查 DB）——P1-12 修复
+    _sla_th_rows = SystemSetting.query.with_entities(SystemSetting.key, SystemSetting.value).filter(
+        SystemSetting.key.like('sla_response_%') | SystemSetting.key.like('sla_resolution_%')
+    ).all()
+    _sla_th_cache = {r.key: float(r.value) for r in _sla_th_rows if r.value}
+    def _get_th(key, default):
+        return _sla_th_cache.get(key, default)
 
     # --- 1. 一次性查出所有符合条件的 Person 名单 ---
     # 团队/角色组过滤
@@ -112,16 +120,6 @@ def personnel_data():
 
     # --- 4. 批量查询：所有人员的 SLA 数据（is_overdue 是 Python property，需在代码中计算）---
     if person_names:
-        # 先读 SLA 阈值（只读一次，避免每条工单都查 DB）
-        def _batch_get_th():
-            rows = SystemSetting.query.with_entities(SystemSetting.key, SystemSetting.value).filter(
-                SystemSetting.key.like('sla_response_%') | SystemSetting.key.like('sla_resolution_%')
-            ).all()
-            return {r.key: float(r.value) for r in rows if r.value}
-        sla_th_cache = _batch_get_th()
-        def _get_th(key, default):
-            return sla_th_cache.get(key, default)
-
         # 用 raw SQL 避免 SQLAlchemy `is_overdue` property 问题
         sla_sql = "SELECT person, priority, created_at, completed_at, end_time " \
                   "FROM work_orders WHERE status = 'completed'"
@@ -137,10 +135,6 @@ def personnel_data():
         sla_fields = db.session.execute(text(sla_sql), sla_params).fetchall()
     else:
         sla_fields = []
-    # 读 SLA 阈值
-    def _get_th(key, default):
-        s = SystemSetting.query.with_entities(SystemSetting.value).filter_by(key=key).scalar()
-        return float(s) if s else default
     sla_map = {}
     for sr in sla_fields:
         name = sr[0]
@@ -282,8 +276,7 @@ def timeout_reminder_check():
     if _get_feature_toggle('timeout_reminder') != 'true':
         return jsonify(success=True, notified=0, reason='超时催办未启用')
 
-    timeout_hours_setting = SystemSetting.query.filter_by(key='wecom_timeout_hours').first()
-    timeout_hours = float(timeout_hours_setting.value) if timeout_hours_setting and timeout_hours_setting.value else 4.0
+    timeout_hours = float(get_cached_setting('wecom_timeout_hours') or 4.0)
 
     now = datetime.now()
     threshold_time = now - timedelta(hours=timeout_hours)

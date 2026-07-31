@@ -156,6 +156,8 @@ def sla_settings():
             else:
                 setting = SystemSetting(key=key, value=str(val), label=key, category='SLA')
                 db.session.add(setting)
+            from models import refresh_setting_cache
+            refresh_setting_cache(key, val)
 
     db.session.commit()
     return jsonify(success=True, message='SLA 阈值已保存')

@@ -5,7 +5,7 @@ from utils.csrf import csrf_protect
 from utils.helpers import safe_get, safe_get_or_404
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
-from models import db, User, WorkOrder, SystemSetting, Hospital, RoleGroup
+from models import db, User, WorkOrder, SystemSetting, Hospital, RoleGroup, get_cached_setting
 from routes.auth import admin_required
 from utils.permissions import permission_required, has_permission
 from services import data_service
@@ -39,8 +39,7 @@ def index():
     team_sel = request.args.get('team', '')
     if not team_sel:
         if has_permission(current_user, 'user:view'):
-            _def_setting = SystemSetting.query.filter_by(key='default_dashboard_team').first()
-            team_sel = _def_setting.value if _def_setting and _def_setting.value else ''
+            team_sel = get_cached_setting('default_dashboard_team') or ''
         else:
             if current_user.team:
                 team_sel = current_user.team

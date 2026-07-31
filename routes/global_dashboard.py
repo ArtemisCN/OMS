@@ -11,6 +11,7 @@ from models import (
     CrossHospitalAssignment,
 )
 from utils.time_helpers import fmt_dt, fmt_date
+from services.cache import cached
 from utils.permissions import permission_required, has_permission
 
 global_dashboard_bp = Blueprint('global_dashboard', __name__, url_prefix='/dashboard/global')
@@ -21,9 +22,10 @@ def _get_hid():
     return hid if hid and hid != 0 else 0
 
 
-def _region_filter(query, model_class):
+def _region_filter(query, model_class, region=None):
     """按区域过滤查询"""
-    region = request.args.get('region', '').strip()
+    if region is None:
+        region = request.args.get('region', '').strip()
     if not region or region == '全市' or region == '全部':
         return query
     # 找到该区域下的所有医院ID
@@ -38,9 +40,10 @@ def _region_filter(query, model_class):
     return query.filter(model_class.hospital_id.in_(hospital_ids))
 
 
-def _days_filter(query, model_class):
+def _days_filter(query, model_class, days=None):
     """按天数过滤查询"""
-    days = request.args.get('days', 30, type=int)
+    if days is None:
+        days = request.args.get('days', 30, type=int)
     if days and days > 0:
         cutoff = datetime.now() - timedelta(days=days)
         return query.filter(model_class.created_at >= cutoff)
@@ -71,14 +74,11 @@ def index():
 # ======================== API 路由 ========================
 
 
-@global_dashboard_bp.route('/api/stats')
-@permission_required('report:global_view')
-def get_stats():
-    # 全局视图：清除医院过滤，让 auto_hospital_filter 跳过
-    g.hospital_id = 0
-    # 基础工单查询
-    base = _days_filter(WorkOrder.query, WorkOrder)
-    base = _region_filter(base, WorkOrder)
+@cached(ttl=30)
+def _compute_stats(days, region):
+    """集团看板核心统计（纯函数，30 秒缓存）"""
+    base = _days_filter(WorkOrder.query, WorkOrder, days=days)
+    base = _region_filter(base, WorkOrder, region=region)
 
     total = base.count()
     completed = base.filter(WorkOrder.status == 'completed').count()
@@ -119,14 +119,25 @@ def get_stats():
         CrossHospitalAssignment.status == 'active'
     ).count()
 
-    return jsonify(success=True, data={
+    return {
         'total_orders': total,
         'completion_rate': completion_rate,
         'sla_rate': sla_rate,
         'avg_response_time': avg_response_minutes,
         'active_cross_assignments': active_cross,
         'pending_orders': pending,
-    })
+    }
+
+
+@global_dashboard_bp.route('/api/stats')
+@permission_required('report:global_view')
+def get_stats():
+    # 全局视图：清除医院过滤，让 auto_hospital_filter 跳过
+    g.hospital_id = 0
+    days = request.args.get('days', 30, type=int)
+    region = request.args.get('region', '').strip()
+    data = _compute_stats(days, region)
+    return jsonify(success=True, data=data)
 
 
 @global_dashboard_bp.route('/api/hospital-ranking')

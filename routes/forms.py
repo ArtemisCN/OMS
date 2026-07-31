@@ -5,7 +5,7 @@ from utils.csrf import csrf_protect
 from utils.helpers import safe_get
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import current_user
-from models import db, PaperForm, FormTemplate, WorkOrder, RepairOrder
+from models import db, PaperForm, FormTemplate, WorkOrder, RepairOrder, get_cached_setting
 from datetime import datetime
 import json
 
@@ -301,8 +301,7 @@ def form_create():
             prefix_setting = None
         # 降级：读取全局前缀
         if not prefix_setting:
-            prefix_setting = SystemSetting.query.filter_by(key='order_prefix').first()
-        prefix = (prefix_setting.value or '').strip() if prefix_setting else ''
+            prefix = (get_cached_setting('order_prefix') or '').strip()
         order_no = f'{prefix}FS{date_str}-{rep_count + 1:03d}'
         repair_order = RepairOrder(
             template_id=template_id,

@@ -643,25 +643,27 @@ def _get_report_data(year, month, hospital_id=None, team_names=None):
         }
 
     # 2. ⏱ 响应时长逐日趋势（本月每天平均响应分钟数）
+    # P1-20：单次 GROUP BY 聚合替代逐日 31 次 SQL
     daily_response = []
     if not is_year:
+        daily_rows = WorkOrder.query.with_entities(
+            func.date(WorkOrder.created_at).label('d'),
+            func.avg(
+                (func.julianday(WorkOrder.accepted_at) - func.julianday(WorkOrder.created_at)) * 24 * 60
+            ).label('avg_min')
+        ).filter(
+            WorkOrder.created_at >= first,
+            WorkOrder.created_at < last,
+            WorkOrder.person != 'admin',
+            WorkOrder.accepted_at.isnot(None),
+        ).group_by(func.date(WorkOrder.created_at)).all()
+        daily_map = {r.d: (r.avg_min or 0) for r in daily_rows}
         days_in_month = (last - first).days
         for d in range(days_in_month):
             ds = first + timedelta(days=d)
-            de = ds + timedelta(days=1)
-            row = WorkOrder.query.with_entities(
-                func.avg(
-                    (func.julianday(WorkOrder.accepted_at) - func.julianday(WorkOrder.created_at)) * 24 * 60
-                )
-            ).filter(
-                WorkOrder.created_at >= ds,
-                WorkOrder.created_at < de,
-                WorkOrder.person != 'admin',
-                WorkOrder.accepted_at.isnot(None),
-            ).scalar()
             daily_response.append({
                 'day': ds.strftime('%m/%d'),
-                'avg_minutes': round(row, 1) if row else 0,
+                'avg_minutes': round(daily_map.get(ds.strftime('%Y-%m-%d'), 0), 1),
             })
 
     # 3. ✅ 首次响应达标率（30分钟内接单占比）
@@ -679,29 +681,32 @@ def _get_report_data(year, month, hospital_id=None, team_names=None):
         WorkOrder.accepted_at.isnot(None),
     ).count()
     resp_compliance_rate = round(resp_ok / resp_total * 100, 1) if resp_total else 0
-    # 按人统计达标率
+    # 按人统计达标率（P1-20：单次查询后内存聚合，替代每人 2 次 count SQL）
     person_compliance = []
-    for p_entry in person_stats:
-        pname = p_entry['name']
-        pok = WorkOrder.query.filter(
+    if person_stats:
+        compliance_rows = WorkOrder.query.with_entities(
+            WorkOrder.person, WorkOrder.created_at, WorkOrder.accepted_at
+        ).filter(
             WorkOrder.created_at >= first,
             WorkOrder.created_at < last,
-            WorkOrder.person == pname,
+            WorkOrder.person != 'admin',
             WorkOrder.accepted_at.isnot(None),
-            (WorkOrder.accepted_at - WorkOrder.created_at) <= timedelta(minutes=30),
-        ).count()
-        ptotal = WorkOrder.query.filter(
-            WorkOrder.created_at >= first,
-            WorkOrder.created_at < last,
-            WorkOrder.person == pname,
-            WorkOrder.accepted_at.isnot(None),
-        ).count()
-        person_compliance.append({
-            'name': pname,
-            'count': ptotal,
-            'ok': pok,
-            'rate': round(pok / ptotal * 100, 1) if ptotal else 0,
-        })
+        ).all()
+        person_agg = {}
+        for cr in compliance_rows:
+            agg = person_agg.setdefault(cr.person, {'total': 0, 'ok': 0})
+            agg['total'] += 1
+            if (cr.accepted_at - cr.created_at) <= timedelta(minutes=30):
+                agg['ok'] += 1
+        for p_entry in person_stats:
+            pname = p_entry['name']
+            pc = person_agg.get(pname, {'total': 0, 'ok': 0})
+            person_compliance.append({
+                'name': pname,
+                'count': pc['total'],
+                'ok': pc['ok'],
+                'rate': round(pc['ok'] / pc['total'] * 100, 1) if pc['total'] else 0,
+            })
 
     # 4. ⚠️ 超时工单排行榜（处理时间最长的 TOP 10）
     longest_orders = WorkOrder.query.with_entities(

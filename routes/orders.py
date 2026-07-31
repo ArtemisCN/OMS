@@ -13,7 +13,7 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from openpyxl import Workbook
 
-from models import db, WorkOrder, SystemSetting, WorkOrderChatMessage, WorkOrderPhoto, can_access, User, ShiftHandover
+from models import db, WorkOrder, SystemSetting, WorkOrderChatMessage, WorkOrderPhoto, can_access, User, ShiftHandover, get_cached_setting
 from services import order_service as svc
 from services.fault_matcher import match_fault
 from routes.auth import admin_required
@@ -532,8 +532,7 @@ def anonymous_publish():
         if not verification:
             code = request.form.get('verify_code', '').strip()
             # 验证码从系统设置读取（P1-6，默认 4567）
-            _an_setting = SystemSetting.query.filter_by(key='anonymous_code').first()
-            expected_code = (_an_setting.value if _an_setting and _an_setting.value else '4567')
+            expected_code = get_cached_setting('anonymous_code') or '4567'
             if code != expected_code:
                 flash('验证码错误', 'danger')
                 return _publish_render(anonymous=True)
@@ -712,8 +711,7 @@ def calendar_view():
     team_param = request.args.get('team')
     if team_param is None:
         if has_permission(current_user, 'order:batch'):
-            _def_setting = SystemSetting.query.filter_by(key='default_dashboard_team').first()
-            team = _def_setting.value if _def_setting and _def_setting.value else ''
+            team = get_cached_setting('default_dashboard_team') or ''
         else:
             _person = User.query.filter_by(id=current_user.id).first()
             team = _person.team if _person and _person.team else ''
@@ -990,8 +988,7 @@ def urge_order(order_id):
     order = safe_get_or_404(WorkOrder, order_id)
     
     # 检查催单间隔
-    interval_setting = SystemSetting.query.filter_by(key='order_remind_interval').first()
-    min_interval = int(interval_setting.value) if interval_setting and interval_setting.value else 30
+    min_interval = int(get_cached_setting('order_remind_interval') or 30)
     
     if order.last_urged_at:
         elapsed = (now() - order.last_urged_at).total_seconds() / 60

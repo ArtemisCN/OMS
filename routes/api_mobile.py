@@ -1137,7 +1137,9 @@ def send_wecom_notification(order, skip_time_check=False, is_urge=False):
     # ====== 构建推送内容 ======
     title = order.title[:40] if order.title else '未命名工单'
     building = order.building or '未指定'
+    floor = order.floor or ''
     department = order.department or '未指定'
+    location_str = f'{building}{" " + floor if floor else ""}'.strip()
     created_at = fmt_dt(order.created_at, '%Y-%m-%d %H:%M')
     pri_label = {'normal': '普通', 'urgent': '加急', 'emergency': '紧急'}.get(order.priority, '普通')
 
@@ -1152,6 +1154,7 @@ def send_wecom_notification(order, skip_time_check=False, is_urge=False):
                     priority=order.priority or 'normal',
                     pri_label=pri_label,
                     building=building,
+                    floor=floor,
                     department=department,
                     created_at=created_at,
                 )
@@ -1162,7 +1165,7 @@ def send_wecom_notification(order, skip_time_check=False, is_urge=False):
             content = "## 🚨 工单催办通知\n" \
                       f"> **工单名称：**{title}\n" \
                       f"> **紧急程度：**{pri_label}\n" \
-                      f"> **楼区：**{building}\n" \
+                      f"> **位置：**{location_str}\n" \
                       f"> **科室：**{department}\n" \
                       f"> **发布时间：**{created_at}\n" \
                       f"> **状态：**待处理 ⏰ 请尽快安排人员处理！"
@@ -1177,7 +1180,7 @@ def send_wecom_notification(order, skip_time_check=False, is_urge=False):
             "markdown": {
                 "content": "## 🔧 新工单通知\n"
                            f"> **工单名称：**{title}\n"
-                           f"> **楼区：**{building}\n"
+                           f"> **位置：**{location_str}\n"
                            f"> **科室：**{department}\n"
                            f"> **发布时间：**{created_at}\n"
                            f"> **状态：**待接单"

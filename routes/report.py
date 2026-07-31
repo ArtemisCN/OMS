@@ -948,11 +948,11 @@ def report_page():
     from flask import g
     from models import User
     from utils.time_helpers import resolve_team
+    hid = getattr(g, 'hospital_id', None)
     team = resolve_team(request, current_user)
     team_names = None
     if team:
         team_q = User.query.filter(User.team == team, User.is_active == True)
-        hid = getattr(g, 'hospital_id', None)
         if hid:
             team_q = team_q.filter(User.hospital_id == hid)
         team_names = [u.display_name for u in team_q.all() if u.display_name]
@@ -973,11 +973,11 @@ def report_data():
     from flask import g
     from models import User
     from utils.time_helpers import resolve_team
+    hid = getattr(g, 'hospital_id', None)
     team = resolve_team(request, current_user)
     team_names = None
     if team:
         team_q = User.query.filter(User.team == team, User.is_active == True)
-        hid = getattr(g, 'hospital_id', None)
         if hid:
             team_q = team_q.filter(User.hospital_id == hid)
         team_names = [u.display_name for u in team_q.all() if u.display_name]
@@ -1003,11 +1003,11 @@ def download_report():
     from flask import g
     from models import User
     from utils.time_helpers import resolve_team
+    hid = getattr(g, 'hospital_id', None)
     team = resolve_team(request, current_user)
     team_names = None
     if team:
         team_q = User.query.filter(User.team == team, User.is_active == True)
-        hid = getattr(g, 'hospital_id', None)
         if hid:
             team_q = team_q.filter(User.hospital_id == hid)
         team_names = [u.display_name for u in team_q.all() if u.display_name]

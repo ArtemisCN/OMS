@@ -439,6 +439,13 @@ if __name__ == '__main__':
                     db.session.add(user)
                     print(f"  - 创建用户: {uname} / demo123 ({dname})")
 
+            # 4. 创建默认系统设置
+            from models import SystemSetting
+            existing = SystemSetting.query.filter_by(key='default_hospital_id').first()
+            if not existing:
+                db.session.add(SystemSetting(key='default_hospital_id', value=str(pd_hosp.id)))
+                print(f"  - 默认医院设置: {pd_hosp.name} (ID={pd_hosp.id})")
+
             db.session.commit()
             print("✓ 演示数据生成完成")
         else:

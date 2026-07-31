@@ -36,13 +36,24 @@ def _team_filter(query, model, team):
 #  1. 人员管理
 # ===================================================================
 
-def list_persons():
-    """获取人员列表（User 已合并 Person 数据）"""
+def list_persons(include_inactive=False):
+    """获取人员列表（User 已合并 Person 数据）
+
+    include_inactive=False：只返回在职人员（系统参数「显示离职人员」关闭）
+    include_inactive=True：返回全部人员（含已停用/离职）
+    """
     from flask import g
+    from models import SystemSetting
+    # 系统参数「显示离职人员」person_show_inactive：'1'=显示离职/停用人员，'0'=仅在职
+    if not include_inactive:
+        _s = SystemSetting.query.filter_by(key='person_show_inactive').first()
+        include_inactive = bool(_s and _s.value == '1')
     hid = getattr(g, 'hospital_id', None)
     q = User.query.filter(User.is_admin == False)
     if hid:
         q = q.filter(User.hospital_id == hid)
+    if not include_inactive:
+        q = q.filter(User.is_active == True)
     persons = q.order_by(User.is_active.desc(), User.sort_order, User.display_name).all()
     return persons, {}
 

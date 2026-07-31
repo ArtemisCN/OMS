@@ -34,15 +34,24 @@ def list_hospitals():
     from flask import g as flask_g
     _saved_hid = getattr(flask_g, 'hospital_id', None)
     flask_g.hospital_id = None
+    # 系统参数「显示离职人员」person_show_inactive：'1'=显示离职/停用人员，'0'=仅在职
+    _s = SystemSetting.query.filter_by(key='person_show_inactive').first()
+    include_inactive = bool(_s and _s.value == '1')
     try:
         # 各医院人员数
         person_counts = {}
         for h in hospitals:
-            person_counts[h.id] = User.query.filter(User.hospital_id == h.id, User.is_active == True).count()
+            q = User.query.filter(User.hospital_id == h.id)
+            if not include_inactive:
+                q = q.filter(User.is_active == True)
+            person_counts[h.id] = q.count()
         # 各医院人员按组别归类
         hospital_person_teams = {}
         for h in hospitals:
-            persons = User.query.filter(User.hospital_id == h.id, User.is_active == True).order_by(User.team, User.display_name).all()
+            pq = User.query.filter(User.hospital_id == h.id)
+            if not include_inactive:
+                pq = pq.filter(User.is_active == True)
+            persons = pq.order_by(User.team, User.display_name).all()
             teams = {}
             for p in persons:
                 t = p.team or '未分组'

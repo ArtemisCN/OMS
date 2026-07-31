@@ -274,20 +274,35 @@ def personnel_data():
             sla_map[name]['ok'] += 1
 
     # --- 5. 在岗人员名单 ---
-    active_q = text("SELECT display_name FROM users WHERE is_active = 1")
+    # 注意：多医院用户可能 users.hospital_id 为空但通过 user_hospitals 关联，
+    # 必须同时查两个来源，否则跨院关联人员在本院看板消失
+    active_q = text(
+        "SELECT display_name FROM users WHERE is_active = 1 "
+        "UNION "
+        "SELECT u.display_name FROM users u JOIN user_hospitals uh ON uh.user_id = u.id "
+        "WHERE u.is_active = 1 AND uh.hospital_id = :hid2"
+    )
     active_params = {}
     if hid:
-        active_q = text("SELECT display_name FROM users WHERE is_active = 1 AND hospital_id = :hid")
-        active_params['hid'] = hid
+        active_q = text(
+            "SELECT display_name FROM users WHERE is_active = 1 AND hospital_id = :hid "
+            "UNION "
+            "SELECT u.display_name FROM users u JOIN user_hospitals uh ON uh.user_id = u.id "
+            "WHERE u.is_active = 1 AND uh.hospital_id = :hid2"
+        )
+        active_params = {'hid': hid, 'hid2': hid}
     p_rows = db.session.execute(active_q, active_params).fetchall()
     all_active_names = {r[0] for r in p_rows}
     if person_scope is not None:
         all_active_names &= person_scope
 
     # --- 6. 组装结果 ---
+    # 只保留当前医院的活跃在岗人员（跨院处理工单的人不算入本院看板）
     stats = []
     for row in agg_rows:
         name = row.person
+        if name not in all_active_names:
+            continue  # 非本院/已停用人员不显示（如跨院借调处理工单的人）
         total = row.total_orders
         total_days = float(row.total_days or 0)
         avg_hours = round(total_days * 24 / total, 1) if total > 0 else 0
@@ -302,7 +317,7 @@ def personnel_data():
             'in_progress': st.get('in_progress', 0),
             'pending': st.get('pending', 0),
             'avg_hours': avg_hours,
-            'active': name in all_active_names,
+            'active': True,
             'sla_total': sl.get('total', 0),
             'sla_ok': sla_pct,
         })

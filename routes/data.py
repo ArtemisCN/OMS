@@ -1664,9 +1664,19 @@ def approve_registration(rid):
             user.group_id = default_group.id
     db.session.add(user)
     db.session.flush()
-    # 同步创建User记录（使人员管理能看到此人）
+    # 同步创建User记录（使人员管理能看到此人）——Person 已合并进 User，
+    # 若同名人员不存在则补一条（User 已合并 Person 数据，需补唯一 username + 随机密码）
     if not User.query.filter(User.display_name == req.display_name).first():
-        user_obj = User(display_name=req.display_name, is_active=True, team='')
+        import secrets
+        _base = req.display_name or req.username
+        _username = _base
+        _i = 1
+        while User.query.filter_by(username=_username).first():
+            _username = f'{_base}{_i}'
+            _i += 1
+        user_obj = User(display_name=req.display_name or req.username, username=_username,
+                        is_active=True, team='')
+        user_obj.set_password(secrets.token_urlsafe(24))
         db.session.add(user_obj)
     # 分配医院（同时写入多对多关联表，确保 get_assigned_hospitals 能查到）
     h = Hospital.query.get(target_hospital_id)

@@ -61,12 +61,30 @@ def list_persons(include_inactive=False):
 def add_person(name):
     """新增人员，返回 (ok, msg)"""
     from flask import g
+    import secrets
+    if not name:
+        return False, '人员姓名不能为空'
+    name = name.strip()
     if not name:
         return False, '人员姓名不能为空'
     if User.query.filter_by(display_name=name).first():
         return False, f'人员 "{name}" 已存在'
     hid = getattr(g, 'hospital_id', None)
-    db.session.add(User(display_name=name, hospital_id=hid))
+    # 新建人员默认组别（系统参数 person_default_team，留空则不自动选择）
+    from models import SystemSetting
+    _dt = SystemSetting.query.filter_by(key='person_default_team').first()
+    default_team = _dt.value.strip() if _dt and _dt.value else ''
+    # User 已合并 Person 数据：users.username/password_hash 为 NOT NULL，
+    # 纯人员（无登录需求）自动生成唯一 username + 随机密码占位
+    base = name
+    username = base
+    i = 1
+    while User.query.filter_by(username=username).first():
+        username = f'{base}{i}'
+        i += 1
+    u = User(display_name=name, username=username, hospital_id=hid, team=default_team)
+    u.set_password(secrets.token_urlsafe(24))
+    db.session.add(u)
     db.session.commit()
     return True, f'已添加人员 "{name}"'
 
@@ -74,6 +92,7 @@ def add_person(name):
 def import_persons_from_orders():
     """从工单中导入人员"""
     from flask import g
+    import secrets
     persons_in_orders = db.session.query(WorkOrder.person).distinct().all()
     imported = 0
     hid = getattr(g, 'hospital_id', None)
@@ -84,7 +103,17 @@ def import_persons_from_orders():
                 # 尝试从工单获取该人员的 hospital_id，fallback 到当前上下文
                 wo = WorkOrder.query.filter(WorkOrder.person == name).first()
                 person_hid = wo.hospital_id if wo else hid
-                db.session.add(User(display_name=name, is_active=True, hospital_id=person_hid))
+                # User 已合并 Person 数据：补唯一 username + 随机密码占位
+                base = name
+                username = base
+                i = 1
+                while User.query.filter_by(username=username).first():
+                    username = f'{base}{i}'
+                    i += 1
+                u = User(display_name=name, is_active=True, hospital_id=person_hid,
+                         username=username)
+                u.set_password(secrets.token_urlsafe(24))
+                db.session.add(u)
                 imported += 1
     db.session.commit()
     return imported

@@ -120,6 +120,9 @@ body[data-theme="dark"] .toast-cross { background:#1e293b; color:#e2e8f0; }
         </h4>
         <div style="font-size:12px;color:var(--text-muted,#64748b);">
             <i class="fas fa-info-circle me-1"></i>拖拽用户到右侧面板发起借调
+            <button class="btn btn-sm btn-outline-secondary ms-3" onclick="openLogsModal()" title="查看操作日志">
+                <i class="fas fa-history me-1"></i>操作日志
+            </button>
         </div>
     </div>
 
@@ -218,6 +221,65 @@ body[data-theme="dark"] .toast-cross { background:#1e293b; color:#e2e8f0; }
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- ===== 修改借调模态框 ===== -->
+<div class="modal fade cross-modal" id="editModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold"><i class="fas fa-edit text-primary me-2"></i>修改借调</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editForm" onsubmit="submitEdit(event)">
+                <div class="modal-body">
+                    <div class="d-flex align-items-center gap-3 mb-4 p-3" style="background:var(--bg-light,#f8fafc);border-radius:12px;">
+                        <div class="modal-user-avatar" id="editAvatar">?</div>
+                        <div class="modal-user-info">
+                            <div class="name" id="editUserName">—</div>
+                            <div class="meta" id="editUserHospital">—</div>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="editAssignId">
+
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">开始日期 <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="editStartDate" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">结束日期 <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="editEndDate" required>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label fw-medium">借调理由</label>
+                        <input type="text" class="form-control" id="editReason" placeholder="如：临时支援、项目协作…">
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary" id="editSubmitBtn">
+                        <i class="fas fa-check me-1"></i>保存修改
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ===== 操作日志模态框 ===== -->
+<div class="modal fade cross-modal" id="logsModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold"><i class="fas fa-history text-primary me-2"></i>借调操作日志</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="logsBody" style="max-height:60vh;overflow-y:auto;">
+                <div class="text-center text-muted py-4">加载中…</div>
+            </div>
         </div>
     </div>
 </div>
@@ -394,7 +456,10 @@ function renderAssignments(data) {
             }
         }
         html += remainingHtml;
-        html += '<button class="btn-sm-icon" onclick="cancelAssign(' + a.id + ',\'' + escHtml(a.user_name) + '\')" title="撤销借调"><i class="fas fa-times"></i></button>';
+        if (a.status === 'active') {
+            html += '<button class="btn-sm-icon" onclick="openEditModal(' + a.id + ')" title="修改借调"><i class="fas fa-edit"></i></button>';
+        }
+        html += '<button class="btn-sm-icon" onclick="cancelAssign(' + a.id + ',' + "'" + escHtml(a.user_name) + "'" + ')" title="撤销借调"><i class="fas fa-times"></i></button>';
         html += '</div></div>';
         html += '<div class="assign-dates"><i class="far fa-calendar-alt me-1"></i>' + escHtml(a.start_date) + ' ~ ' + escHtml(a.end_date);
         if (a.reason) html += ' &middot; ' + escHtml(a.reason);
@@ -532,6 +597,128 @@ function cancelAssign(id, name) {
         })
         .catch(function() {
             showToast('网络错误，请重试', 'error');
+        });
+}
+
+// ===== 修改借调 =====
+function openEditModal(assignId) {
+    // 从当前加载的列表中找这条记录
+    fetch('/cross/api/assignments?status=active&per_page=100')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.success) return;
+            var list = data.data.assignments || [];
+            var a = list.find(function(x) { return x.id === assignId; });
+            if (!a) { showToast('未找到该借调记录', 'error'); return; }
+
+            document.getElementById('editAssignId').value = a.id;
+            document.getElementById('editUserName').textContent = a.user_name;
+            document.getElementById('editUserHospital').textContent = '原属医院：' + a.source_hospital_name;
+            document.getElementById('editAvatar').textContent = (a.user_name || '?')[0];
+            document.getElementById('editStartDate').value = a.start_date;
+            document.getElementById('editEndDate').value = a.end_date;
+            document.getElementById('editReason').value = a.reason || '';
+
+            var modal = new bootstrap.Modal(document.getElementById('editModal'));
+            modal.show();
+        })
+        .catch(function(err) {
+            console.error('加载借调详情失败:', err);
+            showToast('网络错误，请重试', 'error');
+        });
+}
+
+function submitEdit(e) {
+    e.preventDefault();
+    var btn = document.getElementById('editSubmitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>保存中…';
+
+    var payload = {
+        start_date: document.getElementById('editStartDate').value,
+        end_date: document.getElementById('editEndDate').value,
+        reason: document.getElementById('editReason').value.trim()
+    };
+
+    fetch('/cross/api/assign/' + document.getElementById('editAssignId').value, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            showToast(data.message || '已修改借调信息', 'success');
+            var modal = bootstrap.Modal.getInstance(document.getElementById('editModal'));
+            if (modal) modal.hide();
+            loadAssignments();
+            loadAvailableUsers();
+        } else {
+            showToast(data.error || '修改失败', 'error');
+        }
+    })
+    .catch(function(err) {
+        showToast('网络错误，请重试', 'error');
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check me-1"></i>保存修改';
+    });
+}
+
+// ===== 操作日志 =====
+function openLogsModal() {
+    var modal = new bootstrap.Modal(document.getElementById('logsModal'));
+    modal.show();
+    loadLogs();
+}
+
+function loadLogs() {
+    var body = document.getElementById('logsBody');
+    body.innerHTML = '<div class="text-center text-muted py-4">加载中…</div>';
+    fetch('/cross/api/logs?per_page=100')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.success) {
+                body.innerHTML = '<div class="text-center text-muted py-4">加载失败</div>';
+                return;
+            }
+            var logs = data.data.logs || [];
+            if (!logs.length) {
+                body.innerHTML = '<div class="text-center text-muted py-4"><i class="fas fa-inbox me-2"></i>暂无操作记录</div>';
+                return;
+            }
+            var html = '';
+            logs.forEach(function(l) {
+                var color = {create: '#10b981', update: '#3b82f6', cancel: '#f59e0b', expire: '#ef4444'}[l.action] || '#64748b';
+                html += '<div class="log-item d-flex align-items-start gap-2 py-2" style="border-bottom:1px solid var(--border,#e2e8f0);">';
+                html += '<span class="badge" style="background:' + color + ';color:#fff;flex-shrink:0;margin-top:2px;">' + escHtml(l.action_label) + '</span>';
+                html += '<div style="flex:1;min-width:0;font-size:13px;">';
+                html += '<div style="color:var(--text,#1e293b);">' + escHtml(l.operator_name || '系统') + ' · ';
+                if (l.assignment) {
+                    html += escHtml(l.assignment.user_name || '') + '（' + escHtml(l.assignment.source_hospital_name || '') + ' → ' + escHtml(l.assignment.target_hospital_name || '') + '）';
+                }
+                html += '</div>';
+                if (l.new_value) {
+                    try {
+                        var nv = JSON.parse(l.new_value);
+                        var parts = [];
+                        if (nv.start_date) parts.push('开始 ' + nv.start_date);
+                        if (nv.end_date) parts.push('结束 ' + nv.end_date);
+                        if (nv.reason) parts.push('理由 ' + nv.reason);
+                        if (nv.status) parts.push('状态 ' + nv.status);
+                        if (parts.length) html += '<div style="color:var(--text-muted,#64748b);font-size:12px;">' + escHtml(parts.join(' · ')) + '</div>';
+                    } catch(e) {}
+                }
+                html += '</div>';
+                html += '<span style="color:var(--text-muted,#94a3b8);font-size:11px;flex-shrink:0;">' + escHtml(l.created_at) + '</span>';
+                html += '</div>';
+            });
+            body.innerHTML = html;
+        })
+        .catch(function(err) {
+            console.error('加载日志失败:', err);
+            body.innerHTML = '<div class="text-center text-muted py-4">网络错误</div>';
         });
 }
 

@@ -1342,6 +1342,7 @@ class DutySchedule(HospitalMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     duty_date = db.Column(db.Date, nullable=False, index=True)
     person_name = db.Column(db.String(50), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)  # 关联用户（借调联动用）
     shift = db.Column(db.String(20), default='全天')  # 日班/夜班/24H/支援/病假/事假/年假/×
     notes = db.Column(db.Text, default='')
     created_at = db.Column(db.DateTime, default=datetime.now)

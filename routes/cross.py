@@ -50,40 +50,80 @@ def _json_success(data=None, **kw):
 # ======================== 排班联动辅助函数 ========================
 
 
+def _upsert_duty_schedule(hospital_id, duty_date, user, shift, tag):
+    """在指定院区写入一条排班记录。
+
+    存在同院区同日期同人记录时更新（shift/notes/user_id），否则新建。
+    原因：duty_schedules 有 (hospital_id, duty_date, person_name) 唯一索引，
+    同一天同一人在同一院区只能有一条排班，避免借调联动时插入冲突。
+    """
+    user_name = user.display_name or user.name or user.username
+    # 临时跳过自动医院过滤：existing 查询显式指定了 hospital_id，避免被 g.hospital_id 干扰
+    _prev_hid = getattr(g, 'hospital_id', None)
+    try:
+        g.hospital_id = None
+        existing = DutySchedule.query.filter_by(
+            hospital_id=hospital_id,
+            duty_date=duty_date,
+            person_name=user_name,
+        ).first()
+    finally:
+        g.hospital_id = _prev_hid
+    if existing:
+        existing.shift = shift
+        existing.user_id = user.id
+        existing.notes = tag
+        return existing
+    record = DutySchedule(
+        hospital_id=hospital_id,
+        duty_date=duty_date,
+        person_name=user_name,
+        user_id=user.id,
+        shift=shift,
+        notes=tag,
+    )
+    db.session.add(record)
+    return record
+
+
 def _add_duty_schedule_records(assignment):
     """为借调记录创建排班标记（目标院区=支援, 本院区=被借调）"""
     user = assignment.user
     if not user:
         return
-    user_name = user.display_name or user.name or user.username
-
+    tag = f'cross_assignment:{assignment.id}'
     # 目标院区：插入 '支援' 排班
-    target_record = DutySchedule(
-        hospital_id=assignment.target_hospital_id,
-        duty_date=assignment.start_date,
-        person_name=user_name,
-        shift='支援',
-        notes=f'cross_assignment:{assignment.id}',
-    )
-    db.session.add(target_record)
-
+    _upsert_duty_schedule(assignment.target_hospital_id, assignment.start_date, user, '支援', tag)
     # 本院区：插入 '被借调' 排班
-    source_record = DutySchedule(
-        hospital_id=assignment.source_hospital_id,
-        duty_date=assignment.start_date,
-        person_name=user_name,
-        shift='被借调',
-        notes=f'cross_assignment:{assignment.id}',
-    )
-    db.session.add(source_record)
+    _upsert_duty_schedule(assignment.source_hospital_id, assignment.start_date, user, '被借调', tag)
 
 
 def _cleanup_duty_schedule_records(assignment):
     """清除借调相关的排班标记"""
     tag = f'cross_assignment:{assignment.id}'
-    DutySchedule.query.filter(
-        DutySchedule.notes == tag
-    ).delete(synchronize_session=False)
+    # 临时跳过自动医院过滤：排班记录分属两个院区，必须全量清除
+    _prev_hid = getattr(g, 'hospital_id', None)
+    try:
+        g.hospital_id = None
+        DutySchedule.query.filter(
+            DutySchedule.notes == tag
+        ).delete(synchronize_session=False)
+    finally:
+        g.hospital_id = _prev_hid
+
+
+def _sync_duty_schedule_dates(assignment):
+    """借调日期修改后，同步更新排班记录日期（保留 shift 标记）"""
+    tag = f'cross_assignment:{assignment.id}'
+    # 临时跳过自动医院过滤：排班记录分属两个院区，必须全量更新
+    _prev_hid = getattr(g, 'hospital_id', None)
+    try:
+        g.hospital_id = None
+        records = DutySchedule.query.filter(DutySchedule.notes == tag).all()
+        for rec in records:
+            rec.duty_date = assignment.start_date
+    finally:
+        g.hospital_id = _prev_hid
 
 
 def _log_cross_action(assignment, action, operator_id, old_value=None, new_value=None):
@@ -368,7 +408,7 @@ def create_assignment():
         CrossHospitalAssignment.status == 'active',
     ).first()
     if existing:
-        return _json_error(f'该用户当前已有活跃借调（目标院区：{existing.target_hospital.name}）')
+        return _json_error('该人员当前已有借调，请先撤销后再操作')
 
     # ===== 创建借调记录 =====
     assignment = CrossHospitalAssignment(
@@ -485,6 +525,94 @@ def cancel_assignment(assignment_id):
         db.session.rollback()
         current_app.logger.error(f'撤销借调失败: {e}')
         return _json_error('撤销失败，请重试')
+
+
+@cross_bp.route('/api/assign/<int:assignment_id>', methods=['PUT'])
+@login_required
+def update_assignment(assignment_id):
+    """修改借调（日期/理由），记录修改前后变化"""
+    if not current_user.is_admin and not _can_cross_assign(current_user):
+        return _json_error('无权限', 403)
+
+    hid = _get_hospital_id()
+    if not hid:
+        return _json_error('请选择医院', 400)
+
+    assignment = CrossHospitalAssignment.query.get(assignment_id)
+    if not assignment:
+        return _json_error('借调记录不存在', 404)
+    if assignment.hospital_id != hid:
+        return _json_error('无权操作其他院区的借调记录')
+    if assignment.status != 'active':
+        return _json_error('只能修改活跃状态的借调')
+
+    data = request.get_json(silent=True) or {}
+    new_start_str = (data.get('start_date') or '').strip()
+    new_end_str = (data.get('end_date') or '').strip()
+    new_reason = (data.get('reason') or '').strip()
+
+    if not new_start_str or not new_end_str:
+        return _json_error('请填写借调起止日期')
+
+    try:
+        new_start = datetime.strptime(new_start_str, '%Y-%m-%d')
+        new_end = datetime.strptime(new_end_str, '%Y-%m-%d')
+    except ValueError:
+        return _json_error('日期格式无效，请使用 YYYY-MM-DD')
+
+    today = today_start()
+    if new_start < today:
+        return _json_error('开始日期不能早于今天')
+    if new_end < new_start:
+        return _json_error('结束日期不能早于开始日期')
+
+    # 记录修改前后差异
+    old_value = {
+        'start_date': fmt_date(assignment.start_date),
+        'end_date': fmt_date(assignment.end_date),
+        'reason': assignment.reason or '',
+    }
+    new_value = {
+        'start_date': new_start_str,
+        'end_date': new_end_str,
+        'reason': new_reason,
+    }
+    changed = {k: v for k, v in new_value.items() if old_value.get(k) != v}
+    if not changed:
+        return _json_error('没有需要修改的内容')
+
+    # 应用修改
+    assignment.start_date = new_start
+    assignment.end_date = new_end
+    assignment.reason = new_reason or '临时借调'
+
+    # 排班日期同步（start_date 变了则更新排班记录日期）
+    if old_value['start_date'] != new_start_str:
+        _sync_duty_schedule_dates(assignment)
+
+    # 操作日志
+    _log_cross_action(
+        assignment, 'update', operator_id=current_user.id,
+        old_value=old_value,
+        new_value=new_value,
+    )
+
+    try:
+        db.session.commit()
+        log_audit(
+            'update', 'cross_assignment', current_user.name or current_user.username,
+            target_id=assignment_id,
+            target_desc=f'修改借调 {assignment.user.name if assignment.user else ""}',
+            detail=json.dumps({
+                'assignment_id': assignment_id,
+                'changed': changed,
+            }),
+        )
+        return _json_success(message='已修改借调信息')
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'修改借调失败: {e}')
+        return _json_error('修改失败，请重试')
 
 
 @cross_bp.route('/api/cross-users')

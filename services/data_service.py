@@ -177,6 +177,22 @@ def person_account_save(pid, username, password, display_name, is_admin, hospita
         # 保存所属医院
         if hospital_ids is not None:
             user.hospitals = Hospital.query.filter(Hospital.id.in_([int(x) for x in hospital_ids if x])).all()
+            # 同步主归属医院字段（人员管理按 User.hospital_id 分组显示）
+            _hid_list = [int(x) for x in hospital_ids if x]
+            user.hospital_id = _hid_list[0] if _hid_list else None
+            # 同步 Person 记录（人员名单表）的 hospital_id
+            from models import Person
+            from flask import g as _g
+            _prev_hid = getattr(_g, 'hospital_id', None)
+            try:
+                _g.hospital_id = None  # 绕过自动医院过滤，确保能查到 Person
+                person = Person.query.filter(
+                    (Person.id == pid) | (Person.user_id == user.id)
+                ).first()
+                if person:
+                    person.hospital_id = user.hospital_id
+            finally:
+                _g.hospital_id = _prev_hid
         # 关联 Person → User
         p.user_id = user.id
         db.session.commit()
@@ -190,7 +206,7 @@ def person_account_save(pid, username, password, display_name, is_admin, hospita
         user = User(
             username=username, display_name=display_name or p.display_name,
             is_admin=is_admin, group_id=group_id,  # ← 保存角色组
-            hospital_id=getattr(g, 'hospital_id', None),
+            hospital_id=(int(hospital_ids[0]) if hospital_ids else getattr(g, 'hospital_id', None)),
         )
         user.set_password(password)
         db.session.add(user)
@@ -199,6 +215,19 @@ def person_account_save(pid, username, password, display_name, is_admin, hospita
             user.hospitals = Hospital.query.filter(Hospital.id.in_([int(x) for x in hospital_ids if x])).all()
         # 关联 Person → User
         p.user_id = user.id
+        # 同步 Person 记录（人员名单表）的 hospital_id
+        from models import Person
+        from flask import g as _g
+        _prev_hid = getattr(_g, 'hospital_id', None)
+        try:
+            _g.hospital_id = None  # 绕过自动医院过滤，确保能查到 Person
+            person = Person.query.filter(
+                (Person.id == pid) | (Person.user_id == user.id)
+            ).first()
+            if person:
+                person.hospital_id = user.hospital_id
+        finally:
+            _g.hospital_id = _prev_hid
         db.session.commit()
         return True, f'✅ 账号 "{username}" 已创建'
 

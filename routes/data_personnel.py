@@ -6,7 +6,6 @@ from utils.helpers import safe_get, safe_get_or_404
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from models import db, User, WorkOrder, SystemSetting, Hospital, RoleGroup, get_cached_setting
-from routes.auth import admin_required
 from utils.permissions import permission_required, has_permission
 from services import data_service
 from datetime import datetime

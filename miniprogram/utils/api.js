@@ -60,10 +60,13 @@ module.exports = {
   // 获取个人信息
   getProfile: () => request('GET', '/profile'),
 
-  // 获取工单列表（可筛选 status）
-  getOrders: (status) => {
+  // 获取工单列表（可筛选 status，支持分页）
+  getOrders: (status, page) => {
     let path = '/orders';
-    if (status) path += '?status=' + status;
+    const params = [];
+    if (status) params.push('status=' + status);
+    if (page) params.push('page=' + page);
+    if (params.length) path += '?' + params.join('&');
     return request('GET', path);
   },
 

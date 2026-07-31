@@ -4,7 +4,6 @@ from utils.csrf import csrf_protect
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from models import db
-from routes.auth import admin_required
 from utils.permissions import permission_required
 from services import data_service
 from services.data_service import get_team_options

@@ -8,7 +8,6 @@ import json
 from datetime import datetime, date
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, g, abort
 from flask_login import login_required, current_user
-from routes.auth import admin_required
 from utils.permissions import permission_required, has_permission
 from models import db, Asset, AssetLog, log_audit
 

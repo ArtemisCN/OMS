@@ -295,7 +295,7 @@ def publish():
 
         # 推送通知
         try:
-            from routes.api_mobile import send_new_order_notification, send_wecom_notification
+            from services.notifier import send_new_order_notification, send_wecom_notification
             send_new_order_notification(order)
             send_wecom_notification(order)
         except Exception as e:

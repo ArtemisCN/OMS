@@ -155,52 +155,68 @@ def get_hospital_ranking():
     hospitals = Hospital.query.filter_by(is_active=True).order_by(Hospital.id).all()
     if region and region not in ('全市', '全部'):
         hospitals = [h for h in hospitals if h.region == region]
+    hospital_ids = [h.id for h in hospitals]
+    if not hospital_ids:
+        return jsonify(success=True, data=[])
+
+    # ===== 批量聚合：3 次 GROUP BY 替代 N×8 次查询 =====
+    # 1) 工单统计（总量/完成/待接/平均响应/SLA），受 days 时间窗约束
+    order_cols = [
+        WorkOrder.hospital_id,
+        func.count(WorkOrder.id).label('total'),
+        func.sum(case((WorkOrder.status == 'completed', 1), else_=0)).label('completed'),
+        func.sum(case((WorkOrder.status.in_(['pending', 'confirmed']), 1), else_=0)).label('pending'),
+        func.avg(
+            func.strftime('%s', WorkOrder.accepted_at) -
+            func.strftime('%s', WorkOrder.created_at)
+        ).label('avg_resp'),
+        func.sum(case((
+            (func.strftime('%s', WorkOrder.accepted_at) -
+             func.strftime('%s', WorkOrder.created_at)) <= 1800, 1), else_=0)
+        ).label('sla_pass'),
+        func.sum(case((WorkOrder.accepted_at.isnot(None), 1), else_=0)).label('sla_total'),
+    ]
+    q = WorkOrder.query.with_entities(*order_cols).filter(
+        WorkOrder.hospital_id.in_(hospital_ids))
+    if cutoff:
+        q = q.filter(WorkOrder.created_at >= cutoff)
+    order_rows = q.group_by(WorkOrder.hospital_id).all()
+
+    # 2) 当前活跃工单数（不受时间窗约束）
+    active_rows = WorkOrder.query.with_entities(
+        WorkOrder.hospital_id, func.count(WorkOrder.id)
+    ).filter(
+        WorkOrder.hospital_id.in_(hospital_ids),
+        WorkOrder.status.in_(['pending', 'processing', 'confirmed']),
+    ).group_by(WorkOrder.hospital_id).all()
+
+    # 3) 人员数
+    staff_rows = Person.query.with_entities(
+        Person.hospital_id, func.count(Person.id)
+    ).filter(
+        Person.hospital_id.in_(hospital_ids),
+        Person.is_active == True,
+    ).group_by(Person.hospital_id).all()
+
+    # 组装 dict
+    order_map = {r[0]: r for r in order_rows}
+    active_map = dict(active_rows)
+    staff_map = dict(staff_rows)
 
     result = []
     for h in hospitals:
-        q = WorkOrder.query.filter(WorkOrder.hospital_id == h.id)
-        if cutoff:
-            q = q.filter(WorkOrder.created_at >= cutoff)
-
-        total = q.count()
-        completed = q.filter(WorkOrder.status == 'completed').count()
-        pending = q.filter(WorkOrder.status.in_(['pending', 'confirmed'])).count()
+        r = order_map.get(h.id)
+        total = r.total if r else 0
+        completed = r.completed if r else 0
+        pending = r.pending if r else 0
         completion_rate = round(completed / total * 100, 1) if total else 0
-
-        # 平均响应时间
-        avg_resp = q.with_entities(
-            func.avg(
-                func.strftime('%s', WorkOrder.accepted_at) -
-                func.strftime('%s', WorkOrder.created_at)
-            )
-        ).filter(
-            WorkOrder.accepted_at.isnot(None),
-            WorkOrder.created_at.isnot(None),
-        ).first()
-        avg_resp_sec = avg_resp[0] if avg_resp and avg_resp[0] else 0
-        avg_resp_min = round(avg_resp_sec / 60, 1) if avg_resp_sec else 0
-
-        # SLA达标率
-        sla_q = q.filter(WorkOrder.accepted_at.isnot(None))
-        sla_pass = sla_q.with_entities(
-            func.count(WorkOrder.id)
-        ).filter(
-            (
-                func.strftime('%s', WorkOrder.accepted_at) -
-                func.strftime('%s', WorkOrder.created_at)
-            ) <= 1800
-        ).scalar() or 0
-        sla_total = sla_q.count()
+        avg_resp_min = round((r.avg_resp or 0) / 60, 1) if r and r.avg_resp else 0
+        sla_pass = r.sla_pass if r else 0
+        sla_total = r.sla_total if r else 0
         sla_rate = round(sla_pass / sla_total * 100, 1) if sla_total else 0
-
-        # 人员数
-        staff_count = Person.query.filter(
-            Person.hospital_id == h.id,
-            Person.is_active == True,
-        ).count()
-
-        # 人均负载
-        staff_load = round(active_orders_count(h.id) / staff_count, 2) if staff_count else 0
+        staff_count = staff_map.get(h.id, 0)
+        active_count = active_map.get(h.id, 0)
+        staff_load = round(active_count / staff_count, 2) if staff_count else 0
 
         result.append({
             'hospital_id': h.id,
@@ -227,13 +243,6 @@ def get_hospital_ranking():
         result.sort(key=lambda x: x['order_count'], reverse=True)
 
     return jsonify(success=True, data=result)
-
-
-def active_orders_count(hospital_id):
-    return WorkOrder.query.filter(
-        WorkOrder.hospital_id == hospital_id,
-        WorkOrder.status.in_(['pending', 'processing', 'confirmed']),
-    ).count()
 
 
 @global_dashboard_bp.route('/api/timeline')
@@ -299,25 +308,45 @@ def get_staff_load():
     hospitals = Hospital.query.filter_by(is_active=True).order_by(Hospital.id).all()
     if region and region not in ('全市', '全部'):
         hospitals = [h for h in hospitals if h.region == region]
+    hospital_ids = [h.id for h in hospitals]
+    if not hospital_ids:
+        return jsonify(success=True, data=[])
+
+    # ===== 批量聚合：3 次 GROUP BY 替代 N×3 次查询 =====
+    # 1) 活跃工单数
+    active_rows = WorkOrder.query.with_entities(
+        WorkOrder.hospital_id, func.count(WorkOrder.id)
+    ).filter(
+        WorkOrder.hospital_id.in_(hospital_ids),
+        WorkOrder.status.in_(['pending', 'processing', 'confirmed']),
+    ).group_by(WorkOrder.hospital_id).all()
+    active_map = dict(active_rows)
+
+    # 2) 人员数
+    staff_rows = Person.query.with_entities(
+        Person.hospital_id, func.count(Person.id)
+    ).filter(
+        Person.hospital_id.in_(hospital_ids),
+        Person.is_active == True,
+    ).group_by(Person.hospital_id).all()
+    staff_map = dict(staff_rows)
+
+    # 3) 时间窗内工单总量
+    total_map = {}
+    if cutoff:
+        total_rows = WorkOrder.query.with_entities(
+            WorkOrder.hospital_id, func.count(WorkOrder.id)
+        ).filter(
+            WorkOrder.hospital_id.in_(hospital_ids),
+            WorkOrder.created_at >= cutoff,
+        ).group_by(WorkOrder.hospital_id).all()
+        total_map = dict(total_rows)
 
     result = []
     for h in hospitals:
-        # 人员数
-        staff_count = Person.query.filter(
-            Person.hospital_id == h.id,
-            Person.is_active == True,
-        ).count()
-
-        # 活跃工单
-        active_count = active_orders_count(h.id)
-
-        # 30天内工单总量
-        total_orders = 0
-        if cutoff:
-            total_orders = WorkOrder.query.filter(
-                WorkOrder.hospital_id == h.id,
-                WorkOrder.created_at >= cutoff,
-            ).count()
+        staff_count = staff_map.get(h.id, 0)
+        active_count = active_map.get(h.id, 0)
+        total_orders = total_map.get(h.id, 0)
 
         # 人均活跃负载
         load = round(active_count / staff_count, 2) if staff_count else 0

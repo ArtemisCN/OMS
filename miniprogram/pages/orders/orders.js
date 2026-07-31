@@ -16,6 +16,9 @@ Page({
     user: {},
     subscribed: false,
     unreadCount: 0,
+    page: 1,
+    hasMore: true,
+    loadingMore: false,
   },
 
   _prevPending: 0,
@@ -122,19 +125,34 @@ Page({
     }
   },
 
-  fetchOrders(silent) {
+  fetchOrders(silent, page) {
     const tab = this.data.activeTab;
     const apiStatus = tab === 'completed' ? 'completed_today' : tab;
-    return api.getOrders(apiStatus)
+    page = page || 1;
+    return api.getOrders(apiStatus, page)
       .then((res) => {
         const stats = res.stats || { pending: 0, in_progress: 0, completed: 0, completed_today: 0 };
         const app = getApp();
-        app.globalData.ordersCache[tab] = {
-          orders: res.orders || [],
+        const newOrders = res.orders || [];
+        const isFirstPage = page <= 1;
+        const orders = isFirstPage ? newOrders : (this.data.orders || []).concat(newOrders);
+        const pagination = res.pagination || { page: page, has_more: false };
+        if (isFirstPage) {
+          app.globalData.ordersCache[tab] = {
+            orders: newOrders,
+            stats: stats,
+            time: Date.now(),
+          };
+        }
+        this.setData({
+          orders: orders,
           stats: stats,
-          time: Date.now(),
-        };
-        this.setData({ orders: res.orders || [], stats: stats, loading: false, splash: false });
+          loading: false,
+          splash: false,
+          page: page,
+          hasMore: !!pagination.has_more,
+          loadingMore: false,
+        });
 
         // 节流持久化（每30秒一次）
         const now = Date.now();
@@ -164,8 +182,15 @@ Page({
           else if (err && err.error) msg = err.error;
           wx.showToast({ title: msg, icon: 'none' });
         }
-        this.setData({ loading: false, splash: false });
+        this.setData({ loading: false, splash: false, loadingMore: false });
       });
+  },
+
+  // 触底加载更多
+  onReachBottom() {
+    if (this.data.loading || this.data.loadingMore || !this.data.hasMore) return;
+    this.setData({ loadingMore: true });
+    this.fetchOrders(true, this.data.page + 1);
   },
 
   switchTab(e) {
@@ -184,22 +209,8 @@ Page({
       });
       this.fetchOrders(true);
     } else {
-      this.setData({ activeTab: tab, orders: cache?.orders || [], loading: false });
-      const apiStatus = tab === 'completed' ? 'completed_today' : tab;
-      api.getOrders(apiStatus).then((res) => {
-        const stats = res.stats || { pending: 0, in_progress: 0, completed: 0, completed_today: 0 };
-        app.globalData.ordersCache[tab] = {
-          orders: res.orders || [],
-          stats: stats,
-          time: Date.now(),
-        };
-        this.setData({ orders: res.orders || [], stats: stats, loading: false });
-        const _now = Date.now();
-        if (_now - this._lastPersistTime > 30000) {
-          this._lastPersistTime = _now;
-          wx.setStorage({ key: 'ordersCache', data: app.globalData.ordersCache });
-        }
-      });
+      this.setData({ activeTab: tab, orders: cache?.orders || [], loading: false, page: 1, hasMore: true });
+      this.fetchOrders(false);
     }
     if (tab === 'pending') {
       this.startPendingPoll();

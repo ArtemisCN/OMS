@@ -92,7 +92,7 @@ def scan_submit(hospital_id):
 
         # 推送通知
         try:
-            from routes.api_mobile import send_new_order_notification
+            from services.notifier import send_new_order_notification
             send_new_order_notification(order)
         except Exception:
             pass

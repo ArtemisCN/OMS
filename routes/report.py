@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, send_file, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import func, case, and_, literal_column
+from sqlalchemy.orm import selectinload
 from models import AuditLog, db, WorkOrder, ConsumableRecord, StockRecord, Consumable, SparePart, RepairOrder, Asset, AssetLog, FormTemplate, can_access
 from models import log_audit
 
@@ -511,7 +512,7 @@ def _get_report_data(year, month, hospital_id=None, team_names=None):
     asset_device_type = [{'type': dt, 'count': c} for dt, c in dev_rows]
 
     # 本月资产变更日志
-    asset_logs = AssetLog.query.filter(
+    asset_logs = AssetLog.query.options(selectinload(AssetLog.asset)).filter(
         AssetLog.created_at >= first,
         AssetLog.created_at < last,
     ).order_by(AssetLog.created_at.desc()).limit(20).all()

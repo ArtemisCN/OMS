@@ -6,7 +6,6 @@ from utils.helpers import safe_get, safe_get_or_404
 # 导入标准库与三方库
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, g, abort
 from flask_login import login_required, current_user
-from routes.auth import admin_required
 from utils.permissions import permission_required, has_permission
 # 导入数据模型与审计日志工具
 from models import db, SparePart, StockRecord, StorageLocation, WorkOrder, log_audit

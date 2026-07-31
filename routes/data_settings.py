@@ -6,7 +6,6 @@ from utils.helpers import safe_get, safe_get_or_404
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required
 from models import db, SystemSetting, Department
-from routes.auth import admin_required
 from utils.permissions import permission_required
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/settings')

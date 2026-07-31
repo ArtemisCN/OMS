@@ -291,7 +291,7 @@ def timeout_reminder_check():
     notified = 0
     for order in overdue_orders:
         try:
-            from routes.api_mobile import send_wecom_notification
+            from services.notifier import send_wecom_notification
             send_wecom_notification(order, is_urge=True)
             order.wecom_timeout_notified = True
             notified += 1

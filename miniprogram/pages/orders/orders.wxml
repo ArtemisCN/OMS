@@ -75,7 +75,7 @@
     </view>
 
     <!-- 工单列表 -->
-    <scroll-view wx:if="{{orders.length > 0}}" class="order-list" scroll-y enhanced show-scrollbar="{{false}}" refresher-default-style="none">
+    <scroll-view wx:if="{{orders.length > 0}}" class="order-list" scroll-y enhanced show-scrollbar="{{false}}" refresher-default-style="none" bindscrolltolower="onReachBottom" lower-threshold="80">
       <view class="order-card" wx:for="{{orders}}" wx:key="id" data-id="{{item.id}}" bindtap="onOrderTap">
         <view class="order-top">
           <view class="order-title-row">
@@ -101,6 +101,9 @@
           </view>
         </view>
       </view>
+      <!-- 加载更多状态 -->
+      <view wx:if="{{loadingMore}}" class="load-more"><text class="load-more-text">加载中...</text></view>
+      <view wx:elif="{{!hasMore && orders.length > 0}}" class="load-more"><text class="load-more-text">— 已全部加载 —</text></view>
     </scroll-view>
   </view>
 

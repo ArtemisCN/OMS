@@ -7,7 +7,6 @@ from flask_login import login_user, logout_user, login_required, current_user
 from models import db, User, AuditLog, RegistrationRequest, Hospital, RoleGroup
 from datetime import datetime
 from models import log_audit
-from functools import wraps
 
 # --- 创建认证蓝图，注册 /login 和 /logout 路由 ---
 auth_bp = Blueprint('auth', __name__)
@@ -32,19 +31,6 @@ def validate_csrf():
 # 注册 CSRF 生成器为 Jinja2 全局函数
 auth_bp.add_app_template_global(generate_csrf_token, '_csrf')
 
-
-def admin_required(f):
-    """管理员权限装饰器"""
-    @wraps(f)
-    @login_required
-    def decorated(*args, **kwargs):
-        # --- 检查当前用户是否为管理员，非管理员重定向到首页 ---
-        if not current_user.is_admin:
-            flash('无权限访问，仅管理员可用', 'danger')
-            return redirect(url_for('main.dashboard'))
-        # --- 管理员用户正常放行 ---
-        return f(*args, **kwargs)
-    return decorated
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])

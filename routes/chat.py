@@ -31,30 +31,71 @@ def _get_user_hospital_name(user_id):
     return ''
 
 def _serialize_conversation(conv, current_user_id):
-    participants = ChatParticipant.query.filter_by(conversation_id=conv.id, is_active=True).all()
-    unread = 0
+    return _serialize_conversations([conv], current_user_id)[0]
+
+
+def _serialize_conversations(convs, current_user_id):
+    """批量序列化会话列表 — 一次查询预加载所有参与者/未读数/头像，避免 N+1"""
+    if not convs:
+        return []
+    conv_ids = [c.id for c in convs]
+
+    # 1) 批量参与者
+    participants = ChatParticipant.query.filter(
+        ChatParticipant.conversation_id.in_(conv_ids),
+        ChatParticipant.is_active == True,
+    ).all()
+    part_by_conv = {}
+    thresholds = {}
     for p in participants:
+        part_by_conv.setdefault(p.conversation_id, []).append(p)
         if p.user_id == current_user_id:
-            unread = ChatMessage.query.filter(
-                ChatMessage.conversation_id == conv.id,
-                ChatMessage.created_at > (p.last_read_at or datetime(2000, 1, 1)),
-                ChatMessage.sender_id != current_user_id
-            ).count()
-            break
-    title = conv.title
-    if conv.type == 'single':
-        for p in participants:
-            if p.user_id != current_user_id:
-                title = p.user_name
-                break
-    return {
-        'id': conv.id, 'title': title, 'type': conv.type,
-        'last_message': conv.last_message or '', 'last_sender': conv.last_sender or '',
-        'last_time': conv.last_time.isoformat() if conv.last_time else '',
-        'unread': unread,
-        'participants': [{'id': p.user_id, 'name': p.user_name, 'hospital_id': p.hospital_id,
-                          'avatar': (safe_get(User, p.user_id).avatar or '') if safe_get(User, p.user_id) else ''} for p in participants]
-    }
+            thresholds[p.conversation_id] = p.last_read_at or datetime(2000, 1, 1)
+
+    # 2) 批量未读数：一次查询按会话分组（WHERE 按会话阈值 OR 拼接）
+    unread_map = {}
+    if thresholds:
+        from sqlalchemy import or_, and_, func
+        conds = [
+            and_(ChatMessage.conversation_id == cid, ChatMessage.created_at > th)
+            for cid, th in thresholds.items()
+        ]
+        rows = db.session.query(
+            ChatMessage.conversation_id, func.count(ChatMessage.id)
+        ).filter(
+            or_(*conds), ChatMessage.sender_id != current_user_id
+        ).group_by(ChatMessage.conversation_id).all()
+        unread_map = dict(rows)
+
+    # 3) 批量用户（头像）
+    user_ids = set()
+    for ps in part_by_conv.values():
+        for p in ps:
+            user_ids.add(p.user_id)
+    user_map = {}
+    if user_ids:
+        users = User.query.filter(User.id.in_(list(user_ids))).all()
+        user_map = {u.id: u for u in users}
+
+    result = []
+    for conv in convs:
+        parts = part_by_conv.get(conv.id, [])
+        unread = unread_map.get(conv.id, 0)
+        title = conv.title
+        if conv.type == 'single':
+            for p in parts:
+                if p.user_id != current_user_id:
+                    title = p.user_name
+                    break
+        result.append({
+            'id': conv.id, 'title': title, 'type': conv.type,
+            'last_message': conv.last_message or '', 'last_sender': conv.last_sender or '',
+            'last_time': conv.last_time.isoformat() if conv.last_time else '',
+            'unread': unread,
+            'participants': [{'id': p.user_id, 'name': p.user_name, 'hospital_id': p.hospital_id,
+                              'avatar': (user_map.get(p.user_id).avatar or '') if p.user_id in user_map else ''} for p in parts]
+        })
+    return result
 
 @chat_bp.route('/conversations')
 @login_required
@@ -65,7 +106,7 @@ def list_conversations():
     conversations = ChatConversation.query.filter(
         ChatConversation.id.in_(participant_ids)
     ).order_by(ChatConversation.updated_at.desc()).all()
-    return jsonify({'conversations': [_serialize_conversation(c, current_user.id) for c in conversations]})
+    return jsonify({'conversations': _serialize_conversations(conversations, current_user.id)})
 
 @chat_bp.route('/messages')
 @login_required

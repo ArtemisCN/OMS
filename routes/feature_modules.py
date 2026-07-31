@@ -13,6 +13,7 @@ from datetime import datetime, date, timedelta
 from flask import current_app, Blueprint, render_template, jsonify, request, send_file, g, redirect, flash, url_for
 from flask_login import login_required, current_user
 from sqlalchemy import func
+from sqlalchemy.orm import selectinload
 
 from utils.time_helpers import fmt_dt, now, fmt_date, resolve_team
 from models import (
@@ -1456,7 +1457,7 @@ def timeout_reminder_check():
     notified = 0
     for order in overdue_orders:
         try:
-            from routes.api_mobile import send_wecom_notification
+            from services.notifier import send_wecom_notification
             send_wecom_notification(order)
             order.wecom_timeout_notified = True
             notified += 1
@@ -2114,7 +2115,7 @@ def maintenance_calendar():
     now = datetime.now()
     year = request.args.get('year', now.year, type=int)
     month = request.args.get('month', now.month, type=int)
-    contracts = MaintenanceContract.query.all()
+    contracts = MaintenanceContract.query.options(selectinload(MaintenanceContract.supplier)).all()
     import calendar
     cal = calendar.monthcalendar(year, month)
     calendar_grid = []

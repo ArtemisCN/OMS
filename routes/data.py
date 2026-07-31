@@ -17,7 +17,6 @@ from models import (db, Department, SolutionTemplate, WorkOrder,
     log_audit, get_module_permissions, save_module_permissions, can_access,
     get_cached_setting)
 import config
-from routes.auth import admin_required
 from services import data_service
 from services.data_service import get_team_options
 from utils.time_helpers import resolve_team, fmt_dt

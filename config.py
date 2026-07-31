@@ -1,6 +1,13 @@
 import os
 import secrets
 
+# 加载 .env（幂等：gunicorn 经 wsgi.py 已加载过，这里兜底开发模式直接运行 config）
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.abspath(os.path.dirname(__file__)), '.env'))
+except ImportError:
+    pass  # python-dotenv 未安装时静默跳过，环境变量直接使用
+
 # ==================== 路径计算 ====================
 _basedir = os.path.abspath(os.path.dirname(__file__))
 

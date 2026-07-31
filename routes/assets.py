@@ -14,6 +14,7 @@ from datetime import datetime, date, timedelta
 from flask import Blueprint, render_template, jsonify, request, send_file, Response, g
 from flask_login import login_required, current_user
 from sqlalchemy import func
+from sqlalchemy.orm import selectinload
 
 from utils.time_helpers import fmt_dt, fmt_date
 from models import (
@@ -637,7 +638,7 @@ def maintenance_calendar():
     now = datetime.now()
     year = request.args.get('year', now.year, type=int)
     month = request.args.get('month', now.month, type=int)
-    contracts = MaintenanceContract.query.all()
+    contracts = MaintenanceContract.query.options(selectinload(MaintenanceContract.supplier)).all()
     import calendar
     cal = calendar.monthcalendar(year, month)
     calendar_grid = []

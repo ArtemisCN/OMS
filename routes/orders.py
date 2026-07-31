@@ -16,7 +16,6 @@ from openpyxl import Workbook
 from models import db, WorkOrder, SystemSetting, WorkOrderChatMessage, WorkOrderPhoto, can_access, User, ShiftHandover, get_cached_setting
 from services import order_service as svc
 from services.fault_matcher import match_fault
-from routes.auth import admin_required
 from utils.permissions import permission_required, has_permission
 from utils.time_helpers import fmt_dt, now, fmt_date, resolve_team
 
@@ -168,7 +167,7 @@ def publish_order():
             )
             # 推送通知
             try:
-                from routes.api_mobile import send_new_order_notification, send_wecom_notification
+                from services.notifier import send_new_order_notification, send_wecom_notification
                 send_new_order_notification(order)
                 send_wecom_notification(order)
             except Exception:
@@ -1005,7 +1004,7 @@ def urge_order(order_id):
         order.description = (order.description or '') + note
         was_escalated = True
     
-    from routes.api_mobile import send_wecom_notification
+    from services.notifier import send_wecom_notification
     send_wecom_notification(order, skip_time_check=True, is_urge=True)
     
     order.last_urged_at = now()

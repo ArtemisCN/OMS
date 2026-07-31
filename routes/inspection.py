@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file
 from flask_login import login_required, current_user
 from models import db, InspectionTemplate, InspectionPlan, WorkOrder, User
-from routes.auth import admin_required
 from utils.permissions import permission_required
 from services.address import get_all_buildings, get_floors_by_building, get_departments_by_building, get_locations_by_building_dept
 from utils.time_helpers import fmt_dt, now, fmt_date
